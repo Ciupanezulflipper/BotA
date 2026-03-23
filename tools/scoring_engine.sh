@@ -312,13 +312,51 @@ if missing:
     json.dump(out, sys.stdout, separators=(",",":"))
     sys.exit(0)
 
-# Core direction (unchanged intent)
-if ema9 > ema21 and rsi > 50:
+# Core direction — Option C pullback entry
+# Step 1: Detect trend bias from EMA9/21 crossover
+# Step 2: Only enter when price PULLS BACK to EMA zone after crossover
+# This avoids entering at the crossover candle where stops get hunted
+
+candle_open  = sf(ind.get("open",  0))
+candle_high  = sf(ind.get("high",  0))
+candle_low   = sf(ind.get("low",   0))
+candle_close = sf(ind.get("close", 0))
+prev_close   = sf(ind.get("prev_close", 0))
+
+# Trend bias (EMA alignment)
+bullish_trend = ema9 > ema21 and rsi > 50
+bearish_trend = ema9 < ema21 and rsi < 50
+
+# Pullback zone: price touches EMA21 (±0.3x ATR buffer)
+pb_buffer = atr * 0.3 if atr > 0 else 0.0005
+
+# BUY pullback: trend is bullish, candle low touched EMA21, close above EMA21, bullish candle
+pullback_buy = (
+    bullish_trend
+    and candle_low <= (ema21 + pb_buffer)   # price dipped to EMA zone
+    and candle_close > ema21                # closed back above EMA21
+    and candle_close > candle_open          # bullish candle (close > open)
+    and rsi > 45                            # not oversold reversal
+)
+
+# SELL pullback: trend is bearish, candle high touched EMA21, close below EMA21, bearish candle
+pullback_sell = (
+    bearish_trend
+    and candle_high >= (ema21 - pb_buffer)  # price bounced to EMA zone
+    and candle_close < ema21                # closed back below EMA21
+    and candle_close < candle_open          # bearish candle (close < open)
+    and rsi < 55                            # not overbought reversal
+)
+
+if pullback_buy:
     direction = "BUY"
-elif ema9 < ema21 and rsi < 50:
+elif pullback_sell:
     direction = "SELL"
 else:
     direction = "HOLD"
+
+# Store pullback status in reasons
+pullback_tag = "pullback_entry" if direction != "HOLD" else "no_pullback"
 
 vol = volatility_bucket(atr, price)
 
@@ -492,7 +530,8 @@ reasons.extend([
     f"vol={vol_tag}",
     f"sr_comp={sr_comp:.1f}",
     f"sr={sr_tag}",
-    f"phase={phase}"
+    f"phase={phase}",
+    f"{pullback_tag}"
 ])
 
 # GEM 53 FIX: Pip-capped SL/TP (max 20 SL / 40 TP pips)

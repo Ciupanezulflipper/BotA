@@ -528,6 +528,22 @@ def build_bundle(pair: str, tf: str, candles_in: List[Dict[str, float]]) -> Dict
     pip = _pip_size(pair, bundle["price"])
     bundle["atr_pips"] = float(bundle["atr"] / pip) if pip > 0 else 0.0
 
+    # OHLC for current and previous candle (needed for pullback detection)
+    if len(candles_in) >= 2:
+        c  = candles_in[-1]
+        cp = candles_in[-2]
+        bundle["open"]       = float(c.get("o", c.get("open", 0)))
+        bundle["high"]       = float(c.get("h", c.get("high", 0)))
+        bundle["low"]        = float(c.get("l", c.get("low", 0)))
+        bundle["close"]      = float(c.get("c", c.get("close", 0)))
+        bundle["prev_open"]  = float(cp.get("o", cp.get("open", 0)))
+        bundle["prev_high"]  = float(cp.get("h", cp.get("high", 0)))
+        bundle["prev_low"]   = float(cp.get("l", cp.get("low", 0)))
+        bundle["prev_close"] = float(cp.get("c", cp.get("close", 0)))
+    else:
+        for k in ["open","high","low","close","prev_open","prev_high","prev_low","prev_close"]:
+            bundle[k] = 0.0
+
     bundle["weak"] = False
     bundle["error"] = ""
     return bundle
