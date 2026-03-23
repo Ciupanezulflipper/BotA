@@ -203,9 +203,34 @@ def score_signal(candles: List[Dict], idx: int, use_bb: bool = False) -> Dict[st
     rsi_bias  = r - 50.0
     base_score = abs(ema_dist) * 2.0 + abs(rsi_bias) * 1.2
 
-    if ef > es and r >= 55:
+    # Option C: pullback entry — wait for price to retest EMA21 after crossover
+    bullish_trend = ef > es and r > 50
+    bearish_trend = ef < es and r < 50
+
+    pb_buffer = a * 0.3 if a > 0 else 0.0005
+    c_open  = candles[idx]["o"]
+    c_high  = candles[idx]["h"]
+    c_low   = candles[idx]["l"]
+    c_close = candles[idx]["c"]
+
+    pb_buffer = a * 0.5 if a > 0 else 0.0008  # widened to 0.5x ATR
+
+    pullback_buy = (
+        bullish_trend
+        and c_low <= (es + pb_buffer)
+        and c_close > es
+        and r > 45
+    )
+    pullback_sell = (
+        bearish_trend
+        and c_high >= (es - pb_buffer)
+        and c_close < es
+        and r < 55
+    )
+
+    if pullback_buy:
         direction = "BUY"
-    elif ef < es and r <= 45:
+    elif pullback_sell:
         direction = "SELL"
     else:
         return {"valid": False, "score": base_score}
