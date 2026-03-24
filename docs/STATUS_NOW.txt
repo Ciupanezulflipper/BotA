@@ -1,1 +1,1 @@
-Score threshold lowered to 65 for signal volume collection week. Review Saturday March 28. Target: 20+ live signals.
+GBPUSD only. 46.2% WR 90-day backtest. Option C live. Monitor this week for live validation.

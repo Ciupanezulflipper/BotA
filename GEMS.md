@@ -271,3 +271,17 @@ Protects against: missing ECB/FOMC regime changes that score 90+.
 Keeps protection: score<90 or price hasn't confirmed break = H4 veto still active.
 March 19 ECB test: score=100 but price was BELOW H4 EMA21 (not above by 10 pips).
 Would need price at 1.331+0.001=1.332 to trigger for BUY — confirms correct calibration.
+
+## GEM-125: Option C pullback entry (2026-03-23)
+Root cause identified: bot was entering at EMA crossover — the exact point
+where institutions hunt retail stops. All 3 AIs (Grok, Gemini, ChatGPT-5)
+confirmed Option C as the fix.
+New logic: crossover sets trend bias, entry only fires when price pulls back
+to EMA21 zone (±0.3x ATR) and closes back in trend direction.
+OHLC added to build_indicators.py and indicators cache.
+This is the most important change since the bot's inception.
+
+## GEM-126: EURUSD dropped, GBPUSD only (2026-03-23)
+90-day backtest: EURUSD 23.1% WR losing vs GBPUSD 46.2% WR profitable.
+EURUSD in strong macro uptrend — pullback SELL setups keep losing.
+Decision: trade GBPUSD only until EURUSD macro trend shifts.
