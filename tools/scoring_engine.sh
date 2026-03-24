@@ -353,6 +353,25 @@ elif pullback_sell:
 else:
     direction = "HOLD"
 
+# D1 trend filter — only trade in direction of daily trend
+d1_cache_path = f"{os.environ.get('ROOT', os.path.expanduser('~/BotA'))}/cache/d1_trend_{pair}.json"
+d1_trend = "ANY"
+try:
+    import json as _json
+    d1_data = _json.load(open(d1_cache_path))
+    d1_trend = d1_data.get("trend", "ANY")
+except Exception:
+    d1_trend = "ANY"
+
+# Block signals that fight D1 trend (fail open if cache missing)
+if d1_trend != "ANY":
+    if direction == "BUY" and d1_trend == "SELL":
+        direction = "HOLD"
+    elif direction == "SELL" and d1_trend == "BUY":
+        direction = "HOLD"
+
+d1_tag = f"d1_filter={d1_trend}"
+
 # Store pullback status in reasons
 pullback_tag = "pullback_entry" if direction != "HOLD" else "no_pullback"
 
@@ -529,7 +548,8 @@ reasons.extend([
     f"sr_comp={sr_comp:.1f}",
     f"sr={sr_tag}",
     f"phase={phase}",
-    f"{pullback_tag}"
+    f"{pullback_tag}",
+    f"{d1_tag}"
 ])
 
 # GEM 53 FIX: Pip-capped SL/TP (max 20 SL / 40 TP pips)
