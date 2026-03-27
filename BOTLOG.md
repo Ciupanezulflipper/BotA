@@ -496,3 +496,14 @@ Credentials in .env: OANDA_API_TOKEN, OANDA_ACCOUNT_ID, OANDA_API_URL.
 - S/R proximity scoring: sr_score.py wired, activates when ADX>20
 - TD credit warning: false alarm — counter tracks all fetches, reset to 0/800
 - Zero signals today: ADX<20 all day, ranging market — correct behavior
+
+## Session 2026-03-23
+- Root cause identified: entering at EMA crossover = stop hunting point
+- Option C implemented: pullback entry to EMA21 zone (0.5x ATR buffer)
+- OHLC added to build_indicators.py and indicators cache
+- 90-day backtest results:
+  EURUSD: 23.1% WR LOSING → dropped
+  GBPUSD: 46.2% WR +138.9 pips PROFITABLE → keeping
+- EURUSD dropped from cron — GBPUSD only
+- Score threshold: 65 (signal volume week)
+- All 3 AIs (Grok, Gemini, ChatGPT-5) confirmed Option C as root fix

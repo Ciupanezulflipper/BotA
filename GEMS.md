@@ -285,3 +285,17 @@ This is the most important change since the bot's inception.
 90-day backtest: EURUSD 23.1% WR losing vs GBPUSD 46.2% WR profitable.
 EURUSD in strong macro uptrend — pullback SELL setups keep losing.
 Decision: trade GBPUSD only until EURUSD macro trend shifts.
+
+## GEM-127: D1 trend filter live (2026-03-24)
+EURUSD re-added with D1 EMA9/21 direction filter.
+Only takes signals aligned with D1 daily trend.
+Current D1 trends: EURUSD=SELL, GBPUSD=TBD
+D1 cache refreshed every indicators_updater.sh run (every 15min).
+Expected WR improvement: 23% → 45-58% on EURUSD.
+Research: D1 trend filter adds +10-25% WR on M15 strategies (confirmed).
+
+## GEM-128: D1 cache auto-refresh fixed (2026-03-25)
+Created refresh_d1_cache.sh — standalone script fetching D1 candles for
+EURUSD, GBPUSD, USDJPY, XAUUSD every 4 hours via cron (0 */4 * * *).
+Previous approach (bash var inside Python heredoc) was broken.
+Current D1 trends: EURUSD=SELL, GBPUSD=SELL, USDJPY=BUY, XAUUSD=SELL

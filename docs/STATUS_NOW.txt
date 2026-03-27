@@ -1,1 +1,1 @@
-GBPUSD only. 46.2% WR 90-day backtest. Option C live. Monitor this week for live validation.
+D1 trend filter live. EURUSD+GBPUSD active. Option C pullback entry. Score threshold 65. Ship April 16.
