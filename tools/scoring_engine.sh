@@ -328,13 +328,13 @@ bullish_trend = ema9 > ema21 and rsi > 50
 bearish_trend = ema9 < ema21 and rsi < 50
 
 # Pullback zone: price touches EMA21 (±0.3x ATR buffer)
-pb_buffer = atr * 0.5 if atr > 0 else 0.0008  # 0.5x ATR buffer
+pb_buffer = atr * 1.0 if atr > 0 else 0.0012  # 1.0x ATR buffer
 
 # BUY pullback: trend bullish, candle low touched EMA zone, closed above EMA21
 pullback_buy = (
     bullish_trend
     and candle_low <= (ema21 + pb_buffer)
-    and candle_close > ema21
+    and candle_close > (ema21 - atr * 0.3)  # allow close within 0.3x ATR of EMA21
     and rsi > 45
 )
 
@@ -342,7 +342,7 @@ pullback_buy = (
 pullback_sell = (
     bearish_trend
     and candle_high >= (ema21 - pb_buffer)
-    and candle_close < ema21
+    and candle_close < (ema21 + atr * 0.3)  # allow close within 0.3x ATR of EMA21
     and rsi < 55
 )
 
@@ -452,7 +452,7 @@ bb_comp = 0.0
 bb_tag = "bb_neutral"
 if bb_upper > 0 and bb_lower > 0 and bb_middle > 0:
     if bb_squeeze:
-        bb_comp = -10.0
+        bb_comp = -3.0
         bb_tag = "bb_squeeze"
     elif direction == "SELL" and price >= bb_upper * 0.9998:
         bb_comp = 8.0
