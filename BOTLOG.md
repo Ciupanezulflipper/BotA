@@ -507,3 +507,65 @@ Credentials in .env: OANDA_API_TOKEN, OANDA_ACCOUNT_ID, OANDA_API_URL.
 - EURUSD dropped from cron — GBPUSD only
 - Score threshold: 65 (signal volume week)
 - All 3 AIs (Grok, Gemini, ChatGPT-5) confirmed Option C as root fix
+
+## Session 2026-03-30
+FIRST LIVE WINS since Option C pullback entry implemented.
+GBPUSD SELL entry=1.32396 -> WIN +35.8 pips
+EURUSD SELL entry=1.14789 -> WIN +30.1 pips
+Scores: 83.6, 84.3, 89.4 — H1 neutral overridden correctly.
+Live record: 2W / 4L / 3 Expired | WR: 33%
+
+---
+## Session 2026-04-01 — Diagnostic Audit
+
+### REAL WIN RATE
+- Pre-Option C (before 2026-03-23): 11W/34L = garbage, discard
+- Post-Option C (2026-03-23 onward): 2W/4L = 33% WR, 6 signals only
+- Without overnight SL hits: effectively 2W/2L = 50% WR on same-session closes
+
+### ROOT CAUSES IDENTIFIED
+1. **Duplicate Supabase inserts** — Telegram cooldown blocks notification but supabase_publish.py still inserts new row. GBPUSD SELL fired 3x at 1.31898, 1.31982, 1.31846 on 2026-03-30. All three hit SL on same reversal. Fix: check for existing ACTIVE signal on same pair before calling supabase_publish.py.
+2. **Asian session losses were overnight holds** — not session filter failures. Session filter working correctly. Losses at 04:31 EET were London-session entries that reversed overnight.
+3. **No D1 direction logged at signal fire time** — cannot confirm D1 filter was current at signal generation. Needs verification.
+4. **8MB error.log** — inflated by indicators fetching XAUUSD/USDJPY/EURJPY every cycle. Wasted ~18 OANDA credits per run on non-traded pairs.
+
+### NEXT SESSION PRIORITIES (in order)
+1. Fix duplicate Supabase insert — check for ACTIVE same-pair signal before publishing. One-line guard in supabase_publish.py or signal_watcher_pro.sh line 910.
+2. Restrict indicators cron to EURUSD+GBPUSD only — stop burning credits on XAUUSD/USDJPY/EURJPY.
+3. Verify D1 direction is logged at signal fire time.
+4. Run EURUSD 90-day backtest with D1 filter.
+
+### SUPABASE PUBLISH LOCATION
+signal_watcher_pro.sh lines 910-915 — no dedup check before insert.
+supabase_publish.py called with pair/direction/score — logs to ERRLOG only on failure.
+
+### SAMPLE SIZE WARNING
+6 post-Option C signals is statistically meaningless. Do not change strategy logic until 30+ signals accumulated.
+
+### FIX DEPLOYED 2026-04-01
+**Duplicate Supabase insert bug — FIXED**
+- supabase_publish.py now calls has_active_signal() before every INSERT
+- If ACTIVE signal exists for same pair, skips with ⏭ SKIP log
+- Tested: first call publishes, second call skips correctly
+- Backup: tools/supabase_publish.py.bak
+- Expected impact: eliminates multi-entry same-direction losses (was root cause of 2 of 4 post-Option C losses)
+
+### USDJPY ADDED 2026-04-01
+- D1 trend: BUY (diverges from EURUSD/GBPUSD SELL — good diversification)
+- Added to config/strategy.env and crontab hardcoded PAIRS
+- Zero extra API cost — already being fetched by indicators_updater.sh
+- D1 cache fresh as of 09:00 UTC
+
+### ADDITIONAL FIXES 2026-04-01
+- CANDLE_MAX_AGE_SECS synced to 3600 in strategy.env (was 2700, crontab had 3600 — now consistent)
+- USDJPY sanity test PASSED: pipeline runs clean, cache fresh, calendar guard working
+- USDJPY D1 trend: BUY — diverges from EURUSD/GBPUSD SELL pairs
+
+### ProfitLab Security Audit COMPLETE 2026-04-05
+- RLS on shadow_log table — fixed by Lovable
+- Tier escalation exploit blocked — fixed by Lovable
+- Realtime signals publication removed — manual Supabase
+- SMTP configured — smtp.resend.com wired to ProfitLab
+- Security Definer View shadow_performance — fixed via SQL
+- Leaked password protection — Pro plan only, skipped
+- Application-level issues: 0 remaining

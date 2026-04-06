@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+"""
+be_shadow_manager.py  v4.0.0
+BotA Read-Only Shadow Trade Manager
+
+PURPOSE
+  Runs two shadow policy lanes alongside the unchanged production static closer.
+  Writes only to `shadow_log`. Never touches `signals`.
+
+  STATIC_MIRROR  — mirrors live TP-first static closer via OANDA replay (canary)
+  BE_1.0R        — arms break-even once +1.0R MFE is reached in the shadow
+
+CHANGES FROM v3
+  [1] First-run anchor bug fixed.
+      `last_polled_at` is NEVER used as a candle replay anchor.
+      When `last_candle_ts_processed` is null, fetch_from = signal `created_at`.
+      Applies to both `process_active_signal` and `reconcile_orphaned_shadow_rows`.
+      The `elif last_polled_at` fallback branches are removed entirely.
+
+  [2] Reconciliation retry/cooldown added.
+      Unresolved reconciliation rows (Cases A/B/C) are no longer retried every cycle.
+      Cooldown enforced via `last_polled_at` check against RECONCILE_RETRY_COOLDOWN_MINUTES.
+      Max-age check: rows older than RECONCILE_MAX_AGE_HOURS are permanently abandoned
+      (shadow_state = CLOSED, shadow_outcome = null, last_error = reconcile_abandoned).
+      This eliminates redundant OANDA/Supabase calls on dead cases.
+
+  [3] API efficiency hardened.
+      - last_polled_at removed as replay anchor — no more defensive overlaps that cause
+        reprocessing of already-evaluated candles
+      - Reconciliation skips rows within cooldown window before any API call
+      - Max-age check fires before any fetch attempt
+
+REQUIRED ENV KEYS
+  SUPABASE_URL                        full project URL https://xxx.supabase.co
+  SUPABASE_SERVICE_KEY                service role key (rotate before use)
+  OANDA_API_TOKEN                     new token after rotation
+  OANDA_MODE                          must be exactly PRACTICE or LIVE — hard fail
+
+OPTIONAL ENV KEYS
+  SHADOW_ENABLED                       true | false   (default: false)
+  BE_R_THRESHOLD                       float          (default: 1.0)
+  MIRROR_DIVERGENCE_THRESHOLD_PIPS     float          (default: 2.0)
+  TERMINAL_LOOKBACK_HOURS              int            (default: 96)
+  RECONCILE_RETRY_COOLDOWN_MINUTES     int            (default: 60)
+  RECONCILE_MAX_AGE_HOURS              int            (default: 96)
+
+ENV FILE LOAD ORDER (first file wins per key)
+  .env.runtime → .env → config/strategy.env → strategy.env
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import sys
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import requests
+───────────────────────
+
+SUPABASE_URL: str = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_KEY: str = (
+    os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY") or ""
+)
+OANDA_TOKEN: str = (
+    os.getenv("OANDA_API_TOKEN") or os.getenv("OANDA_API_KEY") or ""
+)
+OANDA_MODE: str = os.getenv("OANDA_MODE", "").strip().upper()
+
+SHADOW_ENABLED: bool = os.getenv("SHADOW_ENABLED", "false").strip().lower() == "true"
+BE_R_THRESHOLD: float = float(os.getenv("BE_R_THRESHOLD", "1.0"))
+MIRROR_DIVERGENCE_THRESHOLD: float = float(
+    os.getenv("MIRROR_DIVERGENCE_THRESHOLD_PIPS", "2.0")
+)
+TERMINAL_LOOKBACK_HOURS: int = int(os.getenv("TERMINAL_LOOKBACK_HOURS", "96"))
+RECONCILE_RETRY_COOLDOWN_MINUTES: int = int(
+    os.getenv("RECONCILE_RETRY_COOLDOWN_MINUTES", "60")
+)
+RECONCILE_MAX_AGE_HOURS: int = int(os.getenv("RECONCILE_MAX_AGE_HOURS", "96"))
+
+OPEN_STATUSES: frozenset = frozenset({"ACTIVE", "active"})
+POLICIES: Tuple[str, ...] = ("STATIC_MIRROR", "BE_1.0R")
+
+# All columns the script requires to exist in shadow_log.
+REQUIRED_SHADOW_COLUMNS: Tuple[str, ...] = (
+    "id", "signal_id", "policy", "pair", "direction",
+    "entry_price", "stop_loss", "take_profit", "risk_pips",
+    "signal_created_at", "highest_mfe_pips", "highest_mfe_r",
+    "arm_triggered", "arm_triggered_at", "arm_candle_high", "arm_candle_low",
+    "shadow_state", "shadow_outcome", "shadow_pips", "shadow_closed_at",
+    "actual_outcome", "actual_pips", "actual_closed_at", "delta_pips",
+    "last_polled_at", "last_candle_ts_processed", "last_error",
+    "poll_count", "candle_source", "logged_at",
+)
+
+# ─────────────────────────────────────────────────────────────
+# LOGGING
+# ─────────────────────────────────────────────────────────────
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_PATH),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+log = logging.getLogger("be_shadow_manager")
+
+# ─────────────────────────────────────────────────────────────
+# MODELS
+# ─────────────────────────────────────────────────────────────
+
+
+@dataclass
+class Candle:
+    time: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+
+
+# ─────────────────────────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────────────────────────
+
+
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def to_iso(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).isoformat()
+
+
+def parse_ts(value: str) -> datetime:
+    return (
+        datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        .astimezone(timezone.utc)
+    )
+
+
+def pip_size(pair: str) -> float:
+    return 0.01 if pair.upper().endswith("JPY") else 0.0001
+
+
+def pips_between(a: float, b: float, pair: str) -> float:
+    return round(abs(a - b) / pip_size(pair), 1)
+
+
+def favorable_mfe_pips(c: Candle, entry: float, direction: str, pair: str) -> float:
+    ps = pip_size(pair)
+    if direction.upper() == "SELL":
+        return max(0.0, round((entry - c.low) / ps, 1))
+    return max(0.0, round((c.high - entry) / ps, 1))
+
+
+def oanda_instrument(pair: str) -> str:
+    clean = pair.upper().replace("/", "").replace("_", "")
+    return f"{clean[:3]}_{clean[3:]}" if len(clean) == 6 else pair.upper()
+
+
+def write_heartbeat(status: str, detail: str = "") -> None:
+    with HEARTBEAT_PATH.open("a", encoding="utf-8") as f:
+        f.write(f"{to_iso(now_utc())} | {status} | {detail}\n")
+
+
+def check_previous_heartbeat(max_gap_min: int = 35) -> None:
+    if not HEARTBEAT_PATH.exists():
+        return
+    try:
+        last = (
+            HEARTBEAT_PATH.read_text(encoding="utf-8", errors="ignore")
+            .strip().splitlines()[-1]
+        )
+        gap = (now_utc() - parse_ts(last.split(" | ")[0])).total_seconds() / 60.0
+        if gap > max_gap_min:
+            log.warning(
+                "MISSED_CYCLE: last heartbeat %.1f min ago (expected ≤15)", gap
+            )
+    except Exception:
+        pass
+
+
+# ─────────────────────────────────────────────────────────────
+# CONFIG + SCHEMA VALIDATION
+# ─────────────────────────────────────────────────────────────
+
+
+def validate_config() -> bool:
+    """Hard-fails if any required key is missing or OANDA_MODE is unrecognised."""
+    errors: List[str] = []
+    if not SUPABASE_URL:
+        errors.append("SUPABASE_URL is not set")
+    if not SUPABASE_KEY:
+        errors.append("SUPABASE_SERVICE_KEY (or SUPABASE_KEY) is not set")
+    if not OANDA_TOKEN:
+        errors.append("OANDA_API_TOKEN (or OANDA_API_KEY) is not set")
+    if OANDA_MODE not in ("PRACTICE", "LIVE"):
+        errors.append(
+            f"OANDA_MODE must be exactly 'PRACTICE' or 'LIVE' — got: '{OANDA_MODE}'. "
+            "Verify your token type in the OANDA portal before setting this."
+        )
+    for err in errors:
+        log.error("CONFIG ERROR: %s", err)
+    return len(errors) == 0
+
+
+def oanda_base_url() -> str:
+    """Returns correct OANDA endpoint. Call only after validate_config() passes."""
+    return (
+        "https://api-fxpractice.oanda.com"
+        if OANDA_MODE == "PRACTICE"
+        else "https://api-fxtrade.oanda.com"
+    )
+
+
+def check_schema_compatibility() -> bool:
+    """
+    Validates all required shadow_log columns exist.
+    Fetches LIMIT=0 rows — zero data transferred, validates column list only.
+    Hard-fails with exact guidance if any column is missing.
+    """
+    select_cols = ",".join(REQUIRED_SHADOW_COLUMNS)
+    try:
+        sb_get("shadow_log", {"select": select_cols, "limit": "0"})
+        log.info(
+            "Schema compatibility: PASS (%d required columns verified)",
+            len(REQUIRED_SHADOW_COLUMNS),
+        )
+        return True
+    except Exception as exc:
+        log.error(
+            "Schema compatibility: FAIL — %s\n"
+            "Most likely missing: last_candle_ts_processed\n"
+            "Fix in Supabase SQL Editor:\n"
+            "  ALTER TABLE shadow_log "
+            "ADD COLUMN IF NOT EXISTS last_candle_ts_processed TIMESTAMPTZ;",
+            exc,
+        )
+        return False
