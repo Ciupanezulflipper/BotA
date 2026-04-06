@@ -569,3 +569,8 @@ supabase_publish.py called with pair/direction/score — logs to ERRLOG only on 
 - Security Definer View shadow_performance — fixed via SQL
 - Leaked password protection — Pro plan only, skipped
 - Application-level issues: 0 remaining
+
+### USDJPY SUPABASE FIX 2026-04-06
+- signals_pair_check constraint updated to include USDJPY
+- USDJPY publish now works end to end
+- Telegram + Supabase + ProfitLab pipeline fully synced for all 3 pairs
