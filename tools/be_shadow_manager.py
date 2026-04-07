@@ -99,6 +99,7 @@ logging.basicConfig(
     ],
 )
 log = logging.getLogger("shadow")
+UNIQ_CONFLICT_ERR = "no unique or exclusion constraint matching the ON CONFLICT specification"
 
 # ---------------------------------------------------------------------------
 # DATA MODEL
@@ -421,6 +422,13 @@ def ensure_shadow_row(sig: Dict[str, Any], policy: str, poll_ts: str) -> Dict[st
             prefer="resolution=ignore-duplicates,return=representation",
         )
     except Exception as exc:
+        msg = str(exc)
+        if UNIQ_CONFLICT_ERR in msg:
+            raise RuntimeError(
+                "uniqueness contract not enforced for shadow_log(signal_id, policy). "
+                "Action: ALTER TABLE shadow_log ADD CONSTRAINT "
+                "shadow_log_signal_policy_uniq UNIQUE (signal_id, policy);"
+            ) from exc
         log.error("ensure_shadow_row insert %s/%s: %s", sig["id"], policy, exc)
     rows = sb_get("shadow_log", {
         "signal_id": f"eq.{sig['id']}",
@@ -1106,7 +1114,12 @@ def main() -> None:
             shadow_row = existing.get(signal_id)
 
             if shadow_row is None:
-                shadow_row = ensure_shadow_row(sig, policy, started_iso)
+                try:
+                    shadow_row = ensure_shadow_row(sig, policy, started_iso)
+                except RuntimeError as exc:
+                    log.error("UNIQUE CONTRACT ERROR: %s", exc)
+                    write_heartbeat("ERROR", "uniqueness contract check failed -- see shadow_manager.log")
+                    sys.exit(1)
 
             if not shadow_row:
                 log.error("Could not ensure shadow row %s/%s", signal_id, policy)
