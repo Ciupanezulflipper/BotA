@@ -440,6 +440,33 @@ if adx < 20.0:
                "filter_rr": 0.0, "filter_atr": 0.0,
                "filter_rejected": True, "filter_reasons": ["adx_regime"],
                "pattern_delta": 0}, sys.stdout, separators=(",",":"))
+    # SHADOW LANE — no production effect
+    if adx >= 15.0:
+        try:
+            import datetime as _sdt, json as _sj
+            _sp = {
+                "timestamp": _sdt.datetime.now(_sdt.timezone.utc).isoformat(),
+                "pair": pair,
+                "timeframe": tf,
+                "adx": round(adx, 2),
+                "direction_pre_gate": direction,
+                "score_partial_pre_gate": round(40.0 + ema_comp + rsi_comp + macd_comp + adx_comp, 1),
+                "confidence_partial_pre_gate": round(40.0 + ema_comp + rsi_comp + macd_comp + adx_comp, 1),
+                "entry": float(price),
+                "sl": 0.0,
+                "tp": 0.0,
+                "volatility": vol,
+                "reasons": f"ema_comp={ema_comp:.1f}|rsi_comp={rsi_comp:.1f}|macd_comp={macd_comp:.1f}|adx_comp={adx_comp:.1f}|{pullback_tag}|{d1_tag}",
+                "provider": "engine_A3",
+                "gate_status_current": "blocked_lt20",
+                "gate_status_shadow": "would_pass_lt15",
+                "d1_trend": d1_trend
+            }
+            _shadow_path = os.path.join(os.path.expanduser("~/BotA"), "logs", "shadow_adx_scoring.jsonl")
+            with open(_shadow_path, "a", encoding="utf-8") as _sf:
+                _sf.write(_sj.dumps(_sp, separators=(",",":")) + "\n")
+        except Exception:
+            pass
     sys.exit(0)
 
 # 5. Bollinger Bands component (volatility + price position)

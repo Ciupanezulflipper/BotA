@@ -574,3 +574,43 @@ supabase_publish.py called with pair/direction/score — logs to ERRLOG only on 
 - signals_pair_check constraint updated to include USDJPY
 - USDJPY publish now works end to end
 - Telegram + Supabase + ProfitLab pipeline fully synced for all 3 pairs
+
+## 2026-04-07 — ADX 15-20 shadow lane installed and validated
+
+### Summary
+- Added a shadow-only JSONL logger inside `tools/scoring_engine.sh` for the `15 <= ADX < 20` regime.
+- Insertion point is inside the Python heredoc, in the existing `if adx < 20.0:` block, after the production `json.dump(...)` and before `sys.exit(0)`.
+- Production behavior was preserved: the ADX hard gate still blocks live output exactly as before.
+
+### Safety checks
+- Shadow block writes only to `logs/shadow_adx_scoring.jsonl`.
+- No `print()` or `json.dump(..., sys.stdout)` inside the shadow block.
+- No Telegram, no Supabase, no external side effects.
+- Shadow write is wrapped in fail-safe exception handling.
+
+### Validation proof
+- Manual runtime test:
+  - `bash tools/scoring_engine.sh USDJPY M15`
+  - Production stdout remained a single valid JSON object.
+- Shadow file created successfully:
+  - `logs/shadow_adx_scoring.jsonl`
+- First validated shadow entry:
+  - pair: `USDJPY`
+  - timeframe: `M15`
+  - adx: `15.3`
+  - direction_pre_gate: `BUY`
+  - score_partial_pre_gate: `47.4`
+  - gate_status_current: `blocked_lt20`
+  - gate_status_shadow: `would_pass_lt15`
+
+### Interpretation
+- The shadow experiment is live.
+- First captured entry proves the lane works technically.
+- It does **not** justify lowering the production ADX gate yet, because the captured signal still had partial score below production quality threshold.
+
+### Files changed in this phase
+- `tools/scoring_engine.sh`
+
+### Next decision rule
+- Collect shadow entries over the validation window before any ADX gate change.
+- Do not lower the live ADX gate based on a single shadow entry.
