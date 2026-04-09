@@ -1,6 +1,6 @@
 # BOTA REMAINING FIXES MAP
 
-Last updated: 2026-04-08
+Last updated: 2026-04-09
 
 ---
 
@@ -16,7 +16,7 @@ Proof:
   - `python3 .../pause_guard.py`
 
 Notes:
-- Historical shell syntax errors may remain in old log lines
+- historical shell syntax errors may remain in old logs
 - active cron wiring is corrected
 
 ---
@@ -36,6 +36,23 @@ Proof:
 Notes:
 - startup/config blocker is resolved
 - scheduling path now exists in active cron
+
+---
+
+### OPS-BOOT-001 — Boot persistence for cron runtime
+Status: FIXED
+
+Proof:
+- real device reboot performed
+- post-reboot file timestamps advanced:
+  - `logs/cron.indicators.log`
+  - `logs/cron.signals.log`
+  - `logs/cron.shadow.log`
+- post-reboot heartbeat advanced:
+  - `2026-04-09T09:00:04... | OK | 0 active signals`
+
+Conclusion:
+- Termux:Boot + boot script + cron runtime persistence is working
 
 ---
 
@@ -89,22 +106,20 @@ What remains:
 
 ## 3) OPEN
 
-### Signal scarcity / no signals today
+### Signal scarcity / no signals received since 2026-04-06
 Status: OPEN
 
-Known likely contributors from logs:
-- `score<65`
-- `vetoed_by_H1`
-- `adx_regime_block`
-- `no_signal`
+Proven context:
+- runtime persistence is now proven working
+- old silent-period explanation cannot continue to rely on cron boot failure
+- recent logs show many blocks such as:
+  - `score<65`
+  - `vetoed_by_H1`
+  - `adx_regime_block`
+  - `no_signal`
 
-Not yet proven:
-- whether scarcity is mainly threshold-related
-- whether H1 veto is overly restrictive
-- whether current market regime is simply producing weak setups
-
-Next step after current integrity proof:
-- perform focused audit of today/recent blocked candidates by reason bucket
+Most likely next audit target:
+- quantify block-rate by reason bucket on fresh post-restart data
 
 ---
 
@@ -116,7 +131,7 @@ Proof:
 - not yet proven whether they currently affect result tracking after recent fixes
 
 Next step:
-- inspect recent closer behavior separately after shadow scheduling proof stabilizes
+- inspect recent closer behavior separately after signal-flow audit
 
 ---
 
@@ -134,11 +149,14 @@ Reason:
 
 ## 5) NEXT PROOF ORDER
 
-1. Verify scheduled shadow manager runs from cron
-2. Verify heartbeat continuity improves
-3. Wait for active signal and observe `ensure_shadow_row()` path
-4. Reassess duplicate evidence quality
-5. Audit signal scarcity / accuracy only after integrity proof is current
+1. Collect fresh post-restart signal-flow evidence
+2. Quantify signal blocks by reason
+3. Verify whether active candidates are mainly failing on:
+   - H1 veto
+   - ADX regime
+   - score threshold
+4. Reassess duplicate evidence quality only when fresh active rows exist
+5. Only then tune strategy thresholds
 
 ---
 
@@ -169,3 +187,8 @@ Reason:
 - Marked shadow manager env/bootstrap and scheduling fixed.
 - Recorded storage-boundary uniqueness hardening as installed and partially proven.
 - Added explicit next-proof order before any signal-accuracy tuning.
+
+### 2026-04-09
+- Added real reboot proof for boot persistence.
+- Marked cron boot/runtime persistence fixed.
+- Narrowed remaining root-cause space toward strategy/filter scarcity.

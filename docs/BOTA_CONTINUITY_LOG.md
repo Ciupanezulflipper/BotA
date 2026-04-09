@@ -37,3 +37,27 @@
   - heartbeat updates
   - ensure_shadow_row() execution path
 
+
+## [2026-04-09] Boot Persistence Proof (PROVEN)
+
+### Proven
+- Real device reboot performed
+- Termux:Boot boot hook executed successfully
+- `crond` restarted automatically after reboot
+- cron jobs resumed automatically after reboot
+- proof artifacts updated after reboot:
+  - `logs/cron.indicators.log`
+  - `logs/cron.signals.log`
+  - `logs/cron.shadow.log`
+  - `logs/shadow_manager_heartbeat.txt`
+
+### Conclusion
+- Boot persistence for cron-based BotA runtime is working
+- Prior runtime silence cannot now be attributed to missing boot autostart
+
+### Remaining focus
+- signal scarcity / over-filtering
+- H1 veto rate
+- ADX regime blocking
+- score threshold pressure
+
