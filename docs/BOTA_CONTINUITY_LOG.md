@@ -1,4 +1,3 @@
-
 ## [2026-04-08] Shadow Manager + Cron Fixes (PROVEN PARTIAL)
 
 ### Fixed
@@ -37,27 +36,76 @@
   - heartbeat updates
   - ensure_shadow_row() execution path
 
-
-## [2026-04-09] Boot Persistence Proof (PROVEN)
+## [2026-04-09] Runtime / Boot / D1 Refresh / Live No-Signal Root Cause
 
 ### Proven
-- Real device reboot performed
-- Termux:Boot boot hook executed successfully
-- `crond` restarted automatically after reboot
-- cron jobs resumed automatically after reboot
-- proof artifacts updated after reboot:
-  - `logs/cron.indicators.log`
-  - `logs/cron.signals.log`
-  - `logs/cron.shadow.log`
-  - `logs/shadow_manager_heartbeat.txt`
+- Cron runtime is healthy again:
+  - crond running
+  - logs/cron.signals.log updating
+  - logs/cron.indicators.log updating
+  - logs/cron.shadow.log updating
+  - shadow_manager heartbeat advancing
+- Boot persistence is proven:
+  - after real reboot, cron logs advanced automatically
+  - Termux boot path successfully restarted crond
+- Shadow manager startup path is working:
+  - tools/run_shadow_manager.sh works
+  - logs/cron.shadow.log now updates on schedule
+
+### D1 Cache Investigation
+- Original stale-cache issue was real:
+  - cache/d1_trend_EURUSD.json
+  - cache/d1_trend_GBPUSD.json
+  had remained stale from Apr 6
+- Broken owner path identified:
+  - tools/indicators_updater.sh
+  - function: refresh_d1_trend_cache()
+- Broken inline path produced:
+  - D1 EUR_USD error: HTTP Error 400: Bad Request
+  - D1 GBP_USD error: HTTP Error 400: Bad Request
+- Standalone path worked:
+  - bash tools/refresh_d1_cache.sh
+  - refreshed both EURUSD and GBPUSD D1 cache files successfully
+- indicators_updater.sh was then fixed so its internal D1 refresh now works too
+- Post-fix proof:
+  - bash syntax PASS
+  - D1 cache timestamps refreshed
+  - D1 cache contents now refresh correctly from inside tools/indicators_updater.sh
+
+### Current Live Strategy State (most important)
+- After D1 refresh fix, scorer still returns:
+  - EURUSD -> HOLD / no_signal|phase=Open
+  - GBPUSD -> HOLD / no_signal|phase=Open
+- Live proof shows this is NOT caused by D1 veto and NOT caused by ADX gate
+- Current live M15 gate result:
+  - EURUSD:
+    - bullish_trend=False
+    - bearish_trend=False
+    - pullback_buy=False
+    - pullback_sell=False
+    - direction_before_d1=HOLD
+  - GBPUSD:
+    - bullish_trend=False
+    - bearish_trend=False
+    - pullback_buy=False
+    - pullback_sell=False
+    - direction_before_d1=HOLD
 
 ### Conclusion
-- Boot persistence for cron-based BotA runtime is working
-- Prior runtime silence cannot now be attributed to missing boot autostart
+- BotA silence is no longer explained by dead cron, boot failure, or stale D1 cache corruption
+- Current no-signal state is now grounded in live scoring rules:
+  - there is no valid M15 trend/pullback setup under current entry logic
+- D1 trend remains SELL for both:
+  - EURUSD
+  - GBPUSD
+- But D1 is not the active blocker in the current snapshot because direction is already HOLD before D1 filter is applied
 
-### Remaining focus
-- signal scarcity / over-filtering
-- H1 veto rate
-- ADX regime blocking
-- score threshold pressure
-
+### Next Proof Step
+- Audit tools/scoring_engine.sh entry logic only:
+  - bullish_trend
+  - bearish_trend
+  - pullback_buy
+  - pullback_sell
+- Determine whether current no-signal behavior is:
+  - intended strict regime behavior
+  - or over-restrictive calibration

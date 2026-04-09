@@ -25,6 +25,7 @@
 #   - FETCH_BACKOFF_MAX (default 180s): cap backoff
 #   - FETCH_MIN_GAP_SECS (default 3s): min sleep between fetches to reduce 429
 ###############################################################################
+
 set -euo pipefail
 shopt -s inherit_errexit 2>/dev/null || true
 
@@ -34,7 +35,7 @@ CACHE="${ROOT}/cache"
 LOGS="${ROOT}/logs"
 
 PAIRS="${PAIRS:-"EURUSD GBPUSD XAUUSD USDJPY EURJPY"}"
-TIMEFRAMES="${TIMEFRAMES:-"M15 H4 D1"}"
+TIMEFRAMES="${TIMEFRAMES:-"M15 H1 H4 D1"}"
 
 FETCH_RETRIES="${FETCH_RETRIES:-5}"
 FETCH_BACKOFF_BASE="${FETCH_BACKOFF_BASE:-10}"
@@ -71,9 +72,9 @@ build_indicators_cli_args() {
     echo "no_cli"
     return 0
   fi
+
   supports() { grep -qF -- "$1" <<<"${help}"; }
 
-  # one arg per line
   if supports "--pair"; then
     printf '%s\n' "--pair" "${pair}"
   elif supports "--symbol"; then
@@ -101,6 +102,7 @@ build_indicators_cli_args() {
   elif supports "-o"; then
     printf '%s\n' "-o" "${out_path}"
   fi
+
   return 0
 }
 
@@ -118,7 +120,6 @@ fetch_with_retry() {
 
   while (( attempt <= FETCH_RETRIES )); do
     if bash "${TOOLS}/data_fetch_candles.sh" "${pair}" "${tf}" >/dev/null 2>>"${LOGS}/error.log"; then
-      # min gap to reduce 429 bursts across many pairs
       sleep "${FETCH_MIN_GAP_SECS}" 2>/dev/null || true
       [[ -s "${in_path}" ]] && return 0
       log "[UPDATER] FETCH  FAIL   ${pair} ${tf} input_missing_or_empty=${in_path} (attempt=${attempt}/${FETCH_RETRIES})"
@@ -128,15 +129,14 @@ fetch_with_retry() {
       log "[UPDATER] FETCH  FAIL   ${pair} ${tf} rc=${rc} (attempt=${attempt}/${FETCH_RETRIES})"
     fi
 
-    # Backoff + jitter (0-4s)
-    # backoff = min(max, base * 2^(attempt-1)) + jitter
     local pow=$(( attempt - 1 ))
     local backoff=$(( FETCH_BACKOFF_BASE * (1 << pow) ))
-    if (( backoff > FETCH_BACKOFF_MAX )); then backoff="${FETCH_BACKOFF_MAX}"; fi
+    if (( backoff > FETCH_BACKOFF_MAX )); then
+      backoff="${FETCH_BACKOFF_MAX}"
+    fi
     local jitter=$(( RANDOM % 5 ))
     local sleep_s=$(( backoff + jitter ))
 
-    # For last attempt, don't sleep again.
     if (( attempt == FETCH_RETRIES )); then
       break
     fi
@@ -148,6 +148,59 @@ fetch_with_retry() {
   done
 
   return 1
+}
+
+refresh_d1_trend_cache() {
+  source /data/data/com.termux/files/home/BotA/.env 2>/dev/null || true
+  source /data/data/com.termux/files/home/BotA/config/strategy.env 2>/dev/null || true
+  export OANDA_API_TOKEN OANDA_API_URL
+
+  python3 <<'PYEOF'
+import json
+import urllib.request
+import datetime
+import os
+
+TOKEN = os.environ.get("OANDA_API_TOKEN", "")
+URL = os.environ.get("OANDA_API_URL", "https://api-fxpractice.oanda.com")
+PAIRS = [("EURUSD", "EUR_USD"), ("GBPUSD", "GBP_USD")]
+
+for pair, instrument in PAIRS:
+    req = urllib.request.Request(
+        f"{URL}/v3/instruments/{instrument}/candles?count=50&granularity=D&price=M",
+        headers={"Authorization": f"Bearer {TOKEN}"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read())
+        candles = [c for c in data["candles"] if c.get("complete", True)]
+        closes = [float(c["mid"]["c"]) for c in candles]
+
+        def ema(v, p):
+            k = 2.0 / (p + 1)
+            r = sum(v[:p]) / p
+            for x in v[p:]:
+                r = x * k + r * (1 - k)
+            return r
+
+        e9 = ema(closes, 9)
+        e21 = ema(closes, 21)
+        trend = "BUY" if e9 > e21 else "SELL"
+        bundle = {
+            "pair": pair,
+            "ema9": e9,
+            "ema21": e21,
+            "trend": trend,
+            "weak": False,
+            "error": "",
+            "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }
+        path = f"/data/data/com.termux/files/home/BotA/cache/d1_trend_{pair}.json"
+        open(path, "w").write(json.dumps(bundle))
+        print(f"[D1] {pair}: {trend} EMA9={e9:.5f} EMA21={e21:.5f}")
+    except Exception as ex:
+        print(f"[D1] {pair} error: {ex}", flush=True)
+PYEOF
 }
 
 log "------------------------------------------------------------"
@@ -169,10 +222,8 @@ for pair in ${PAIRS}; do
   for tf in ${TIMEFRAMES}; do
     in_path="${CACHE}/${pair}_${tf}.json"
     out_path="${CACHE}/indicators_${pair}_${tf}.json"
-
     log "[UPDATER] ---- ${pair} ${tf} ----"
 
-    # 1) Fetch fresh raw cache first (with retry/backoff)
     if fetch_with_retry "${pair}" "${tf}" "${in_path}"; then
       log "[UPDATER] FETCH  OK     ${pair} ${tf} -> ${in_path}"
       python3 "${TOOLS}/api_credit_tracker.py" increment 1 >>"${LOGS}/error.log" 2>&1 || true
@@ -182,7 +233,6 @@ for pair in ${PAIRS}; do
       continue
     fi
 
-    # 2) Build indicators
     cli_lines="$(build_indicators_cli_args "${pair}" "${tf}" "${in_path}" "${out_path}")"
     if [[ "${cli_lines}" == "no_cli" ]]; then
       build_fail_count=$((build_fail_count+1))
@@ -209,7 +259,6 @@ for pair in ${PAIRS}; do
   done
 done
 
-# Optional fallback: if any builds failed and a pre16k backup exists, run it once.
 if (( build_fail_count > 0 )); then
   backup="$(find_latest_backup_updater)"
   if [[ -n "${backup}" && -f "${backup}" ]]; then
@@ -226,38 +275,8 @@ if (( build_fail_count > 0 )); then
   fi
 fi
 
+# Refresh D1 trend cache for all pairs (fail-safe)
+refresh_d1_trend_cache
+
 log "[UPDATER] DONE fetch_fail_count=${fetch_fail_count} build_fail_count=${build_fail_count}"
 exit 0
-
-# Refresh D1 trend cache for all pairs (every run, fail-safe)
-for _pair in EURUSD GBPUSD; do
-  python3 -c "
-import json, urllib.request, datetime, os
-TOKEN = os.environ.get('OANDA_API_TOKEN','')
-URL = os.environ.get('OANDA_API_URL','https://api-fxpractice.oanda.com')
-instrument = '${_pair}'.replace('USD','_USD').replace('EUR_','EUR_')
-# Fix instrument format
-p = '${_pair}'
-instrument = p[:3] + '_' + p[3:]
-req = urllib.request.Request(
-    f'{URL}/v3/instruments/{instrument}/candles?count=50&granularity=D&price=M',
-    headers={'Authorization': f'Bearer {TOKEN}'}
-)
-try:
-    with urllib.request.urlopen(req, timeout=10) as r:
-        data = json.loads(r.read())
-    candles = [c for c in data['candles'] if c.get('complete',True)]
-    closes = [float(c['mid']['c']) for c in candles]
-    def ema(v,p):
-        k=2.0/(p+1); r=sum(v[:p])/p
-        for x in v[p:]: r=x*k+r*(1-k)
-        return r
-    e9=ema(closes,9); e21=ema(closes,21)
-    trend='BUY' if e9>e21 else 'SELL'
-    bundle={'pair':'${_pair}','ema9':e9,'ema21':e21,'trend':trend,'weak':False,'error':'','updated_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
-    open(f\"/data/data/com.termux/files/home/BotA/cache/d1_trend_${_pair}.json\",'w').write(json.dumps(bundle))
-    print(f'D1 {instrument}: {trend} EMA9={e9:.5f} EMA21={e21:.5f}')
-except Exception as ex:
-    print(f'D1 {instrument} error: {ex}')
-" 2>/dev/null || true
-done

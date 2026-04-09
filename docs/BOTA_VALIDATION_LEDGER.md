@@ -13,18 +13,18 @@ Purpose:
 Status: PROVEN
 
 Evidence:
-- `crond` was manually started and remained running
-- `logs/cron.signals.log` updated at 2026-04-09 12:15
-- `logs/cron.indicators.log` updated at 2026-04-09 12:14
-- `logs/cron.shadow.log` exists and updated at 2026-04-09 12:15
-- `logs/shadow_manager_heartbeat.txt` advanced to `2026-04-09T09:15:04... | OK | 0 active signals`
+- crond running
+- logs/cron.signals.log advancing
+- logs/cron.indicators.log advancing
+- logs/cron.shadow.log advancing
+- shadow_manager heartbeat advancing
 
 Conclusion:
 - BotA cron runtime is alive and executing on schedule
 
 Repeat this check again only if:
 - cron logs stop advancing
-- `pgrep -af crond` shows no process
+- pgrep shows no crond
 - heartbeat goes stale again
 
 ---
@@ -33,20 +33,20 @@ Repeat this check again only if:
 Status: PROVEN
 
 Evidence:
-- Real device reboot performed
-- After reboot:
-  - `logs/cron.indicators.log` advanced
-  - `logs/cron.signals.log` advanced
-  - `logs/cron.shadow.log` appeared and advanced
-  - `logs/shadow_manager_heartbeat.txt` advanced
+- real device reboot performed
+- after reboot:
+  - cron.indicators.log advanced
+  - cron.signals.log advanced
+  - cron.shadow.log advanced
+  - shadow_manager_heartbeat advanced
 
 Conclusion:
-- Termux:Boot + `start-crond.sh` + cron persistence are working
+- boot persistence is working for crond / cron-driven BotA tasks
 
 Repeat this check again only if:
 - reboot behavior changes
 - boot scripts are edited
-- Android battery/background settings are changed
+- Android background/boot settings are changed
 
 ---
 
@@ -54,21 +54,13 @@ Repeat this check again only if:
 Status: PROVEN
 
 Evidence:
-- `tools/run_shadow_manager.sh` created and used
+- tools/run_shadow_manager.sh created and used
 - manual wrapper smoke test passed
-- `logs/shadow_manager.log` shows:
-  - `Schema compatibility: PASS`
-  - `OANDA_MODE=PRACTICE`
-  - normal completion
-- `logs/cron.shadow.log` now updates on schedule
+- logs/shadow_manager.log shows normal startup and completion
+- logs/cron.shadow.log now updates on schedule
 
 Conclusion:
 - Shadow manager startup/bootstrap path is working
-
-Repeat this check again only if:
-- wrapper file changes
-- env bootstrap changes
-- shadow manager stops logging
 
 ---
 
@@ -76,141 +68,81 @@ Repeat this check again only if:
 Status: INSTALLED_NOT_FULLY_EXERCISED
 
 Evidence:
-- `tools/be_shadow_manager.py` contains:
-  - `UNIQ_CONFLICT_ERR`
-  - `UNIQUE CONTRACT ERROR`
+- tools/be_shadow_manager.py contains UNIQ_CONFLICT_ERR / UNIQUE CONTRACT ERROR markers
 - file compiles successfully
 - wrapper smoke test passed
 
 Not yet proven:
-- real live insert path hitting `ensure_shadow_row()` under active-signal conditions
-- behavior when DB uniqueness contract is actually missing
+- real ensure_shadow_row() failure path under active-signal conditions
+- missing DB uniqueness contract behavior in live insert path
 
 Conclusion:
-- protection is installed, but not fully exercised with live active signals
-
-Next proof step:
-- wait for active production signals
-- inspect `ensure_shadow_row()` execution path in logs
+- protection is installed, but not yet fully exercised with live active signals
 
 ---
 
-## VALIDATION-005 — Runtime silence since Apr 6
-Status: PARTIALLY_EXPLAINED
+## VALIDATION-005 — Stale D1 cache bug
+Status: PROVEN_FIXED
 
 Evidence:
-- cron had been down earlier at one checkpoint
-- runtime is now restored
-- scorer outputs for EURUSD/GBPUSD still return `HOLD` + `no_signal|phase=Open`
+- stale D1 cache files existed for EURUSD / GBPUSD
+- broken owner path identified:
+  - tools/indicators_updater.sh
+  - refresh_d1_trend_cache()
+- broken inline path emitted HTTP 400 errors
+- standalone refresh_d1_cache.sh worked
+- updater file was replaced with working D1 refresh logic
+- post-fix proof:
+  - bash -n tools/indicators_updater.sh => PASS
+  - D1 refresh output printed for EURUSD and GBPUSD
+  - cache/d1_trend_EURUSD.json refreshed
+  - cache/d1_trend_GBPUSD.json refreshed
+  - updated_at values advanced
 
 Conclusion:
-- silence is not explained anymore by boot persistence or dead cron
-- remaining cause is in decision data / signal logic
+- D1 cache refresh corruption is fixed
 
-Repeat this check again only after:
-- D1 cache refresh bug is addressed
+Do not repeat:
+- stale-cache root cause investigation
+unless this updater file changes again or D1 cache stops updating
 
 ---
 
-## VALIDATION-006 — Direct scorer output for live watched pairs
+## VALIDATION-006 — Current live no-signal reason
 Status: PROVEN
 
 Evidence:
-- `bash tools/scoring_engine.sh EURUSD M15` ->
-  - `direction=HOLD`
-  - `reasons=no_signal|phase=Open`
-- `bash tools/scoring_engine.sh GBPUSD M15` ->
-  - `direction=HOLD`
-  - `reasons=no_signal|phase=Open`
-
-Indicator snapshots at same time were valid:
-- nonzero price
-- nonzero ATR
-- valid EMA/RSI/ADX
-- `tf_ok=True`
-- `error=` empty
+- scorer after D1 fix still returns:
+  - EURUSD HOLD no_signal|phase=Open
+  - GBPUSD HOLD no_signal|phase=Open
+- live M15 proof shows:
+  - bullish_trend=False
+  - bearish_trend=False
+  - pullback_buy=False
+  - pullback_sell=False
+  - direction_before_d1=HOLD
+- D1 trend is SELL for both, but direction is already HOLD before D1 filter
 
 Conclusion:
-- watcher is not the owner of the failure
-- scorer is intentionally returning HOLD on current live state
+- current live no-signal state is caused by entry logic not producing a tradeable trend/pullback setup
+- D1 veto is not the active blocker in the current snapshot
+- ADX gate is not the active blocker in the current snapshot
 
-Repeat this check again only after:
-- D1 cache refresh path is fixed
-- or scorer logic is changed
+Do not repeat:
+- boot/cron/D1-staleness checks before first re-checking current scoring conditions
 
 ---
 
-## VALIDATION-007 — Pullback gate vs D1 veto
-Status: PROVEN
-
-Evidence:
-- Manual condition check showed:
-  - `pullback_buy=True` for EURUSD
-  - `pullback_buy=True` for GBPUSD
-- Scorer still returned `HOLD`
-- D1 trend cache files contained:
-  - `cache/d1_trend_EURUSD.json` -> `trend: SELL`
-  - `cache/d1_trend_GBPUSD.json` -> `trend: SELL`
-- Both files were stale from Apr 6
-
-Conclusion:
-- valid M15 bullish setups are being reset to HOLD by stale D1 trend veto data
-
-Repeat this check again only after:
-- D1 trend cache files are refreshed successfully
-
----
-
-## VALIDATION-008 — D1 trend refresh path
-Status: PROVEN_BROKEN_PATH_OWNER_IDENTIFIED
-
-Owner file:
-- `tools/indicators_updater.sh`
-
-Evidence:
-- `refresh_d1_trend_cache()` located in `tools/indicators_updater.sh`
-- updater prints:
-  - `D1 EUR_USD error: HTTP Error 400: Bad Request`
-  - `D1 GBP_USD error: HTTP Error 400: Bad Request`
-- after full updater run:
-  - `cache/d1_trend_EURUSD.json` unchanged
-  - `cache/d1_trend_GBPUSD.json` unchanged
-  - both still stale from Apr 6
-
-Conclusion:
-- next technical fix target is `tools/indicators_updater.sh`
-- specifically `refresh_d1_trend_cache()`
-
-Next proof/fix step:
-- compare behavior of `tools/refresh_d1_cache.sh`
-- determine whether:
-  - standalone D1 refresh works
-  - or request/env/provider logic is wrong in both places
-
-Do NOT repeat:
-- cron runtime checks
-- boot persistence checks
-- generic watcher checks
-unless D1 path is first ruled out
-
----
-
-## VALIDATION-009 — Still unknown
+## VALIDATION-007 — Still unknown
 Status: UNKNOWN
 
 Unknowns:
-- whether `tools/refresh_d1_cache.sh` succeeds or fails the same way
-- whether the 400 comes from wrong instrument format, wrong URL, missing env, or provider behavior
-- whether fixing D1 cache alone will restore actual tradeable outputs, or whether ADX < 20 becomes the next blocker
+- whether current pullback/trend rules are intentionally strict or over-restrictive
+- whether future live snapshots will fail mainly on:
+  - no trend/pullback
+  - D1 veto
+  - ADX gate
+- whether strategy calibration should be changed after audit
 
----
-
-## RULES
-1. Never mark PROVEN without command/log/file evidence.
-2. Never collapse INSTALLED into PROVEN.
-3. Every new check must answer:
-   - what was tested
-   - what was proven
-   - what remains unknown
-   - when this check should be repeated
-4. If a check is already PROVEN and no relevant file changed, do not repeat it.
+Next target:
+- audit tools/scoring_engine.sh entry logic only
