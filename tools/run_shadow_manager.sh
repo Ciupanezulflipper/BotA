@@ -14,4 +14,10 @@ if [[ -f "${ROOT}/.env.runtime" ]]; then
   set +a
 fi
 
+if [[ -f "${ROOT}/config/strategy.env" ]]; then
+  set -a
+  . "${ROOT}/config/strategy.env"
+  set +a
+fi
+
 exec python3 "${ROOT}/tools/be_shadow_manager.py"
