@@ -151,9 +151,23 @@ if [[ "${PROVIDER_USED}" != "oanda" ]]; then
   log "[FETCH] Yahoo fallback: ${Y_SYMBOL} ${Y_INTERVAL} ${Y_RANGE}"
 
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL -A "${UA}" "${URL}" -o "${TMP_JSON}" 2>>"${ROOT}/logs/error.log" || die "curl failed"
+    YAHOO_HTTP=$(curl -sSL -A "${UA}" "${URL}" -o "${TMP_JSON}" -w "%{http_code}" --max-time 15 2>>"${ROOT}/logs/error.log" || echo "000")
+    if [[ "${YAHOO_HTTP}" == "429" ]]; then
+      log "[FETCH] Yahoo 429 rate-limited — skipping fallback"
+      exit 3
+    fi
+    [[ "${YAHOO_HTTP}" == "200" && -s "${TMP_JSON}" ]] || die "curl failed (http=${YAHOO_HTTP})"
   else
-    wget -qO "${TMP_JSON}" --user-agent="${UA}" "${URL}" 2>>"${ROOT}/logs/error.log" || die "wget failed"
+    TMP_WGET_HDR="$(mktemp 2>/dev/null || echo "${CACHE_DIR}/.tmp_whdr_${PAIR}_${TF}_$$.txt")"
+    wget -qO "${TMP_JSON}" --server-response --timeout=15 --user-agent="${UA}" "${URL}" \
+      2>"${TMP_WGET_HDR}" || true
+    if grep -q "HTTP.*429" "${TMP_WGET_HDR}" 2>/dev/null; then
+      rm -f "${TMP_WGET_HDR}" 2>/dev/null || true
+      log "[FETCH] Yahoo 429 rate-limited — skipping fallback"
+      exit 3
+    fi
+    rm -f "${TMP_WGET_HDR}" 2>/dev/null || true
+    [[ -s "${TMP_JSON}" ]] || die "wget failed"
   fi
   [[ -s "${TMP_JSON}" ]] || die "empty response (Yahoo)"
   PROVIDER_USED="yahoo"

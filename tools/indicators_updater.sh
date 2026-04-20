@@ -127,6 +127,10 @@ fetch_with_retry() {
     else
       rc=$?
       log "[UPDATER] FETCH  FAIL   ${pair} ${tf} rc=${rc} (attempt=${attempt}/${FETCH_RETRIES})"
+      if [[ "${rc}" -eq 3 ]]; then
+        log "[UPDATER] Yahoo rate-limited — skipping retries for ${pair} ${tf}"
+        return 1
+      fi
     fi
 
     local pow=$(( attempt - 1 ))
