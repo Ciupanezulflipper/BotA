@@ -101,3 +101,6 @@ tools/RULEBOOK_ACTIVE
 tools/NEXT_STEPS.sh
 config/strategy.env
 config/*.env
+tools/*.BAK.*
+!state/
+!state/STATE.json

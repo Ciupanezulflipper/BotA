@@ -1,0 +1,183 @@
+{
+  "_meta": {
+    "schema_version": "1.0",
+    "project": "BotA",
+    "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
+    "supabase_project": "ozgkeslgjqbqfewojnmr",
+    "runtime": "Termux Android arm64",
+    "last_updated": "YYYY-MM-DDTHH:MM:SSZ",
+    "updated_by": "human|claude|script",
+    "session_id": "describe the session briefly"
+  },
+
+  "git": {
+    "current_branch": "",
+    "latest_commit_hash": "",
+    "latest_commit_message": "",
+    "untracked_files": [],
+    "uncommitted_changes": []
+  },
+
+  "infrastructure": {
+    "crond_running": null,
+    "crond_pid": null,
+    "termux_boot_script_exists": null,
+    "boot_proof_last_entry": "",
+    "deadman_flag_exists": null,
+    "deadman_flag_age_min": null
+  },
+
+  "pipeline": {
+    "watcher": {
+      "scope_pairs": ["EURUSD", "GBPUSD"],
+      "scope_timeframes": ["M15"],
+      "stale_lock_fix_installed": true,
+      "lock_file_path": "logs/state/watcher.lock",
+      "last_run_utc": "",
+      "last_run_outcome": "",
+      "last_known_blocker": ""
+    },
+    "updater": {
+      "scope_pairs": ["EURUSD", "GBPUSD", "USDJPY", "EURJPY", "XAUUSD"],
+      "scope_timeframes": ["M15", "H1", "H4", "D1"],
+      "yahoo_429_exit3_installed": true,
+      "updater_skip_retry_rc3_installed": true,
+      "last_run_utc": "",
+      "last_run_outcome": "",
+      "fetch_fail_count_last_run": null,
+      "build_fail_count_last_run": null
+    },
+    "shadow_manager": {
+      "cron_schedule": "2,17,32,47 * * * *",
+      "supabase_env_fix_installed": true,
+      "env_source_file": "config/strategy.env",
+      "schema_check_status": "",
+      "last_heartbeat_utc": "",
+      "last_heartbeat_status": "",
+      "active_signals_last_run": null,
+      "policies_running": ["STATIC_MIRROR", "BE_1.0R"]
+    },
+    "heartbeat": {
+      "cron_schedule": "0 * * * *",
+      "deadman_alert_installed": true,
+      "deadman_threshold_min": 60,
+      "last_telegram_heartbeat_utc": "",
+      "last_deadman_alert_utc": "",
+      "last_recovery_alert_utc": ""
+    },
+    "d1_cache": {
+      "last_refresh_utc": "",
+      "eurusd_trend": "",
+      "eurusd_ema9": null,
+      "eurusd_ema21": null,
+      "gbpusd_trend": "",
+      "gbpusd_ema9": null,
+      "gbpusd_ema21": null
+    }
+  },
+
+  "market_data": {
+    "eurusd_m15_last_candle_utc": "",
+    "eurusd_m15_cache_age_min": null,
+    "gbpusd_m15_last_candle_utc": "",
+    "gbpusd_m15_cache_age_min": null,
+    "oanda_reachable": null,
+    "oanda_last_http_status": null,
+    "yahoo_last_http_status": null,
+    "network_state": "ONLINE|DEGRADED|OFFLINE"
+  },
+
+  "scoring": {
+    "eurusd_m15_adx": null,
+    "eurusd_m15_direction": "",
+    "eurusd_m15_score": null,
+    "eurusd_m15_blocker": "",
+    "gbpusd_m15_adx": null,
+    "gbpusd_m15_direction": "",
+    "gbpusd_m15_score": null,
+    "gbpusd_m15_blocker": "",
+    "filter_score_min": 65,
+    "telegram_min_score": 70,
+    "adx_hard_gate": 20.0
+  },
+
+  "shadow_adx_experiment": {
+    "logger_installed": true,
+    "shadow_gate_threshold": 15.0,
+    "log_path": "logs/shadow_adx_scoring.jsonl",
+    "entries_collected": null,
+    "last_entry_utc": "",
+    "last_entry_pair": "",
+    "last_entry_adx": null,
+    "last_entry_score_partial": null,
+    "promotion_criteria_met": false,
+    "promotion_criteria": {
+      "min_entries": 15,
+      "min_score_partial": 52.0,
+      "max_one_sided_pct": 80,
+      "d1_alignment_required": true
+    }
+  },
+
+  "supabase": {
+    "project_id": "ozgkeslgjqbqfewojnmr",
+    "region": "eu-west-1",
+    "signals_active_count": null,
+    "signals_closed_count": null,
+    "shadow_log_row_count": null,
+    "shadow_log_schema_verified": true,
+    "shadow_log_last_entry_utc": ""
+  },
+
+  "open_issues": [],
+
+  "resolved": [
+    {
+      "id": "stale-lock-2026-04-14",
+      "title": "Stale watcher.lock caused permanent scan stoppage",
+      "resolved_at": "2026-04-19",
+      "fix": "Added stale lock auto-cleanup in signal_watcher_pro.sh before flock check",
+      "file": "tools/signal_watcher_pro.sh"
+    },
+    {
+      "id": "yahoo-429-storm-2026-04-14",
+      "title": "Yahoo fallback hammered rate-limited endpoint with 5 retries",
+      "resolved_at": "2026-04-21",
+      "fix": "curl/wget detect HTTP 429 and exit code 3; updater breaks retry loop on rc=3",
+      "files": ["tools/data_fetch_candles.sh", "tools/indicators_updater.sh"]
+    },
+    {
+      "id": "deadman-missing-2026-04-14",
+      "title": "No alert when pipeline went silent for 5 days",
+      "resolved_at": "2026-04-21",
+      "fix": "Deadman alert block added to heartbeat.sh using shadow_manager_heartbeat.txt age",
+      "file": "tools/heartbeat.sh"
+    },
+    {
+      "id": "supabase-env-shadow-2026-04-14",
+      "title": "shadow_manager cron failed schema check because SUPABASE_URL/KEY not sourced",
+      "resolved_at": "2026-04-21",
+      "fix": "Added source config/strategy.env to run_shadow_manager.sh",
+      "file": "tools/run_shadow_manager.sh"
+    }
+  ],
+
+  "decisions": [
+    {
+      "id": "watcher-scope-locked",
+      "decision": "Watcher scope stays EURUSD GBPUSD M15 until shadow experiment has 15+ entries with score >= 52",
+      "decided_at": "2026-04-21",
+      "do_not_change": ["PAIRS", "TIMEFRAMES", "FILTER_SCORE_MIN", "ADX_GATE"]
+    },
+    {
+      "id": "alerts-csv-excluded",
+      "decision": "alerts.csv is excluded from all evidence chains — proven contaminated",
+      "decided_at": "2026-04-06"
+    },
+    {
+      "id": "oanda-primary-yahoo-fallback",
+      "decision": "OANDA is primary data source. Yahoo is fallback only. Never merge BotA with Forex Profit Lab bot.",
+      "decided_at": "2026-03-09"
+    }
+  ]
+}
