@@ -152,11 +152,11 @@ if [[ "${PROVIDER_USED}" != "oanda" ]]; then
 
   if command -v curl >/dev/null 2>&1; then
     YAHOO_HTTP=$(curl -sSL -A "${UA}" "${URL}" -o "${TMP_JSON}" -w "%{http_code}" --max-time 15 2>>"${ROOT}/logs/error.log" || echo "000")
-    if [[ "${YAHOO_HTTP}" == "429" ]]; then
+    if [[ "${YAHOO_HTTP}" = "429" ]]; then
       log "[FETCH] Yahoo 429 rate-limited — skipping fallback"
       exit 3
     fi
-    [[ "${YAHOO_HTTP}" == "200" && -s "${TMP_JSON}" ]] || die "curl failed (http=${YAHOO_HTTP})"
+    [[ "${YAHOO_HTTP}" = "200" && -s "${TMP_JSON}" ]] || die "curl failed (http=${YAHOO_HTTP})"
   else
     TMP_WGET_HDR="$(mktemp 2>/dev/null || echo "${CACHE_DIR}/.tmp_whdr_${PAIR}_${TF}_$$.txt")"
     wget -qO "${TMP_JSON}" --server-response --timeout=15 --user-agent="${UA}" "${URL}" \
