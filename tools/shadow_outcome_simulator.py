@@ -72,6 +72,14 @@ def pair_to_instrument(pair: str) -> str:
     return f"{pair_u[:3]}_{pair_u[3:]}"
 
 
+def validate_https_url(url: str) -> str:
+    raw = str(url or "").strip()
+    parsed = urllib.parse.urlparse(raw)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise RuntimeError(f"unsupported url scheme/netloc: {raw!r}")
+    return raw
+
+
 @dataclass
 class Candle:
     time: datetime
@@ -137,7 +145,7 @@ def load_existing_keys(path: Path) -> set[str]:
     return keys
 
 
-def spread_pips_for_pair(pair: str) -> float:
+def spread_pips_for_pair(_pair: str) -> float:
     # Conservative default unless user later wants pair-specific overrides.
     return SPREAD_PIPS_DEFAULT
 
@@ -171,7 +179,11 @@ def oanda_fetch_candles(pair: str, tf: str, start_dt: datetime, end_dt: datetime
         "from": start_dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
         "to": end_dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
-    url = f"{OANDA_API_URL}/v3/instruments/{instrument}/candles?{urllib.parse.urlencode(params)}"
+
+    base_url = validate_https_url(OANDA_API_URL)
+    url = f"{base_url}/v3/instruments/{instrument}/candles?{urllib.parse.urlencode(params)}"
+    validate_https_url(url)
+
     req = urllib.request.Request(
         url,
         headers={
@@ -286,7 +298,6 @@ def main() -> int:
 
     existing_keys = set() if args.allow_duplicates else load_existing_keys(out_path)
     results: List[Dict[str, Any]] = []
-
     processed = 0
     duplicates_skipped = 0
 
@@ -359,7 +370,7 @@ def main() -> int:
                 row,
                 "SKIP_TP_TOO_SMALL",
                 ts,
-                notes=f"tp_pips={tp_pips} < min_tp_pips={MIN_TP_PIPS}"
+                notes=f"tp_pips={tp_pips} < min_tp_pips={MIN_TP_PIPS}",
             ))
             processed += 1
             continue
