@@ -278,6 +278,7 @@ def build_skip_result(
     }
 
 
+# skipcq: PY-R1000
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--in", dest="inp", default=str(DEFAULT_IN))

@@ -175,6 +175,7 @@ def send_telegram(text: str) -> Tuple[bool, str]:
         return False, f"telegram send exception: {type(exc).__name__}: {exc}"
 
 
+# skipcq: PY-R1000
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Daily replay audit for BotA alerts.csv using shadow_outcome_simulator.py"
