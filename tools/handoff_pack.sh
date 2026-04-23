@@ -47,9 +47,10 @@ STATE_TS=""
 if [[ -f state/STATE.json ]]; then
   STATE_TS="$(python3 - <<'PY'
 import json
+
 try:
-    d = json.load(open("state/STATE.json"))
-    print(d.get("as_of_utc", ""))
+    data = json.load(open("state/STATE.json", "r", encoding="utf-8"))
+    print(data.get("_meta", {}).get("last_updated", ""))
 except Exception:
     print("")
 PY
@@ -78,8 +79,8 @@ import datetime as dt
 state_ts = sys.argv[1]
 proof_ts = sys.argv[2]
 
-def parse(s: str):
-    return dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+def parse(value: str):
+    return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 try:
     print("stale" if parse(state_ts) < parse(proof_ts) else "fresh")
@@ -87,9 +88,9 @@ except Exception:
     print("unknown")
 PY
 )"
-  if [[ "${CMP}" == "stale" ]]; then
+  if [[ "${CMP}" = "stale" ]]; then
     add_warning "state_json_older_than_cache_or_indicators"
-  elif [[ "${CMP}" == "unknown" ]]; then
+  elif [[ "${CMP}" = "unknown" ]]; then
     add_warning "state_json_timestamp_unparseable"
   fi
 fi
@@ -128,13 +129,14 @@ echo
 echo "--- CURRENT WATCHER SCOPE FROM STATE ---"
 python3 - <<'PY'
 import json
+
 try:
-    d = json.load(open("state/STATE.json"))
-    scope = d.get("live_watcher_scope", {})
-    print("pairs=", scope.get("pairs", []))
-    print("timeframes=", scope.get("timeframes", []))
-except Exception as e:
-    print("state_scope_error=", e)
+    data = json.load(open("state/STATE.json", "r", encoding="utf-8"))
+    scope = data.get("pipeline", {}).get("watcher", {})
+    print("pairs=", scope.get("scope_pairs", []))
+    print("timeframes=", scope.get("scope_timeframes", []))
+except Exception as exc:
+    print("state_scope_error=", exc)
 PY
 echo
 
@@ -143,8 +145,12 @@ tail -n 30 logs/error.log 2>/dev/null || echo "logs/error.log missing"
 echo
 
 echo "--- D1 cache mtimes ---"
-ls -l --time-style=long-iso cache/d1_trend_*.json 2>/dev/null || echo "No d1_trend caches found"
+find cache -maxdepth 1 -type f -name 'd1_trend_*.json' -exec ls -l --time-style=long-iso {} + 2>/dev/null \
+  || echo "No d1_trend caches found"
 echo
 
 echo "--- indicator mtimes (latest 10) ---"
-ls -lt --time-style=long-iso cache/indicators_*.json 2>/dev/null | head -n 10 || echo "No indicators found"
+find cache -maxdepth 1 -type f -name 'indicators_*.json' -printf '%TY-%Tm-%Td %TH:%TM %p\n' 2>/dev/null \
+  | sort -r \
+  | head -n 10 \
+  || echo "No indicators found"

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-
 import json
-import os
 
 PIP_SIZE = 0.01  # USDJPY default
+
 
 def calculate_atr(candles, period=14):
     """
@@ -14,7 +13,6 @@ def calculate_atr(candles, period=14):
         "close": float
     }
     """
-
     if len(candles) < period + 1:
         return None
 
@@ -28,15 +26,14 @@ def calculate_atr(candles, period=14):
         tr = max(
             high - low,
             abs(high - prev_close),
-            abs(low - prev_close)
+            abs(low - prev_close),
         )
         trs.append(tr)
 
     # take last N TR values
     recent_trs = trs[-period:]
-
-    atr = sum(recent_trs) / len(recent_trs)
-    return atr
+    atr_result = sum(recent_trs) / len(recent_trs)
+    return atr_result
 
 
 def atr_in_pips(atr_value):
@@ -64,8 +61,13 @@ if __name__ == "__main__":
         {"high": 114, "low": 112, "close": 113},
     ]
 
-    atr = calculate_atr(sample)
-    print(json.dumps({
-        "atr_raw": atr,
-        "atr_pips": atr_in_pips(atr)
-    }, indent=2))
+    sample_atr = calculate_atr(sample)
+    print(
+        json.dumps(
+            {
+                "atr_raw": sample_atr,
+                "atr_pips": atr_in_pips(sample_atr),
+            },
+            indent=2,
+        )
+    )

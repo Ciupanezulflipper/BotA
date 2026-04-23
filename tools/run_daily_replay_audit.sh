@@ -1,14 +1,15 @@
 #!/data/data/com.termux/files/usr/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+ROOT="$(CDPATH='' cd -- "${SCRIPT_DIR}/.." && pwd)"
 LOG_DIR="${ROOT}/logs"
 mkdir -p "${LOG_DIR}"
 
 env_safe_source() {
   local file="$1"
   [[ -f "${file}" ]] || return 0
+
   eval "$(
     python3 - "${file}" <<'PY'
 import re
