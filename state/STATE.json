@@ -5,13 +5,13 @@
     "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
     "supabase_project": "ozgkeslgjqbqfewojnmr",
     "runtime": "Termux Android arm64",
-    "last_updated": "2026-04-22T00:00:00Z",
+    "last_updated": "2026-04-23T00:00:00Z",
     "updated_by": "claude",
-    "session_id": "2026-04-21 full recovery + workflow setup"
+    "session_id": "post-merge STATE.json refresh"
   },
   "git": {
-    "current_branch": "hotfix/rate-limit-deadman-20260421",
-    "latest_commit_hash": "ac91f1e",
+    "current_branch": "main",
+    "latest_commit_hash": "7c3a18d",
     "dirty_tracked_files_audit": {
       "tools/data_fetch_candles.sh": "INTENTIONAL - COMMITTED ad704fd/acb7e2e",
       "tools/market_open.sh": "INTENTIONAL - COMMITTED acb7e2e",
@@ -20,7 +20,8 @@
       "tools/signal_watcher_pro.sh": "SUSPICIOUS - RESTORED TO HEAD",
       "tools/supabase_publish.py": "SUSPICIOUS - RESTORED TO HEAD"
     },
-    "state_json_git_blocked": false
+    "state_json_git_blocked": false,
+    "latest_commit_message": "Hotfix/rate limit deadman 20260421 (#3)"
   },
   "infrastructure": {
     "crond_running": true,
@@ -185,12 +186,6 @@
     "false_diagnosis_rejected": "ChatGPT-5 suggested missing last_candle_ts_processed - FALSIFIED by direct MCP check"
   },
   "open_issues": [
-    {
-      "id": "hotfix-pr-not-merged",
-      "title": "hotfix/rate-limit-deadman-20260421 not yet merged to main",
-      "status": "open",
-      "next_step": "Verify STATE.json canonical then merge PR"
-    },
     {
       "id": "suspicious-4-files-provenance",
       "title": "4 files had large unaudited diffs - restored to HEAD, provenance unknown",
