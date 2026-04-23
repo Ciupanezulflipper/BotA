@@ -20,7 +20,6 @@ try:
 except Exception:
     ZoneInfo = None  # type: ignore
 
-
 ROOT = Path.home() / "BotA"
 LOG_DIR = ROOT / "logs"
 REPLAY_DIR = LOG_DIR / "replay_audit"
@@ -167,7 +166,7 @@ def send_telegram(text: str) -> Tuple[bool, str]:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
+        with urllib.request.urlopen(req, timeout=20) as resp:  # nosec B310
             payload = resp.read().decode("utf-8", errors="replace")
         if '"ok":true' in payload:
             return True, "sent"
@@ -208,6 +207,7 @@ def main() -> int:
     args = parser.parse_args()
 
     audit_date = target_local_date(args.date, args.timezone)
+
     alerts_path = Path(args.alerts)
     if not alerts_path.is_absolute():
         alerts_path = ROOT / alerts_path
@@ -334,6 +334,7 @@ def main() -> int:
             text=True,
             cwd=str(ROOT),
             env=os.environ.copy(),
+            check=False,
         )
         sim_stdout = proc.stdout.strip()
         sim_stderr = proc.stderr.strip()
@@ -343,7 +344,6 @@ def main() -> int:
             print(sim_stdout)
         if sim_stderr:
             print(sim_stderr, file=sys.stderr)
-
         if sim_rc != 0:
             print(f"ERROR: simulator rc={sim_rc}", file=sys.stderr)
             return sim_rc

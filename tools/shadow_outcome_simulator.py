@@ -193,7 +193,7 @@ def oanda_fetch_candles(pair: str, tf: str, start_dt: datetime, end_dt: datetime
         },
     )
 
-    with urllib.request.urlopen(req, timeout=20) as resp:
+    with urllib.request.urlopen(req, timeout=20) as resp:  # nosec B310
         payload = json.loads(resp.read().decode("utf-8"))
 
     raw = payload.get("candles", [])
