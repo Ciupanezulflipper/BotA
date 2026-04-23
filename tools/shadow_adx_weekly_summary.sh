@@ -3,14 +3,13 @@ set -euo pipefail
 
 ROOT="${HOME}/BotA"
 LOG_DIR="${ROOT}/logs"
-IN_JSONL="${LOG_DIR}/shadow_adx_scoring.jsonl"
-OUT_JSONL="${LOG_DIR}/shadow_adx_weekly_summary.jsonl"
 WINDOW_DAYS="${WINDOW_DAYS:-7}"
 
 mkdir -p "${LOG_DIR}"
 
 python3 - <<'PY'
 from __future__ import annotations
+
 import json
 import os
 import statistics
@@ -25,6 +24,7 @@ WINDOW_DAYS = int(os.environ.get("WINDOW_DAYS", "7"))
 now_utc = datetime.now(timezone.utc)
 window_start = now_utc - timedelta(days=WINDOW_DAYS)
 
+
 def parse_iso(ts: str):
     try:
         dt = datetime.fromisoformat(ts)
@@ -33,6 +33,7 @@ def parse_iso(ts: str):
         return dt.astimezone(timezone.utc)
     except Exception:
         return None
+
 
 rows = []
 if os.path.exists(IN_JSONL):
@@ -56,9 +57,19 @@ for r in rows:
     if ts >= window_start:
         window_rows.append(r)
 
-non_hold = [r for r in window_rows if str(r.get("direction_pre_gate", "")).upper() != "HOLD"]
-buy_count = sum(1 for r in non_hold if str(r.get("direction_pre_gate", "")).upper() == "BUY")
-sell_count = sum(1 for r in non_hold if str(r.get("direction_pre_gate", "")).upper() == "SELL")
+non_hold = [
+    r for r in window_rows
+    if str(r.get("direction_pre_gate", "")).upper() != "HOLD"
+]
+
+buy_count = sum(
+    1 for r in non_hold
+    if str(r.get("direction_pre_gate", "")).upper() == "BUY"
+)
+sell_count = sum(
+    1 for r in non_hold
+    if str(r.get("direction_pre_gate", "")).upper() == "SELL"
+)
 
 scores = []
 adx_values = []
@@ -71,6 +82,7 @@ for r in non_hold:
         scores.append(float(r.get("score_partial_pre_gate", 0.0) or 0.0))
     except Exception:
         pass
+
     try:
         adx_values.append(float(r.get("adx", 0.0) or 0.0))
     except Exception:
@@ -108,7 +120,6 @@ summary = {
 }
 
 os.makedirs(LOG_DIR, exist_ok=True)
-
 with open(OUT_JSONL, "a", encoding="utf-8") as f:
     f.write(json.dumps(summary, separators=(",", ":"), ensure_ascii=False) + "\n")
 
