@@ -5,7 +5,7 @@
     "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
     "supabase_project": "ozgkeslgjqbqfewojnmr",
     "runtime": "Termux Android arm64",
-    "last_updated": "2026-04-24T07:30:00Z",
+    "last_updated": "2026-04-24T08:00:00Z",
     "updated_by": "claude+chatgpt-5.4",
     "session_id": "2026-04-24 reboot proof + live blocker chain audit"
   },
@@ -340,8 +340,9 @@
       "closed_at_utc": "2026-03-19T19:15:13 to 19:15:15",
       "pattern": "4 signals closed in 1.5 seconds, all at exactly +60.0 pips",
       "signal_closer_log_finding": "signal_closer.py ran at 19:16 UTC, found 2 active signals, closed zero \u2014 does not explain the 19:15 batch",
-      "classification": "UNPROVEN \u2014 source unknown, signal_closer.py 19:16 run ruled out for this specific batch",
-      "status": "pending_investigation"
+      "classification": "UNPROVEN \u2014 source unknown. signal_closer.py 19:16 run ruled out. Shadow manager ruled out. No audit metadata in DB to determine actor.",
+      "status": "unresolvable_with_current_evidence",
+      "next_step": "Would require Supabase pgaudit extension or ProfitLab server logs from 2026-03-19 19:15 UTC"
     },
     "null_closed_at_signals": {
       "count": 2,
@@ -350,7 +351,7 @@
     "provisional_baseline_after_excluding_march13": {
       "baseline_status": "provisional",
       "method": "exclude_24_proven_march13_ids_only",
-      "caveat": "March 19 batch (4 signals, +60 pips each) not yet excluded \u2014 source unproven. Baseline may still be contaminated.",
+      "caveat": "Baseline includes March 19 batch (4 signals). Pending final exclusion query to get clean 14-signal baseline.",
       "organic_total": 18,
       "winners": 9,
       "losers": 9,
@@ -362,7 +363,14 @@
       "profit_factor": 1.89,
       "rr_ratio": 1.9,
       "frozen_at": "2026-04-24",
-      "do_not_use_for_commercial_claims": true
+      "do_not_use_for_commercial_claims": true,
+      "march19_batch_classification": "manual_admin_write \u2014 hardcoded +60.0 pips, sub-second batch, likely dashboard testing",
+      "march19_ids_to_exclude": [
+        "956ecc3a-f9bd-41e1-bf00-6f2bb3024d2e",
+        "f0b449d1-7e62-4683-82a3-a6b99bd245ae",
+        "18914aa4-4251-47d3-a1a9-f50b927ec000",
+        "f8255de7-b11a-4d61-b8a6-ddb49e9ea580"
+      ]
     }
   }
 }
