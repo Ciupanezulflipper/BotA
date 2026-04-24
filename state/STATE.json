@@ -5,7 +5,7 @@
     "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
     "supabase_project": "ozgkeslgjqbqfewojnmr",
     "runtime": "Termux Android arm64",
-    "last_updated": "2026-04-24T08:00:00Z",
+    "last_updated": "2026-04-24T08:30:00Z",
     "updated_by": "claude+chatgpt-5.4",
     "session_id": "2026-04-24 reboot proof + live blocker chain audit"
   },
@@ -226,6 +226,15 @@
       ],
       "status": "deferred",
       "next_step": "Audit in separate session with git log --follow per file"
+    },
+    {
+      "id": "signal-mutation-auditability",
+      "title": "No audit trail for signal status mutations \u2014 March 19 source permanently unresolvable",
+      "status": "open",
+      "priority": "next_engineering_session",
+      "proposed_fix": "Add closed_source, closed_by, close_reason columns to signals table, or implement append-only mutation log",
+      "why": "Without this, any future batch close event cannot be attributed to an actor or tool",
+      "constraint": "Do not implement before commercial validation is underway \u2014 schema change requires ProfitLab coordination"
     }
   ],
   "resolved": [
