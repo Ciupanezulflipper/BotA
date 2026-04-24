@@ -106,3 +106,6 @@ tools/*.BAK.*
 !state/STATE.json
 docs/*.BAK.*
 restore_cron.txt.BAK.*
+state/runtime_health.json
+tools/backup_pre_v2/
+.bota_supervisor_wait.txt

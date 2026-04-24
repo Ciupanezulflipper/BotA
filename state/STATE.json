@@ -5,8 +5,8 @@
     "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
     "supabase_project": "ozgkeslgjqbqfewojnmr",
     "runtime": "Termux Android arm64",
-    "last_updated": "2026-04-23T18:45:01Z",
-    "updated_by": "chatgpt-5.4",
+    "last_updated": "2026-04-24T06:00:00Z",
+    "updated_by": "claude+chatgpt-5.4",
     "session_id": "2026-04-24 reboot proof + live blocker chain audit"
   },
   "git": {
@@ -190,7 +190,11 @@
     "updater_log_advanced": "04:29",
     "shadow_log_advanced": "04:45",
     "manual_intervention_required": false,
-    "caveat": "One real-world reboot proven. Not guaranteed for all future Android/Termux conditions."
+    "caveat": "One real-world reboot proven. Not guaranteed for all future Android/Termux conditions.",
+    "second_reboot_proven_at": "2026-04-24",
+    "second_reboot_crond_pid": 24859,
+    "autonomous_supervisor_tick_proven": true,
+    "supervisor_tick_utc": "2026-04-24T05:45:02Z"
   },
   "open_issues": [
     {
