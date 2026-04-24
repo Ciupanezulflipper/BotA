@@ -5,7 +5,7 @@
     "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
     "supabase_project": "ozgkeslgjqbqfewojnmr",
     "runtime": "Termux Android arm64",
-    "last_updated": "2026-04-24T06:00:00Z",
+    "last_updated": "2026-04-24T07:30:00Z",
     "updated_by": "claude+chatgpt-5.4",
     "session_id": "2026-04-24 reboot proof + live blocker chain audit"
   },
@@ -324,5 +324,45 @@
       "decision": "state/STATE.json is single source of truth. One file. No hybrid schemas. Updated every session.",
       "decided_at": "2026-04-22"
     }
-  ]
+  ],
+  "profitlab_signals": {
+    "total_closed": 42,
+    "dashboard_win_rate_pct": 38,
+    "dashboard_note": "38% is contaminated by March 13 bulk close. Do not use for commercial claims.",
+    "march13_bulk_close": {
+      "count": 24,
+      "classification": "manual_or_semi_manual_batch_close",
+      "root_cause": "live execution of signal_closer.py \u2014 proven via log sequence",
+      "ids_excluded": 24
+    },
+    "march19_batch": {
+      "count": 4,
+      "closed_at_utc": "2026-03-19T19:15:13 to 19:15:15",
+      "pattern": "4 signals closed in 1.5 seconds, all at exactly +60.0 pips",
+      "signal_closer_log_finding": "signal_closer.py ran at 19:16 UTC, found 2 active signals, closed zero \u2014 does not explain the 19:15 batch",
+      "classification": "UNPROVEN \u2014 source unknown, signal_closer.py 19:16 run ruled out for this specific batch",
+      "status": "pending_investigation"
+    },
+    "null_closed_at_signals": {
+      "count": 2,
+      "note": "result_pips set but closed_at is NULL \u2014 data integrity issue, excluded from baseline"
+    },
+    "provisional_baseline_after_excluding_march13": {
+      "baseline_status": "provisional",
+      "method": "exclude_24_proven_march13_ids_only",
+      "caveat": "March 19 batch (4 signals, +60 pips each) not yet excluded \u2014 source unproven. Baseline may still be contaminated.",
+      "organic_total": 18,
+      "winners": 9,
+      "losers": 9,
+      "win_rate_pct": 50.0,
+      "avg_win_pips": 46.7,
+      "avg_loss_pips": -24.6,
+      "net_pips": 198.1,
+      "expectancy_pips": 11.0,
+      "profit_factor": 1.89,
+      "rr_ratio": 1.9,
+      "frozen_at": "2026-04-24",
+      "do_not_use_for_commercial_claims": true
+    }
+  }
 }
