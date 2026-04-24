@@ -24,3 +24,10 @@
   - `tools/handoff_pack.sh`
 - Rule:
   - No meaningful BotA fix is considered done until continuity + state + decision trail are updated
+
+## signal_closer.py role — 2026-04-24
+- Classification: manual guarded admin tool
+- Not cron-managed (confirmed via crontab -l | grep closer = empty)
+- Live execution requires: --live --confirm CLOSE_SIGNALS --max-batch N
+- Bulk close requires: --allow-bulk
+- Root cause of March 13: live default without guardrails — fixed in v2

@@ -207,3 +207,25 @@
 
 ### Next proof step
 - Force one watcher run now and inspect the newest watcher log lines
+
+## Architecture Lock — 2026-04-24 (Boot ownership model)
+
+### Frozen decisions
+- bota_supervisor.sh: FROZEN. Works correctly when run manually. No changes until reboot proof exists.
+- Boot script owns daemon resurrection. Cron owns recurring jobs. Supervisor owns detection and state logging once cron is alive.
+- ~/.termux/boot/start_bota.sh is the single point of autonomous crond recovery.
+
+### Android platform risk (production contract)
+- Termux battery optimization MUST be set to Unrestricted (not Optimized).
+- Termux:Boot battery optimization MUST be set to Unrestricted.
+- Termux:Boot app must be opened once after every fresh install or Android update.
+- Android 13+: BOOT_COMPLETED may be delayed until Termux is manually opened once after reboot.
+- Background restrictions in battery saver profiles can silently kill crond.
+- These are platform risks, not BotA code risks. Verify after every Android OS update.
+
+### Remaining proof required
+- One real phone reboot must produce:
+  - logs/boot.log entry: BOOT_OK crond_pid=XXXXX
+  - crond visible in ps -ef within 30s of boot
+  - logs/cron.supervisor.log advancing at next */5 tick without manual intervention
+- Until that proof exists, autonomous recovery is NOT fully proven.

@@ -5,9 +5,9 @@
     "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
     "supabase_project": "ozgkeslgjqbqfewojnmr",
     "runtime": "Termux Android arm64",
-    "last_updated": "2026-04-23T00:00:00Z",
-    "updated_by": "claude",
-    "session_id": "post-merge STATE.json refresh"
+    "last_updated": "2026-04-23T18:45:01Z",
+    "updated_by": "chatgpt-5.4",
+    "session_id": "2026-04-24 reboot proof + live blocker chain audit"
   },
   "git": {
     "current_branch": "main",
@@ -20,13 +20,12 @@
       "tools/signal_watcher_pro.sh": "SUSPICIOUS - RESTORED TO HEAD",
       "tools/supabase_publish.py": "SUSPICIOUS - RESTORED TO HEAD"
     },
-    "state_json_git_blocked": false,
-    "latest_commit_message": "Hotfix/rate limit deadman 20260421 (#3)"
+    "state_json_git_blocked": false
   },
   "infrastructure": {
     "crond_running": true,
     "termux_boot_script_exists": true,
-    "boot_proof_last_entry": "2026-04-13T08:15:54+03:00",
+    "boot_proof_last_entry": "2026-04-24T04:30:03+1000",
     "stale_lock_fix_installed": true,
     "deadman_alert_installed": true,
     "deadman_threshold_min": 60,
@@ -46,8 +45,8 @@
       "scope_locked": true,
       "scope_unlock_criteria": "15+ shadow_adx non-HOLD entries with score_partial >= 52, not >80% one-sided, D1 aligned",
       "stale_lock_fix": "installed - removes lockfile older than 900s",
-      "last_known_outcome": "FILTER REJECT - adx_regime_block",
-      "last_known_blocker": "ADX below 20.0: EURUSD 18.6, GBPUSD 9.6"
+      "last_known_outcome": "FILTER REJECT - market regime / no_signal or H1_trend_neutral",
+      "last_known_blocker": "M15 no_signal most cycles; occasional near-signal EURUSD cycles vetoed by H1_trend_neutral. No infrastructure blocker proven."
     },
     "updater": {
       "scope_pairs": [
@@ -77,7 +76,7 @@
       ],
       "d1_scope_note": "indicators_updater.sh hardcoded to EURUSD/GBPUSD only. refresh_d1_cache.sh covers 4 pairs.",
       "last_run_outcome": "fetch_fail_count=0 build_fail_count=0",
-      "last_run_utc": "2026-04-21"
+      "last_run_utc": "2026-04-24"
     },
     "shadow_manager": {
       "cron_schedule": "2,17,32,47 * * * *",
@@ -100,40 +99,38 @@
     },
     "d1_cache": {
       "eurusd_trend": "BUY",
-      "eurusd_ema9": 1.17287,
-      "eurusd_ema21": 1.16726,
+      "eurusd_ema9": 1.17342,
+      "eurusd_ema21": 1.1691,
       "gbpusd_trend": "BUY",
-      "gbpusd_ema9": 1.34737,
-      "gbpusd_ema21": 1.34183,
-      "last_refresh_utc": "2026-04-21",
-      "usdjpy_d1_note": "Refreshed 2026-04-21 - was stale since 2026-04-09",
+      "gbpusd_ema9": 1.34929,
+      "gbpusd_ema21": 1.34419,
+      "last_refresh_utc": "2026-04-24",
+      "usdjpy_d1_note": "Refreshed 2026-04-24 via updater build OK.",
       "xauusd_d1_note": "Refreshed 2026-04-21 - was stale since 2026-04-09"
     }
   },
   "market_data": {
     "oanda_last_http_status": 200,
-    "oanda_last_response_time_s": 1.5,
-    "yahoo_last_http_status": 429,
-    "network_state": "DEGRADED",
-    "network_state_reason": "OANDA reachable, Yahoo rate-limited",
-    "eurusd_m15_last_candle_utc": "2026-04-21T05:30:00Z",
-    "gbpusd_m15_last_candle_utc": "2026-04-21T05:30:00Z"
+    "oanda_last_response_time_s": null,
+    "yahoo_last_http_status": null,
+    "network_state": "OPERATIONAL",
+    "network_state_reason": "OANDA fetch/build OK after reboot proof; watcher/updater/shadow logs advancing.",
+    "eurusd_m15_last_candle_utc": null,
+    "gbpusd_m15_last_candle_utc": null
   },
   "scoring": {
-    "eurusd_m15_adx": 18.6,
     "eurusd_m15_direction": "HOLD",
     "eurusd_m15_score": 0.0,
-    "eurusd_m15_blocker": "adx_regime_block - ADX 18.6 < 20.0",
-    "gbpusd_m15_adx": 9.6,
+    "eurusd_m15_blocker": "no_signal|phase=Open",
     "gbpusd_m15_direction": "HOLD",
     "gbpusd_m15_score": 0.0,
-    "gbpusd_m15_blocker": "adx_regime_block - ADX 9.6 < 20.0",
-    "filter_score_min": 65,
-    "telegram_min_score": 70,
+    "gbpusd_m15_blocker": "no_signal|phase=Open",
+    "filter_score_min": 62,
+    "telegram_min_score": 0,
     "adx_hard_gate": 20.0,
-    "current_alert_silence_reason": "Market regime - not infrastructure failure",
+    "current_alert_silence_reason": "Market regime - M15 no_signal most cycles; near-signal EURUSD cycles vetoed by H1_trend_neutral. macro6 short-circuit is secondary, not primary.",
     "scorer_is_broken": false,
-    "scorer_pass_proof": "GBPUSD D1 scored 70.1, EURJPY D1 scored 85.5"
+    "scorer_pass_proof": "Structured scorer/fusion output is present; watcher reached 68.70-76.10 EURUSD near-signal cycles before H1 neutral veto."
   },
   "market_open_contract": {
     "fix_installed": true,
@@ -146,9 +143,9 @@
   "usdjpy_status": {
     "technical_ready": true,
     "live_scope_approved": false,
-    "technical_proof": "OANDA M15 fetch OK. score=76.4 phase=Open during open market.",
-    "fusion_rejection_reason": "macro6=3 and H1_trend_neutral during test window",
-    "d1_trend": "BUY as of 2026-04-21",
+    "technical_proof": "OANDA M15/H1/H4/D1 fetch/build OK after reboot proof.",
+    "fusion_rejection_reason": "Not approved for live watcher scope.",
+    "d1_trend": "BUY as of 2026-04-24 updater build",
     "decision": "NOT approved for live watcher. Technical validation != live approval.",
     "do_not_add_to_watcher": true
   },
@@ -174,7 +171,7 @@
       "d1_alignment_required": true,
       "all_criteria_met": false
     },
-    "key_insight": "score_partial=51.6 below FILTER_SCORE_MIN=65. Context preservation improves observability but will NOT restore alerts alone."
+    "key_insight": "score_partial=51.6 below live filter threshold. Context preservation improves observability but will NOT restore alerts alone."
   },
   "supabase": {
     "project_id": "ozgkeslgjqbqfewojnmr",
@@ -183,9 +180,37 @@
     "shadow_log_row_count": 2,
     "shadow_log_schema_verified": true,
     "schema_verification_method": "information_schema.columns via MCP - all 30 columns confirmed present",
-    "false_diagnosis_rejected": "ChatGPT-5 suggested missing last_candle_ts_processed - FALSIFIED by direct MCP check"
+    "false_diagnosis_rejected": "Missing last_candle_ts_processed diagnosis was falsified by direct MCP check."
+  },
+  "reboot_proof": {
+    "proven_at": "2026-04-24",
+    "result": "PASS",
+    "crond_pid_after_reboot": 29694,
+    "watcher_log_advanced": "04:30",
+    "updater_log_advanced": "04:29",
+    "shadow_log_advanced": "04:45",
+    "manual_intervention_required": false,
+    "caveat": "One real-world reboot proven. Not guaranteed for all future Android/Termux conditions."
   },
   "open_issues": [
+    {
+      "id": "news-on-disabled",
+      "title": "NEWS_ON unset - fusion macro path short-circuits to macro6=3/provider=off",
+      "status": "open",
+      "facts": [
+        "news_sentiment.py is implemented and working - direct CLI output returned macro6=0 via RSS for EURUSD and GBPUSD",
+        "NEWS_ON=0/unset causes m15_h1_fusion.sh lines 109-112 to bypass news_sentiment.py and inject macro6=3/provider=off",
+        "macro6=3 appears in filter_reasons but is not the primary signal blocker",
+        "primary active veto on near-signal cycles is H1_trend_neutral",
+        "latest direct H1 context proved ema9<ema21 and RSI<50 on both EURUSD and GBPUSD H1"
+      ],
+      "decision": "No config change approved yet. Enable NEWS_ON=1 only after a supportive H1 context and a near-signal cycle are observed.",
+      "do_not_change": [
+        "NEWS_ON",
+        "macro6 threshold",
+        "H1 fusion logic"
+      ]
+    },
     {
       "id": "suspicious-4-files-provenance",
       "title": "4 files had large unaudited diffs - restored to HEAD, provenance unknown",
@@ -200,6 +225,13 @@
     }
   ],
   "resolved": [
+    {
+      "id": "hotfix-pr-3-merged",
+      "title": "hotfix/rate-limit-deadman-20260421 merged to main",
+      "resolved_at": "2026-04-23",
+      "proof": "main HEAD 7c3a18d; STATE.json schema_version 1.1 on main; handoff_pack.sh runs from main",
+      "do_not_reopen": true
+    },
     {
       "id": "stale-lock",
       "title": "Stale watcher.lock blocked scans since 2026-04-14",
