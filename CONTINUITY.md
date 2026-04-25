@@ -229,3 +229,35 @@
   - crond visible in ps -ef within 30s of boot
   - logs/cron.supervisor.log advancing at next */5 tick without manual intervention
 - Until that proof exists, autonomous recovery is NOT fully proven.
+
+## Session Update — 2026-04-26 (BotA git auth migrated from HTTPS+PAT to SSH)
+
+### Fixed (confirmed)
+- BotA git auth path migrated from HTTPS + PAT to SSH
+- Existing local key `~/.ssh/id_ed25519` was reused; no new key was generated
+- GitHub SSH auth test passed:
+  - `Hi Ciupanezulflipper! You've successfully authenticated, but GitHub does not provide shell access.`
+- BotA remote changed to:
+  - `git@github.com:Ciupanezulflipper/BotA_Prod_2025_11.git`
+
+### Proven working
+- `git fetch origin` over SSH passed
+- `git push origin main` over SSH passed
+- latest proven push:
+  - `83dcbc9..5b781dc  main -> main`
+- `git remote -v` now shows SSH for fetch and push
+- `git config --get remote.origin.url` now returns SSH URL
+
+### Root-cause clarification
+- Previous Git path depended on HTTPS remote + stored credentials/PAT
+- BotA no longer depends on PAT for normal `git pull` / `git push`
+- Global `credential.helper=store` may still exist, but it is no longer the active auth path for BotA because BotA remote is now SSH
+
+### Current status
+- Git auth for BotA: CLOSED
+- Infra auth path for repo operations: SSH
+- PAT is no longer the primary git path for BotA
+
+### Next proof step
+- None required for BotA git auth migration
+- Optional future hygiene step: assess whether old stored HTTPS GitHub credentials should be removed from the global credential store
