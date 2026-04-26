@@ -50,3 +50,15 @@
 - Old PAT (ghp_miTfh...) was exposed in chat and revoked immediately
 - ~/.git-credentials GitHub entry removed after revocation
 - PAT no longer needed for BotA git operations
+
+## Gitleaks failure classification — 2026-04-26
+- Decision: treat current Gitleaks failure as likely valid historical secret exposure until proven otherwise
+- Status: LOCKED
+- Proven:
+  - custom OANDA rule is not matching env-var names
+  - code-level OANDA hits are env reads/usages only
+  - historical `.env` and `config/tele.env` were committed with secret-bearing fields
+- Do not change:
+  - do not loosen `.gitleaks.toml`
+  - do not allowlist `.env` or `config/tele.env`
+  - do not mark the Gitleaks failure as false positive

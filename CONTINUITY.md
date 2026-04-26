@@ -261,3 +261,32 @@
 ### Next proof step
 - None required for BotA git auth migration
 - Optional future hygiene step: assess whether old stored HTTPS GitHub credentials should be removed from the global credential store
+
+## Session Update — 2026-04-26 (Gitleaks root-cause clarified)
+
+### Proven working
+- Custom OANDA gitleaks rule is NOT the source of the current failure:
+  - it matches token-shaped values, not plain variable names
+- OANDA matches in code were proven to be env-var reads/usages only:
+  - `tools/data_fetch_candles.sh`
+  - `tools/backtest_bota.py`
+  - `tools/shadow_outcome_simulator.py`
+
+### Root-cause clarification
+- Historical secret-bearing files were committed in git history:
+  - `.env` introduced in commit `a60e5d51b430c90555bcec0cc0cd2343f1261747`
+  - `config/tele.env` introduced in commit `c0724ad36c4d68eafe2fa7bd78b1409173ebb108`
+- Historical `.env` contained multiple real secret fields / API-key fields (redacted during audit)
+- Historical `config/tele.env` contained Telegram credentials (redacted during audit)
+- These paths are not globally allowlisted in `.gitleaks.toml`
+- Therefore the current GitHub Actions Gitleaks failure is likely a valid historical-secrets finding, not a false positive from OANDA variable names
+
+### Do not do yet
+- Do NOT weaken `.gitleaks.toml`
+- Do NOT allowlist `.env` or `config/tele.env`
+- Do NOT classify the current Gitleaks failure as false positive
+
+### Next proof / decision step
+- Decide remediation path:
+  - rotate any still-live exposed credentials
+  - then decide whether to keep history as-is or do a history rewrite
