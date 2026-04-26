@@ -5,8 +5,8 @@
     "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
     "supabase_project": "ozgkeslgjqbqfewojnmr",
     "runtime": "Termux Android arm64",
-    "last_updated": "2026-04-24T08:30:00Z",
-    "updated_by": "claude+chatgpt-5.4",
+    "last_updated": "2026-04-26T01:33:36Z",
+    "updated_by": "chatgpt-5.4+claude",
     "session_id": "2026-04-24 reboot proof + live blocker chain audit"
   },
   "git": {
@@ -381,5 +381,19 @@
         "f8255de7-b11a-4d61-b8a6-ddb49e9ea580"
       ]
     }
+  },
+  "git_auth": {
+    "bota_remote_protocol": "SSH",
+    "remote_origin_url": "git@github.com:Ciupanezulflipper/BotA_Prod_2025_11.git",
+    "ssh_key_path": "~/.ssh/id_ed25519",
+    "ssh_key_auth_proven": true,
+    "git_fetch_over_ssh_passed": true,
+    "git_push_over_ssh_passed": true,
+    "pat_primary_for_normal_git": false,
+    "credential_helper_global": "store",
+    "git_credentials_store_cleaned": false,
+    "pat_revoked": "UNPROVEN",
+    "migrated_at": "2026-04-26",
+    "note": "BotA remote now uses SSH for normal git pull/push. Global credential.helper=store still exists, but BotA remote is SSH. PAT is no longer the primary git path for BotA."
   }
 }
