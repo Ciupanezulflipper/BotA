@@ -62,3 +62,15 @@
   - do not loosen `.gitleaks.toml`
   - do not allowlist `.env` or `config/tele.env`
   - do not mark the Gitleaks failure as false positive
+
+## Secret rotation scope — 2026-04-26
+- Decision: do not rotate all credentials in this session
+- Status: LOCKED
+- Priority for any near-term rotation:
+  - OANDA_API_TOKEN
+  - SUPABASE_SERVICE_KEY
+  - TELEGRAM_BOT_TOKEN
+- Deferred:
+  - lower-priority/read-only provider keys
+- Do not change:
+  - do not weaken .gitleaks.toml just to get green CI

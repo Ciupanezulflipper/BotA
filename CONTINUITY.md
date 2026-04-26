@@ -290,3 +290,31 @@
 - Decide remediation path:
   - rotate any still-live exposed credentials
   - then decide whether to keep history as-is or do a history rewrite
+
+## Session Update — 2026-04-26 (Secret rotation scope deferred)
+
+### Decision
+- Full credential rotation is intentionally deferred for now
+- Immediate priority, if rotation starts later, is limited to high-blast-radius secrets only:
+  - OANDA_API_TOKEN
+  - SUPABASE_SERVICE_KEY
+  - TELEGRAM_BOT_TOKEN
+
+### Deferred
+- Read-only / lower-priority provider keys are not being rotated in this session:
+  - TWELVE_DATA_API_KEY
+  - ALPHA_VANTAGE_API_KEY
+  - FINNHUB_API_KEY
+  - EODHD_API_KEY
+  - FMP_API_KEY
+  - POLYGON_API_KEY
+  - NEWS_API_KEY
+  - FRED_API_KEY
+  - RAPIDAPI_CALENDAR_KEY
+
+### Guardrail
+- Do NOT weaken .gitleaks.toml yet
+- Do NOT mark the historical exposure issue as resolved
+- Gitleaks remediation remains open until either:
+  - live critical secrets are rotated, and/or
+  - a history-rewrite decision is made
