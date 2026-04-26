@@ -5,13 +5,13 @@
     "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
     "supabase_project": "ozgkeslgjqbqfewojnmr",
     "runtime": "Termux Android arm64",
-    "last_updated": "2026-04-26T02:01:37Z",
+    "last_updated": "2026-04-26T02:48:45Z",
     "updated_by": "chatgpt-5.4+claude",
     "session_id": "2026-04-24 reboot proof + live blocker chain audit"
   },
   "git": {
     "current_branch": "main",
-    "latest_commit_hash": "7c3a18d",
+    "latest_commit_hash": "7040b22",
     "dirty_tracked_files_audit": {
       "tools/data_fetch_candles.sh": "INTENTIONAL - COMMITTED ad704fd/acb7e2e",
       "tools/market_open.sh": "INTENTIONAL - COMMITTED acb7e2e",
@@ -125,8 +125,8 @@
     "gbpusd_m15_direction": "HOLD",
     "gbpusd_m15_score": 0.0,
     "gbpusd_m15_blocker": "no_signal|phase=Open",
-    "filter_score_min": 62,
-    "telegram_min_score": 0,
+    "filter_score_min": 65,
+    "telegram_min_score": 70,
     "adx_hard_gate": 20.0,
     "current_alert_silence_reason": "Market regime - M15 no_signal most cycles; near-signal EURUSD cycles vetoed by H1_trend_neutral. macro6 short-circuit is secondary, not primary.",
     "scorer_is_broken": false,

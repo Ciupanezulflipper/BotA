@@ -45,12 +45,6 @@
 - Do not change:
   - `origin` back to HTTPS unless there is a separately documented reason
 
-## Auth path — 2026-04-25
-- BotA git auth: SSH via ~/.ssh/id_ed25519 (migrated from HTTPS+PAT)
-- Old PAT (ghp_miTfh...) was exposed in chat and revoked immediately
-- ~/.git-credentials GitHub entry removed after revocation
-- PAT no longer needed for BotA git operations
-
 ## Gitleaks failure classification — 2026-04-26
 - Decision: treat current Gitleaks failure as likely valid historical secret exposure until proven otherwise
 - Status: LOCKED

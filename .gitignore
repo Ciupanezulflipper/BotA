@@ -4,6 +4,9 @@
 # =========================
 
 # --- Secrets (never commit) ---
+.git-credentials
+*.key
+*.pem
 .env
 .env*
 .env.*
