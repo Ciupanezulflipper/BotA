@@ -724,4 +724,19 @@ Experiments approved for future testing but not yet started or not yet meeting p
 
 ---
 
+### EXP-040
+
+| Field | Value |
+|---|---|
+| **ID** | EXP-040 |
+| **Date** | 2026-04-29 |
+| **Category** | BASELINE |
+| **Description** | Clean 14-signal organic baseline computed after excluding March 13 (24 IDs) and March 19 (4 IDs confirmed) |
+| **Result** | 5W/9L, 35.7% WR, -41.9 pips net, expectancy -3.0, profit factor 0.81 |
+| **Key finding** | March 19 batch (+240 pips) was inflating provisional baseline. Removal flips result from positive to negative. |
+| **Verdict** | INCONCLUSIVE — 14 signals insufficient for any strategy conclusion. Do not use for commercial claims. Do not act on negative result until 30+ clean signals accumulated. |
+| **Source** | Supabase Query 1B direct, 2026-04-29 |
+
+---
+
 *Last updated: 2026-04-29. Sources: BOTLOG.md, GEMS.md, DECISIONS.md, RESOLVED.md, CONTINUITY.md, state/STATE.json, config/strategy.env, SIGNALS_LOG.md, git log --all. No entries invented — every row maps to a proven source.*

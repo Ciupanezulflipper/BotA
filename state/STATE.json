@@ -366,7 +366,7 @@
       "note": "result_pips set but closed_at is NULL \u2014 data integrity issue, excluded from baseline"
     },
     "provisional_baseline_after_excluding_march13": {
-      "baseline_status": "superseded",
+      "baseline_status": "SUPERSEDED — see clean_baseline_after_excluding_both_batches",
       "superseded_by": "clean_baseline_after_excluding_both_batches",
       "method": "exclude_24_proven_march13_ids_only",
       "caveat": "Included March 19 batch (4 signals at +60.0 pips each). Inflated by contamination. Superseded 2026-04-29.",
