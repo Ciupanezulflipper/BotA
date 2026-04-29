@@ -706,4 +706,22 @@ Experiments approved for future testing but not yet started or not yet meeting p
 
 ---
 
+### EXP-039
+
+| Field | Value |
+|---|---|
+| **ID** | EXP-039 |
+| **Date** | 2026-04-29 |
+| **Category** | THRESHOLD |
+| **Parameters** | Proposed FILTER_SCORE_MIN 65 → 55 |
+| **Pairs/TFs** | EURUSD, GBPUSD / M15 |
+| **Reason** | Investigate whether 55-64 near-miss band contained viable signals |
+| **Evidence** | Supabase query on all organic closed signals (excluding 28 contamination IDs). Zero rows returned in 55-64 band. |
+| **Outcome** | No data — gate blocked before supabase_publish.py so signals in this range were never inserted |
+| **Verdict** | INCONCLUSIVE — zero published live Supabase data in 55-64 band. Cannot evaluate without shadow ADX log (not yet at promotion criteria) or a dedicated backtest. |
+| **Do not retry until** | Shadow ADX promotion criteria met (15+ non-HOLD entries, score_partial>=52, ≤80% one-sided, D1 aligned) OR a clean backtest is run |
+| **Source** | Supabase query 2026-04-29, STRATEGY_EXPERIMENTS.md session |
+
+---
+
 *Last updated: 2026-04-29. Sources: BOTLOG.md, GEMS.md, DECISIONS.md, RESOLVED.md, CONTINUITY.md, state/STATE.json, config/strategy.env, SIGNALS_LOG.md, git log --all. No entries invented — every row maps to a proven source.*
