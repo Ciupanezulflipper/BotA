@@ -5,9 +5,9 @@
     "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
     "supabase_project": "ozgkeslgjqbqfewojnmr",
     "runtime": "Termux Android arm64",
-    "last_updated": "2026-04-26T02:48:45Z",
-    "updated_by": "chatgpt-5.4+claude",
-    "session_id": "2026-04-24 reboot proof + live blocker chain audit"
+    "last_updated": "2026-04-29T00:00:00Z",
+    "updated_by": "claude-sonnet-4-6",
+    "session_id": "2026-04-29 clean baseline + score gate audit"
   },
   "git": {
     "current_branch": "main",
@@ -350,17 +350,26 @@
       "pattern": "4 signals closed in 1.5 seconds, all at exactly +60.0 pips",
       "signal_closer_log_finding": "signal_closer.py ran at 19:16 UTC, found 2 active signals, closed zero \u2014 does not explain the 19:15 batch",
       "classification": "UNPROVEN \u2014 source unknown. signal_closer.py 19:16 run ruled out. Shadow manager ruled out. No audit metadata in DB to determine actor.",
-      "status": "unresolvable_with_current_evidence",
-      "next_step": "Would require Supabase pgaudit extension or ProfitLab server logs from 2026-03-19 19:15 UTC"
+      "status": "confirmed_excluded",
+      "ids_confirmed": [
+        "956ecc3a-f9bd-41e1-bf00-6f2bb3024d2e",
+        "f0b449d1-7e62-4683-82a3-a6b99bd245ae",
+        "18914aa4-4251-47d3-a1a9-f50b927ec000",
+        "f8255de7-b11a-4d61-b8a6-ddb49e9ea580"
+      ],
+      "ids_confirmed_by": "Query 1A — MCP Supabase direct 2026-04-29. Exactly 4 rows returned matching closed_at window + result_pips=60.0. IDs match march19_ids_to_exclude.",
+      "source_unresolvable": true,
+      "source_unresolvable_note": "Would require Supabase pgaudit extension or ProfitLab server logs from 2026-03-19 19:15 UTC"
     },
     "null_closed_at_signals": {
       "count": 2,
       "note": "result_pips set but closed_at is NULL \u2014 data integrity issue, excluded from baseline"
     },
     "provisional_baseline_after_excluding_march13": {
-      "baseline_status": "provisional",
+      "baseline_status": "superseded",
+      "superseded_by": "clean_baseline_after_excluding_both_batches",
       "method": "exclude_24_proven_march13_ids_only",
-      "caveat": "Baseline includes March 19 batch (4 signals). Pending final exclusion query to get clean 14-signal baseline.",
+      "caveat": "Included March 19 batch (4 signals at +60.0 pips each). Inflated by contamination. Superseded 2026-04-29.",
       "organic_total": 18,
       "winners": 9,
       "losers": 9,
@@ -372,14 +381,27 @@
       "profit_factor": 1.89,
       "rr_ratio": 1.9,
       "frozen_at": "2026-04-24",
+      "do_not_use_for_commercial_claims": true
+    },
+    "clean_baseline_after_excluding_both_batches": {
+      "baseline_status": "final",
+      "method": "exclude_28_ids_march13_24_plus_march19_4",
+      "excluded_march13_count": 24,
+      "excluded_march19_count": 4,
+      "excluded_total_confirmed": 28,
+      "clean_total": 14,
+      "winners": 5,
+      "losers": 9,
+      "win_rate_pct": 35.7,
+      "avg_win_pips": 36.0,
+      "avg_loss_pips": -24.6,
+      "net_pips": -41.9,
+      "expectancy_pips": -3.0,
+      "profit_factor": 0.81,
+      "frozen_at": "2026-04-29",
+      "computed_by": "Query 1B — MCP Supabase direct 2026-04-29",
       "do_not_use_for_commercial_claims": true,
-      "march19_batch_classification": "manual_admin_write \u2014 hardcoded +60.0 pips, sub-second batch, likely dashboard testing",
-      "march19_ids_to_exclude": [
-        "956ecc3a-f9bd-41e1-bf00-6f2bb3024d2e",
-        "f0b449d1-7e62-4683-82a3-a6b99bd245ae",
-        "18914aa4-4251-47d3-a1a9-f50b927ec000",
-        "f8255de7-b11a-4d61-b8a6-ddb49e9ea580"
-      ]
+      "note": "Net negative. March 19 batch was heavily inflating the provisional baseline (+198.1 pips → -41.9 pips after exclusion). 14 signals is statistically insufficient for any strategy conclusion."
     }
   },
   "git_auth": {
