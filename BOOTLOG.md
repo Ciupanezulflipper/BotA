@@ -30,3 +30,11 @@
 - Watcher reached scoring/filter: PASS.
 - Strategy changed: NO.
 - Remaining scheduler check: exact `crond` and `market_open.sh`.
+
+## 2026-05-07T06:34:51Z — Bootlog: market_open.sh server-clock patch
+
+- File replaced: `tools/market_open.sh`
+- Reason: Android/device UTC drift during ship sea-day time changes.
+- New behavior: uses HTTPS Date headers to compute server UTC.
+- Fail behavior: Closed if server clock unavailable.
+- Strategy changed: NO.

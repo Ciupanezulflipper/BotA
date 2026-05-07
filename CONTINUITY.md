@@ -381,3 +381,17 @@
 - Confirm exact crond daemon with `pgrep -x crond`.
 - Confirm `tools/market_open.sh` allows watcher during valid market time.
 - If market gate fails incorrectly, patch market gate separately.
+
+## 2026-05-07T06:34:51Z — market_open.sh patched to server UTC
+
+### Fixed / proven
+- `tools/market_open.sh` replaced with server-clock based market gate.
+- Reason: device UTC is wrong by ~7116 seconds during cruise ship time changes.
+- Original session rules preserved: `07:00-20:00 UTC Mon-Fri`.
+- Fail-closed behavior added if server UTC cannot be computed.
+- Strategy thresholds/scoring unchanged.
+
+### Expected behavior
+- At real server UTC around `04:30`, market gate should correctly output `Closed`.
+- It should not open early just because Android/device UTC is ahead.
+- After real server UTC reaches `07:00`, gate should output `Open` if weekday and server clock is available.
