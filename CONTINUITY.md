@@ -358,3 +358,26 @@
 3. Confirm M15 cache last candle advances.
 4. Run dry watcher again and verify it reaches FILTER/scoring rather than STALE.
 5. If server clock still fails while Python urllib can read Google Date, patch only the server-clock helper.
+
+## 2026-05-07T06:24:52Z — Runtime validation after ship-clock fix
+
+### Fixed / proven
+- GitHub contains the watcher server-clock patch.
+- Manual updater succeeded with `manual_updater_exit_code=0`.
+- M15 raw cache refreshed successfully:
+  - EURUSD/GBPUSD/USDJPY last M15 candle: `2026-05-07T03:45:00Z`
+  - age vs server: `1481s`
+  - `PASS_CACHE_FRESHNESS=pass`
+- Watcher dry run reached scoring/filter:
+  - `PASS_WATCHER_SERVER_CLOCK=pass`
+  - `PASS_WATCHER_REACHED_SCORING=pass`
+  - `WATCHER_STALE_PRESENT=no`
+
+### Important correction
+- Previous broad `pgrep -af crond` check was unreliable because it matched report/log text containing `crond`.
+- Use `pgrep -x crond` only for exact crond validation.
+
+### Remaining production proof
+- Confirm exact crond daemon with `pgrep -x crond`.
+- Confirm `tools/market_open.sh` allows watcher during valid market time.
+- If market gate fails incorrectly, patch market gate separately.

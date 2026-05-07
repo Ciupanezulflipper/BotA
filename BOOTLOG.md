@@ -20,3 +20,13 @@
   - Start crond.
   - Run manual updater.
   - Re-test watcher dry run.
+
+## 2026-05-07T06:24:52Z — Bootlog: runtime validation after ship-clock patch
+
+- Server-clock watcher patch: active and committed.
+- Manual updater: PASS.
+- Cache freshness: PASS.
+- Watcher stale gate: PASS, no stale skip after fresh cache.
+- Watcher reached scoring/filter: PASS.
+- Strategy changed: NO.
+- Remaining scheduler check: exact `crond` and `market_open.sh`.
