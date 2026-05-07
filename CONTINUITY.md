@@ -318,3 +318,43 @@
 - Gitleaks remediation remains open until either:
   - live critical secrets are rotated, and/or
   - a history-rewrite decision is made
+
+## 2026-05-07T06:04:18Z — Ship clock/network/cache audit update
+
+### Fixed / proven
+- `tools/signal_watcher_pro.sh` server-clock patch is now present.
+- Patch markers found: `v2.0.3 ship-mode server clock`, `compute_server_clock_epoch`, `BOTA_SERVER_EPOCH`.
+- Watcher syntax check passed.
+- Strategy thresholds were not changed.
+- No scoring/Telegram/Supabase strategy changes were made.
+
+### Proven current blockers
+- Raw M15 cache is stale:
+  - EURUSD/GBPUSD/USDJPY M15 last cache candle: `2026-05-05T18:30:00Z`.
+- Current provider/cache audit showed server-clock source failure in that run:
+  - Google/Cloudflare/OANDA/Yahoo Date headers missing in the audit script.
+- However network audit clarified this is not a simple DNS failure:
+  - Curl resolved provider hostnames.
+  - TLS handshakes completed.
+  - Python `socket_gethostbyname` resolved hosts.
+  - Python urllib got `200` from Google with a valid Date header.
+  - Cloudflare/OANDA returned HTTP 403 at root; Yahoo returned HTTP 429, meaning endpoints are reachable but may reject/limit root requests.
+- `curl_exit_code=23` is likely an artifact from piping verbose curl output to `head`, not proof of provider failure.
+- Most important runtime proof:
+  - `NO_RELEVANT_PROCESSES_FOUND`
+  - This means `crond` was not running at audit time, so scheduled cache refresh was not active.
+
+### Interpretation
+- The original local-phone clock freshness bug is fixed/patched in watcher.
+- The active issue is now runtime/cache refresh:
+  1. crond was not running;
+  2. cache remained stale;
+  3. watcher correctly refused to score stale candles.
+- Secondary possible issue: server-clock helper should be hardened to read Date headers from HTTPError responses or use more reliable endpoints.
+
+### Next proof step
+1. Restart/verify `crond`.
+2. Run manual `tools/indicators_updater.sh`.
+3. Confirm M15 cache last candle advances.
+4. Run dry watcher again and verify it reaches FILTER/scoring rather than STALE.
+5. If server clock still fails while Python urllib can read Google Date, patch only the server-clock helper.
