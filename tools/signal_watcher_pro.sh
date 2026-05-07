@@ -332,6 +332,55 @@ raw_cache_path() {
 
 # Candle-based staleness (authoritative).
 # Output TSV: "<age_secs|missing>\t<last_utc>\t<source>"
+# ── v2.0.3 ship-mode server clock ────────────────────────────────────────
+# compute_server_clock_epoch: query HTTPS Date headers from multiple endpoints.
+# Returns trusted UTC epoch int, or 0 if unavailable/disagreement.
+compute_server_clock_epoch() {
+  python3 - <<'CLOCKPY'
+import subprocess, email.utils, statistics
+
+endpoints = [
+    "https://www.google.com",
+    "https://www.cloudflare.com",
+    "https://api-fxpractice.oanda.com",
+    "https://query1.finance.yahoo.com",
+]
+
+epochs = []
+for url in endpoints:
+    if len(epochs) >= 2:
+        break  # have enough — short-circuit
+    try:
+        p = subprocess.run(
+            ["curl", "-sI", "--max-time", "6", url],
+            text=True, capture_output=True, timeout=10,
+        )
+        date_line = next(
+            (x for x in p.stdout.splitlines() if x.lower().startswith("date:")),
+            "",
+        )
+        if not date_line:
+            continue
+        dt = email.utils.parsedate_to_datetime(date_line.split(":", 1)[1].strip())
+        from datetime import timezone as _tz
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_tz.utc)
+        epochs.append(int(dt.timestamp()))
+    except Exception:
+        continue
+
+if len(epochs) >= 2:
+    if max(epochs) - min(epochs) <= 60:
+        print(int(statistics.median(epochs)))
+    else:
+        print(0)
+elif len(epochs) == 1:
+    print(epochs[0])
+else:
+    print(0)
+CLOCKPY
+}
+
 candle_age_info() {
   local pair="$1" tf="$2"
   local raw_file
@@ -357,7 +406,14 @@ except Exception:
   out("missing", "", "json_parse_error")
   raise SystemExit(0)
 
-now = datetime.now(timezone.utc)
+# v2.0.3: trusted server UTC, not local phone clock (ship-mode fix)
+_server_epoch = int(os.environ.get('BOTA_SERVER_EPOCH', '0') or '0')
+if _server_epoch > 1000000000:
+    now = datetime.fromtimestamp(_server_epoch, timezone.utc)
+else:
+    # Server clock unavailable — fail closed: do not use local phone clock
+    out('missing', '', 'server_clock_unavailable')
+    raise SystemExit(0)
 
 # Case A: explicit ISO timestamp if present
 if isinstance(data, dict):
@@ -921,7 +977,19 @@ except Exception:
 }
 
 scan_once() {
-  local tf pair
+  # v2.0.3 — ship-mode: compute trusted server UTC before pair/tf loop
+  # Fail closed if server clock unavailable (phone clock unreliable on ship)
+  local tf pair _sv_epoch
+  _sv_epoch="$(compute_server_clock_epoch 2>/dev/null || echo 0)"
+  _sv_epoch="${_sv_epoch:-0}"
+  if [[ "${_sv_epoch}" =~ ^[0-9]+$ ]] && (( _sv_epoch > 1000000000 )); then
+    export BOTA_SERVER_EPOCH="${_sv_epoch}"
+    log "CLOCK" "server_clock_ok BOTA_SERVER_EPOCH=${BOTA_SERVER_EPOCH}"
+  else
+    log "CLOCK" "server_clock_unavailable -> SKIP_SCAN fail_closed"
+    export BOTA_SERVER_EPOCH="0"
+    return 0
+  fi
   for tf in ${TIMEFRAMES}; do
     for pair in ${PAIRS}; do
       process_pair_tf "${pair}" "${tf}"
