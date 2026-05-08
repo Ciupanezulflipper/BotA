@@ -395,3 +395,14 @@
 - At real server UTC around `04:30`, market gate should correctly output `Closed`.
 - It should not open early just because Android/device UTC is ahead.
 - After real server UTC reaches `07:00`, gate should output `Open` if weekday and server clock is available.
+
+## 2026-05-08T22:35:26Z — Sea-day health check passed
+
+- Health check run during sea-day ship time changes before Sydney.
+- Exact crond check passed.
+- `market_open.sh` used server UTC and correctly returned Closed after 20:00 UTC.
+- M15 cache was fresh.
+- Watcher dry run reached scoring/filter.
+- No stale skip appeared.
+- Strategy changed: NO.
+- No further code changes required at this stage.

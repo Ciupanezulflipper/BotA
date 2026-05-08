@@ -38,3 +38,11 @@
 - New behavior: uses HTTPS Date headers to compute server UTC.
 - Fail behavior: Closed if server clock unavailable.
 - Strategy changed: NO.
+
+## 2026-05-08T22:35:26Z — Sea-day BotA health proof
+
+- Crond: PASS.
+- Market gate server UTC: PASS.
+- Cache freshness: PASS.
+- Watcher reached filter/scoring: PASS.
+- Ship/Android time no longer controls critical trading gates.
