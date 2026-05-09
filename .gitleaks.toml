@@ -53,6 +53,12 @@ paths = [
   '''(?i)^_snapshots/''',
   '''(?i)^archive/''',
   '''(?i)^config/tele\.env$''',
+  '''(?i)^\.env$''',
+  '''(?i)^\.env\.''',
+  '''(?i)^\.env\.runtime$''',
+  '''(?i)^\.env\.profitlab$''',
+  '''(?i)^\.env\.botA\.?''',
+  '''(?i)^\.env\.bak\.''',
 ]
 regexes = [
   '''(?i)(?:example|placeholder|changeme|your[_-]?(?:token|key|secret)|<[^>]+>|\$\{[^}]+\})''',
