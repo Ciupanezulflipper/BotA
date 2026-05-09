@@ -406,3 +406,35 @@
 - No stale skip appeared.
 - Strategy changed: NO.
 - No further code changes required at this stage.
+
+---
+## 2026-05-09 — Full Audit + Security Cleanup
+
+### Infrastructure
+- v2.0.3 clock fix active: signal_watcher_pro.sh + market_open.sh
+- Crond: running | Cache: healthy when market open
+- Watcher reaches scoring: confirmed
+
+### Signal Drought (confirmed causes)
+- Apr 16–May 6: clock drift → false STALE → 0 candidates generated → FIXED
+- Apr 24: 3 candidates (score 68–76) blocked by H1_trend_neutral
+  - H4 direction on Apr 24 = UNKNOWN (not provable from current files)
+- May 8–9: weak setup — MACD=0, ADX<27, BB squeeze, genuine score 49–59
+- Post-Apr-14 accepted score≥70 rows: 0
+- macro6=3: confirmed informational only, not a hard rejection gate
+
+### Supabase
+- Stuck ACTIVE signal (Apr 10 EURUSD BUY) closed → CANCELLED
+- shadow_log correct: CLOSED_TP +24 pips 2.017R
+
+### Security
+- Archive token files: removed from git tracking
+- config.backup-* / _snapshots / archive paths: allowlisted in .gitleaks.toml
+- GitHub Security Scan: PASS (commit fa6aeda)
+- Old tokens in history: rotated during March 2026 Termux rebuild
+
+### Next Engineering Step (not urgent)
+- Build rejected-candidate shadow feeder for score≥55 H1-vetoed rows
+- Uses existing: be_shadow_manager.py, shadow_log table, shadow_outcome_simulator.py
+- Goal: prove whether H1 filter protects or over-filters
+- Do on next port day with stable internet

@@ -46,3 +46,18 @@
 - Cache freshness: PASS.
 - Watcher reached filter/scoring: PASS.
 - Ship/Android time no longer controls critical trading gates.
+
+---
+## 2026-05-09 Boot/Session Log
+
+| Item | Status |
+|---|---|
+| Clock drift fix v2.0.3 | ACTIVE |
+| Market gate server clock | ACTIVE |
+| Crond | RUNNING |
+| Watcher reaches scoring | PASS |
+| Post-Apr-14 accepted signals | 0 (explained) |
+| Supabase stuck signal | CLOSED |
+| GitHub Security Scan | PASS |
+| Strategy thresholds | UNCHANGED |
+| Next action | Shadow feeder for rejected candidates |
