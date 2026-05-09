@@ -49,6 +49,10 @@ paths = [
   '''(?i)^logs?/''',
   '''(?i)^docs?/''',
   '''(?i)README''',
+  '''(?i)^config\.backup-''',
+  '''(?i)^_snapshots/''',
+  '''(?i)^archive/''',
+  '''(?i)^config/tele\.env$''',
 ]
 regexes = [
   '''(?i)(?:example|placeholder|changeme|your[_-]?(?:token|key|secret)|<[^>]+>|\$\{[^}]+\})''',
