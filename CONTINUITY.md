@@ -438,3 +438,23 @@
 - Uses existing: be_shadow_manager.py, shadow_log table, shadow_outcome_simulator.py
 - Goal: prove whether H1 filter protects or over-filters
 - Do on next port day with stable internet
+
+---
+## 2026-05-09 — Documentation Corrections (post-ChatGPT-5 repo verification)
+
+### signal_closer.py local limitation
+Manual local run requires service key sourcing before execution:
+  set -a; source config/strategy.env; set +a
+  python3 tools/signal_closer.py --live --confirm CLOSE_SIGNALS --max-batch 1
+Plain shell environment without this source will fail with SUPABASE_SERVICE_KEY not set.
+The Supabase closure itself succeeded — this is a local env sourcing note only.
+
+### Twelve Data credit watch item
+Twelve Data is used by emit_snapshot.py for H1/H4/D1 confluence vote context.
+Credit exhaustion (seen at 600/800 in Telegram warnings Apr 26, May 4, May 6)
+may degrade higher-timeframe vote quality but does not block signal generation.
+Not a confirmed drought cause. Mark as data-quality risk to monitor.
+
+### Security scan commit reference correction
+Security checks PASS through latest session commit 41c7753
+(not fa6aeda as previously noted — 41c7753 is the docs commit that also passes all checks).
