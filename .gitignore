@@ -116,3 +116,11 @@ archive/fix_token*.sh
 archive/github_token*.sh
 archive/tools_cleanup_20260224/github_token_check.sh
 archive/tools_cleanup_20260224/token_smoke.sh
+
+# Local secrets / runtime env files — never commit
+.env
+.env.*
+!.env.example
+config/tele.env
+config.backup-*/tele.env
+_snapshots/env.runtime.*
