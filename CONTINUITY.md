@@ -458,3 +458,41 @@ Not a confirmed drought cause. Mark as data-quality risk to monitor.
 ### Security scan commit reference correction
 Security checks PASS through latest session commit 41c7753
 (not fa6aeda as previously noted — 41c7753 is the docs commit that also passes all checks).
+
+---
+## 2026-05-09 — Rejected Candidate Shadow Tracker v1.1
+
+### Added
+- New file: `tools/rejected_shadow_tracker.py`
+- Output target: `logs/rejected_shadow_outcomes.jsonl`
+- Purpose: replay rejected BUY/SELL candidates from `logs/alerts.csv` using OANDA M15 candles.
+- Safety contract:
+  - No Telegram sends.
+  - No Supabase writes.
+  - No live signal-table writes.
+  - No scoring/strategy/threshold changes.
+  - No cron installed yet.
+
+### Important implementation details
+- Uses trusted server UTC from HTTP Date headers to avoid Android/ship clock drift.
+- Skips alert rows that are future-dated versus trusted server UTC.
+- Uses `TP_FIRST_LIVE_MATCH` same-candle policy to match the proven BotA live closer behavior.
+- Final dedup only applies to final outcomes: `TP_HIT`, `SL_HIT`, `EXPIRED_NO_HIT`.
+- Retryable states such as fetch errors or pending rows are not treated as final.
+- Candidate key includes pair, timeframe, direction, timestamp, entry, SL, and TP.
+- Stores both `filter_reason` and `reasons` from `alerts.csv`.
+
+### First test result
+- Initial draft run failed with OANDA HTTP 400 because device/alert timestamps were ahead of OANDA server time.
+- Invalid first output was archived as `logs/rejected_shadow_outcomes.jsonl.invalid_future_ts.*.bak`.
+- After server-clock patch, live run succeeded:
+  - rows: 2
+  - fetch_errors: 0
+  - EURUSD BUY score 55.2 -> `SL_HIT` -11.7 pips
+  - GBPUSD BUY score 56.2 -> `SL_HIT` -13.7 pips
+- Interpretation: these low-score rejected candidates would have lost, so this tiny sample supports the score filter. It does not yet prove whether H1 neutral/veto is over-filtering.
+
+### Next
+- Do not add cron yet.
+- Wait for real non-future rejected candidates, especially score >=65 H1-neutral/H1-veto rows.
+- After enough samples, analyze score-gated vs H1-blocked outcomes.

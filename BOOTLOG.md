@@ -61,3 +61,24 @@
 | GitHub Security Scan | PASS |
 | Strategy thresholds | UNCHANGED |
 | Next action | Shadow feeder for rejected candidates |
+
+---
+## 2026-05-09 — Rejected Shadow Tracker Installed
+
+| Item | Status |
+|---|---|
+| `tools/rejected_shadow_tracker.py` | INSTALLED |
+| Syntax check | PASS |
+| Server-clock safety | ACTIVE |
+| First useful live run | PASS |
+| Rows replayed | 2 |
+| Fetch errors | 0 |
+| Outcomes | 2 x `SL_HIT` |
+| Production changed | NO |
+| Strategy changed | NO |
+| Telegram changed | NO |
+| Cron added | NO |
+
+Notes:
+- First invalid OANDA 400 output was archived because timestamps were future-dated versus OANDA server time.
+- Cron intentionally not added yet. Need more proof from real non-future rejected candidates before automation.
