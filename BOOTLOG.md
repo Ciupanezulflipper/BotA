@@ -82,3 +82,22 @@
 Notes:
 - First invalid OANDA 400 output was archived because timestamps were future-dated versus OANDA server time.
 - Cron intentionally not added yet. Need more proof from real non-future rejected candidates before automation.
+
+---
+## 2026-05-09T04:06:44Z — Shadow Tracker Final Success
+
+| Item | Status |
+|---|---|
+| Commit | `71db50c` |
+| Tracker installed | YES |
+| GitHub pushed | YES |
+| First useful replay | PASS |
+| Rows replayed | 2 |
+| Fetch errors | 0 |
+| Outcomes | 2 x `SL_HIT` |
+| Production changed | NO |
+| Strategy changed | NO |
+| Telegram changed | NO |
+| Cron added | NO |
+
+Next action: wait for non-future score >=65 H1-neutral/H1-veto rejected candidates before automating with cron.

@@ -496,3 +496,36 @@ Security checks PASS through latest session commit 41c7753
 - Do not add cron yet.
 - Wait for real non-future rejected candidates, especially score >=65 H1-neutral/H1-veto rows.
 - After enough samples, analyze score-gated vs H1-blocked outcomes.
+
+---
+## 2026-05-09T04:06:44Z — Shadow Tracker Commit/Push Success
+
+### Confirmed final state
+- Rejected candidate shadow tracker is installed and pushed.
+- Commit recorded: `71db50c`
+- File added: `tools/rejected_shadow_tracker.py`
+- Documentation updated: `CONTINUITY.md`, `BOOTLOG.md`
+- First useful replay passed:
+  - rows replayed: 2
+  - fetch_errors: 0
+  - outcomes: 2 x `SL_HIT`
+  - EURUSD BUY score 55.2 -> -11.7 pips
+  - GBPUSD BUY score 56.2 -> -13.7 pips
+
+### Safety state
+- Production changed: NO
+- Strategy changed: NO
+- Telegram changed: NO
+- Cron added: NO
+- Supabase writes: NO
+- Signal table writes: NO
+
+### Interpretation
+- The first two low-score rejected candidates would have lost.
+- This supports the current low-score filter on this tiny sample.
+- It does not yet prove whether H1 neutral/veto is over-filtering.
+
+### Next step
+- Do not add cron yet.
+- Wait for real non-future rejected candidates, especially score >=65 H1-neutral/H1-veto rows.
+- Later analyze `logs/rejected_shadow_outcomes.jsonl` once enough samples exist.
