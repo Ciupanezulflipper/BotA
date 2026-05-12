@@ -113,3 +113,24 @@ Next action: wait for non-future score >=65 H1-neutral/H1-veto rejected candidat
 | Drought duration | 28 days (Apr 14 – May 12) |
 | Root cause | Clock drift + weak market setup |
 | Status | RESOLVED |
+
+---
+## 2026-05-12T01:04:58Z — First Signal After Drought
+
+| Item | Status |
+|---|---|
+| First accepted signal after drought | EURUSD M15 BUY score=75.70 |
+| Telegram delivery | CONFIRMED |
+| Chart image delivery | CONFIRMED |
+| H1 neutral override | ACTIVE |
+| Entry | 1.17870 |
+| SL | 1.17760 |
+| TP | 1.18090 |
+| Strategy changed | NO |
+| Production changed | NO |
+| Cron changed | NO |
+
+Notes:
+- This confirms BotA is no longer in a total no-send state.
+- Do not change thresholds based on one signal.
+- Continue monitoring server-clock availability and Twelve Data usage.

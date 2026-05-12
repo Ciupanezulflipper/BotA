@@ -545,3 +545,35 @@ Confirmed working:
 
 Drought confirmed resolved. 28-day gap explained by clock drift + weak market setup.
 Twelve Data 600/800 warning at 08:28 — monitor but not urgent.
+
+---
+## 2026-05-12T01:04:58Z — First Accepted Signal After April Drought
+
+### Signal observed
+- Pair/timeframe: EURUSD M15
+- Direction: BUY
+- Score: 75.70
+- Filter state: `macro6=3 | H1_trend_neutral_overridden`
+- Entry: 1.17870
+- SL: 1.17760
+- TP: 1.18090
+- Telegram delivery: CONFIRMED by received Telegram alert and chart image.
+- Displayed Telegram time: 01:02 on May 12.
+- Note: displayed Telegram time is not recorded here as UTC unless confirmed directly from logs.
+
+### What this proves
+- BotA can send accepted Telegram trade alerts again.
+- Chart image delivery works.
+- H1 neutral override path is active when score reaches the override threshold.
+- The long signal drought is no longer an active total-send failure.
+
+### What remains to monitor
+- Twelve Data warning observed: 600/800 credits used. Monitor, but no immediate strategy/code change made.
+- Later manual check showed `server_clock_unavailable`, so server-clock source availability still needs monitoring under ship internet conditions.
+- Rejected shadow tracker should continue being used manually before adding cron.
+
+### Safety state
+- Production changed: NO
+- Strategy changed: NO
+- Telegram changed: NO
+- Cron changed: NO
