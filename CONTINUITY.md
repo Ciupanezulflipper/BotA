@@ -577,3 +577,15 @@ Twelve Data 600/800 warning at 08:28 — monitor but not urgent.
 - Strategy changed: NO
 - Telegram changed: NO
 - Cron changed: NO
+
+---
+## 2026-05-12 — Telegram Branding Updated
+
+Toma Signal AI / BotA logo accepted and uploaded to Telegram.
+
+Confirmed:
+- Telegram visual branding updated.
+- Bot identity is now clearer for users/subscribers.
+- No production code changed.
+- No trading strategy changed.
+- No cron changed.

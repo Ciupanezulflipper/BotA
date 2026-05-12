@@ -134,3 +134,14 @@ Notes:
 - This confirms BotA is no longer in a total no-send state.
 - Do not change thresholds based on one signal.
 - Continue monitoring server-clock availability and Twelve Data usage.
+
+---
+## 2026-05-12 — Telegram Logo Updated
+
+| Item | Status |
+|---|---|
+| Toma Signal AI / BotA logo | ACCEPTED |
+| Uploaded to Telegram | YES |
+| Production code changed | NO |
+| Strategy changed | NO |
+| Cron changed | NO |
