@@ -529,3 +529,19 @@ Security checks PASS through latest session commit 41c7753
 - Do not add cron yet.
 - Wait for real non-future rejected candidates, especially score >=65 H1-neutral/H1-veto rows.
 - Later analyze `logs/rejected_shadow_outcomes.jsonl` once enough samples exist.
+
+---
+## 2026-05-12 — First Signal After April 14 Drought
+
+EURUSD M15 BUY fired at 01:02 local time.
+Score: 75.70 | H1_trend_neutral_overridden | macro6=3
+Entry: 1.17870 | SL: 1.17760 | TP: 1.18090
+
+Confirmed working:
+- v2.0.3 server clock fix
+- market_open.sh server clock fix
+- Watcher reaching scoring and Telegram delivery
+- H1 neutral override at score >= 75 (H1_VETO_OVERRIDE_SCORE=75 in .env.runtime)
+
+Drought confirmed resolved. 28-day gap explained by clock drift + weak market setup.
+Twelve Data 600/800 warning at 08:28 — monitor but not urgent.

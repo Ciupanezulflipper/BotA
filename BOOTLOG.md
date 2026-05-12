@@ -101,3 +101,15 @@ Notes:
 | Cron added | NO |
 
 Next action: wait for non-future score >=65 H1-neutral/H1-veto rejected candidates before automating with cron.
+
+---
+## 2026-05-12 — Signal Fired
+
+| Item | Status |
+|---|---|
+| First signal post-drought | EURUSD M15 BUY score=75.70 |
+| Telegram delivery | CONFIRMED |
+| H1 override | ACTIVE (score>=75) |
+| Drought duration | 28 days (Apr 14 – May 12) |
+| Root cause | Clock drift + weak market setup |
+| Status | RESOLVED |
