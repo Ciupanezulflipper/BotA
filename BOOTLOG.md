@@ -163,3 +163,14 @@ Notes:
 | Telegram behavior | UNCHANGED |
 | Cron behavior | UNCHANGED |
 | Next action | Recheck pending rows after outcome window |
+
+---
+## 2026-05-14 — Shadow JSONL Dedup + Clean State
+
+| Item | Status |
+|---|---|
+| JSONL dedup | DONE (13→10 rows) |
+| Resolved | 7 (all SL_HIT) |
+| Pending | 3 (resolve after May 14 16:00 UTC) |
+| H1 veto verdict | PROTECTIVE — do not change |
+| Next action | Rerun tracker after May 14 16:00 UTC |

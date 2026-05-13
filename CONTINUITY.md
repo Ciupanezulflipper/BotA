@@ -656,3 +656,43 @@ After the 3 OPEN_PENDING rows have had enough time to resolve, rerun:
 `python3 tools/rejected_shadow_tracker.py --score-min 65 --lookback-hours 720 --outcome-hours 24`
 
 Then re-inspect `logs/rejected_shadow_outcomes.jsonl` and join back to `alerts.csv` again.
+
+---
+## 2026-05-14 — Shadow Tracker Dedup Fix + Final Outcome State
+
+### Dedup fix applied to logs/rejected_shadow_outcomes.jsonl
+Before=13 after=10 removed=3 duplicate OPEN_PENDING rows.
+Cause: tracker wrote May 13 rows twice (before and after filter_str fix).
+Fix: keep-last dedup by (ts[:16], pair, direction, entry).
+
+### Current JSONL state (10 rows, clean)
+Resolved (7): all SL_HIT, WR=0.0%
+  2026-04-23 14:47 EURUSD score=76.1 -> SL_HIT -16.1p  [H1_trend_neutral - join confirmed]
+  2026-04-23 15:46 EURUSD score=71.7 -> SL_HIT -16.0p  [H1_trend_neutral - join confirmed]
+  2026-04-23 16:00 EURUSD score=68.7 -> SL_HIT -16.0p  [H1_trend_neutral - join confirmed]
+  2026-05-07 14:15 EURUSD score=55.2 -> SL_HIT -11.7p  [score_gate, written by --score-min 55 run]
+  2026-05-07 14:30 GBPUSD score=56.2 -> SL_HIT -13.7p  [score_gate, written by --score-min 55 run]
+  2026-05-11 14:30 EURUSD score=68.5 -> SL_HIT -11.2p  [H1_trend_neutral - join confirmed]
+  2026-05-11 16:51 GBPUSD score=71.0 -> SL_HIT -17.9p  [H1_trend_neutral - join confirmed]
+
+Pending (3): OPEN_PENDING, resolve after 2026-05-14T15:49Z
+  2026-05-13 15:49 GBPUSD score=71.0  h1=True
+  2026-05-13 16:00 GBPUSD score=68.0  h1=True
+  2026-05-13 16:16 GBPUSD score=66.0  h1=True
+
+### h1=False on resolved rows — known artifact
+Resolved rows were written before filter_str fix. h1 labels unreliable for those rows.
+Attribution confirmed separately via ChatGPT-5 CSV join: matched_H1_trend_neutral=8.
+5 of 7 resolved = H1_trend_neutral vetoed. 2 of 7 = score_gate (score 55-56).
+
+### Evidence summary
+H1-vetoed resolved: 5 — all SL_HIT
+Score-gate resolved: 2 — all SL_HIT
+H1-vetoed pending:  3 — resolve ~2026-05-14T16:00Z
+
+### Verdict (current evidence)
+H1_trend_neutral veto is protective on available sample.
+Do NOT lower H1 override threshold.
+Do NOT remove H1 veto.
+Next: rerun tracker after May 14 16:00 UTC to resolve 3 pending rows.
+Command: python3 tools/rejected_shadow_tracker.py --score-min 65 --lookback-hours 720 --outcome-hours 24
