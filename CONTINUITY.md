@@ -589,3 +589,70 @@ Confirmed:
 - No production code changed.
 - No trading strategy changed.
 - No cron changed.
+
+---
+## 2026-05-14 — Shadow Tracker Fix + First H1 Outcome Proof
+
+### Bug Fixed
+`tools/rejected_shadow_tracker.py` was not recognizing the current `alerts.csv` filter column name: `filter_str`.
+
+Previous lookup:
+`["filter_reason", "filter_reasons", "filters"]`
+
+Fixed lookup:
+`["filter_reason", "filter_reasons", "filters", "filter_str"]`
+
+Patch applied at line 369. Syntax check passed.
+
+### Grounded Outcome Inspection
+`logs/rejected_shadow_outcomes.jsonl` was joined back to `logs/alerts.csv` using timestamp, pair, timeframe, direction, entry, SL, and TP.
+
+Join result:
+- Shadow rows inspected: 10
+- Matched back to alerts.csv: 10
+- Unmatched: 0
+- Outcome counts: 7 SL_HIT, 3 OPEN_PENDING
+- Matched H1_trend_neutral rows: 8
+- Matched score-gate rows: 2
+
+### H1_trend_neutral Resolved Outcomes
+Resolved H1_trend_neutral rows so far:
+
+- 2026-04-23 14:47 UTC — EURUSD BUY score=76.1 -> SL_HIT -16.1p
+- 2026-04-23 15:46 UTC — EURUSD BUY score=71.7 -> SL_HIT -16.0p
+- 2026-04-23 16:00 UTC — EURUSD BUY score=68.7 -> SL_HIT -16.0p
+- 2026-05-11 14:30 UTC — EURUSD BUY score=68.5 -> SL_HIT -11.2p
+- 2026-05-11 16:51 UTC — GBPUSD BUY score=71.0 -> SL_HIT -17.9p
+
+Resolved H1 sample:
+- TP_HIT: 0
+- SL_HIT: 5
+- WR: 0%
+- Sample size: 5 resolved H1 rows
+
+### H1_trend_neutral OPEN_PENDING
+Still unresolved:
+
+- 2026-05-13 15:49 UTC — GBPUSD BUY score=71.0
+- 2026-05-13 16:00 UTC — GBPUSD BUY score=68.0
+- 2026-05-13 16:16 UTC — GBPUSD BUY score=66.0
+
+### Current Conclusion
+Current evidence says the H1_trend_neutral gate is protective, not merely strangling throughput.
+
+Do not lower the H1 override threshold yet.
+Do not remove the H1 veto yet.
+Do not increase alert aggressiveness based only on signal drought frustration.
+
+### Limitations
+- Resolved H1 sample size is still small: 5.
+- 3 H1 rows remain OPEN_PENDING.
+- This is evidence, not final proof.
+- The 2 score<65 rows are a separate category and should not be mixed into H1-veto conclusions.
+
+### Next Step
+After the 3 OPEN_PENDING rows have had enough time to resolve, rerun:
+
+`python3 tools/rejected_shadow_tracker.py --score-min 65 --lookback-hours 720 --outcome-hours 24`
+
+Then re-inspect `logs/rejected_shadow_outcomes.jsonl` and join back to `alerts.csv` again.

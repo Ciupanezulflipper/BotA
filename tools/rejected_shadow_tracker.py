@@ -366,7 +366,7 @@ def build_candidates(score_min: float, lookback_hours: int) -> List[Dict[str, An
         sl = safe_float(row_get(drow, ["sl"], 7, rrow), 0.0)
         tp = safe_float(row_get(drow, ["tp"], 8, rrow), 0.0)
         rejected_raw = row_get(drow, ["filter_rejected", "rejected"], 10, rrow)
-        filter_reason = row_get(drow, ["filter_reason", "filter_reasons", "filters"], 11, rrow)
+        filter_reason = row_get(drow, ["filter_reason", "filter_reasons", "filters", "filter_str"], 11, rrow)
         reasons = row_get(drow, ["reasons", "reason"], 12, rrow)
 
         if score < score_min or entry <= 0 or sl <= 0 or tp <= 0:

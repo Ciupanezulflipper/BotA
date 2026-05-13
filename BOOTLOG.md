@@ -145,3 +145,21 @@ Notes:
 | Production code changed | NO |
 | Strategy changed | NO |
 | Cron changed | NO |
+
+---
+## 2026-05-14 — Shadow Tracker Fix + H1 Outcome Proof
+
+| Item | Status |
+|---|---|
+| `filter_str` column mapping | FIXED |
+| Syntax check | PASS |
+| Shadow rows joined to alerts.csv | 10/10 matched |
+| H1_trend_neutral rows | 8 |
+| Resolved H1 outcomes | 5 SL_HIT / 0 TP_HIT |
+| Pending H1 outcomes | 3 OPEN_PENDING |
+| Current H1 verdict | Protective so far |
+| Strategy thresholds | UNCHANGED |
+| Production behavior | UNCHANGED |
+| Telegram behavior | UNCHANGED |
+| Cron behavior | UNCHANGED |
+| Next action | Recheck pending rows after outcome window |
