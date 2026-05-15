@@ -696,3 +696,35 @@ Do NOT lower H1 override threshold.
 Do NOT remove H1 veto.
 Next: rerun tracker after May 14 16:00 UTC to resolve 3 pending rows.
 Command: python3 tools/rejected_shadow_tracker.py --score-min 65 --lookback-hours 720 --outcome-hours 24
+
+---
+## 2026-05-15 — Final H1 Pending Resolution: 8/8 H1 SL_HIT
+
+Final pending H1 rows resolved.
+
+Command run:
+python3 tools/rejected_shadow_tracker.py --score-min 65 --lookback-hours 720 --outcome-hours 24
+
+Tracker output:
+- 2026-05-13 15:49 UTC GBPUSD BUY score=71.0 -> SL_HIT -19.9p
+- 2026-05-13 16:00 UTC GBPUSD BUY score=68.0 -> SL_HIT -19.9p
+- 2026-05-13 16:16 UTC GBPUSD BUY score=66.0 -> SL_HIT -19.6p
+
+After cleanup:
+- JSONL before: 13 rows
+- JSONL after: 10 rows
+- Removed: 3 duplicate rows
+- Final clean outcomes: 10 SL_HIT, 0 TP_HIT, 0 pending
+
+Joined result:
+- H1_trend_neutral: 8 resolved, 8 SL_HIT, 0 TP_HIT, WR=0.0%
+- score_gate: 2 resolved, 2 SL_HIT, 0 TP_HIT, WR=0.0%
+
+Conclusion:
+Current tested sample strongly supports H1_trend_neutral as protective.
+Do NOT lower H1 override threshold.
+Do NOT remove H1 veto.
+Do NOT increase strategy aggressiveness based only on signal drought frustration.
+
+Important distinction:
+This does not prove H1 is always correct forever. It proves that, in the current replay sample, H1 prevented losing trades.

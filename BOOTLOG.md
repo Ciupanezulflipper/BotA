@@ -174,3 +174,20 @@ Notes:
 | Pending | 3 (resolve after May 14 16:00 UTC) |
 | H1 veto verdict | PROTECTIVE — do not change |
 | Next action | Rerun tracker after May 14 16:00 UTC |
+
+---
+## 2026-05-15 — Final H1 Replay Resolution
+
+| Item | Status |
+|---|---|
+| May 13 pending rows | RESOLVED |
+| May 13 outcomes | 3 SL_HIT / 0 TP_HIT |
+| Clean JSONL state | 10 rows |
+| All rejected sample | 10 SL_HIT / 0 TP_HIT |
+| H1_trend_neutral sample | 8 SL_HIT / 0 TP_HIT |
+| score_gate sample | 2 SL_HIT / 0 TP_HIT |
+| H1 verdict | PROTECTIVE in current sample |
+| Strategy thresholds | UNCHANGED |
+| Production behavior | UNCHANGED |
+| Telegram behavior | UNCHANGED |
+| Cron behavior | UNCHANGED |

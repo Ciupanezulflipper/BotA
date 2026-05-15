@@ -1,6 +1,6 @@
 # BotA Chat Handoff
 
-Last updated: 2026-05-14
+Last updated: 2026-05-15
 
 Read this first in any new AI chat before proposing BotA changes.
 
@@ -12,7 +12,7 @@ Main question:
 Is BotA too quiet because the strategy is broken, or because filters are correctly blocking bad trades?
 
 Current grounded answer:
-BotA is quiet, but first replay evidence shows the H1_trend_neutral gate is protective so far, not proven harmful.
+BotA is quiet, but replay evidence shows the H1_trend_neutral gate protected BotA from losing trades in the current tested sample.
 
 ## Latest verified commits
 
@@ -24,25 +24,27 @@ Meaning: tools/rejected_shadow_tracker.py now recognizes filter_str from logs/al
 Message: fix: shadow JSONL dedup + outcome proof — 7 SL_HIT 0 TP_HIT on rejected candidates
 Meaning: duplicate shadow rows cleaned and current rejected-candidate outcome proof documented.
 
+3. Current pending commit
+Meaning: final May 13 pending rows resolved as SL_HIT and handoff was updated.
+
 ## Proven facts
 
 Shadow tracker fix:
-tools/rejected_shadow_tracker.py now recognizes:
+tools/rejected_shadow_tracker.py recognizes:
 ["filter_reason", "filter_reasons", "filters", "filter_str"]
 
-Shadow JSONL state:
-logs/rejected_shadow_outcomes.jsonl was deduplicated.
+Shadow JSONL was cleaned after final pending resolution.
 
-Before: 13 rows
-After: 10 rows
-Removed: 3 duplicate OPEN_PENDING rows
+Before cleanup: 13 rows
+After cleanup: 10 rows
+Removed: 3 duplicate rows
 
-Current clean state:
+Final clean outcome state:
 Total rows: 10
-Resolved: 7
-Pending: 3
+Resolved: 10
+Pending: 0
 TP_HIT: 0
-SL_HIT: 7
+SL_HIT: 10
 WR: 0.0%
 
 ## H1 evidence
@@ -61,31 +63,36 @@ Resolved H1_trend_neutral rows:
 2026-04-23 16:00 UTC EURUSD BUY score=68.7 -> SL_HIT -16.0p
 2026-05-11 14:30 UTC EURUSD BUY score=68.5 -> SL_HIT -11.2p
 2026-05-11 16:51 UTC GBPUSD BUY score=71.0 -> SL_HIT -17.9p
+2026-05-13 15:49 UTC GBPUSD BUY score=71.0 -> SL_HIT -19.9p
+2026-05-13 16:00 UTC GBPUSD BUY score=68.0 -> SL_HIT -19.9p
+2026-05-13 16:16 UTC GBPUSD BUY score=66.0 -> SL_HIT -19.6p
 
-Current H1 resolved sample:
-H1 resolved: 5
+Current H1 sample:
+H1 resolved: 8
 TP_HIT: 0
-SL_HIT: 5
+SL_HIT: 8
 WR: 0.0%
 
 Score-gate resolved rows:
 2026-05-07 14:15 UTC EURUSD BUY score=55.2 -> SL_HIT -11.7p
 2026-05-07 14:30 UTC GBPUSD BUY score=56.2 -> SL_HIT -13.7p
 
-Pending H1 rows:
-2026-05-13 15:49 UTC GBPUSD BUY score=71.0 OPEN_PENDING
-2026-05-13 16:00 UTC GBPUSD BUY score=68.0 OPEN_PENDING
-2026-05-13 16:16 UTC GBPUSD BUY score=66.0 OPEN_PENDING
+Score-gate sample:
+Resolved: 2
+TP_HIT: 0
+SL_HIT: 2
+WR: 0.0%
 
 ## Current interpretation
 
 H1_trend_neutral is the main throughput gate.
 
-However, first replay evidence says H1_trend_neutral is protective so far:
-5 resolved H1-blocked candidates
-5 SL_HIT
+Current replay evidence says H1_trend_neutral is protective in this tested sample:
+8 resolved H1-blocked candidates
+8 SL_HIT
 0 TP_HIT
 
+Therefore:
 Do NOT lower H1 override threshold yet.
 Do NOT remove H1 veto yet.
 Do NOT increase strategy aggressiveness based only on signal drought frustration.
@@ -95,15 +102,13 @@ Do NOT increase strategy aggressiveness based only on signal drought frustration
 This is not final proof that H1 is always correct.
 
 Limitations:
-H1 resolved sample size is only 5.
-3 H1 rows remain OPEN_PENDING.
-More samples are needed.
-
-Current evidence is strong enough to block reckless strategy changes, but not enough to finalize long-term tuning.
+H1 resolved sample size is 8.
+More samples are needed before long-term tuning.
+The current evidence is strong enough to block reckless H1 changes, but not enough to finalize all future strategy decisions.
 
 ## No-change rules
 
-Until the 3 pending rows resolve:
+Until more rejected-candidate samples are collected:
 
 PRODUCTION_CHANGED=NO
 STRATEGY_CHANGED=NO
@@ -123,16 +128,22 @@ Production signal pipeline
 
 ## Next exact proof step
 
-After 2026-05-14 16:00 UTC, run:
+Keep collecting rejected shadow outcomes.
+
+When enough new rejected rows exist, run:
 
 cd /data/data/com.termux/files/home/BotA || { echo "FAIL"; exit 1; }
 
 python3 tools/rejected_shadow_tracker.py --score-min 65 --lookback-hours 720 --outcome-hours 24
 
-Then inspect logs/rejected_shadow_outcomes.jsonl.
+Then inspect logs/rejected_shadow_outcomes.jsonl and join back to logs/alerts.csv before drawing conclusions.
 
-If the 3 pending rows become SL_HIT, the H1 protective case strengthens.
-If any becomes TP_HIT, that is counter-evidence and must be analyzed before any threshold change.
+## Separate UX issue
+
+Telegram API warning spam is a separate problem.
+
+The strategy should not be changed because of warning frustration.
+However, Telegram UX should eventually be improved so public/user channel receives useful status summaries instead of repeated API warning fear messages.
 
 ## Working discipline
 
