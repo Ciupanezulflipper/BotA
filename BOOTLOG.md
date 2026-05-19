@@ -191,3 +191,15 @@ Notes:
 | Production behavior | UNCHANGED |
 | Telegram behavior | UNCHANGED |
 | Cron behavior | UNCHANGED |
+
+---
+## 2026-05-19 — PR #4 Deployed
+
+| Item | Status |
+|---|---|
+| clock_drift_check.py | INSTALLED |
+| clock_drift_check.sh | INSTALLED |
+| Cron hourly :55 | ADDED |
+| market_open.sh | UNCHANGED |
+| Strategy | UNCHANGED |
+| Next | Telegram daily summary |

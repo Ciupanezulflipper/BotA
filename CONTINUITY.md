@@ -728,3 +728,16 @@ Do NOT increase strategy aggressiveness based only on signal drought frustration
 
 Important distinction:
 This does not prove H1 is always correct forever. It proves that, in the current replay sample, H1 prevented losing trades.
+
+---
+## 2026-05-19 — PR #4 Merged: Clock Drift Observability
+
+Files added: tools/clock_drift_check.py, tools/clock_drift_check.sh, docs/CLOCK_DRIFT_OBSERVABILITY.md
+Reports: local_utc, server_utc, drift_seconds, local_clock_unsafe, status (OK/DRIFT_WARN/SERVER_CLOCK_UNAVAILABLE)
+Cron: hourly at :55 → logs/cron.clock_drift.log
+market_open.sh logic: UNCHANGED (server clock already active from v2.0.3)
+Strategy: UNCHANGED
+
+Known gap closed: operator now sees clock drift explicitly instead of inferring from negative cache ages.
+Remaining gap: market_open.sh does not write clock_drift_status.json automatically (blocked by PR safety layer).
+Next: Telegram proof-of-work daily summary at 20:00 UTC.
