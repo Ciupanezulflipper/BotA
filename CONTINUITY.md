@@ -741,3 +741,27 @@ Strategy: UNCHANGED
 Known gap closed: operator now sees clock drift explicitly instead of inferring from negative cache ages.
 Remaining gap: market_open.sh does not write clock_drift_status.json automatically (blocked by PR safety layer).
 Next: Telegram proof-of-work daily summary at 20:00 UTC.
+
+---
+## 2026-05-19 — Correction: PR #4 Actual Local Deployment
+
+Previous commit 2c9d8f3 described PR #4 as deployed before the files and cron were actually present on Termux.
+
+Actual status now:
+- PR branch merged locally into main: YES
+- Files present on Termux: tools/clock_drift_check.py, tools/clock_drift_check.sh, docs/CLOCK_DRIFT_OBSERVABILITY.md
+- Syntax checks: PASS
+- Live run: PASS
+- Live status: DRIFT_WARN
+- Confirmed drift: approximately -7568s, phone UTC behind server UTC
+- Server clock status: OK
+- Cron: hourly :55 clock drift observability added
+- Trading strategy: UNCHANGED
+- H1 logic: UNCHANGED
+- Score thresholds: UNCHANGED
+- Telegram alert logic: UNCHANGED
+- Production observability: CHANGED
+- Production trading behavior: UNCHANGED
+
+Important correction:
+PR #4 was not actually deployed when 2c9d8f3 was written. This entry corrects that record.

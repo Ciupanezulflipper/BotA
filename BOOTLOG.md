@@ -203,3 +203,26 @@ Notes:
 | market_open.sh | UNCHANGED |
 | Strategy | UNCHANGED |
 | Next | Telegram daily summary |
+
+---
+## 2026-05-19 — PR #4 Actual Deployment Confirmed
+
+| Item | Status |
+|---|---|
+| Local merge to main | DONE |
+| clock_drift_check.py | ON DISK |
+| clock_drift_check.sh | ON DISK |
+| Python syntax | PASS |
+| Bash syntax | PASS |
+| Live run | PASS |
+| Live result | DRIFT_WARN |
+| Drift | approx -7568s |
+| Server clock | OK |
+| Cron hourly :55 | ADDED |
+| Strategy | UNCHANGED |
+| H1 logic | UNCHANGED |
+| Thresholds | UNCHANGED |
+| Telegram logic | UNCHANGED |
+| Production observability | CHANGED |
+| Production trading behavior | UNCHANGED |
+| Previous docs claim 2c9d8f3 | CORRECTED |
