@@ -226,3 +226,25 @@ Notes:
 | Production observability | CHANGED |
 | Production trading behavior | UNCHANGED |
 | Previous docs claim 2c9d8f3 | CORRECTED |
+
+---
+## 2026-05-19 — Daily Proof-of-Work Telegram Summary Tested
+
+| Item | Status |
+|---|---|
+| File | tools/daily_summary.sh |
+| Replacement | DONE |
+| Bash syntax | PASS |
+| Dry run | PASS |
+| Real Telegram send | PASS |
+| Telegram HTTP | 200 |
+| Best candidate shown | EURUSD SELL 70.70 |
+| Rejection reason shown | macro6=3 / H1_trend_neutral |
+| API usage shown | 280/800 |
+| Clock drift shown | DRIFT_WARN approx -7566s |
+| Strategy | UNCHANGED |
+| H1 logic | UNCHANGED |
+| Thresholds | UNCHANGED |
+| Production trading behavior | UNCHANGED |
+| Cron | NOT YET CHANGED |
+| Next action | Change daily summary cron to 20:00 UTC |

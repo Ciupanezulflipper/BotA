@@ -765,3 +765,43 @@ Actual status now:
 
 Important correction:
 PR #4 was not actually deployed when 2c9d8f3 was written. This entry corrects that record.
+
+---
+## 2026-05-19 — Telegram Daily Proof-of-Work Summary
+
+Implemented and live-tested `tools/daily_summary.sh` replacement.
+
+Proof:
+- Syntax test: PASS
+- Dry run with DAILY_SUMMARY_SEND=0: PASS
+- Real Telegram send with DAILY_SUMMARY_SEND=1: PASS
+- Telegram response: TELEGRAM_SEND=PASS http=200
+- Message delivered to TomaiSignalAI
+
+Current summary reports:
+- Cron status
+- Market gate status and reason
+- Scans logged
+- Candidates found
+- Accepted signals
+- Rejected candidates
+- Reject mix: H1 / score gate / macro6 / no-trade
+- Best candidate and rejection reason
+- Latest row
+- API usage
+- Clock drift status
+- Strategy/H1/threshold safety line
+
+Observed proof on 2026-05-19:
+- Best candidate: EURUSD SELL score=70.70
+- Rejection: macro6=3 / H1_trend_neutral
+- API usage: 280/800
+- Clock drift: DRIFT_WARN, approx -7566s
+- Accepted signals: 0
+- Strategy: UNCHANGED
+- H1 logic: UNCHANGED
+- Thresholds: UNCHANGED
+- Production trading behavior: UNCHANGED
+
+Known cosmetic issue:
+- `market_skip_tail` is rough tail evidence, not a clean daily count. Acceptable for this version; refine later.
