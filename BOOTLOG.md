@@ -248,3 +248,25 @@ Notes:
 | Production trading behavior | UNCHANGED |
 | Cron | NOT YET CHANGED |
 | Next action | Change daily summary cron to 20:00 UTC |
+
+---
+## 2026-05-19 — Server-UTC Daily Summary Gate
+
+| Item | Status |
+|---|---|
+| File added | tools/daily_summary_server_gate.sh |
+| Purpose | Send daily proof-of-work summary by server UTC, not phone time |
+| Reason | Phone/ship time unsafe; another 1 hour back tonight |
+| Bash syntax | PASS |
+| Dry-run result | PASS |
+| Gate status | OUTSIDE_WINDOW |
+| Server UTC observed | 2026-05-19T11:58:44Z |
+| Target hour | 20 UTC |
+| Telegram sent during test | NO |
+| Cron | CHANGED |
+| New cron | hourly at :10 through server-UTC gate |
+| Strategy | UNCHANGED |
+| H1 logic | UNCHANGED |
+| Thresholds | UNCHANGED |
+| Production trading behavior | UNCHANGED |
+| Next proof | Check `logs/cron.daily.log` after next :10 run |

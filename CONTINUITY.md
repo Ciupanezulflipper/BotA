@@ -805,3 +805,40 @@ Observed proof on 2026-05-19:
 
 Known cosmetic issue:
 - `market_skip_tail` is rough tail evidence, not a clean daily count. Acceptable for this version; refine later.
+
+---
+## 2026-05-19 — Server-UTC Daily Summary Gate Added
+
+Reason:
+Ship/local phone time is unsafe. Current confirmed clock drift is around -7566s/-7567s, and tonight the ship time moves 1 hour back again. Therefore a normal cron line such as `0 20 * * *` would mean device-local time, not guaranteed real UTC.
+
+Change:
+Added `tools/daily_summary_server_gate.sh`.
+
+Behavior:
+- Runs from cron hourly.
+- Calls `tools/clock_drift_check.py --json --write-state`.
+- Uses server UTC, not phone/local UTC.
+- Sends `tools/daily_summary.sh` only when server UTC hour equals target hour.
+- Default target: 20 UTC.
+- Sends once per server date using `state/daily_summary_sent_YYYY-MM-DD.ok`.
+- Logs to `logs/daily_summary_gate.log` and `logs/cron.daily.log`.
+
+Proof:
+- Bash syntax: PASS.
+- Dry-run gate: PASS.
+- Current dry-run result: OUTSIDE_WINDOW.
+- Observed server UTC: 2026-05-19T11:58:44Z.
+- Observed server hour: 11.
+- Target hour: 20.
+- Telegram send during dry run: NO.
+- Cron changed from direct daily summary to hourly server-UTC gate:
+  `10 * * * * bash /data/data/com.termux/files/home/BotA/tools/daily_summary_server_gate.sh >> /data/data/com.termux/files/home/BotA/logs/cron.daily.log 2>&1`
+
+Safety:
+- Strategy: UNCHANGED.
+- H1 logic: UNCHANGED.
+- Score thresholds: UNCHANGED.
+- Production trading behavior: UNCHANGED.
+- Telegram alert logic: UNCHANGED, except daily proof-of-work summary scheduling path.
+- Cron: CHANGED for daily summary only.
