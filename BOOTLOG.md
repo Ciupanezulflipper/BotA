@@ -270,3 +270,17 @@ Notes:
 | Thresholds | UNCHANGED |
 | Production trading behavior | UNCHANGED |
 | Next proof | Check `logs/cron.daily.log` after next :10 run |
+
+---
+## 2026-05-19 — Session Close State
+
+| Item | Status |
+|---|---|
+| Clock drift observability | DEPLOYED + CRON ACTIVE |
+| Daily proof-of-work summary | DEPLOYED |
+| Server-UTC gate | DEPLOYED + CRON ACTIVE |
+| Last trade candidate | EURUSD SELL 70.70 → H1-vetoed |
+| Accepted signals today | 0 |
+| Strategy | UNCHANGED |
+| GitHub | UP TO DATE (8f75d9c HEAD) |
+| Next check | logs/daily_summary_gate.log after 20:16 UTC |

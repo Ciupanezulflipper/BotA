@@ -842,3 +842,45 @@ Safety:
 - Production trading behavior: UNCHANGED.
 - Telegram alert logic: UNCHANGED, except daily proof-of-work summary scheduling path.
 - Cron: CHANGED for daily summary only.
+
+---
+## 2026-05-19 — Full Session Handoff
+
+### What was built today
+1. PR #4 clock drift observability (0b1b211)
+   - tools/clock_drift_check.py + tools/clock_drift_check.sh
+   - Cron: hourly :55 → logs/cron.clock_drift.log
+   - Live result: DRIFT_WARN drift=-7568s server_clock_ok=YES
+
+2. Telegram Daily Proof-of-Work Summary (397dbfb)
+   - tools/daily_summary.sh
+   - Replaces panic API warnings with structured daily report
+   - Test send: PASS http=200
+
+3. Server-UTC Daily Gate (8f75d9c)
+   - tools/daily_summary_server_gate.sh
+   - Fires hourly at :10, sends only when server_hour==20
+   - Reason: ship clock drift (-7568s) + tonight 1hr clock rollback
+   - Dry-run: PASS OUTSIDE_WINDOW
+   - First real fire expected ~20:16 UTC tonight
+
+### Bot trading state at session close
+- Infrastructure: RUNNING
+- Last candidate: EURUSD SELL score=66.60 May 18 16:45 UTC → H1-vetoed (correct)
+- Best candidate today: EURUSD SELL score=70.70 → H1_trend_neutral + macro6=3
+- Accepted signals: 0 (H1 protective per shadow replay evidence)
+- Clock drift: -7568s (v2.0.3 handles candle/gate via server clock)
+- API credits: 280/800 on session check
+- Strategy/H1/thresholds: UNCHANGED throughout
+
+### Known issues carried forward
+- Untracked files (leave alone): audits/, state/*.json, state/*.txt
+- Premature docs commit 2c9d8f3 corrected in a06a53c
+- Future PR merges: use --squash not --no-ff (avoid merge commit warning)
+- market_open.sh does not auto-write clock_drift_status.json (blocked in PR safety layer)
+
+### Next session items
+1. Verify daily summary fired tonight at ~20:16 UTC (check logs/daily_summary_gate.log)
+2. Review daily_summary.sh content after first real run
+3. API warning cleanup — reduce/remove daily 600/800 panic messages from Telegram
+4. Continue accumulating shadow tracker data (H1 veto outcome proof)
