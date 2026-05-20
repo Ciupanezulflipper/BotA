@@ -130,6 +130,8 @@ def safe_int(value, default=0):
     except Exception:
         return default
 
+TELEGRAM_MIN_SCORE = safe_float(os.environ.get("TELEGRAM_MIN_SCORE", "70"), 70.0)
+
 def load_json(path, default):
     try:
         if path.exists():
@@ -266,14 +268,15 @@ def count_signal_log_today():
 rows = read_alert_rows()
 tradeable = [r for r in rows if r["direction"] in ("BUY", "SELL")]
 holds = [r for r in rows if r["direction"] not in ("BUY", "SELL")]
-accepted = [r for r in tradeable if not r["rejected"]]
-rejected = [r for r in tradeable if r["rejected"]]
+filter_accepted = [r for r in tradeable if not r["rejected"]]
+filter_rejected = [r for r in tradeable if r["rejected"]]
+telegram_threshold_eligible = [r for r in filter_accepted if r["score"] >= TELEGRAM_MIN_SCORE]
 
 best = max(tradeable, key=lambda r: r["score"], default=None)
 latest = rows[-1] if rows else None
 
-h1_rejects = sum(1 for r in rejected if "H1" in r["filters"])
-score_rejects = sum(1 for r in rejected if "score<" in r["filters"])
+h1_rejects = sum(1 for r in filter_rejected if "H1" in r["filters"])
+score_rejects = sum(1 for r in filter_rejected if "score<" in r["filters"])
 macro_rejects = sum(1 for r in rows if "macro6" in r["filters"])
 not_tradeable = sum(1 for r in rows if "direction_not_tradeable" in r["filters"] or r["direction"] == "HOLD")
 
@@ -298,8 +301,10 @@ def best_line(r):
     if not r:
         return "none"
     if r["rejected"]:
-        return f'{r["pair"]} {r["direction"]} score={r["score"]:.2f} → rejected: {clean_filter_text(r["filters"])}'
-    return f'{r["pair"]} {r["direction"]} score={r["score"]:.2f} → accepted'
+        return f'{r["pair"]} {r["direction"]} score={r["score"]:.2f} → filter-rejected: {clean_filter_text(r["filters"])}'
+    if r["score"] >= TELEGRAM_MIN_SCORE:
+        return f'{r["pair"]} {r["direction"]} score={r["score"]:.2f} → filter-accepted / Telegram-threshold eligible'
+    return f'{r["pair"]} {r["direction"]} score={r["score"]:.2f} → filter-accepted / below Telegram threshold {TELEGRAM_MIN_SCORE:.2f}'
 
 def latest_line(r):
     if not r:
@@ -314,13 +319,14 @@ lines.append(f"Cron: {cron_status} | Market gate now: {market_status}")
 lines.append(f"Market reason: {market_reason}")
 lines.append("")
 lines.append(f"Scans logged: {len(rows)} | Candidates: {len(tradeable)} | HOLD/no-trade: {len(holds)}")
-lines.append(f"Accepted signals: {len(accepted)} | Rejected candidates: {len(rejected)}")
+lines.append(f"Filter-accepted candidates: {len(filter_accepted)} | Filter-rejected candidates: {len(filter_rejected)}")
+lines.append(f"Telegram-threshold eligible: {len(telegram_threshold_eligible)} | Send threshold: {TELEGRAM_MIN_SCORE:.2f}")
 lines.append(f"Reject mix: H1={h1_rejects} | score_gate={score_rejects} | macro6={macro_rejects} | no_trade={not_tradeable}")
 lines.append("")
 lines.append(f"Best candidate: {best_line(best)}")
 lines.append(f"Latest row: {latest_line(latest)}")
 lines.append("")
-lines.append(f"Signal log evidence: filter_lines={siglog['filter_lines']} | accepted_lines={siglog['accepted_lines']} | market_skip_tail={siglog['skip_lines']}")
+lines.append(f"Signal log evidence: filter_lines={siglog['filter_lines']} | watcher_accepted_log_lines={siglog['accepted_lines']} | market_skip_tail={siglog['skip_lines']}")
 lines.append(f"API usage: {api_used}/{api_limit} ({api_pct:.1f}%) {api_icon} | warned={str(api_warned).lower()}")
 lines.append(f"Clock drift: {clock_status} | drift={drift}s | server_clock_ok={str(clock_ok).lower()} | local_clock_unsafe={str(clock_unsafe).lower()}")
 lines.append("")
