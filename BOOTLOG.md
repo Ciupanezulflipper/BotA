@@ -299,3 +299,15 @@ Notes:
 | Clock drift | DRIFT_WARN -7568s |
 | SERVER_CLOCK_UNAVAILABLE later | noted, did not block send |
 | Next phase | API warning cleanup or shadow tracker expansion |
+
+---
+## 2026-05-20 — Session Close
+
+| Item | Status |
+|---|---|
+| Daily summary wording fix | LIVE on GitHub (1b6b903) |
+| Duplicate docs commit | 5b1430c — harmless, leave alone |
+| Clock drift | -11113s (ship 1hr rollback), DRIFT_WARN logged |
+| Bot scoring | EURUSD SELL context, H1 vetoing correctly |
+| Strategy / H1 / thresholds | UNCHANGED |
+| Next check | Tonight 20:16 UTC daily summary fire |
