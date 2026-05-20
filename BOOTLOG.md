@@ -284,3 +284,18 @@ Notes:
 | Strategy | UNCHANGED |
 | GitHub | UP TO DATE (8f75d9c HEAD) |
 | Next check | logs/daily_summary_gate.log after 20:16 UTC |
+
+---
+## 2026-05-20 — Daily Summary Phase Complete
+
+| Item | Status |
+|---|---|
+| First unattended fire | PASS 20:16 UTC |
+| Telegram delivery | PASS http=200 |
+| State file created | state/daily_summary_sent_2026-05-19.ok |
+| Accepted signals (May 19) | 1 |
+| Best rejected candidate | EURUSD SELL 70.70 H1-vetoed |
+| API usage | 526/800 |
+| Clock drift | DRIFT_WARN -7568s |
+| SERVER_CLOCK_UNAVAILABLE later | noted, did not block send |
+| Next phase | API warning cleanup or shadow tracker expansion |

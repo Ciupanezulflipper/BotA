@@ -884,3 +884,30 @@ Safety:
 2. Review daily_summary.sh content after first real run
 3. API warning cleanup — reduce/remove daily 600/800 panic messages from Telegram
 4. Continue accumulating shadow tracker data (H1 veto outcome proof)
+
+---
+## 2026-05-20 — Daily Summary First Unattended Fire: PASS
+
+First real unattended server-UTC gate fire confirmed.
+
+Proof:
+  GATE_SEND_START server_date=2026-05-19 server_utc=2026-05-19T20:16:09Z drift=-7568
+  [daily] TELEGRAM_SEND=PASS http=200
+  GATE_SEND_DONE status=PASS server_date=2026-05-19
+  state/daily_summary_sent_2026-05-19.ok EXISTS
+
+Daily summary content (2026-05-19):
+  Scans: 28 | Candidates: 23 | HOLD/no-trade: 5
+  Accepted signals: 1 | Rejected: 22
+  Best candidate: EURUSD SELL score=70.70 → H1_trend_neutral + macro6=3
+  API usage: 526/800 warned=false
+  Clock drift: DRIFT_WARN drift=-7568s
+  Strategy/H1/thresholds: UNCHANGED
+
+Known issue:
+  Later dry run returned SERVER_CLOCK_UNAVAILABLE — ship internet intermittent.
+  Did NOT block the 20:16 UTC send. Fail-closed behavior correct.
+  If SERVER_CLOCK_UNAVAILABLE hits during the 20 UTC window repeatedly,
+  consider cached-offset fallback (separate branch, not urgent).
+
+Phase status: COMPLETE. No further code changes needed.
