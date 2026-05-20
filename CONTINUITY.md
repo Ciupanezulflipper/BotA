@@ -951,3 +951,22 @@ Safety:
 - Production trading behavior: UNCHANGED.
 - Cron: UNCHANGED.
 - Telegram sending logic: UNCHANGED.
+
+---
+## 2026-05-20 — Daily Summary Wording Clarified
+
+Change:
+- Reworded daily proof-of-work summary so CSV `rejected=false` rows are shown as filter-accepted candidates, not final accepted signals.
+- Added Telegram-threshold eligible count using TELEGRAM_MIN_SCORE.
+- Renamed accepted_lines log evidence to watcher_accepted_log_lines.
+
+Reason:
+The May 19 summary showed `Accepted signals: 1`, but audit proved the row was filter-accepted with score=67.10 while TELEGRAM_MIN_SCORE=70. Therefore it was not Telegram-send eligible.
+
+Safety:
+- Strategy: UNCHANGED.
+- H1 logic: UNCHANGED.
+- Threshold values: UNCHANGED.
+- Production trading behavior: UNCHANGED.
+- Cron: UNCHANGED.
+- Telegram sending logic: UNCHANGED.
