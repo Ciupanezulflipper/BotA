@@ -911,3 +911,24 @@ Known issue:
   consider cached-offset fallback (separate branch, not urgent).
 
 Phase status: COMPLETE. No further code changes needed.
+
+---
+## 2026-05-20 — Daily Summary Accepted Count Verified
+
+Investigation of "Accepted signals: 1" in May 19 summary.
+
+Finding: CORRECT. Not a bug.
+Row: line=1178, 2026-05-19T21:30:28+1000 = 11:30:28 UTC
+  EURUSD M15 SELL score=67.1 filter_rejected=false filters=macro6=3 | H1_trend_confirmed
+
+Explanation:
+  H1 was confirmed SELL direction (not neutral). Signal passed the production filter.
+  Score 67.1 is above FILTER_SCORE_MIN=65 but below TELEGRAM_MIN_SCORE=70.
+  Correctly logged to alerts.csv as accepted, correctly NOT sent to Telegram.
+  Daily summary counts filter-accepted rows, not Telegram-sent rows.
+
+Known cosmetic gap (low priority):
+  Summary does not distinguish "accepted + Telegram sent" vs "accepted + below Telegram threshold".
+  Not a bug. Acceptable for current version. Refine in a future PR if needed.
+
+No code changes made.
