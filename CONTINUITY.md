@@ -992,3 +992,35 @@ Proposed fix (next branch — do not build on ship):
 
 Tonight: if May 21 summary fires → CLOCK_FAIL was temporary.
           if May 21 also misses → cached-offset fallback is urgent.
+
+---
+## 2026-05-21 — May 20 Daily Summary Missed: CLOCK_FAIL During 20 UTC Window
+
+Status:
+- May 19 daily summary: PASS, sent at server UTC 20:16.
+- May 20 daily summary: MISSED.
+- May 21 daily summary: pending.
+
+Proof:
+- No state/daily_summary_sent_2026-05-20.ok file exists.
+- Gate log shows repeated CLOCK_FAIL / SERVER_CLOCK_UNAVAILABLE during the May 20 target window.
+- This prevented the server-UTC gate from confirming server_hour=20, so the gate correctly failed closed.
+
+Root cause:
+Ship internet/server-clock endpoints were unavailable during the May 20 daily-summary send window.
+
+Safety:
+- Trading strategy: UNCHANGED.
+- H1 logic: UNCHANGED.
+- Thresholds: UNCHANGED.
+- Cron: UNCHANGED.
+- Telegram sending logic: UNCHANGED.
+- Production trading behavior: UNCHANGED.
+
+Next observation:
+Check the May 21 daily summary after the next server UTC 20 window. Based on current drift, expected local-device check time is around 03:10 AEST on May 22, but ship/device time may move again.
+
+Decision rule:
+- If May 21 sends successfully, no urgent fix.
+- If May 21 also misses due to CLOCK_FAIL, build a daily-summary-only cached server-offset fallback.
+- Do not apply cached offset fallback to trading/market gates; those remain fail-closed.
