@@ -970,3 +970,25 @@ Safety:
 - Production trading behavior: UNCHANGED.
 - Cron: UNCHANGED.
 - Telegram sending logic: UNCHANGED.
+
+---
+## 2026-05-21 — May 20 Daily Summary Missed: CLOCK_FAIL During 20 UTC Window
+
+May 19 summary: PASS (sent at 20:16 UTC)
+May 20 summary: MISSED — server clock unavailable from ~17:15 UTC through end of day
+May 21 summary: pending (~17:10 AEST / 20:10 server UTC tonight)
+
+Root cause: ship internet blocked all server clock endpoints during the entire
+20 UTC window on May 20. Fail-closed behavior is correct for trading gate,
+but causes daily summary to miss when clock fails at exactly the send hour.
+
+Pattern: now missed twice during 20 UTC window due to CLOCK_FAIL.
+Threshold reached for building cached-offset fallback (daily summary only).
+
+Proposed fix (next branch — do not build on ship):
+  daily_summary_server_gate.sh: if server clock fails, use last-known-good
+  offset from clock_drift_status.json (if written within last 4 hours) to
+  estimate server UTC. Trading market_open.sh remains fail-closed unchanged.
+
+Tonight: if May 21 summary fires → CLOCK_FAIL was temporary.
+          if May 21 also misses → cached-offset fallback is urgent.
