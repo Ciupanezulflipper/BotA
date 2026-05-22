@@ -1024,3 +1024,29 @@ Decision rule:
 - If May 21 sends successfully, no urgent fix.
 - If May 21 also misses due to CLOCK_FAIL, build a daily-summary-only cached server-offset fallback.
 - Do not apply cached offset fallback to trading/market gates; those remain fail-closed.
+
+---
+## 2026-05-22 — Clock Drift Last-Good State Added
+
+Change:
+- Updated tools/clock_drift_check.py to write logs/clock_drift_last_good.json only when server_clock_ok=true.
+- Failed clock checks continue writing logs/clock_drift_status.json, but they do not overwrite the last-good server clock file.
+- This prepares for a future daily-summary-only cached-offset fallback.
+
+Proof:
+- python3 -m py_compile tools/clock_drift_check.py passed.
+- Live check wrote logs/clock_drift_last_good.json.
+- Last-good payload included server_utc, drift_seconds, generated_utc, local_utc, and server source metadata.
+
+Safety:
+- Trading strategy: UNCHANGED.
+- H1 logic: UNCHANGED.
+- Thresholds: UNCHANGED.
+- Cron: UNCHANGED.
+- Telegram sending logic: UNCHANGED.
+- Daily summary gate behavior: UNCHANGED.
+- Production trading behavior: UNCHANGED.
+
+Next:
+- Update tools/daily_summary_server_gate.sh so only the daily proof-of-work summary can use last-good server offset when live server clock is unavailable.
+- Do not apply this fallback to trading or market gates.

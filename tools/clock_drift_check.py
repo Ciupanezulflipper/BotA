@@ -184,9 +184,48 @@ def default_state_file() -> Path:
     return root / "logs" / "clock_drift_status.json"
 
 
-def write_state(path: Path, status: dict) -> None:
+def default_last_good_file() -> Path:
+    root = Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA")))
+    return root / "logs" / "clock_drift_last_good.json"
+
+
+def build_last_good_payload(status: dict) -> dict:
+    return {
+        "generated_utc": status.get("generated_utc"),
+        "local_utc": status.get("local_utc"),
+        "server_utc": status.get("server_utc"),
+        "drift_seconds": status.get("drift_seconds"),
+        "drift_abs_seconds": status.get("drift_abs_seconds"),
+        "server_sources_count": status.get("server_sources_count"),
+        "server_spread_seconds": status.get("server_spread_seconds"),
+        "server_reason": status.get("server_reason"),
+        "status": status.get("status"),
+        "source_status_file": "clock_drift_status.json",
+        "last_good_clock": True,
+        "strategy_changed": "NO",
+        "thresholds_changed": "NO",
+        "production_changed_by_this_report": "NO",
+    }
+
+
+def write_json_file(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(status, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def write_state(path: Path, status: dict) -> None:
+    write_json_file(path, status)
+
+
+def write_last_good(path: Path, status: dict) -> bool:
+    if not status.get("server_clock_ok"):
+        return False
+    if not status.get("server_utc") or status.get("server_utc") == "NA":
+        return False
+    if status.get("drift_seconds") is None:
+        return False
+    write_json_file(path, build_last_good_payload(status))
+    return True
 
 
 def print_plain(status: dict) -> None:
@@ -222,6 +261,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--plain", action="store_true", help="Print plain text. Default.")
     parser.add_argument("--write-state", action="store_true", help="Write logs/clock_drift_status.json.")
     parser.add_argument("--state-file", default=str(default_state_file()), help="State JSON path.")
+    parser.add_argument(
+        "--last-good-file",
+        default=str(default_last_good_file()),
+        help="Last known good server-clock JSON path. Updated only when server_clock_ok=true.",
+    )
     parser.add_argument(
         "--warn-seconds",
         type=int,
@@ -259,6 +303,10 @@ def main(argv: list[str]) -> int:
     if args.write_state:
         try:
             write_state(Path(args.state_file), status)
+            if write_last_good(Path(args.last_good_file), status):
+                status["last_good_state_written"] = "YES"
+            else:
+                status["last_good_state_written"] = "NO"
         except Exception as exc:  # noqa: BLE001
             # Observability must not fail the caller.
             status.setdefault("state_write_error", f"{type(exc).__name__}: {exc}")
