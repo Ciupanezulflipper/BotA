@@ -1085,3 +1085,45 @@ NEXT QUESTION:
   Should USDJPY or additional pairs be added to increase probability
   of at least one pair being in H1 trend at any given time?
   This requires a separate analysis — not a threshold change.
+
+---
+
+## Pre-Commercial Checkpoint — 2026-05-22
+
+Read-only audit. No production files modified.
+Full report: `audits/bota_pre_commercial_checkpoint_2026-05-22.md`
+
+### State
+
+- Signal pipeline: ACTIVE.
+- Active signal scan: EURUSD + GBPUSD on M15.
+- USDJPY: indicators fetched/cached by indicators_updater.sh, but not confirmed in active signal scan cron.
+- Thresholds unchanged:
+  - FILTER_SCORE_MIN=65
+  - TELEGRAM_MIN_SCORE / YELLOW tier=70
+  - TELEGRAM_TIER_GREEN_MIN=75
+  - H1_VETO_OVERRIDE_SCORE=75
+  - TELEGRAM_COOLDOWN_SECONDS=1800
+  - SCALP_SL_ATR_MULT=2.0
+  - SCALP_TP_ATR_MULT=4.0
+  - FILTER_RR_MIN=1.4
+- H1 veto: hard in tools/m15_h1_fusion.sh; proven protective by shadow replay (20/20 SL_HIT, 0 TP_HIT both BUY and SELL directions, commit 20e23a5).
+- Telegram: ACTIVE. YELLOW watchlist tier >=70, GREEN full-alert tier >=75.
+- Supabase/ProfitLab: code path wired through tools/supabase_publish.py and signal_watcher_pro.sh; local key presence observed; production insert success not confirmed in this audit window.
+- Daily summary: May 19 PASS; May 20 and May 21 missed due to CLOCK_FAIL during target window; May 22 pending at audit time (target: 20 UTC).
+- Last-good server clock fallback: deployed and operational (commit 26e333d); affects daily summary only, not trading gates.
+- Clock drift observability active; device clock ~4.1h ahead but server clock currently recoverable (DRIFT_WARN, server_clock_ok=true).
+
+### Risks Logged
+
+- Supabase production insert success remains unproven in current logs.
+- state/bota_shipmode_crontab.txt is stale; live crontab (crontab -l) is the authoritative source.
+- Daily summary can still miss if server clock unavailable for more than 8 hours through the target window.
+- H1_VETO_OVERRIDE_SCORE duplicate line in strategy.env (lines 25-26); both values are 75, no functional impact.
+- No product/commercial message layer exists yet.
+
+### Next Planned Branch
+
+  feat/signal-product-message-v1
+
+Do not start that branch until this checkpoint commit is reviewed.
