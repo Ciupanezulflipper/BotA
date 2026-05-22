@@ -311,3 +311,17 @@ Notes:
 | Bot scoring | EURUSD SELL context, H1 vetoing correctly |
 | Strategy / H1 / thresholds | UNCHANGED |
 | Next check | Tonight 20:16 UTC daily summary fire |
+
+---
+## 2026-05-22 — Shadow Replay Final: 20/20 SL_HIT
+
+| Item | Result |
+|---|---|
+| SELL shadow outcomes | 7/7 SL_HIT WR=0.0% |
+| BUY shadow outcomes | 13/13 SL_HIT WR=0.0% |
+| Combined | 20/20 SL_HIT WR=0.0% |
+| H1 veto verdict | PROTECTIVE — FINAL, do not change |
+| H1_VETO_OVERRIDE_SCORE | UNCHANGED at 75 |
+| Strategy | UNCHANGED |
+| Signal scarcity cause | Ranging H1 market, not broken bot |
+| Next question | Pair expansion (USDJPY) analysis |

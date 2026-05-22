@@ -1050,3 +1050,38 @@ Safety:
 Next:
 - Update tools/daily_summary_server_gate.sh so only the daily proof-of-work summary can use last-good server offset when live server clock is unavailable.
 - Do not apply this fallback to trading or market gates.
+
+---
+## 2026-05-22 — H1 Veto Final Proof: SELL Direction Confirmed Protective
+
+Shadow replay expanded to include SELL-direction H1-vetoed candidates.
+
+SELL results: resolved=7, TP=0, SL=7, WR=0.0%
+  May 18 EURUSD SELL 66.6 → SL_HIT -12.1p
+  May 19 GBPUSD SELL 68.4 → SL_HIT -15.3p
+  May 19 EURUSD SELL 70.7 → SL_HIT -11.8p  (would have been Telegram signal)
+  May 21 EURUSD SELL 72.4 → SL_HIT -15.7p  (would have been Telegram signal)
+  May 21 EURUSD SELL 72.5 → SL_HIT -16.2p  (would have been Telegram signal)
+  May 21 EURUSD SELL 73.2 → SL_HIT -16.4p  (would have been Telegram signal)
+  May 22 GBPUSD SELL 68.7 → SL_HIT -11.5p
+
+Combined ALL directions: 20 resolved, 20 SL_HIT, 0 TP_HIT, WR=0.0%
+BUY results: resolved=13, all SL_HIT (prior sessions)
+
+CONCLUSION:
+  H1 neutral veto is protective in BOTH BUY and SELL directions.
+  Directional bias concern eliminated.
+  Do NOT lower H1_VETO_OVERRIDE_SCORE.
+  Do NOT remove or weaken H1 veto.
+  Silence is correct behavior in ranging H1 market conditions.
+
+ROOT CAUSE OF SIGNAL SCARCITY:
+  Strategy requires trending H1 conditions to produce clean signals.
+  EUR/USD and GBP/USD H1 has been ranging since mid-May.
+  When H1 trends, the strategy fires (May 12 BUY 75.70 worked).
+  The fix is not threshold changes — it is market exposure.
+
+NEXT QUESTION:
+  Should USDJPY or additional pairs be added to increase probability
+  of at least one pair being in H1 trend at any given time?
+  This requires a separate analysis — not a threshold change.
