@@ -1218,3 +1218,102 @@ Before any public Watchlist message is enabled:
 - Fix the YELLOW/Supabase product-contract issue.
 - YELLOW watchlist-style Telegram messages must not be inserted into ProfitLab as ACTIVE executable signals.
 - Public Telegram / Supabase / cron activation remains blocked until that contract is fixed and verified.
+
+---
+
+## 2026-05-23 — Step 3.5: YELLOW/Supabase Contract Fix
+
+Branch: `feat/signal-product-message-v1`
+
+Code commit:
+- `df53cbf` — `fix: prevent YELLOW watchlist tier from publishing active Supabase signals`
+
+### Problem Fixed
+
+YELLOW Telegram alerts were watchlist-style messages, but the successful Telegram path still called `tools/supabase_publish.py`.
+
+That allowed a YELLOW/watchlist message to be inserted into Supabase `public.signals` as:
+
+- `status='ACTIVE'`
+- executable `entry_price`
+- executable `stop_loss`
+- executable `take_profit`
+
+This was a product-contract bug because ProfitLab treats `public.signals.status='ACTIVE'` as an executable signal.
+
+### Files Changed
+
+Modified only:
+
+- `tools/signal_watcher_pro.sh`
+- `tools/supabase_publish.py`
+
+No changes made to:
+
+- `tools/m15_h1_fusion.sh`
+- `tools/scoring_engine.sh`
+- `tools/product_message_v1.py`
+- `config/strategy.env`
+- cron
+- thresholds
+- H1 veto logic
+- Supabase schema
+- ProfitLab frontend
+
+### Fix Implemented
+
+`tools/signal_watcher_pro.sh`:
+
+- GREEN tier continues to publish to Supabase after successful Telegram send.
+- YELLOW tier still sends Telegram.
+- YELLOW tier now skips Supabase publishing.
+- Added clear Supabase skip log for non-GREEN tiers.
+
+`tools/supabase_publish.py`:
+
+- Added defensive tier guard at the top of `publish()`.
+- Non-GREEN tiers return success with a skip message.
+- Non-GREEN tiers no longer require `SUPABASE_SERVICE_KEY`.
+- Only GREEN can proceed toward ACTIVE Supabase insertion.
+- `min_tier` is now constant `pro` for published ACTIVE signals.
+
+### Validation Results
+
+Passed:
+
+- `git diff --check`
+- `python3 -m py_compile tools/supabase_publish.py`
+- `bash -n tools/signal_watcher_pro.sh`
+
+Defensive behavior confirmed:
+
+- `YELLOW_EXIT:0`
+  - Printed skip message.
+  - Did not require Supabase key.
+  - Did not attempt ACTIVE publish.
+
+- `GREEN_NO_KEY_EXIT:1`
+  - Still failed when `SUPABASE_SERVICE_KEY` was missing.
+  - Preserved existing GREEN publish safety behavior.
+
+### Final Contract After Step 3.5
+
+GREEN:
+
+- Telegram: sends.
+- Chart: GREEN-only behavior preserved.
+- Supabase: publishes ACTIVE executable signal.
+
+YELLOW:
+
+- Telegram: sends.
+- Supabase: skipped.
+- ProfitLab ACTIVE signal: not created.
+
+### Remaining Gate
+
+Public Watchlist activation remains blocked until a separate product decision is made about whether watchlist items need:
+
+- their own Supabase table,
+- a schema migration adding `WATCHLIST`,
+- or Telegram-only behavior.
