@@ -1127,3 +1127,94 @@ Full report: `audits/bota_pre_commercial_checkpoint_2026-05-22.md`
   feat/signal-product-message-v1
 
 Do not start that branch until this checkpoint commit is reviewed.
+
+---
+
+## 2026-05-23 — Product Message Layer V1: Shadow Market Pulse Formatter Added
+
+Branch: `feat/signal-product-message-v1`  
+Commit: `c9bcee4` — `feat: add product message v1 shadow market pulse formatter`
+
+### What Changed
+
+Added new file:
+
+- `tools/product_message_v1.py`
+
+Purpose:
+
+- Generate a shadow-only BotA Market Pulse message.
+- Read existing cache files only.
+- Write preview output to stdout.
+- Write shadow audit record to `logs/product_messages_v1.jsonl`.
+
+### Confirmed Safety Contract
+
+- Telegram send: NO.
+- Supabase publish: NO.
+- Cron change: NO.
+- Trading thresholds changed: NO.
+- H1 veto changed: NO.
+- Signal generation logic changed: NO.
+- Active scan scope remains: EURUSD + GBPUSD only.
+- USDJPY remains fetched/cached only, not part of active signal scan.
+- Market Pulse output does not include executable trade instructions.
+
+### Data Sources Used
+
+The formatter reads:
+
+- `cache/indicators_EURUSD_M15.json`
+- `cache/indicators_EURUSD_H1.json`
+- `cache/indicators_EURUSD_H4.json`
+- `cache/d1_trend_EURUSD.json`
+- `cache/indicators_GBPUSD_M15.json`
+- `cache/indicators_GBPUSD_H1.json`
+- `cache/indicators_GBPUSD_H4.json`
+- `cache/d1_trend_GBPUSD.json`
+
+The formatter intentionally ignores broken D1 indicator files:
+
+- `cache/indicators_EURUSD_D1.json`
+- `cache/indicators_GBPUSD_D1.json`
+
+Reason: both showed `tf_ok=false`, `weak=true`, and `error=tf_mismatch`.
+
+### Validation Results
+
+Commands run:
+
+- `python3 -m py_compile tools/product_message_v1.py`
+- `python3 tools/product_message_v1.py --type market_pulse --shadow`
+- `git status --short`
+
+Results:
+
+- Syntax check: PASS.
+- Shadow output generated successfully.
+- `telegram_sent=false`.
+- `supabase_published=false`.
+- Shadow JSONL log created and confirmed non-empty.
+- `logs/product_messages_v1.jsonl` is ignored by Git through `.gitignore`.
+- No tracked production files modified after commit.
+
+### Runtime Observation
+
+During the first shadow run:
+
+- Market phase was closed.
+- M15/H1/H4 cache ages were stale, expected for Saturday market closure.
+- EURUSD H4 rendered as unavailable because cache had:
+  - `tf_ok=true`
+  - `weak=true`
+  - `error=insufficient_data`
+
+This is not a formatter bug. The formatter handled weak cache data safely.
+
+### Next Required Step
+
+Before any public Watchlist message is enabled:
+
+- Fix the YELLOW/Supabase product-contract issue.
+- YELLOW watchlist-style Telegram messages must not be inserted into ProfitLab as ACTIVE executable signals.
+- Public Telegram / Supabase / cron activation remains blocked until that contract is fixed and verified.
