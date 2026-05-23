@@ -91,7 +91,9 @@ def load_d1_trend(pair: str) -> dict:
         return {"error": f"parse:{type(e).__name__}", "trend": "UNKNOWN", "weak": True}
 
 
-BASH_BIN = "/data/data/com.termux/files/usr/bin/bash"
+BASH_BIN     = "/data/data/com.termux/files/usr/bin/bash"
+ROOT_DIR     = Path(__file__).resolve().parents[1]
+FUSION_SCRIPT = ROOT_DIR / "tools" / "m15_h1_fusion.sh"
 
 
 def run_fusion(pair: str) -> dict:
@@ -102,7 +104,7 @@ def run_fusion(pair: str) -> dict:
     """
     try:
         result = subprocess.run(
-            [BASH_BIN, "tools/m15_h1_fusion.sh", pair],
+            [BASH_BIN, str(FUSION_SCRIPT), pair],
             capture_output=True,
             text=True,
             timeout=30,
@@ -156,6 +158,69 @@ def age_label(value, max_age: float) -> str:
     return f"✅ fresh ({age:.0f}min old)"
 
 
+def derive_fusion_blockers(fusion: dict) -> list:
+    blockers = []
+    reasons_str    = str(fusion.get("reasons", ""))
+    filter_reasons = fusion.get("filter_reasons", [])
+
+    if "Closed" in reasons_str or "fail_closed" in filter_reasons:
+        blockers.append("market closed")
+
+    if "direction_not_tradeable" in filter_reasons:
+        blockers.append("no tradeable direction (HOLD)")
+
+    if any("score" in r for r in filter_reasons):
+        score = safe_float(fusion.get("score"))
+        blockers.append(f"score below threshold ({score:.0f})")
+
+    if any("rr" in r for r in filter_reasons):
+        blockers.append("risk/reward not met")
+
+    if any("macro" in r for r in filter_reasons):
+        blockers.append("macro filter active")
+
+    return blockers
+
+
+def derive_data_blockers(m15: dict, h1: dict, d1_trend: dict) -> list:
+    blockers = []
+
+    if not m15.get("tf_ok", True) or m15.get("weak"):
+        blockers.append(f"M15 data issue: {m15.get('error', 'unknown')}")
+
+    if not h1.get("tf_ok", True) or h1.get("weak"):
+        blockers.append(f"H1 data issue: {h1.get('error', 'unknown')}")
+
+    if d1_trend.get("weak") or d1_trend.get("error"):
+        blockers.append("D1 trend data weak or unavailable")
+
+    return blockers
+
+
+def derive_cache_only_adx_blockers(m15: dict, h1: dict) -> list:
+    blockers = []
+
+    adx_m15 = safe_float(m15.get("adx"))
+    if 0 < adx_m15 < ADX_WEAK_THRESHOLD:
+        blockers.append(f"M15 ADX low ({adx_m15:.1f})")
+
+    adx_h1 = safe_float(h1.get("adx"))
+    if 0 < adx_h1 < ADX_WEAK_THRESHOLD:
+        blockers.append(f"H1 ADX low ({adx_h1:.1f}) — H1 veto risk")
+
+    return blockers
+
+
+def dedupe_preserve_order(items: list) -> list:
+    seen: set = set()
+    result = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
+
 def derive_blockers(
     m15: dict, h1: dict, d1_trend: dict, fusion: dict
 ) -> list:
@@ -166,50 +231,14 @@ def derive_blockers(
     blockers = []
 
     if fusion:
-        reasons_str    = str(fusion.get("reasons", ""))
-        filter_reasons = fusion.get("filter_reasons", [])
+        blockers.extend(derive_fusion_blockers(fusion))
 
-        if "Closed" in reasons_str or "fail_closed" in filter_reasons:
-            blockers.append("market closed")
-
-        if "direction_not_tradeable" in filter_reasons:
-            blockers.append("no tradeable direction (HOLD)")
-
-        if any("score" in r for r in filter_reasons):
-            score = safe_float(fusion.get("score"))
-            blockers.append(f"score below threshold ({score:.0f})")
-
-        if any("rr" in r for r in filter_reasons):
-            blockers.append("risk/reward not met")
-
-        if any("macro" in r for r in filter_reasons):
-            blockers.append("macro filter active")
-
-    if not m15.get("tf_ok", True) or m15.get("weak"):
-        blockers.append(f"M15 data issue: {m15.get('error', 'unknown')}")
-
-    if not h1.get("tf_ok", True) or h1.get("weak"):
-        blockers.append(f"H1 data issue: {h1.get('error', 'unknown')}")
+    blockers.extend(derive_data_blockers(m15, h1, d1_trend))
 
     if not fusion:
-        adx_m15 = safe_float(m15.get("adx"))
-        if 0 < adx_m15 < ADX_WEAK_THRESHOLD:
-            blockers.append(f"M15 ADX low ({adx_m15:.1f})")
+        blockers.extend(derive_cache_only_adx_blockers(m15, h1))
 
-        adx_h1 = safe_float(h1.get("adx"))
-        if 0 < adx_h1 < ADX_WEAK_THRESHOLD:
-            blockers.append(f"H1 ADX low ({adx_h1:.1f}) — H1 veto risk")
-
-    if d1_trend.get("weak") or d1_trend.get("error"):
-        blockers.append("D1 trend data weak or unavailable")
-
-    seen, deduped = set(), []
-    for b in blockers:
-        if b not in seen:
-            seen.add(b)
-            deduped.append(b)
-
-    return deduped
+    return dedupe_preserve_order(blockers)
 
 # ── PAIR SUMMARY BUILDER ──────────────────────────────────────────────────────
 
@@ -241,13 +270,14 @@ def format_market_pulse(summaries: list, generated_at: str) -> str:
     Format Market Pulse message.
     PRODUCT CONTRACT ENFORCED: no entry, no SL, no TP anywhere in output.
     """
-    lines = []
-    lines.append("📊 BotA Market Pulse")
-    lines.append(f"🕐 {generated_at}")
-    lines.append("─" * 34)
-    lines.append("ℹ️  Monitoring snapshot — not a trade alert.")
-    lines.append("🚨 Only 🔴 TRADE ALERT messages are executable.")
-    lines.append("")
+    lines = [
+        "📊 BotA Market Pulse",
+        f"🕐 {generated_at}",
+        "─" * 34,
+        "ℹ️  Monitoring snapshot — not a trade alert.",
+        "🚨 Only 🔴 TRADE ALERT messages are executable.",
+        "",
+    ]
 
     for s in summaries:
         pair     = s["pair"]
