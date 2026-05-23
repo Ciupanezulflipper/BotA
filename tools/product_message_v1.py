@@ -91,6 +91,9 @@ def load_d1_trend(pair: str) -> dict:
         return {"error": f"parse:{type(e).__name__}", "trend": "UNKNOWN", "weak": True}
 
 
+BASH_BIN = "/data/data/com.termux/files/usr/bin/bash"
+
+
 def run_fusion(pair: str) -> dict:
     """
     Run tools/m15_h1_fusion.sh to get current filter state.
@@ -99,10 +102,11 @@ def run_fusion(pair: str) -> dict:
     """
     try:
         result = subprocess.run(
-            ["bash", "tools/m15_h1_fusion.sh", pair],
+            [BASH_BIN, "tools/m15_h1_fusion.sh", pair],
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
         stdout = result.stdout.strip()
         if not stdout:
@@ -153,7 +157,7 @@ def age_label(value, max_age: float) -> str:
 
 
 def derive_blockers(
-    m15: dict, h1: dict, h4: dict, d1_trend: dict, fusion: dict
+    m15: dict, h1: dict, d1_trend: dict, fusion: dict
 ) -> list:
     """
     Derive human-readable blocker reasons from real cached data only.
@@ -189,11 +193,11 @@ def derive_blockers(
 
     if not fusion:
         adx_m15 = safe_float(m15.get("adx"))
-        if adx_m15 > 0 and adx_m15 < ADX_WEAK_THRESHOLD:
+        if 0 < adx_m15 < ADX_WEAK_THRESHOLD:
             blockers.append(f"M15 ADX low ({adx_m15:.1f})")
 
         adx_h1 = safe_float(h1.get("adx"))
-        if adx_h1 > 0 and adx_h1 < ADX_WEAK_THRESHOLD:
+        if 0 < adx_h1 < ADX_WEAK_THRESHOLD:
             blockers.append(f"H1 ADX low ({adx_h1:.1f}) — H1 veto risk")
 
     if d1_trend.get("weak") or d1_trend.get("error"):
@@ -217,7 +221,7 @@ def build_pair_summary(pair: str, use_fusion: bool = True) -> dict:
     fusion   = run_fusion(pair) if use_fusion else {}
 
     price    = safe_float(m15.get("price") or h1.get("price"))
-    blockers = derive_blockers(m15, h1, h4, d1_trend, fusion)
+    blockers = derive_blockers(m15, h1, d1_trend, fusion)
 
     return {
         "pair":     pair,
