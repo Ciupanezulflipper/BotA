@@ -46,14 +46,17 @@ def has_active_signal(pair: str) -> bool:
         return False
 
 def publish(pair, direction, entry, sl, tp, score, tf, tier):
+    tier = str(tier).upper()
+    if tier != "GREEN":
+        print(f"[supabase_publish] ⏭ SKIP non-GREEN tier={tier} — only GREEN publishes ACTIVE signals", file=sys.stderr)
+        return True
+
     if not SUPABASE_KEY:
         print("[supabase_publish] ❌ SUPABASE_SERVICE_KEY not set", file=sys.stderr)
         return False
 
     if has_active_signal(pair):
         return False
-
-    min_tier = "free" if tier == "YELLOW" else "pro"
 
     payload = {
         "pair":            pair.upper(),
@@ -64,7 +67,7 @@ def publish(pair, direction, entry, sl, tp, score, tf, tier):
         "signal_strength": score_to_strength(int(score)),
         "status":          "ACTIVE",
         "timeframe":       tf.upper(),
-        "min_tier":        min_tier,
+        "min_tier":        "pro",
         "rationale":       f"BotA score={score} tier={tier}",
     }
 

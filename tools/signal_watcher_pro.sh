@@ -962,13 +962,17 @@ except Exception:
     # Cooldown is only meaningful on real sends (not DRY_RUN, not disabled).
     if ! is_true "${DRY_RUN_MODE:-false}" && ! is_false "${TELEGRAM_ENABLED:-1}"; then
       telegram_cooldown_mark "${pair_o}" "${tf_o}"
-    # Publish to ProfitLab dashboard
-    if [[ -f "${TOOLS}/supabase_publish.py" ]] && [[ -n "${SUPABASE_SERVICE_KEY:-}" ]]; then
-      python3 "${TOOLS}/supabase_publish.py" \
-        --pair "${pair_o}" --direction "${direction}" \
-        --entry "${entry}" --sl "${sl}" --tp "${tp}" \
-        --score "${score_int}" --tf "${tf_o}" --tier "${tier}" \
-        2>>"${ERRLOG}" || log "SUPABASE" "publish failed for ${pair_o} ${tf_o}"
+    # Publish to ProfitLab dashboard — GREEN tier only.
+    if [[ "${tier}" == "GREEN" ]]; then
+      if [[ -f "${TOOLS}/supabase_publish.py" ]] && [[ -n "${SUPABASE_SERVICE_KEY:-}" ]]; then
+        python3 "${TOOLS}/supabase_publish.py" \
+          --pair "${pair_o}" --direction "${direction}" \
+          --entry "${entry}" --sl "${sl}" --tp "${tp}" \
+          --score "${score_int}" --tf "${tf_o}" --tier "${tier}" \
+          2>>"${ERRLOG}" || log "SUPABASE" "publish failed for ${pair_o} ${tf_o}"
+      fi
+    else
+      log "SUPABASE" "skip non-GREEN tier=${tier} for ${pair_o} ${tf_o}"
     fi
     fi
   else
