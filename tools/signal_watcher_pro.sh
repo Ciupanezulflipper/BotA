@@ -929,7 +929,7 @@ except Exception:
   fi
 
   local msg
-  if [[ "${tier}" == "GREEN" ]]; then
+  if [[ "${tier}" = "GREEN" ]]; then
     msg="${emoji} BotA ${pair_o} ${tf_o} ${direction}\n📊 Score: ${score} | ${filter_str}\n💰 Entry: ${entry}\n🛑 SL: ${sl}  🎯 TP: ${tp}"
   else
     msg="${emoji} BotA ${pair_o} ${tf_o} ${direction} | score=${score} conf=${conf} | ${filter_str}"
@@ -937,7 +937,7 @@ except Exception:
 
   if send_telegram_message "${msg}"; then
     # Send chart PNG for GREEN signals only
-    if [[ "${tier}" == "GREEN" ]] && [[ -f "${TOOLS}/chart_generator.py" ]]; then
+    if [[ "${tier}" = "GREEN" ]] && [[ -f "${TOOLS}/chart_generator.py" ]]; then
       local chart_path
       chart_path="${ROOT}/logs/tmp/chart_${pair_o}_${tf_o}_$$.png"
       python3 "${TOOLS}/chart_generator.py" \
@@ -962,13 +962,17 @@ except Exception:
     # Cooldown is only meaningful on real sends (not DRY_RUN, not disabled).
     if ! is_true "${DRY_RUN_MODE:-false}" && ! is_false "${TELEGRAM_ENABLED:-1}"; then
       telegram_cooldown_mark "${pair_o}" "${tf_o}"
-    # Publish to ProfitLab dashboard
-    if [[ -f "${TOOLS}/supabase_publish.py" ]] && [[ -n "${SUPABASE_SERVICE_KEY:-}" ]]; then
-      python3 "${TOOLS}/supabase_publish.py" \
-        --pair "${pair_o}" --direction "${direction}" \
-        --entry "${entry}" --sl "${sl}" --tp "${tp}" \
-        --score "${score_int}" --tf "${tf_o}" --tier "${tier}" \
-        2>>"${ERRLOG}" || log "SUPABASE" "publish failed for ${pair_o} ${tf_o}"
+    # Publish to ProfitLab dashboard — GREEN tier only.
+    if [[ "${tier}" = "GREEN" ]]; then
+      if [[ -f "${TOOLS}/supabase_publish.py" ]] && [[ -n "${SUPABASE_SERVICE_KEY:-}" ]]; then
+        python3 "${TOOLS}/supabase_publish.py" \
+          --pair "${pair_o}" --direction "${direction}" \
+          --entry "${entry}" --sl "${sl}" --tp "${tp}" \
+          --score "${score_int}" --tf "${tf_o}" --tier "${tier}" \
+          2>>"${ERRLOG}" || log "SUPABASE" "publish failed for ${pair_o} ${tf_o}"
+      fi
+    else
+      log "SUPABASE" "skip non-GREEN tier=${tier} for ${pair_o} ${tf_o}"
     fi
     fi
   else

@@ -1085,3 +1085,235 @@ NEXT QUESTION:
   Should USDJPY or additional pairs be added to increase probability
   of at least one pair being in H1 trend at any given time?
   This requires a separate analysis — not a threshold change.
+
+---
+
+## Pre-Commercial Checkpoint — 2026-05-22
+
+Read-only audit. No production files modified.
+Full report: `audits/bota_pre_commercial_checkpoint_2026-05-22.md`
+
+### State
+
+- Signal pipeline: ACTIVE.
+- Active signal scan: EURUSD + GBPUSD on M15.
+- USDJPY: indicators fetched/cached by indicators_updater.sh, but not confirmed in active signal scan cron.
+- Thresholds unchanged:
+  - FILTER_SCORE_MIN=65
+  - TELEGRAM_MIN_SCORE / YELLOW tier=70
+  - TELEGRAM_TIER_GREEN_MIN=75
+  - H1_VETO_OVERRIDE_SCORE=75
+  - TELEGRAM_COOLDOWN_SECONDS=1800
+  - SCALP_SL_ATR_MULT=2.0
+  - SCALP_TP_ATR_MULT=4.0
+  - FILTER_RR_MIN=1.4
+- H1 veto: hard in tools/m15_h1_fusion.sh; proven protective by shadow replay (20/20 SL_HIT, 0 TP_HIT both BUY and SELL directions, commit 20e23a5).
+- Telegram: ACTIVE. YELLOW watchlist tier >=70, GREEN full-alert tier >=75.
+- Supabase/ProfitLab: code path wired through tools/supabase_publish.py and signal_watcher_pro.sh; local key presence observed; production insert success not confirmed in this audit window.
+- Daily summary: May 19 PASS; May 20 and May 21 missed due to CLOCK_FAIL during target window; May 22 pending at audit time (target: 20 UTC).
+- Last-good server clock fallback: deployed and operational (commit 26e333d); affects daily summary only, not trading gates.
+- Clock drift observability active; device clock ~4.1h ahead but server clock currently recoverable (DRIFT_WARN, server_clock_ok=true).
+
+### Risks Logged
+
+- Supabase production insert success remains unproven in current logs.
+- state/bota_shipmode_crontab.txt is stale; live crontab (crontab -l) is the authoritative source.
+- Daily summary can still miss if server clock unavailable for more than 8 hours through the target window.
+- H1_VETO_OVERRIDE_SCORE duplicate line in strategy.env (lines 25-26); both values are 75, no functional impact.
+- No product/commercial message layer exists yet.
+
+### Next Planned Branch
+
+  feat/signal-product-message-v1
+
+Do not start that branch until this checkpoint commit is reviewed.
+
+---
+
+## 2026-05-23 — Product Message Layer V1: Shadow Market Pulse Formatter Added
+
+Branch: `feat/signal-product-message-v1`  
+Commit: `c9bcee4` — `feat: add product message v1 shadow market pulse formatter`
+
+### What Changed
+
+Added new file:
+
+- `tools/product_message_v1.py`
+
+Purpose:
+
+- Generate a shadow-only BotA Market Pulse message.
+- Read existing cache files only.
+- Write preview output to stdout.
+- Write shadow audit record to `logs/product_messages_v1.jsonl`.
+
+### Confirmed Safety Contract
+
+- Telegram send: NO.
+- Supabase publish: NO.
+- Cron change: NO.
+- Trading thresholds changed: NO.
+- H1 veto changed: NO.
+- Signal generation logic changed: NO.
+- Active scan scope remains: EURUSD + GBPUSD only.
+- USDJPY remains fetched/cached only, not part of active signal scan.
+- Market Pulse output does not include executable trade instructions.
+
+### Data Sources Used
+
+The formatter reads:
+
+- `cache/indicators_EURUSD_M15.json`
+- `cache/indicators_EURUSD_H1.json`
+- `cache/indicators_EURUSD_H4.json`
+- `cache/d1_trend_EURUSD.json`
+- `cache/indicators_GBPUSD_M15.json`
+- `cache/indicators_GBPUSD_H1.json`
+- `cache/indicators_GBPUSD_H4.json`
+- `cache/d1_trend_GBPUSD.json`
+
+The formatter intentionally ignores broken D1 indicator files:
+
+- `cache/indicators_EURUSD_D1.json`
+- `cache/indicators_GBPUSD_D1.json`
+
+Reason: both showed `tf_ok=false`, `weak=true`, and `error=tf_mismatch`.
+
+### Validation Results
+
+Commands run:
+
+- `python3 -m py_compile tools/product_message_v1.py`
+- `python3 tools/product_message_v1.py --type market_pulse --shadow`
+- `git status --short`
+
+Results:
+
+- Syntax check: PASS.
+- Shadow output generated successfully.
+- `telegram_sent=false`.
+- `supabase_published=false`.
+- Shadow JSONL log created and confirmed non-empty.
+- `logs/product_messages_v1.jsonl` is ignored by Git through `.gitignore`.
+- No tracked production files modified after commit.
+
+### Runtime Observation
+
+During the first shadow run:
+
+- Market phase was closed.
+- M15/H1/H4 cache ages were stale, expected for Saturday market closure.
+- EURUSD H4 rendered as unavailable because cache had:
+  - `tf_ok=true`
+  - `weak=true`
+  - `error=insufficient_data`
+
+This is not a formatter bug. The formatter handled weak cache data safely.
+
+### Next Required Step
+
+Before any public Watchlist message is enabled:
+
+- Fix the YELLOW/Supabase product-contract issue.
+- YELLOW watchlist-style Telegram messages must not be inserted into ProfitLab as ACTIVE executable signals.
+- Public Telegram / Supabase / cron activation remains blocked until that contract is fixed and verified.
+
+---
+
+## 2026-05-23 — Step 3.5: YELLOW/Supabase Contract Fix
+
+Branch: `feat/signal-product-message-v1`
+
+Code commit:
+- `df53cbf` — `fix: prevent YELLOW watchlist tier from publishing active Supabase signals`
+
+### Problem Fixed
+
+YELLOW Telegram alerts were watchlist-style messages, but the successful Telegram path still called `tools/supabase_publish.py`.
+
+That allowed a YELLOW/watchlist message to be inserted into Supabase `public.signals` as:
+
+- `status='ACTIVE'`
+- executable `entry_price`
+- executable `stop_loss`
+- executable `take_profit`
+
+This was a product-contract bug because ProfitLab treats `public.signals.status='ACTIVE'` as an executable signal.
+
+### Files Changed
+
+Modified only:
+
+- `tools/signal_watcher_pro.sh`
+- `tools/supabase_publish.py`
+
+No changes made to:
+
+- `tools/m15_h1_fusion.sh`
+- `tools/scoring_engine.sh`
+- `tools/product_message_v1.py`
+- `config/strategy.env`
+- cron
+- thresholds
+- H1 veto logic
+- Supabase schema
+- ProfitLab frontend
+
+### Fix Implemented
+
+`tools/signal_watcher_pro.sh`:
+
+- GREEN tier continues to publish to Supabase after successful Telegram send.
+- YELLOW tier still sends Telegram.
+- YELLOW tier now skips Supabase publishing.
+- Added clear Supabase skip log for non-GREEN tiers.
+
+`tools/supabase_publish.py`:
+
+- Added defensive tier guard at the top of `publish()`.
+- Non-GREEN tiers return success with a skip message.
+- Non-GREEN tiers no longer require `SUPABASE_SERVICE_KEY`.
+- Only GREEN can proceed toward ACTIVE Supabase insertion.
+- `min_tier` is now constant `pro` for published ACTIVE signals.
+
+### Validation Results
+
+Passed:
+
+- `git diff --check`
+- `python3 -m py_compile tools/supabase_publish.py`
+- `bash -n tools/signal_watcher_pro.sh`
+
+Defensive behavior confirmed:
+
+- `YELLOW_EXIT:0`
+  - Printed skip message.
+  - Did not require Supabase key.
+  - Did not attempt ACTIVE publish.
+
+- `GREEN_NO_KEY_EXIT:1`
+  - Still failed when `SUPABASE_SERVICE_KEY` was missing.
+  - Preserved existing GREEN publish safety behavior.
+
+### Final Contract After Step 3.5
+
+GREEN:
+
+- Telegram: sends.
+- Chart: GREEN-only behavior preserved.
+- Supabase: publishes ACTIVE executable signal.
+
+YELLOW:
+
+- Telegram: sends.
+- Supabase: skipped.
+- ProfitLab ACTIVE signal: not created.
+
+### Remaining Gate
+
+Public Watchlist activation remains blocked until a separate product decision is made about whether watchlist items need:
+
+- their own Supabase table,
+- a schema migration adding `WATCHLIST`,
+- or Telegram-only behavior.
