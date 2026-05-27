@@ -1,28 +1,29 @@
 #!/usr/bin/env python3
 """
 tools/product_message_v1.py
-BotA Product Message Layer — V1 Shadow Only
+BotA Product Message Layer — V1
 
-Shadow-only formatter.
-Does NOT send Telegram.
-Does NOT publish Supabase.
-Does NOT make new API calls.
 Reads existing cache files only.
+Does NOT publish to Supabase.
+Does NOT change signal logic, scoring, or thresholds.
 
 Usage:
     python3 tools/product_message_v1.py --type market_pulse --shadow
     python3 tools/product_message_v1.py --type market_pulse --shadow --pair EURUSD
     python3 tools/product_message_v1.py --type market_pulse --shadow --no-fusion
+    python3 tools/product_message_v1.py --type market_pulse --send --chat-id "<CHAT_ID>"
 
 Outputs:
     stdout                          — formatted Telegram-safe message preview
-    logs/product_messages_v1.jsonl  — one JSONL record per run (shadow log)
+    logs/product_messages_v1.jsonl  — one JSONL record per run
 """
 
 import argparse
 import json
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -50,18 +51,11 @@ PRODUCT_CONTRACT = {
     "may_include_entry":                  False,
     "may_include_sl_tp":                  False,
     "may_publish_to_supabase_as_active":  False,
-    "sends_telegram":                     False,
-    "shadow_only_in_v1":                  True,
 }
 
 # ── SAFE NUMERIC HELPER ───────────────────────────────────────────────────────
 
 def safe_float(value, fallback: float = 0.0) -> float:
-    """
-    Convert any cache value to float safely.
-    Returns fallback if value is None, empty string, or non-numeric.
-    Prevents malformed or null indicator fields from crashing formatters.
-    """
     if value is None:
         return fallback
     try:
@@ -91,8 +85,8 @@ def load_d1_trend(pair: str) -> dict:
         return {"error": f"parse:{type(e).__name__}", "trend": "UNKNOWN", "weak": True}
 
 
-BASH_BIN     = "/data/data/com.termux/files/usr/bin/bash"
-ROOT_DIR     = Path(__file__).resolve().parents[1]
+BASH_BIN      = "/data/data/com.termux/files/usr/bin/bash"
+ROOT_DIR      = Path(__file__).resolve().parents[1]
 FUSION_SCRIPT = ROOT_DIR / "tools" / "m15_h1_fusion.sh"
 
 
@@ -100,7 +94,6 @@ def run_fusion(pair: str) -> dict:
     """
     Run tools/m15_h1_fusion.sh to get current filter state.
     Read-only: fusion only reads cache, does not write signals.
-    Returns parsed JSON dict, or empty dict on any failure.
     """
     try:
         result = subprocess.run(
@@ -176,8 +169,11 @@ def derive_fusion_blockers(fusion: dict) -> list:
     if any("rr" in r for r in filter_reasons):
         blockers.append("risk/reward not met")
 
+    # macro6=3 is neutral/default — only flag actual opposing macro conditions
     if any("macro" in r for r in filter_reasons):
-        blockers.append("macro filter active")
+        macro6 = safe_float(fusion.get("macro6"), fallback=3.0)
+        if macro6 != 3.0:
+            blockers.append("macro filter active")
 
     return blockers
 
@@ -344,6 +340,32 @@ def format_market_pulse(summaries: list, generated_at: str) -> str:
 
     return "\n".join(lines)
 
+# ── TELEGRAM SENDER ───────────────────────────────────────────────────────────
+
+def send_telegram_message(token: str, chat_id: str, text: str) -> bool:
+    """Send message via Telegram Bot API using stdlib urllib only."""
+    url     = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = json.dumps({"chat_id": chat_id, "text": text}).encode("utf-8")
+    req     = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            return bool(body.get("ok", False))
+    except urllib.error.HTTPError as e:
+        try:
+            body = json.loads(e.read().decode("utf-8"))
+            print(f"ERROR: Telegram API error: {body}", file=sys.stderr)
+        except Exception:
+            print(f"ERROR: Telegram HTTP {e.code}", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"ERROR: Telegram send failed: {e}", file=sys.stderr)
+        return False
+
 # ── SHADOW LOG WRITER ─────────────────────────────────────────────────────────
 
 def write_shadow_log(
@@ -351,15 +373,17 @@ def write_shadow_log(
     summaries: list,
     formatted_text: str,
     generated_at: str,
+    mode: str,
+    telegram_sent: bool,
 ) -> dict:
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
     record = {
         "generated_at":       generated_at,
         "message_type":       message_type,
-        "telegram_sent":      False,
+        "mode":               mode,
+        "telegram_sent":      telegram_sent,
         "supabase_published": False,
-        "shadow_only":        True,
         "pairs": [
             {
                 "pair":                   s["pair"],
@@ -392,18 +416,30 @@ def write_shadow_log(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="BotA Product Message Layer V1 — shadow only"
+        description="BotA Product Message Layer V1"
     )
     parser.add_argument(
         "--type",
         choices=["market_pulse"],
         required=True,
     )
-    parser.add_argument(
+
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument(
         "--shadow",
         action="store_true",
-        required=True,
-        help="Must be passed explicitly. V1 never auto-sends.",
+        help="Preview only — does not send Telegram.",
+    )
+    mode_group.add_argument(
+        "--send",
+        action="store_true",
+        help="Send to Telegram. Requires --chat-id.",
+    )
+
+    parser.add_argument(
+        "--chat-id",
+        default=None,
+        help="Telegram chat ID to send to. Required when --send is used.",
     )
     parser.add_argument(
         "--pair",
@@ -417,33 +453,73 @@ def main():
     )
     args = parser.parse_args()
 
-    if not args.shadow:
-        print(
-            "ERROR: --shadow required. This module is shadow-only in V1.",
-            file=sys.stderr,
-        )
+    if args.send and not args.chat_id:
+        print("ERROR: --send requires --chat-id.", file=sys.stderr)
         sys.exit(1)
 
     pairs        = [args.pair] if args.pair else ACTIVE_PAIRS
     use_fusion   = not args.no_fusion
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    mode         = "send" if args.send else "shadow"
 
     if args.type == "market_pulse":
         summaries = [build_pair_summary(p, use_fusion=use_fusion) for p in pairs]
         message   = format_market_pulse(summaries, generated_at)
 
-        print("\n" + "=" * 42)
-        print("SHADOW OUTPUT — NOT SENT TO TELEGRAM")
-        print("=" * 42)
-        print(message)
-        print("=" * 42)
+        if args.shadow:
+            print("\n" + "=" * 42)
+            print("SHADOW OUTPUT — NOT SENT TO TELEGRAM")
+            print("=" * 42)
+            print(message)
+            print("=" * 42)
 
-        log_record = write_shadow_log("market_pulse", summaries, message, generated_at)
+            log_record = write_shadow_log(
+                "market_pulse", summaries, message, generated_at,
+                mode="shadow", telegram_sent=False,
+            )
 
-        print(f"\n[shadow] logged  → {SHADOW_LOG}")
-        print(f"[shadow] pairs   → {[s['pair'] for s in summaries]}")
-        print(f"[shadow] telegram_sent      : {log_record['telegram_sent']}")
-        print(f"[shadow] supabase_published : {log_record['supabase_published']}")
+            print(f"\n[shadow] logged  → {SHADOW_LOG}")
+            print(f"[shadow] pairs   → {[s['pair'] for s in summaries]}")
+            print(f"[shadow] mode               : shadow")
+            print(f"[shadow] telegram_sent      : {log_record['telegram_sent']}")
+            print(f"[shadow] supabase_published : {log_record['supabase_published']}")
+
+        elif args.send:
+            import os
+            token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+            if not token:
+                print("ERROR: TELEGRAM_BOT_TOKEN is not set or empty.", file=sys.stderr)
+                sys.exit(1)
+
+            print("\n" + "=" * 42)
+            print(f"SEND MODE — chat_id: {args.chat_id}")
+            print("=" * 42)
+            print(message)
+            print("=" * 42)
+            print("\n[send] Sending to Telegram...")
+
+            ok = send_telegram_message(token, args.chat_id, message)
+
+            if not ok:
+                print("ERROR: Telegram send failed — see stderr for details.", file=sys.stderr)
+                log_record = write_shadow_log(
+                    "market_pulse", summaries, message, generated_at,
+                    mode="send", telegram_sent=False,
+                )
+                print(f"[send] telegram_sent      : False")
+                print(f"[send] supabase_published : {log_record['supabase_published']}")
+                sys.exit(1)
+
+            log_record = write_shadow_log(
+                "market_pulse", summaries, message, generated_at,
+                mode="send", telegram_sent=True,
+            )
+
+            print(f"[send] logged  → {SHADOW_LOG}")
+            print(f"[send] pairs   → {[s['pair'] for s in summaries]}")
+            print(f"[send] mode               : send")
+            print(f"[send] telegram_sent      : {log_record['telegram_sent']}")
+            print(f"[send] supabase_published : {log_record['supabase_published']}")
 
 
 if __name__ == "__main__":
