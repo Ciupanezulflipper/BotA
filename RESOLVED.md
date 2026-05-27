@@ -34,6 +34,27 @@
 
 ## 2026-05-27
 
+### Step 6 daily pulse wrapper implementation + first private live send
+- Status: RESOLVED (wrapper and first send proven — cron rollout still open/not active)
+- What was proven:
+  - `tools/run_daily_pulse.sh` built with dedup gate and `--dry-run` support.
+  - First private live send: `LIVE_SEND_EXIT_CODE=0`, `telegram_sent=True`, `supabase_published=False`.
+  - Dedup file `state/daily_pulse_sent_2026-05-27.ok` created correctly.
+  - Layout cleanup: heavy separator bars removed; mobile-friendly two-line-per-pair format confirmed.
+  - `--dry-run` skips correctly when dedup file present.
+- Step 6 commit: `6aa985e`, tag: `step-6-wrapper-gates-2026-05-27`
+- Layout cleanup commit: `65d1137`
+- Branch: `main`, pushed to `origin/main`.
+- Cron: NOT active. Manual sends only at this stage.
+- Main BotA channel: NOT approved.
+- Remaining gate: 3 successful private daily sends before cron/main channel decision.
+- Production trading behavior changed: NO.
+- Strategy changed: NO.
+- H1 logic changed: NO.
+- Thresholds changed: NO.
+- Supabase publish for Market Pulse: NO (remains false).
+- ProfitLab executable signal behavior: UNCHANGED.
+
 ### Step 5 private Telegram Market Pulse send
 - Status: RESOLVED
 - What was proven:

@@ -1376,3 +1376,83 @@ Commit message: `feat: Step 5 — add --send mode with explicit --chat-id gate, 
 
 - Decide Step 6 target chat (private test vs main channel).
 - Get explicit approval before adding cron or widening send scope.
+
+---
+
+## 2026-05-27 — Step 6: Daily Pulse Wrapper + First Private Live Send + Layout Cleanup
+
+### Step 6 Implementation
+
+Branch: `main`
+Commit: `6aa985e`
+Tag: `step-6-wrapper-gates-2026-05-27`
+
+Added `tools/run_daily_pulse.sh`:
+
+- Reads `config/pulse.env` for `PULSE_TEST_CHAT_ID`.
+- Dedup gate: writes `state/daily_pulse_sent_YYYY-MM-DD.ok` on first send; skips if file already exists.
+- `--dry-run` flag supported: prints gate decision, no Telegram send.
+- Sources `TELEGRAM_BOT_TOKEN` from `.env`.
+- Calls `product_message_v1.py --type market_pulse --send --chat-id`.
+- Cron: NOT active. Manual execution only at this stage.
+- `config/pulse.env` is local-only and not committed.
+
+### Step 6A: First Private Live Send Passed
+
+- `LIVE_SEND_EXIT_CODE=0`
+- `telegram_sent=True`
+- `supabase_published=False`
+- Private test chat received the Market Pulse message.
+- Dedup file created correctly: `state/daily_pulse_sent_2026-05-27.ok`
+
+### Step 6A: Layout Cleanup
+
+Commit: `65d1137`
+Commit message: `style: simplify Market Pulse mobile layout`
+
+Changed only `tools/product_message_v1.py` — `format_market_pulse`:
+
+- Heavy `━━━` separator bars removed.
+- New mobile-friendly layout per pair:
+  ```
+  EUR/USD · 1.16384 · 📉 Bearish
+  🟡 Watching — bearish bias present
+  ```
+- Footer simplified to two lines:
+  ```
+  Pulse only · No trade levels
+  🔴 Trade Alerts are sent separately
+  ```
+- `py_compile`: PASS. `bash -n run_daily_pulse.sh`: PASS.
+- `--dry-run` skipped correctly (dedup file present).
+
+### Proven Working
+
+- Wrapper send: `LIVE_SEND_EXIT_CODE=0`, `telegram_sent=True`, `supabase_published=False`.
+- Dedup prevents duplicate sends within same UTC day.
+- `--dry-run` mode works: prints gate result, no send.
+- Market Pulse contains no entry, SL, or TP.
+- Disclaimer present: "Pulse only · No trade levels" + "🔴 Trade Alerts are sent separately".
+- Layout confirmed readable on Telegram mobile.
+
+### Safety State
+
+- Production trading behavior changed: NO.
+- Strategy changed: NO.
+- H1 logic changed: NO.
+- Thresholds changed: NO.
+- Cron changed: NO — cron NOT active.
+- Supabase publish: NO — remains false for all Market Pulse sends.
+- ProfitLab executable signal behavior: UNCHANGED.
+- Main BotA channel: NOT approved.
+
+### Remaining Gates Before Wider Rollout
+
+- 3 successful private scheduled/manual daily sends required before cron or main channel approval.
+- Main BotA channel rollout requires separate explicit approval.
+- Cron scheduling requires separate explicit approval after private proof.
+
+### Next Step
+
+- Run `bash tools/run_daily_pulse.sh` manually each day (or wait for cron approval).
+- After 3 confirmed private sends, bring proof and request cron/main channel decision.

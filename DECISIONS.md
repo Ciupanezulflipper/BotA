@@ -76,10 +76,14 @@
      Do not default to `TELEGRAM_CHAT_ID` env var for Step 5 or any early rollout phase.
   2. Market Pulse must not publish to ProfitLab/Supabase `signals` table.
      `supabase_published=false` is mandatory for all Market Pulse message types.
-  3. Main BotA channel rollout requires a separate explicit approval step.
+  3. Daily Market Pulse must go to private test chat first.
+     Require 3 confirmed successful private daily sends before main channel or cron rollout.
+  4. Main BotA channel rollout requires a separate explicit approval step.
      Do not widen send scope to the main channel without that approval.
-  4. Cron scheduling for Market Pulse requires a separate explicit approval step.
+  5. Cron scheduling for Market Pulse requires a separate explicit approval step after private proof.
      Do not add cron for any Market Pulse send without that approval.
 - Proof:
-  - Commit `274b0d3`, tag `step-5-private-send-confirmed-2026-05-27`
-  - Manual private test: `telegram_sent=True`, `supabase_published=False`
+  - Step 5 commit `274b0d3`, tag `step-5-private-send-confirmed-2026-05-27`
+  - Step 6 commit `6aa985e`, tag `step-6-wrapper-gates-2026-05-27`
+  - Step 6A layout commit `65d1137`
+  - First private wrapper send: `LIVE_SEND_EXIT_CODE=0`, `telegram_sent=True`, `supabase_published=False`
