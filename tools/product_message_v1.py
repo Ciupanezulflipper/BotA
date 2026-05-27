@@ -62,9 +62,6 @@ RSI_OVERBOUGHT = 60.0
 # macro6=3 is the neutral baseline — present on valid GREEN signals too.
 MACRO6_NEUTRAL = "macro6=3"
 
-# Separator for premium message template
-SEP = "━" * 32
-
 # ── PRODUCT CONTRACT — DO NOT VIOLATE ─────────────────────────────────────────
 PRODUCT_CONTRACT = {
     "type":                               "market_pulse",
@@ -276,15 +273,13 @@ def build_pair_summary(pair: str, use_fusion: bool = True) -> dict:
 
 def format_market_pulse(summaries: list, generated_at: str) -> str:
     """
-    Premium subscriber-facing Market Pulse.
+    Subscriber-facing Market Pulse — clean mobile layout.
     PRODUCT CONTRACT ENFORCED: no entry, no SL, no TP anywhere in output.
-    Technical metrics stored in JSONL log, not shown to subscribers.
+    Technical metrics stored in JSONL log only, not shown here.
     """
     lines = [
-        SEP,
-        "📊  BotA · Market Pulse",
+        "📊 BotA Market Pulse",
         generated_at,
-        SEP,
         "",
     ]
 
@@ -294,36 +289,32 @@ def format_market_pulse(summaries: list, generated_at: str) -> str:
         d1_trend = s["d1_trend"]
         fusion   = s["fusion"]
 
-        trend       = d1_trend.get("trend", "UNKNOWN")
-        trend_weak  = d1_trend.get("weak", False)
-        trend_err   = bool(d1_trend.get("error"))
-        trend_emoji = (
-            "📈" if trend == "BUY"
-            else "📉" if trend == "SELL"
-            else "➡️"
-        )
-        if trend_err or trend_weak:
+        trend      = d1_trend.get("trend", "UNKNOWN")
+        trend_weak = d1_trend.get("weak", False)
+        trend_err  = bool(d1_trend.get("error"))
+
+        if trend_err or trend_weak or trend == "UNKNOWN":
             trend_emoji = "➡️"
+            trend_label = "Neutral"
+        elif trend == "BUY":
+            trend_emoji = "📈"
+            trend_label = "Bullish"
+        else:
+            trend_emoji = "📉"
+            trend_label = "Bearish"
 
         decimals  = 3 if "JPY" in s["pair"] else 5
         price_str = f"{price:.{decimals}f}" if price else "–"
 
         status_emoji, status_desc = derive_status(fusion)
 
-        lines.append(f"{display}  {trend_emoji}  {price_str}")
-        lines.append(f"{status_emoji}  {status_desc}")
+        lines.append(f"{display} · {price_str} · {trend_emoji} {trend_label}")
+        lines.append(f"{status_emoji} {status_desc}")
         lines.append("")
 
-    scan_pairs = "  ·  ".join(s["pair"] for s in summaries)
-
     lines += [
-        SEP,
-        f"Scan: {scan_pairs}",
-        "No active trade alert in this pulse.",
-        "",
-        "No setup = quality standard held.",
-        "📊 Pulse = context  ·  🔴 Alert = executable",
-        SEP,
+        "Pulse only · No trade levels",
+        "🔴 Trade Alerts are sent separately",
     ]
 
     return "\n".join(lines)
