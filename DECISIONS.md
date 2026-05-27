@@ -68,3 +68,18 @@
   - lower-priority/read-only provider keys
 - Do not change:
   - do not weaken .gitleaks.toml just to get green CI
+
+## Product Market Pulse send gate — 2026-05-27
+- Status: LOCKED
+- Decisions:
+  1. `--send` mode requires `--chat-id` to be passed explicitly on the command line at all times.
+     Do not default to `TELEGRAM_CHAT_ID` env var for Step 5 or any early rollout phase.
+  2. Market Pulse must not publish to ProfitLab/Supabase `signals` table.
+     `supabase_published=false` is mandatory for all Market Pulse message types.
+  3. Main BotA channel rollout requires a separate explicit approval step.
+     Do not widen send scope to the main channel without that approval.
+  4. Cron scheduling for Market Pulse requires a separate explicit approval step.
+     Do not add cron for any Market Pulse send without that approval.
+- Proof:
+  - Commit `274b0d3`, tag `step-5-private-send-confirmed-2026-05-27`
+  - Manual private test: `telegram_sent=True`, `supabase_published=False`

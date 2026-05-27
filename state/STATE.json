@@ -5,9 +5,9 @@
     "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
     "supabase_project": "ozgkeslgjqbqfewojnmr",
     "runtime": "Termux Android arm64",
-    "last_updated": "2026-04-29T00:00:00Z",
+    "last_updated": "2026-05-27T08:35:24Z",
     "updated_by": "claude-sonnet-4-6",
-    "session_id": "2026-04-29 clean baseline + score gate audit"
+    "session_id": "2026-05-27 Step 5 private Telegram Market Pulse send confirmed"
   },
   "git": {
     "current_branch": "main",
@@ -334,6 +334,35 @@
       "decided_at": "2026-04-22"
     }
   ],
+  "product_message_v1": {
+    "market_pulse": {
+      "status": "step_5_complete",
+      "shadow_mode_working": true,
+      "send_mode_working": true,
+      "step_5_private_send_passed": true,
+      "step_5_telegram_sent": true,
+      "step_5_supabase_published": false,
+      "step_5_commit": "274b0d3",
+      "step_5_tag": "step-5-private-send-confirmed-2026-05-27",
+      "step_5_branch": "main",
+      "step_5_push_status": "origin/main up to date",
+      "step_5_confirmed_at": "2026-05-27",
+      "step_6_scheduled_daily_pulse": "NEXT — not approved",
+      "step_6_target_chat_decision": "open — private test chat vs main BotA channel",
+      "main_channel_rollout_approved": false,
+      "cron_approved": false,
+      "macro6_neutral_bug_fixed": true,
+      "contains_entry_sl_tp": false,
+      "contains_disclaimer": true,
+      "production_trading_changed": false,
+      "strategy_changed": false,
+      "h1_changed": false,
+      "thresholds_changed": false,
+      "cron_changed": false,
+      "supabase_publish_market_pulse": false,
+      "profitlab_signal_behavior_changed": false
+    }
+  },
   "profitlab_signals": {
     "total_closed": 42,
     "dashboard_win_rate_pct": 38,

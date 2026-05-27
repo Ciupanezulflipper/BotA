@@ -31,3 +31,26 @@
   - stale lock detection/removal proven in watcher output
 - Proof:
   - watcher resumed and executed `--once` runs successfully
+
+## 2026-05-27
+
+### Step 5 private Telegram Market Pulse send
+- Status: RESOLVED
+- What was proven:
+  - `tools/product_message_v1.py --send --chat-id <TEST_CHAT_ID>` delivered message to private test chat.
+  - `telegram_sent=True` confirmed in log and stdout.
+  - `supabase_published=False` confirmed.
+  - Shadow mode continues working: `telegram_sent=False`, `supabase_published=False`.
+  - macro6=3 neutral/default no longer displayed as "macro filter active".
+  - Market Pulse contains no entry, SL, or TP.
+  - Market Pulse disclaimer present.
+- Commit: `274b0d3`
+- Tag: `step-5-private-send-confirmed-2026-05-27`
+- Branch: `main`, pushed to `origin/main`.
+- Production trading behavior changed: NO.
+- Strategy changed: NO.
+- H1 logic changed: NO.
+- Thresholds changed: NO.
+- Cron changed: NO.
+- Supabase publish for Market Pulse: NO (remains false).
+- ProfitLab executable signal behavior: UNCHANGED.

@@ -1317,3 +1317,62 @@ Public Watchlist activation remains blocked until a separate product decision is
 - their own Supabase table,
 - a schema migration adding `WATCHLIST`,
 - or Telegram-only behavior.
+
+---
+
+## 2026-05-27 — Step 5: Private Telegram Market Pulse Send Confirmed
+
+Branch: `main`
+Commit: `274b0d3`
+Tag: `step-5-private-send-confirmed-2026-05-27`
+Commit message: `feat: Step 5 — add --send mode with explicit --chat-id gate, fix macro6=3 neutral blocker`
+
+### What Changed
+
+`tools/product_message_v1.py` updated:
+
+- Added `--send` mode as a mutually exclusive alternative to `--shadow`. One of the two is required.
+- `--send` requires `--chat-id` to be passed explicitly on the command line. Fails loudly if missing.
+- Token read from `TELEGRAM_BOT_TOKEN` only. Fails loudly if missing.
+- Telegram send uses `urllib` stdlib only. No new dependencies.
+- Success requires HTTP 200 and `ok=true` from Telegram JSON response.
+- Shadow log records `mode=shadow|send`, `telegram_sent=true` only after confirmed send, `supabase_published=false` always.
+- Fixed macro6=3 neutral/default bug: when `macro6=3`, no "macro filter active" blocker is displayed. Only actual non-neutral opposing macro conditions trigger macro blocker language.
+
+### Fixed
+
+- `macro6=3` is the neutral/default value and must not display as "macro filter active". Fixed.
+- `--shadow` and `--send` are now mutually exclusive. Both modes explicit, no silent defaults.
+- `TELEGRAM_CHAT_ID` env var is never used automatically for Step 5. Chat ID must always be passed via `--chat-id`.
+
+### Proven Working
+
+- Shadow mode: `telegram_sent=False`, `supabase_published=False`. Unchanged.
+- Send mode manual test:
+  - `[send] telegram_sent      : True`
+  - `[send] supabase_published : False`
+- Telegram message delivered to private test chat.
+- Market Pulse contains no entry, SL, or TP.
+- Market Pulse disclaimer present: "not a trade alert".
+
+### Safety State
+
+- Production trading behavior changed: NO.
+- Strategy changed: NO.
+- H1 logic changed: NO.
+- Thresholds changed: NO.
+- Cron changed: NO.
+- Supabase publish changed for Market Pulse: NO — remains false.
+- ProfitLab executable signal publish behavior: UNCHANGED.
+
+### Blocking Issues / Open Decisions
+
+- Step 6 scheduled daily pulse: NEXT but NOT approved yet.
+- Step 6 target chat decision still open: private test chat for one week vs main BotA channel.
+- Main BotA channel rollout requires separate explicit approval.
+- Cron scheduling requires separate explicit approval.
+
+### Next Step
+
+- Decide Step 6 target chat (private test vs main channel).
+- Get explicit approval before adding cron or widening send scope.
