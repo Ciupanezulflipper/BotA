@@ -1,5 +1,88 @@
 # BotA Continuity Log (Running)
 
+## Session Update — 2026-06-03 (C1–C7G Signal Closer Lifecycle Repair)
+
+### Fixed (confirmed)
+- Repaired the signal lifecycle path that caused ACTIVE signals to remain stuck and block new pair signals through dedup.
+- Closed the two stuck ACTIVE Supabase signals through the real `signal_closer.py` live path:
+  - EURUSD BUY from May 11: CLOSED, result `-11.0` pips.
+  - GBPUSD SELL from May 26: CLOSED, result `+24.6` pips.
+- Confirmed ACTIVE count returned to `0`, unblocking EURUSD and GBPUSD.
+- Added committed live closer wrapper:
+  - `tools/run_signal_closer_live.sh`
+  - Commit: `7810357 fix: add live signal closer wrapper`
+- Installed closer cron line:
+  - `*/15 * * * * bash /data/data/com.termux/files/home/BotA/tools/run_signal_closer_live.sh >> /data/data/com.termux/files/home/BotA/logs/cron.closer.log 2>&1`
+- Updated `tools/signal_closer.py` to resolve TP/SL outcome before age cancellation:
+  - Commit: `240d8a0 fix: resolve signal closer outcomes before age cancellation`
+- Restored executable mode on `tools/signal_closer.py`:
+  - Commit: `213111b fix: restore signal closer executable mode`
+- Updated `tools/signal_closer.py` to use:
+  - trusted HTTPS Date-header server clock instead of local Android `time.time()`
+  - OANDA-backed local candle cache instead of Yahoo direct fetch
+  - non-OANDA cache rejection
+  - candle-first TP/SL resolution
+  - hard-age escape for unresolved signals
+  - fail-closed behavior when trusted server clock is unavailable
+  - Commit: `8425d3b fix: use trusted clock and OANDA cache for signal closer`
+
+### Proven working
+- `SUPABASE_SERVICE_KEY_PRESENT: PASS`
+- `PY_COMPILE: PASS`
+- `WRAPPER_BASH_N: PASS`
+- `DIFF_CHECK: PASS`
+- Static safety checks passed:
+  - no `time.time()` usage remains in the closer
+  - trusted clock function exists
+  - server-clock unavailable path fails closed
+  - hard-age escape exists
+  - OANDA cache loader exists
+  - non-OANDA cache rejection exists
+  - Yahoo direct fetch is removed
+- C7F-R dry-run passed:
+  - trusted server clock returned valid epoch
+  - `Found 0 ACTIVE signals`
+  - `DRYRUN_RC=0`
+- C7F-R wrapper smoke passed:
+  - wrapper ran with `dry_run=False`
+  - `Found 0 ACTIVE signals`
+  - `WRAPPER_RC=0`
+- Push to GitHub main passed:
+  - `PUSH_RC=0`
+  - HEAD confirmed at `8425d3b`
+
+### Root cause clarified
+- The weeks-long silence was not primarily caused by H1 veto, ADX, pair scope, or thresholds.
+- The stronger root cause was lifecycle failure:
+  - closer stopped/was not reliably scheduled with correct env/live mode
+  - old ACTIVE signals remained open
+  - per-pair dedup then blocked new signals for affected pairs
+- This means the trading pipeline was partially frozen by stale Supabase state, not only by market selectivity.
+
+### Important caveat
+- The new closer is structurally verified against `0 ACTIVE` signals.
+- The first true behavioral proof will happen when the next real signal becomes ACTIVE and the closer resolves it through:
+  - OANDA cache coverage
+  - trusted clock
+  - candle-first TP/SL logic
+  - CLOSED/CANCELLED Supabase update
+
+### Remaining non-blocking risks
+- Hard-age escape is currently `168h` / 7 days. This prevents permanent lockout, but a pair could still remain blocked for up to 7 days during a severe outage. Review later whether `48–72h` is a better production ceiling.
+- Same-candle TP-first policy remains. This is consistent with existing shadow policy, but can be optimistic when TP and SL are both touched inside the same M15 candle.
+- M15 cache depth should be monitored against `MAX_AGE_HOURS` and outage duration. If cache coverage does not reach back to signal creation, hard-age fallback may eventually cancel as unresolved.
+
+### Next proof step
+- Wait for the next real ACTIVE signal.
+- Then verify:
+  - Supabase signal created as ACTIVE.
+  - Telegram alert was sent if eligible.
+  - `logs/cron.closer.log` shows closer execution.
+  - Signal transitions from ACTIVE to CLOSED/CANCELLED correctly.
+  - Result pips are written from OANDA-backed candle resolution.
+- Do not change strategy, H1 veto, ADX gates, thresholds, or pair list until lifecycle behavior is proven on the next real signal.
+
+
 ## Latest Update — 2026-02-21 (T31S3, T32S1–T32S3)
 
 ### Fixed (confirmed)
