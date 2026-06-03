@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """
-BotA Signal Closer  v2.0
-========================
+BotA Signal Closer v2.1
+=======================
+
 Reads ACTIVE signals from Supabase, fetches current candle data,
 checks if TP or SL was hit, and updates signal status accordingly.
 
 Rules:
-- If price hit TP -> status=CLOSED, result_pips=positive
-- If price hit SL -> status=CLOSED, result_pips=negative
-- If signal older than MAX_AGE_HOURS -> status=CANCELLED, result_pips=0
+- If price hit TP -> status=CLOSED, result_pips=positive.
+- If price hit SL -> status=CLOSED, result_pips=negative.
+- Candle outcome detection is attempted BEFORE age cancellation.
+- If candles are available and no TP/SL was hit, then signals older than MAX_AGE_HOURS
+  may be cancelled with result_pips=0.
+- If candles cannot be fetched, the signal is left ACTIVE rather than being cancelled
+  blindly. This protects the performance ledger during ship-network outages.
 
-SAFETY MODEL (v2.0):
+SAFETY MODEL:
 - Dry-run is the DEFAULT. Live execution requires explicit flags.
 - Live run requires ALL THREE: --live --confirm CLOSE_SIGNALS --max-batch N
 - Closing more than 1 signal requires --allow-bulk
@@ -20,14 +25,14 @@ SAFETY MODEL (v2.0):
 
 from __future__ import annotations
 
-import os
-import sys
-import json
-import time
-import pathlib
 import argparse
-import urllib.request
+import json
+import os
+import pathlib
+import sys
+import time
 import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -93,26 +98,30 @@ def fetch_candles(pair: str, signal_time: datetime) -> list[dict]:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310
             data = json.loads(resp.read().decode("utf-8"))
+
         result = data.get("chart", {}).get("result", [])
         if not result:
             return []
-        r = result[0]
-        timestamps = r.get("timestamp", [])
-        quotes = r.get("indicators", {}).get("quote", [{}])[0]
-        candles: list[dict] = []
+
+        quote_block = result[0]
+        timestamps = quote_block.get("timestamp", [])
+        quotes = quote_block.get("indicators", {}).get("quote", [{}])[0]
         highs = quotes.get("high", [])
         lows = quotes.get("low", [])
+
+        candles: list[dict] = []
         for i, ts in enumerate(timestamps):
             try:
-                h = highs[i]
-                l = lows[i]
-                if h is not None and l is not None:
-                    candles.append({"t": ts, "h": float(h), "l": float(l)})
+                high = highs[i]
+                low = lows[i]
+                if high is not None and low is not None:
+                    candles.append({"t": ts, "h": float(high), "l": float(low)})
             except Exception:
                 continue
+
         return candles
-    except Exception as e:
-        log(f"ERROR fetching candles for {pair}: {e}")
+    except Exception as exc:
+        log(f"ERROR fetching candles for {pair}: {exc}")
         return []
 
 
@@ -125,18 +134,23 @@ def check_outcome(
     pair: str,
 ) -> tuple[str, float]:
     direction = direction.upper()
+
     for bar in candles:
-        h, l = bar["h"], bar["l"]
+        high = bar["h"]
+        low = bar["l"]
+
         if direction == "BUY":
-            if h >= tp:
+            if high >= tp:
                 return "WIN", pips(tp - entry, pair)
-            if l <= sl:
+            if low <= sl:
                 return "LOSS", pips(sl - entry, pair)
+
         elif direction == "SELL":
-            if l <= tp:
+            if low <= tp:
                 return "WIN", pips(entry - tp, pair)
-            if h >= sl:
+            if high >= sl:
                 return "LOSS", pips(entry - sl, pair)
+
     return "OPEN", 0.0
 
 
@@ -147,15 +161,17 @@ def close_signal(signal_id: str, status: str, result_pips: float, dry_run: bool)
         "result_pips": round(result_pips, 1),
         "closed_at": now,
     }
+
     if dry_run:
         log(f"DRY-RUN: would update {signal_id} -> {status} {result_pips:+.1f} pips")
         return
+
     try:
         path = f"signals?id=eq.{signal_id}"
         supabase_request("PATCH", path, body)
         log(f"CLOSED {signal_id} -> {status} {result_pips:+.1f} pips")
-    except Exception as e:
-        log(f"ERROR closing {signal_id}: {e}")
+    except Exception as exc:
+        log(f"ERROR closing {signal_id}: {exc}")
 
 
 def safety_gate(args: argparse.Namespace) -> bool:
@@ -176,8 +192,8 @@ def safety_gate(args: argparse.Namespace) -> bool:
 
     if errors:
         print("\n[GUARDRAIL] Live execution blocked:")
-        for e in errors:
-            print(f"  - {e}")
+        for error in errors:
+            print(f"  - {error}")
         print(
             "\nExample safe live command:\n"
             "  python3 tools/signal_closer.py --live --confirm CLOSE_SIGNALS --max-batch 5\n"
@@ -217,17 +233,19 @@ def print_preview(signals_to_act: list[dict], dry_run: bool) -> None:
     print(f"  SIGNAL CLOSER PREVIEW — {mode}")
     print(f"  Signals to act on: {len(signals_to_act)}")
     print(f"{'=' * 64}")
+
     for sig in signals_to_act:
         age_h = float(sig.get("age_hours", 0.0))
         outcome = sig.get("predicted_outcome", "?")
         pips_val = float(sig.get("predicted_pips", 0.0))
         entry_val = float(sig.get("entry_price", 0.0))
         print(
-            f"  {sig.get('pair','?'):<8} {sig.get('direction','?'):<5} "
+            f"  {sig.get('pair', '?'):<8} {sig.get('direction', '?'):<5} "
             f"entry={entry_val:.5f}  "
             f"age={age_h:.1f}h  "
             f"outcome={outcome}  pips={pips_val:+.1f}"
         )
+
     print(f"{'=' * 64}\n")
 
     if not dry_run:
@@ -235,28 +253,82 @@ def print_preview(signals_to_act: list[dict], dry_run: bool) -> None:
         time.sleep(3)
 
 
+def prepare_signal_action(sig: dict, now: datetime, max_age: int) -> dict | None:
+    """
+    Decide whether a signal should be acted on.
+
+    Critical ordering:
+    1. Parse and age the signal.
+    2. Fetch candles.
+    3. If candles prove WIN/LOSS, close with real pips.
+    4. If candles exist and no TP/SL was hit, then age-cancel if expired.
+    5. If candles cannot be fetched, skip and leave ACTIVE.
+
+    This prevents stale signals from being cancelled as 0-pip outcomes during
+    data outages when TP/SL could have been hit while the closer was offline.
+    """
+    try:
+        pair = sig["pair"]
+        direction = sig["direction"]
+        entry = float(sig["entry_price"])
+        sl = float(sig["stop_loss"])
+        tp = float(sig["take_profit"])
+        created = datetime.fromisoformat(sig["created_at"].replace("Z", "+00:00"))
+    except Exception as exc:
+        log(f"ERROR malformed signal payload: {exc}")
+        return None
+
+    age_hours = (now - created).total_seconds() / 3600.0
+    sig["age_hours"] = age_hours
+
+    candles = fetch_candles(pair, created)
+    if not candles:
+        log(
+            f"WARN: no candles for {pair} {direction} entry={entry} "
+            f"age={age_hours:.1f}h — leaving ACTIVE"
+        )
+        sig["predicted_outcome"] = "SKIP_NO_CANDLES"
+        sig["predicted_pips"] = 0.0
+        return None
+
+    outcome, result_pips = check_outcome(direction, entry, sl, tp, candles, pair)
+    sig["predicted_outcome"] = outcome
+    sig["predicted_pips"] = result_pips
+
+    if outcome in ("WIN", "LOSS"):
+        return sig
+
+    if age_hours >= max_age:
+        sig["predicted_outcome"] = "CANCELLED"
+        sig["predicted_pips"] = 0.0
+        return sig
+
+    log(f"OPEN {pair} {direction} entry={entry} age={age_hours:.1f}h — still active")
+    return None
+
+
 def main() -> None:
-    ap = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description=(
-            "BotA Signal Closer v2.0 — dry-run by default.\n"
+            "BotA Signal Closer v2.1 — dry-run by default.\n"
             "Live execution requires: --live --confirm CLOSE_SIGNALS --max-batch N"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    ap.add_argument(
+    parser.add_argument(
         "--live",
         action="store_true",
         help="Enable live writes. Without this flag the script always dry-runs.",
     )
-    ap.add_argument(
+    parser.add_argument(
         "--confirm",
         type=str,
         default="",
         metavar="CLOSE_SIGNALS",
         help="Must be exactly 'CLOSE_SIGNALS' to allow live execution.",
     )
-    ap.add_argument(
+    parser.add_argument(
         "--max-batch",
         type=int,
         default=0,
@@ -264,19 +336,19 @@ def main() -> None:
         metavar="N",
         help="Maximum number of signals that may be closed. Required for live runs.",
     )
-    ap.add_argument(
+    parser.add_argument(
         "--allow-bulk",
         action="store_true",
         dest="allow_bulk",
         help="Required when closing more than 1 signal in a live run.",
     )
-    ap.add_argument(
+    parser.add_argument(
         "--pair",
         type=str,
         default=None,
         help="Limit to a specific pair (e.g. EURUSD).",
     )
-    ap.add_argument(
+    parser.add_argument(
         "--max-age",
         type=int,
         default=None,
@@ -284,14 +356,14 @@ def main() -> None:
         help="Override SIGNAL_MAX_AGE_HOURS for this run.",
     )
 
-    args = ap.parse_args()
+    args = parser.parse_args()
 
     max_age = args.max_age if args.max_age is not None else MAX_AGE_HOURS
     dry_run = safety_gate(args)
 
     if not SUPABASE_KEY:
-      log("ERROR: SUPABASE_SERVICE_KEY not set")
-      sys.exit(1)
+        log("ERROR: SUPABASE_SERVICE_KEY not set")
+        sys.exit(1)
 
     log(
         f"Starting signal closer "
@@ -300,12 +372,15 @@ def main() -> None:
 
     try:
         signals = get_active_signals()
-    except Exception as e:
-        log(f"ERROR fetching active signals: {e}")
+    except Exception as exc:
+        log(f"ERROR fetching active signals: {exc}")
         sys.exit(1)
 
     if args.pair:
-        signals = [s for s in signals if str(s.get("pair", "")).upper() == args.pair.upper()]
+        signals = [
+            sig for sig in signals
+            if str(sig.get("pair", "")).upper() == args.pair.upper()
+        ]
 
     log(f"Found {len(signals)} ACTIVE signals to evaluate")
 
@@ -313,42 +388,9 @@ def main() -> None:
     signals_to_act: list[dict] = []
 
     for sig in signals:
-        try:
-            sig_id = sig["id"]
-            pair = sig["pair"]
-            direction = sig["direction"]
-            entry = float(sig["entry_price"])
-            sl = float(sig["stop_loss"])
-            tp = float(sig["take_profit"])
-            created = datetime.fromisoformat(sig["created_at"].replace("Z", "+00:00"))
-        except Exception as e:
-            log(f"ERROR malformed signal payload: {e}")
-            continue
-
-        age_hours = (now - created).total_seconds() / 3600.0
-        sig["age_hours"] = age_hours
-
-        if age_hours >= max_age:
-            sig["predicted_outcome"] = "CANCELLED"
-            sig["predicted_pips"] = 0.0
-            signals_to_act.append(sig)
-            continue
-
-        candles = fetch_candles(pair, created)
-        if not candles:
-            log(f"WARN: no candles for {pair} {direction} entry={entry} — skipping")
-            sig["predicted_outcome"] = "SKIP_NO_CANDLES"
-            sig["predicted_pips"] = 0.0
-            continue
-
-        outcome, result_pips = check_outcome(direction, entry, sl, tp, candles, pair)
-        sig["predicted_outcome"] = outcome
-        sig["predicted_pips"] = result_pips
-
-        if outcome in ("WIN", "LOSS"):
-            signals_to_act.append(sig)
-        else:
-            log(f"OPEN {pair} {direction} entry={entry} age={age_hours:.1f}h — still active")
+        action = prepare_signal_action(sig, now, max_age)
+        if action is not None:
+            signals_to_act.append(action)
 
     print_preview(signals_to_act, dry_run)
 
