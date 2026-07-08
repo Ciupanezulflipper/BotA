@@ -49,7 +49,7 @@ Runtime log mtimes proved the stop:
 
 Daily Proof continued running because it was restored separately on 2026-07-05, which masked the failure by reporting `Cron: running` while the signal factory was not scheduled.
 
-## Verified repair so far
+## Verified repair
 
 ### C1-SAFE-V2
 
@@ -74,44 +74,78 @@ Installed crontab passed required counts:
 
 Tracked file changes from Termux: none.
 
-## Not yet verified
+### C2 liveness proof — PASS
 
-Do not claim these are working until logs prove it:
+Input metadata:
 
-- watcher liveness after restore
-- updater liveness after restore
-- closer liveness after restore
-- shadow manager liveness after restore
-- supervisor liveness after restore
-- `api_credits.json` movement after restore
-- `state/runtime_health.json` current status
+- `INPUT_TIMESTAMP_LOCAL=2026-07-08 14:45:51 CEST`
+- `INPUT_TIMESTAMP_UTC=2026-07-08 12:45:51 UTC`
+- `SOURCE=Termux`
+- `SCOPE=BotA`
+
+Verified:
+
+- `crond` running with PID `8633`.
+- Required BotA crontab line counts all equal `1`:
+  - watcher
+  - updater
+  - shadow
+  - closer
+  - daily proof
+  - clock drift
+  - supervisor
+- Fresh log/state ages:
+  - `logs/cron.signals.log AGE_MIN=0`
+  - `logs/cron.indicators.log AGE_MIN=2`
+  - `logs/cron.closer.log AGE_MIN=0`
+  - `logs/cron.shadow.log AGE_MIN=0`
+  - `logs/cron.supervisor.log AGE_MIN=0`
+  - `logs/api_credits.json AGE_MIN=2`
+  - `state/runtime_health.json AGE_MIN=0`
+- Watcher reached live scan on 2026-07-08 and rejected/no-sent due to live gates, not runtime failure.
+- Updater fetched and built EURUSD, GBPUSD, and USDJPY M15/H1/H4/D1 with `fetch_fail_count=0 build_fail_count=0`.
+- Closer ran live and found `0 ACTIVE` signals.
+- Shadow manager ran and found `0 active signals`.
+- Supervisor wrote `state/runtime_health.json` and reported `bot_mode=HEALTHY`.
+- API credits moved to `used=60` for `2026-07-08`.
+
+Known non-blocking observation:
+
+- `logs/cron.shadow.log` still contains older network-unreachable traceback from before recovery, but current runs after restore are successful.
+
+## Still not verified
+
+Do not claim these are solved until evidence proves them:
+
 - Termux:Boot installed and configured
 - wake lock active
-- canonical crontab restore after reboot
+- canonical crontab template committed and used for restore
+- crontab hash/drift detection
+- Daily Proof upgraded to prove watcher/updater/closer/supervisor freshness
+- runtime health pushed to Supabase
+- ProfitLab Admin Health Panel displaying BotA health
+- reboot recovery proof
 
-## Next mandatory proof
+## Next mandatory phase
 
-C2 liveness check after at least one runtime cycle.
+Phase 2: committed canonical crontab.
 
-Must check:
+Required:
 
-- `logs/cron.signals.log`
-- `logs/cron.indicators.log`
-- `logs/cron.closer.log`
-- `logs/cron.shadow.log`
-- `logs/cron.supervisor.log`
-- `logs/cron.daily.log`
-- `logs/api_credits.json`
-- `state/runtime_health.json`
-- required crontab line counts still equal 1
-
-If C2 fails, do not proceed to implementation. Diagnose the failed component first.
+- canonical crontab template under version control
+- verify/install script
+- required line count checks
+- crontab hash generation
+- restore path preserving Dividend Capture Scanner block
+- no interactive `exit` behavior that closes the user's Termux session during debugging
 
 ## Reliability conclusion
 
-BotA's confirmed risk is silent runtime failure, not strategy weakness.
+BotA's confirmed risk was silent runtime failure, not strategy weakness.
 
-The minimum safe architecture is:
+C2 proves the restored Termux runtime is alive again.
+
+The minimum safe architecture remains:
 
 ```text
 BotA runtime
@@ -133,7 +167,15 @@ ProfitLab must add runtime-health visibility so it can distinguish:
 
 ## Production readiness
 
-Current score: 58/100.
+Current reliability score: 64/100.
+
+Reason for increase from 58:
+
+- C2 liveness passed.
+- Watcher/updater/closer/shadow/supervisor/runtime_health are fresh.
+- Runtime has recovered from the crontab wipe.
+
+Still below production-hardened because boot recovery, canonical crontab, Daily Proof truth upgrade, Supabase runtime health, and ProfitLab health panel remain open.
 
 Target after minimal reliability roadmap: 85/100.
 
