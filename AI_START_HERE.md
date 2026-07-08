@@ -14,6 +14,28 @@ Before recommending code or cron changes, classify every claim as one of:
 
 Do not optimize trading strategy unless explicitly asked. Do not change thresholds, H1 logic, pair selection, risk logic, or Supabase signal semantics during runtime-reliability work.
 
+## Timestamp rule for new inputs
+
+Every major user-provided terminal/log input should be recorded with:
+
+```text
+INPUT_TIMESTAMP_LOCAL=<user/device local date time if visible>
+INPUT_TIMESTAMP_UTC=<UTC date time if command output provides it, otherwise UNKNOWN>
+SOURCE=<Termux|Supabase|GitHub|ProfitLab|Telegram|Lovable|Other>
+SCOPE=<BotA|ProfitLab|DividendScanner|Other>
+```
+
+Reason: long ChatGPT conversations truncate. Timestamped inputs make it possible to reconstruct ordering without hallucinating. If the timestamp is not visible, mark it UNKNOWN instead of inventing it.
+
+## Hosting spend gate
+
+Do not recommend paid VPS/hosting as the next step until BOTH are true:
+
+1. Reliability score is at least 60/100 and C2 liveness has passed.
+2. Profitability/proof score is at least 60/100, based on verified BotA signal history and realistic ProfitLab path.
+
+Reason: the user is already paying monthly AI subscriptions and has no income from BotA/ProfitLab yet. Reliability spend must be justified by evidence, not optimism.
+
 ## Current verified state as of 2026-07-08
 
 BotA is a Termux Android production trading runtime that powers ProfitLab through Supabase `public.signals`.
