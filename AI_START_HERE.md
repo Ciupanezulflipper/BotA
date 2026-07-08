@@ -83,17 +83,34 @@ Verified C2 liveness:
 - `state/runtime_health.json` reports `bot_mode=HEALTHY`.
 - API credits moved to `used=60` for `2026-07-08`.
 
+Verified Phase 2 canonical crontab:
+
+- Commit `e58844f ops: add canonical BotA crontab verification` added:
+  - `docs/BOTA_CANONICAL_CRONTAB.md`
+  - `ops/bota_crontab.canonical`
+  - `tools/install_canonical_crontab.sh`
+  - `tools/verify_canonical_crontab.sh`
+- Restore drill timestamp: `2026-07-08 15:25:21 CEST` / `2026-07-08 13:25:21 UTC`.
+- Installer preserved Dividend Capture Scanner block.
+- Installer preserved `CRON_TZ=America/New_York` for Dividend Capture Scanner.
+- Installer installed BotA block with `CRON_TZ=UTC`.
+- `INSTALL_RC=0`.
+- `PHASE2_VERIFY_PASS=YES` after installer.
+- `BOTA_BLOCK_HASH_MATCH=YES`.
+
 ## Current production-readiness verdict
 
-Status: RESTORED, NOT PRODUCTION-HARDENED.
+Status: RESTORED, PARTIALLY HARDENED, NOT PRODUCTION-HARDENED.
 
-Reliability score: 64/100.
+Reliability score: 68/100.
 
 Reason:
 
 - Runtime cron was restored.
 - C2 liveness passed.
 - Watcher/updater/closer/shadow/supervisor/runtime_health are fresh.
+- Canonical crontab source of truth, verifier, and installer are committed.
+- Canonical restore drill passed.
 - Daily Proof still needs truth upgrade.
 - `state/runtime_health.json` is local-only and not pushed to Supabase.
 - ProfitLab has no BotA runtime health panel yet.
@@ -101,16 +118,17 @@ Reason:
 
 ## Next mandatory step
 
-Phase 2: committed canonical crontab.
+Phase 3: Termux:Boot and wake-lock recovery.
 
 Required:
 
-- canonical crontab template under version control
-- verify/install script
-- required line count checks
-- crontab hash generation
-- restore path preserving Dividend Capture Scanner block
-- no interactive `exit` behavior that closes the user's Termux session during debugging
+- verify Termux:Boot package/app availability
+- verify or create `~/.termux/boot/` script
+- start `termux-wake-lock` during boot recovery
+- start `crond` on boot
+- run canonical crontab verifier or installer on boot recovery path
+- write boot marker/log
+- prove recovery after reboot later, when safe for the user
 
 ## Correct reliability direction
 
@@ -139,4 +157,5 @@ Dividend Capture Scanner can run on the same small VPS if isolated by directory,
 - `ERRORS.md`
 - `docs/BOTA_RUNTIME_RELIABILITY_PATH.md`
 - `docs/BOTA_PROFITLAB_HANDOFF.md`
+- `docs/BOTA_CANONICAL_CRONTAB.md`
 - `BOOTLOG.md`
