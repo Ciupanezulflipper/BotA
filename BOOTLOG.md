@@ -124,20 +124,50 @@ Required counts passed:
 
 Tracked code files changed: NO.
 
+### C2 liveness checkpoint
+
+Input metadata:
+
+- `INPUT_TIMESTAMP_LOCAL=2026-07-08 14:45:51 CEST`
+- `INPUT_TIMESTAMP_UTC=2026-07-08 12:45:51 UTC`
+- `SOURCE=Termux`
+- `SCOPE=BotA`
+
+C2: PASS.
+
+Verified:
+
+- `crond` running with PID `8633`.
+- Required BotA crontab line counts all equal `1`.
+- Fresh runtime ages:
+  - watcher: 0 min
+  - updater: 2 min
+  - closer: 0 min
+  - shadow: 0 min
+  - supervisor: 0 min
+  - `api_credits.json`: 2 min
+  - `state/runtime_health.json`: 0 min
+- Watcher reached live scan and rejected/skipped by signal gates, not runtime failure.
+- Updater fetched and built all configured pairs/timeframes with `fetch_fail_count=0 build_fail_count=0`.
+- Closer ran live and found `0 ACTIVE` signals.
+- Shadow manager ran and found `0 active signals`.
+- Supervisor reported `HEALTHY` and wrote `runtime_health.json`.
+- API credits moved to `used=60` for 2026-07-08.
+
 ### Status
 
 C1C: PASS.
 
-C2 liveness: PENDING.
+C2 liveness: PASS.
 
-Do not claim BotA is fully healthy until C2 proves fresh watcher/updater/closer/shadow/supervisor logs and updated runtime health.
+Current reliability score: 64/100.
 
 ### Required next boot/reliability work
 
-- Verify Termux:Boot.
-- Verify wake lock.
 - Commit canonical crontab template.
 - Add crontab hash/line-count check.
+- Verify Termux:Boot.
+- Verify wake lock.
 - Upgrade Daily Proof to report component freshness.
 - Push runtime health to Supabase.
 - Add ProfitLab Admin Health Panel.
