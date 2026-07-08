@@ -79,249 +79,65 @@
 | Telegram changed | NO |
 | Cron added | NO |
 
-Notes:
-- First invalid OANDA 400 output was archived because timestamps were future-dated versus OANDA server time.
-- Cron intentionally not added yet. Need more proof from real non-future rejected candidates before automation.
-
 ---
-## 2026-05-09T04:06:44Z — Shadow Tracker Final Success
+## 2026-07-08 — Runtime crontab wipe checkpoint
 
-| Item | Status |
-|---|---|
-| Commit | `71db50c` |
-| Tracker installed | YES |
-| GitHub pushed | YES |
-| First useful replay | PASS |
-| Rows replayed | 2 |
-| Fetch errors | 0 |
-| Outcomes | 2 x `SL_HIT` |
-| Production changed | NO |
-| Strategy changed | NO |
-| Telegram changed | NO |
-| Cron added | NO |
+### Incident
 
-Next action: wait for non-future score >=65 H1-neutral/H1-veto rejected candidates before automating with cron.
+BotA was not unlucky or weak; it was unscheduled.
 
----
-## 2026-05-12 — Signal Fired
+The live Termux crontab had lost the BotA runtime jobs and retained only:
 
-| Item | Status |
-|---|---|
-| First signal post-drought | EURUSD M15 BUY score=75.70 |
-| Telegram delivery | CONFIRMED |
-| H1 override | ACTIVE (score>=75) |
-| Drought duration | 28 days (Apr 14 – May 12) |
-| Root cause | Clock drift + weak market setup |
-| Status | RESOLVED |
+- Dividend Capture Scanner block.
+- BotA Daily Proof block, restored separately on 2026-07-05.
 
----
-## 2026-05-12T01:04:58Z — First Signal After Drought
+Missing jobs:
 
-| Item | Status |
-|---|---|
-| First accepted signal after drought | EURUSD M15 BUY score=75.70 |
-| Telegram delivery | CONFIRMED |
-| Chart image delivery | CONFIRMED |
-| H1 neutral override | ACTIVE |
-| Entry | 1.17870 |
-| SL | 1.17760 |
-| TP | 1.18090 |
-| Strategy changed | NO |
-| Production changed | NO |
-| Cron changed | NO |
+- watcher
+- indicators updater
+- shadow manager
+- signal closer
+- supervisor
+- clock drift checker
 
-Notes:
-- This confirms BotA is no longer in a total no-send state.
-- Do not change thresholds based on one signal.
-- Continue monitoring server-clock availability and Twelve Data usage.
+Frozen evidence:
 
----
-## 2026-05-12 — Telegram Logo Updated
+- `logs/cron.signals.log` frozen around 2026-06-22.
+- `logs/cron.indicators.log` frozen around 2026-06-22.
+- `logs/cron.closer.log` frozen around 2026-06-22.
+- `logs/api_credits.json` frozen around 2026-06-22.
 
-| Item | Status |
-|---|---|
-| Toma Signal AI / BotA logo | ACCEPTED |
-| Uploaded to Telegram | YES |
-| Production code changed | NO |
-| Strategy changed | NO |
-| Cron changed | NO |
+### Restore checkpoint
 
----
-## 2026-05-14 — Shadow Tracker Fix + H1 Outcome Proof
+C1C restored and cleaned crontab.
 
-| Item | Status |
-|---|---|
-| `filter_str` column mapping | FIXED |
-| Syntax check | PASS |
-| Shadow rows joined to alerts.csv | 10/10 matched |
-| H1_trend_neutral rows | 8 |
-| Resolved H1 outcomes | 5 SL_HIT / 0 TP_HIT |
-| Pending H1 outcomes | 3 OPEN_PENDING |
-| Current H1 verdict | Protective so far |
-| Strategy thresholds | UNCHANGED |
-| Production behavior | UNCHANGED |
-| Telegram behavior | UNCHANGED |
-| Cron behavior | UNCHANGED |
-| Next action | Recheck pending rows after outcome window |
+Required counts passed:
 
----
-## 2026-05-14 — Shadow JSONL Dedup + Clean State
+- dividend scanner: 1
+- watcher: 1
+- updater: 1
+- shadow: 1
+- closer: 1
+- daily proof: 1
+- clock drift: 1
+- supervisor: 1
 
-| Item | Status |
-|---|---|
-| JSONL dedup | DONE (13→10 rows) |
-| Resolved | 7 (all SL_HIT) |
-| Pending | 3 (resolve after May 14 16:00 UTC) |
-| H1 veto verdict | PROTECTIVE — do not change |
-| Next action | Rerun tracker after May 14 16:00 UTC |
+Tracked code files changed: NO.
 
----
-## 2026-05-15 — Final H1 Replay Resolution
+### Status
 
-| Item | Status |
-|---|---|
-| May 13 pending rows | RESOLVED |
-| May 13 outcomes | 3 SL_HIT / 0 TP_HIT |
-| Clean JSONL state | 10 rows |
-| All rejected sample | 10 SL_HIT / 0 TP_HIT |
-| H1_trend_neutral sample | 8 SL_HIT / 0 TP_HIT |
-| score_gate sample | 2 SL_HIT / 0 TP_HIT |
-| H1 verdict | PROTECTIVE in current sample |
-| Strategy thresholds | UNCHANGED |
-| Production behavior | UNCHANGED |
-| Telegram behavior | UNCHANGED |
-| Cron behavior | UNCHANGED |
+C1C: PASS.
 
----
-## 2026-05-19 — PR #4 Deployed
+C2 liveness: PENDING.
 
-| Item | Status |
-|---|---|
-| clock_drift_check.py | INSTALLED |
-| clock_drift_check.sh | INSTALLED |
-| Cron hourly :55 | ADDED |
-| market_open.sh | UNCHANGED |
-| Strategy | UNCHANGED |
-| Next | Telegram daily summary |
+Do not claim BotA is fully healthy until C2 proves fresh watcher/updater/closer/shadow/supervisor logs and updated runtime health.
 
----
-## 2026-05-19 — PR #4 Actual Deployment Confirmed
+### Required next boot/reliability work
 
-| Item | Status |
-|---|---|
-| Local merge to main | DONE |
-| clock_drift_check.py | ON DISK |
-| clock_drift_check.sh | ON DISK |
-| Python syntax | PASS |
-| Bash syntax | PASS |
-| Live run | PASS |
-| Live result | DRIFT_WARN |
-| Drift | approx -7568s |
-| Server clock | OK |
-| Cron hourly :55 | ADDED |
-| Strategy | UNCHANGED |
-| H1 logic | UNCHANGED |
-| Thresholds | UNCHANGED |
-| Telegram logic | UNCHANGED |
-| Production observability | CHANGED |
-| Production trading behavior | UNCHANGED |
-| Previous docs claim 2c9d8f3 | CORRECTED |
-
----
-## 2026-05-19 — Daily Proof-of-Work Telegram Summary Tested
-
-| Item | Status |
-|---|---|
-| File | tools/daily_summary.sh |
-| Replacement | DONE |
-| Bash syntax | PASS |
-| Dry run | PASS |
-| Real Telegram send | PASS |
-| Telegram HTTP | 200 |
-| Best candidate shown | EURUSD SELL 70.70 |
-| Rejection reason shown | macro6=3 / H1_trend_neutral |
-| API usage shown | 280/800 |
-| Clock drift shown | DRIFT_WARN approx -7566s |
-| Strategy | UNCHANGED |
-| H1 logic | UNCHANGED |
-| Thresholds | UNCHANGED |
-| Production trading behavior | UNCHANGED |
-| Cron | NOT YET CHANGED |
-| Next action | Change daily summary cron to 20:00 UTC |
-
----
-## 2026-05-19 — Server-UTC Daily Summary Gate
-
-| Item | Status |
-|---|---|
-| File added | tools/daily_summary_server_gate.sh |
-| Purpose | Send daily proof-of-work summary by server UTC, not phone time |
-| Reason | Phone/ship time unsafe; another 1 hour back tonight |
-| Bash syntax | PASS |
-| Dry-run result | PASS |
-| Gate status | OUTSIDE_WINDOW |
-| Server UTC observed | 2026-05-19T11:58:44Z |
-| Target hour | 20 UTC |
-| Telegram sent during test | NO |
-| Cron | CHANGED |
-| New cron | hourly at :10 through server-UTC gate |
-| Strategy | UNCHANGED |
-| H1 logic | UNCHANGED |
-| Thresholds | UNCHANGED |
-| Production trading behavior | UNCHANGED |
-| Next proof | Check `logs/cron.daily.log` after next :10 run |
-
----
-## 2026-05-19 — Session Close State
-
-| Item | Status |
-|---|---|
-| Clock drift observability | DEPLOYED + CRON ACTIVE |
-| Daily proof-of-work summary | DEPLOYED |
-| Server-UTC gate | DEPLOYED + CRON ACTIVE |
-| Last trade candidate | EURUSD SELL 70.70 → H1-vetoed |
-| Accepted signals today | 0 |
-| Strategy | UNCHANGED |
-| GitHub | UP TO DATE (8f75d9c HEAD) |
-| Next check | logs/daily_summary_gate.log after 20:16 UTC |
-
----
-## 2026-05-20 — Daily Summary Phase Complete
-
-| Item | Status |
-|---|---|
-| First unattended fire | PASS 20:16 UTC |
-| Telegram delivery | PASS http=200 |
-| State file created | state/daily_summary_sent_2026-05-19.ok |
-| Accepted signals (May 19) | 1 |
-| Best rejected candidate | EURUSD SELL 70.70 H1-vetoed |
-| API usage | 526/800 |
-| Clock drift | DRIFT_WARN -7568s |
-| SERVER_CLOCK_UNAVAILABLE later | noted, did not block send |
-| Next phase | API warning cleanup or shadow tracker expansion |
-
----
-## 2026-05-20 — Session Close
-
-| Item | Status |
-|---|---|
-| Daily summary wording fix | LIVE on GitHub (1b6b903) |
-| Duplicate docs commit | 5b1430c — harmless, leave alone |
-| Clock drift | -11113s (ship 1hr rollback), DRIFT_WARN logged |
-| Bot scoring | EURUSD SELL context, H1 vetoing correctly |
-| Strategy / H1 / thresholds | UNCHANGED |
-| Next check | Tonight 20:16 UTC daily summary fire |
-
----
-## 2026-05-22 — Shadow Replay Final: 20/20 SL_HIT
-
-| Item | Result |
-|---|---|
-| SELL shadow outcomes | 7/7 SL_HIT WR=0.0% |
-| BUY shadow outcomes | 13/13 SL_HIT WR=0.0% |
-| Combined | 20/20 SL_HIT WR=0.0% |
-| H1 veto verdict | PROTECTIVE — FINAL, do not change |
-| H1_VETO_OVERRIDE_SCORE | UNCHANGED at 75 |
-| Strategy | UNCHANGED |
-| Signal scarcity cause | Ranging H1 market, not broken bot |
-| Next question | Pair expansion (USDJPY) analysis |
+- Verify Termux:Boot.
+- Verify wake lock.
+- Commit canonical crontab template.
+- Add crontab hash/line-count check.
+- Upgrade Daily Proof to report component freshness.
+- Push runtime health to Supabase.
+- Add ProfitLab Admin Health Panel.
