@@ -72,37 +72,45 @@ Verified restore:
   - `tools/clock_drift_check.sh`
   - `tools/bota_supervisor.sh`
 - C1C did not change tracked app/code files.
-- C2 liveness proof is still required before claiming restored runtime is live.
+
+Verified C2 liveness:
+
+- `INPUT_TIMESTAMP_LOCAL=2026-07-08 14:45:51 CEST`
+- `INPUT_TIMESTAMP_UTC=2026-07-08 12:45:51 UTC`
+- `crond` running with PID `8633`.
+- Required crontab line counts all equal `1`.
+- Watcher, updater, closer, shadow, supervisor, API credits, and runtime health files are fresh.
+- `state/runtime_health.json` reports `bot_mode=HEALTHY`.
+- API credits moved to `used=60` for `2026-07-08`.
 
 ## Current production-readiness verdict
 
-Status: PARTIALLY RESTORED, NOT PRODUCTION-HARDENED.
+Status: RESTORED, NOT PRODUCTION-HARDENED.
 
-Production readiness score: 58/100.
+Reliability score: 64/100.
 
 Reason:
 
-- Runtime cron was restored, but silent-failure hardening is incomplete.
-- Daily Proof currently proves crond existence, not the full signal factory.
+- Runtime cron was restored.
+- C2 liveness passed.
+- Watcher/updater/closer/shadow/supervisor/runtime_health are fresh.
+- Daily Proof still needs truth upgrade.
 - `state/runtime_health.json` is local-only and not pushed to Supabase.
 - ProfitLab has no BotA runtime health panel yet.
 - Termux:Boot recovery and wake-lock behavior are not yet verified.
 
 ## Next mandatory step
 
-Run C2 liveness after at least one updater/watcher/closer/supervisor cycle.
+Phase 2: committed canonical crontab.
 
-C2 must prove fresh mtimes and useful tails for:
+Required:
 
-- `logs/cron.signals.log`
-- `logs/cron.indicators.log`
-- `logs/cron.closer.log`
-- `logs/cron.shadow.log`
-- `logs/cron.supervisor.log`
-- `logs/api_credits.json`
-- `state/runtime_health.json`
-
-Do not start implementation phases until C2 passes.
+- canonical crontab template under version control
+- verify/install script
+- required line count checks
+- crontab hash generation
+- restore path preserving Dividend Capture Scanner block
+- no interactive `exit` behavior that closes the user's Termux session during debugging
 
 ## Correct reliability direction
 
