@@ -132,3 +132,39 @@ Still not done:
 - Supabase runtime health table/row.
 - ProfitLab Admin Health Panel.
 - Real reboot recovery proof.
+
+<!-- PHASE5_RUNTIME_HEALTH_PUSH_CLOSURE_20260708 -->
+## Runtime Health Source for ProfitLab
+
+BotA now publishes runtime health to Supabase:
+
+- table: `public.bot_runtime_health`
+- primary row: `bot_id = 'bota-termux-primary'`
+- source: `termux`
+- mode values: `HEALTHY`, `DEGRADED`, `UNKNOWN`
+
+Available fields for the future ProfitLab Admin Health panel:
+
+- `observed_at_utc`
+- `bot_mode`
+- `last_supervisor_run_utc`
+- `watcher_log_age_min`
+- `updater_log_age_min`
+- `closer_log_age_min`
+- `shadow_log_age_min`
+- `eurusd_m15_cache_age_min`
+- `gbpusd_m15_cache_age_min`
+- `eurusd_h1_cache_age_min`
+- `gbpusd_h1_cache_age_min`
+- `failure_reasons`
+- `last_degraded_utc`
+- `last_degraded_reason`
+- `last_healthy_utc`
+- `updated_at`
+
+Important boundary for ProfitLab:
+
+- Do not expose secrets.
+- Do not expose service-role keys.
+- Admin Health panel should read summarized health state only.
+- This phase does not change signal strategy, scoring, or trade lifecycle logic.

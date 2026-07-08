@@ -177,3 +177,27 @@ VERIFIED as of 2026-07-08 15:44:34 UTC.
   - `Reasons: none`
 - Failure-mode tests passed for missing, corrupt, stale `runtime_health.json`, verifier missing, and cron-like environment.
 - Current next open phase: Phase 5 — push local `state/runtime_health.json` into Supabase runtime health storage.
+
+<!-- PHASE5_RUNTIME_HEALTH_PUSH_CLOSURE_20260708 -->
+## Current BotA State — Phase 5 Runtime Health Push Closed
+
+Verified on 2026-07-08:
+
+- Supabase table `public.bot_runtime_health` exists and receives BotA runtime health updates.
+- Edge Function `bot-health-ingest` is deployed and accepts only the limited health-ingest secret.
+- Termux does **not** store a Supabase service-role key.
+- `tools/push_runtime_health_supabase.py` builds the sanitized runtime-health payload.
+- `tools/run_runtime_health_push.sh` is the cron-safe wrapper.
+- Canonical crontab includes one runtime-health push job every 5 minutes.
+- Live crontab and `ops/bota_crontab.canonical` hash-match.
+- Cron-fire proof passed: multiple real cron pushes returned HTTP 200 and Supabase row updated.
+- Latest committed Phase 5 cron state:
+  - `2f8d091 tools: add BotA runtime health push wrapper`
+  - `b715729 ops: add BotA runtime health push cron`
+
+Reliability score: **78/100**.
+
+Still not fully production-hardened:
+- reboot recovery proof remains open;
+- ProfitLab Admin Health panel remains open;
+- profitability/proof score remains separate from runtime reliability.

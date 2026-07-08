@@ -264,3 +264,31 @@ Reliability score updated: 72/100.
 
 Next open phase:
 - Phase 5 — push `state/runtime_health.json` to Supabase runtime health storage.
+
+<!-- PHASE5_RUNTIME_HEALTH_PUSH_CLOSURE_20260708 -->
+## Phase 5 Runtime Health Push — Closed
+
+Status: **PASS / FUNCTIONALLY CLOSED**
+
+Verified facts:
+
+- `public.bot_runtime_health` row exists for `bota-termux-primary`.
+- Health push uses limited `BOTA_HEALTH_INGEST_SECRET`, not a Supabase service-role key.
+- Edge Function `bot-health-ingest` returned HTTP 200 with `ok:true`.
+- Manual sender push passed.
+- Wrapper real push passed.
+- Cron installed one line:
+  - `*/5 * * * * ... tools/run_runtime_health_push.sh ...`
+- Cron-fire proof passed with real updates at 5-minute intervals.
+- Canonical crontab verifier passed after install.
+- Core BotA cron jobs still count once each.
+
+Latest Phase 5 commits:
+- `55194f6 tools: add BotA runtime health sender`
+- `2f8d091 tools: add BotA runtime health push wrapper`
+- `b715729 ops: add BotA runtime health push cron`
+
+Next open work:
+1. Document and commit Phase 5 closure.
+2. Phase 6: ProfitLab Admin Health panel.
+3. Reboot/Termux:Boot recovery proof remains open.

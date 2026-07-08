@@ -301,3 +301,40 @@ Production reliability baseline is reached only when:
 - Runtime health reaches Supabase.
 - ProfitLab displays BotA health.
 - Silent failure produces a red state within the defined threshold.
+
+<!-- PHASE5_RUNTIME_HEALTH_PUSH_CLOSURE_20260708 -->
+## Phase 5 — Supabase Runtime Health Push
+
+Status: **DONE / PASS**
+
+Implemented:
+
+- `supabase/migrations/20260708_create_bot_runtime_health.sql`
+- `supabase/functions/bot-health-ingest/index.ts`
+- `tools/push_runtime_health_supabase.py`
+- `tools/run_runtime_health_push.sh`
+- canonical cron entry in `ops/bota_crontab.canonical`
+
+Runtime proof:
+
+- local runtime-health payload generated successfully;
+- Edge Function accepted payload with HTTP 200;
+- Supabase row updated for `bota-termux-primary`;
+- cron-safe wrapper passed manual real push;
+- cron job fired repeatedly and updated Supabase;
+- canonical crontab verifier passed after install.
+
+Security boundary:
+
+- Termux stores only the limited health-ingest secret;
+- Termux does not store Supabase service-role credentials;
+- payload is allowlisted/sanitized;
+- no raw environment dump or raw runtime JSON is sent.
+
+Reliability score after Phase 5: **78/100**.
+
+Still open:
+
+- reboot recovery proof;
+- ProfitLab Admin Health panel;
+- profitability/proof scoring remains separate.

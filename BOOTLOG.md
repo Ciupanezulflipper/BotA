@@ -229,3 +229,22 @@ Still open after Phase 4C:
 - ProfitLab Admin Health panel.
 
 Current reliability score: 72/100.
+
+<!-- PHASE5_RUNTIME_HEALTH_PUSH_CLOSURE_20260708 -->
+## 2026-07-08 — Phase 5 Runtime Health Push Closure
+
+Phase 5 runtime health push was verified end-to-end.
+
+Evidence:
+
+- Migration created `public.bot_runtime_health`.
+- Edge Function `bot-health-ingest` deployed with `verify_jwt = false` and protected by limited header secret.
+- No Supabase service-role key stored on Termux.
+- Manual Python sender push returned HTTP 200.
+- Wrapper real push returned HTTP 200.
+- Canonical crontab updated and installed.
+- Cron-fire proof passed: runtime-health push executed from cron and updated Supabase.
+- Canonical hash match after cron install: PASS.
+- Core BotA cron jobs preserved exactly once.
+
+Result: Phase 5 runtime-health push is functionally closed.
