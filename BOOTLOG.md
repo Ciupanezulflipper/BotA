@@ -154,18 +154,53 @@ Verified:
 - Supervisor reported `HEALTHY` and wrote `runtime_health.json`.
 - API credits moved to `used=60` for 2026-07-08.
 
+### Phase 2 canonical crontab checkpoint
+
+Input metadata:
+
+- `INPUT_TIMESTAMP_LOCAL=2026-07-08 15:20:17 CEST` for commit/push.
+- `INPUT_TIMESTAMP_UTC=2026-07-08 13:20:17 UTC` for commit/push.
+- `INPUT_TIMESTAMP_LOCAL=2026-07-08 15:25:21 CEST` for restore drill.
+- `INPUT_TIMESTAMP_UTC=2026-07-08 13:25:21 UTC` for restore drill.
+- `SOURCE=Termux`
+- `SCOPE=BotA`
+
+Phase 2: PASS.
+
+Committed and pushed:
+
+- `e58844f ops: add canonical BotA crontab verification`
+
+Files:
+
+- `docs/BOTA_CANONICAL_CRONTAB.md`
+- `ops/bota_crontab.canonical`
+- `tools/install_canonical_crontab.sh`
+- `tools/verify_canonical_crontab.sh`
+
+Restore drill verified:
+
+- backup created at `logs/crontab.backup.before_canonical_install_20260708_132521.txt`
+- installer preserved Dividend Capture Scanner block
+- installer preserved Dividend Capture Scanner `CRON_TZ=America/New_York`
+- installer installed BotA canonical block with `CRON_TZ=UTC`
+- `INSTALL_RC=0`
+- all required counts equal `1`
+- `BOTA_BLOCK_HASH_MATCH=YES`
+- `PHASE2_VERIFY_PASS=YES`
+
 ### Status
 
 C1C: PASS.
 
 C2 liveness: PASS.
 
-Current reliability score: 64/100.
+Phase 2 canonical crontab: PASS.
+
+Current reliability score: 68/100.
 
 ### Required next boot/reliability work
 
-- Commit canonical crontab template.
-- Add crontab hash/line-count check.
 - Verify Termux:Boot.
 - Verify wake lock.
 - Upgrade Daily Proof to report component freshness.
