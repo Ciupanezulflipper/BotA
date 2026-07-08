@@ -106,7 +106,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA")))
+ROOT = Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA"))).expanduser().resolve()
 LOGDIR = ROOT / "logs"
 TODAY = os.environ.get("SUMMARY_DATE") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
 NOW_UTC = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -115,6 +115,12 @@ ALERTS = LOGDIR / "alerts.csv"
 API_STATE = LOGDIR / "api_credits.json"
 CLOCK_STATE = LOGDIR / "clock_drift_status.json"
 CRON_SIGNALS = LOGDIR / "cron.signals.log"
+CRON_INDICATORS = LOGDIR / "cron.indicators.log"
+CRON_CLOSER = LOGDIR / "cron.closer.log"
+CRON_SHADOW = LOGDIR / "cron.shadow.log"
+CRON_SUPERVISOR = LOGDIR / "cron.supervisor.log"
+RUNTIME_HEALTH = ROOT / "state" / "runtime_health.json"
+VERIFY_CANONICAL = ROOT / "tools" / "verify_canonical_crontab.sh"
 
 API_DAILY_LIMIT = int(os.environ.get("API_DAILY_LIMIT", "800"))
 
@@ -131,6 +137,8 @@ def safe_int(value, default=0):
         return default
 
 TELEGRAM_MIN_SCORE = safe_float(os.environ.get("TELEGRAM_MIN_SCORE", "70"), 70.0)
+RUNTIME_HEALTH_FRESH_MAX_MIN = safe_int(os.environ.get("RUNTIME_HEALTH_FRESH_MAX_MIN", "10"), 10)
+RUNTIME_JOB_FRESH_MAX_MIN = safe_int(os.environ.get("RUNTIME_JOB_FRESH_MAX_MIN", "30"), 30)
 
 def load_json(path, default):
     try:
@@ -265,6 +273,215 @@ def count_signal_log_today():
             skip_lines += 1
     return {"filter_lines": filter_lines, "accepted_lines": accepted_lines, "skip_lines": skip_lines}
 
+# PHASE4C_RUNTIME_HEALTH_V1
+def safe_int_or_none(value):
+    if value is None:
+        return None
+    try:
+        return int(float(str(value).strip()))
+    except Exception:
+        return None
+
+def file_age_min(path):
+    try:
+        age = int((datetime.now(timezone.utc).timestamp() - path.stat().st_mtime) // 60)
+        return max(age, 0)
+    except Exception:
+        return None
+
+def age_from_utc_value(value):
+    dt = parse_dt_any(str(value or ""))
+    if not dt:
+        return None
+    return int((datetime.now(timezone.utc) - dt).total_seconds() // 60)
+
+def fmt_age(age):
+    if age is None:
+        return "N/A"
+    if age < 0:
+        return f"future {abs(age)}m"
+    if age < 60:
+        return f"{age}m"
+    return f"{age // 60}h{age % 60:02d}m"
+
+def compact_reasons(reasons, limit=260):
+    cleaned = []
+    for reason in reasons:
+        r = " ".join(str(reason).replace(str(ROOT), "<ROOT>").split())
+        if r and r not in cleaned:
+            cleaned.append(r)
+    if not cleaned:
+        return "none"
+    out = "; ".join(cleaned)
+    if len(out) <= limit:
+        return out
+    return out[:limit].rstrip() + "..."
+
+def run_canonical_verify():
+    if not VERIFY_CANONICAL.exists():
+        return {"status": "UNKNOWN", "hash_match": "UNKNOWN", "reason": "canonical verifier missing"}
+
+    try:
+        r = subprocess.run(
+            ["bash", str(VERIFY_CANONICAL)],
+            cwd=str(ROOT),
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        out = ((r.stdout or "") + "\n" + (r.stderr or ""))[:12000]
+    except subprocess.TimeoutExpired:
+        return {"status": "UNKNOWN", "hash_match": "UNKNOWN", "reason": "canonical verifier timeout"}
+    except Exception as exc:
+        return {"status": "UNKNOWN", "hash_match": "UNKNOWN", "reason": f"canonical verifier error {type(exc).__name__}"}
+
+    pass_yes = "PHASE2_VERIFY_PASS=YES" in out
+    pass_no = "PHASE2_VERIFY_PASS=NO" in out
+    hash_yes = "BOTA_BLOCK_HASH_MATCH=YES" in out
+    hash_no = "BOTA_BLOCK_HASH_MATCH=NO" in out
+
+    if pass_yes and hash_yes:
+        return {"status": "PASS", "hash_match": "YES", "reason": "none"}
+    if pass_no or hash_no:
+        return {"status": "FAIL", "hash_match": "NO" if hash_no else "UNKNOWN", "reason": "canonical verification failed"}
+    if r.returncode != 0:
+        return {"status": "UNKNOWN", "hash_match": "UNKNOWN", "reason": f"canonical verifier rc={r.returncode}"}
+    return {"status": "UNKNOWN", "hash_match": "UNKNOWN", "reason": "canonical verifier markers missing"}
+
+def load_runtime_health_strict():
+    if not RUNTIME_HEALTH.exists():
+        return None, "missing"
+    try:
+        return json.loads(RUNTIME_HEALTH.read_text(encoding="utf-8", errors="ignore")), None
+    except Exception:
+        return None, "corrupt"
+
+def runtime_health_summary():
+    health, err = load_runtime_health_strict()
+    reasons = []
+    reported = "UNKNOWN"
+    last_supervisor = "N/A"
+    supervisor_age = None
+    health_file_age = file_age_min(RUNTIME_HEALTH)
+
+    job_ages = {
+        "watcher": file_age_min(CRON_SIGNALS),
+        "updater": file_age_min(CRON_INDICATORS),
+        "closer": file_age_min(CRON_CLOSER),
+        "shadow": file_age_min(CRON_SHADOW),
+    }
+    cache_ages = {
+        "EUR_M15": None,
+        "GBP_M15": None,
+        "EUR_H1": None,
+        "GBP_H1": None,
+    }
+
+    if err == "missing":
+        reasons.append("runtime_health missing")
+        return {
+            "effective": "UNKNOWN",
+            "reported": reported,
+            "last_supervisor": last_supervisor,
+            "supervisor_age": supervisor_age,
+            "health_file_age": health_file_age,
+            "job_ages": job_ages,
+            "cache_ages": cache_ages,
+            "reasons": reasons,
+        }
+
+    if err == "corrupt":
+        reasons.append("runtime_health corrupt")
+        return {
+            "effective": "DEGRADED",
+            "reported": reported,
+            "last_supervisor": last_supervisor,
+            "supervisor_age": supervisor_age,
+            "health_file_age": health_file_age,
+            "job_ages": job_ages,
+            "cache_ages": cache_ages,
+            "reasons": reasons,
+        }
+
+    if isinstance(health, dict):
+        reported = str(health.get("bot_mode", "UNKNOWN")).upper()
+        last_supervisor = str(health.get("last_supervisor_run_utc", "N/A"))
+        supervisor_age = age_from_utc_value(last_supervisor)
+
+        job_ages["watcher"] = safe_int_or_none(health.get("watcher_log_age_min")) or job_ages["watcher"]
+        job_ages["updater"] = safe_int_or_none(health.get("updater_log_age_min")) or job_ages["updater"]
+        job_ages["shadow"] = safe_int_or_none(health.get("shadow_log_age_min")) or job_ages["shadow"]
+
+        cache_ages["EUR_M15"] = safe_int_or_none(health.get("eurusd_m15_cache_age_min"))
+        cache_ages["GBP_M15"] = safe_int_or_none(health.get("gbpusd_m15_cache_age_min"))
+        cache_ages["EUR_H1"] = safe_int_or_none(health.get("eurusd_h1_cache_age_min"))
+        cache_ages["GBP_H1"] = safe_int_or_none(health.get("gbpusd_h1_cache_age_min"))
+
+        failure_reasons = health.get("failure_reasons")
+        if failure_reasons:
+            reasons.append(f"reported failure: {failure_reasons}")
+
+    if health_file_age is None:
+        reasons.append("runtime_health file age unknown")
+    elif health_file_age > RUNTIME_HEALTH_FRESH_MAX_MIN:
+        reasons.append(f"runtime_health file stale:{health_file_age}m")
+
+    if supervisor_age is None:
+        reasons.append("supervisor timestamp missing")
+    elif supervisor_age < -2:
+        reasons.append(f"supervisor timestamp future:{supervisor_age}m")
+    elif supervisor_age > RUNTIME_HEALTH_FRESH_MAX_MIN:
+        reasons.append(f"supervisor stale:{supervisor_age}m")
+
+    for name, age in job_ages.items():
+        if age is None:
+            reasons.append(f"{name} age unknown")
+        elif age > RUNTIME_JOB_FRESH_MAX_MIN:
+            reasons.append(f"{name} stale:{age}m")
+
+    if reported != "HEALTHY":
+        reasons.append(f"reported mode:{reported}")
+
+    effective = "HEALTHY" if not reasons and reported == "HEALTHY" else "DEGRADED"
+    return {
+        "effective": effective,
+        "reported": reported,
+        "last_supervisor": last_supervisor,
+        "supervisor_age": supervisor_age,
+        "health_file_age": health_file_age,
+        "job_ages": job_ages,
+        "cache_ages": cache_ages,
+        "reasons": reasons,
+    }
+
+def build_runtime_truth_lines(runtime, canonical):
+    reasons = list(runtime["reasons"])
+
+    if canonical["status"] == "FAIL" or canonical["hash_match"] == "NO":
+        reasons.append(canonical["reason"])
+        effective = "DEGRADED"
+    elif canonical["status"] != "PASS" or canonical["hash_match"] != "YES":
+        reasons.append(canonical["reason"])
+        effective = "UNKNOWN" if runtime["effective"] == "HEALTHY" else runtime["effective"]
+    else:
+        effective = runtime["effective"]
+
+    status_icon = {"HEALTHY": "✅", "DEGRADED": "⚠️", "UNKNOWN": "❓"}.get(effective, "❓")
+    verify_icon = "✅" if canonical["status"] == "PASS" else "❌" if canonical["status"] == "FAIL" else "❓"
+    hash_icon = "✅" if canonical["hash_match"] == "YES" else "❌" if canonical["hash_match"] == "NO" else "❓"
+
+    j = runtime["job_ages"]
+    c = runtime["cache_ages"]
+
+    return [
+        f"Runtime: {status_icon} {effective} | Reported: {runtime['reported']}",
+        f"Supervisor: {fmt_age(runtime['supervisor_age'])} ago | Last: {runtime['last_supervisor']}",
+        f"Jobs: watcher {fmt_age(j.get('watcher'))} | updater {fmt_age(j.get('updater'))} | closer {fmt_age(j.get('closer'))} | shadow {fmt_age(j.get('shadow'))}",
+        f"Caches: EUR M15 {fmt_age(c.get('EUR_M15'))} | GBP M15 {fmt_age(c.get('GBP_M15'))} | EUR H1 {fmt_age(c.get('EUR_H1'))} | GBP H1 {fmt_age(c.get('GBP_H1'))}",
+        f"Canonical crontab: {verify_icon} {canonical['status']} | Hash match: {hash_icon} {canonical['hash_match']}",
+        f"Reasons: {compact_reasons(reasons)}",
+    ]
+
 rows = read_alert_rows()
 tradeable = [r for r in rows if r["direction"] in ("BUY", "SELL")]
 holds = [r for r in rows if r["direction"] not in ("BUY", "SELL")]
@@ -296,6 +513,9 @@ clock_unsafe = clock.get("local_clock_unsafe", "UNKNOWN")
 market_status, market_reason = market_gate_status()
 cron_status = crond_status()
 siglog = count_signal_log_today()
+runtime_truth = runtime_health_summary()
+canonical_truth = run_canonical_verify()
+runtime_truth_lines = build_runtime_truth_lines(runtime_truth, canonical_truth)
 
 def best_line(r):
     if not r:
@@ -314,6 +534,8 @@ def latest_line(r):
 lines = []
 lines.append(f"✅ BotA Daily Proof-of-Work — {TODAY}")
 lines.append(f"Generated: {NOW_UTC}")
+lines.append("")
+lines.extend(runtime_truth_lines)
 lines.append("")
 lines.append(f"Cron: {cron_status} | Market gate now: {market_status}")
 lines.append(f"Market reason: {market_reason}")
