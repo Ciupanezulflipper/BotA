@@ -197,12 +197,35 @@ C2 liveness: PASS.
 
 Phase 2 canonical crontab: PASS.
 
-Current reliability score: 68/100.
+Current reliability score: 72/100.
 
 ### Required next boot/reliability work
 
 - Verify Termux:Boot.
 - Verify wake lock.
-- Upgrade Daily Proof to report component freshness.
+- Upgrade Daily Proof to report component freshness. CLOSED by commit `5744802`.
 - Push runtime health to Supabase.
 - Add ProfitLab Admin Health Panel.
+
+### Phase 4C Daily Proof truth upgrade checkpoint
+
+Timestamp: 2026-07-08 15:44:34 UTC
+
+Result: PASS.
+
+Commit:
+- `5744802` — `tools: strengthen BotA daily proof runtime reporting`
+
+Verified:
+- Daily Proof no longer only proves `crond` exists.
+- It reports runtime status, supervisor freshness, watcher/updater/closer/shadow freshness, canonical crontab verification, hash match, and reasons.
+- Final dry-run after rebase showed `Runtime: HEALTHY`, `Canonical crontab: PASS`, `Hash match: YES`, and `Reasons: none`.
+- Push succeeded to `origin/main`.
+- No force push used.
+
+Still open after Phase 4C:
+- Real reboot recovery proof.
+- Supabase runtime health push.
+- ProfitLab Admin Health panel.
+
+Current reliability score: 72/100.

@@ -102,7 +102,7 @@ Verified Phase 2 canonical crontab:
 
 Status: RESTORED, PARTIALLY HARDENED, NOT PRODUCTION-HARDENED.
 
-Reliability score: 68/100.
+Reliability score: 72/100.
 
 Reason:
 
@@ -111,7 +111,7 @@ Reason:
 - Watcher/updater/closer/shadow/supervisor/runtime_health are fresh.
 - Canonical crontab source of truth, verifier, and installer are committed.
 - Canonical restore drill passed.
-- Daily Proof still needs truth upgrade.
+- Daily Proof truth upgrade is complete. `tools/daily_summary.sh` now reports runtime health, supervisor freshness, watcher/updater/closer/shadow ages, canonical crontab verification, hash match, and failure reasons.
 - `state/runtime_health.json` is local-only and not pushed to Supabase.
 - ProfitLab has no BotA runtime health panel yet.
 - Termux:Boot recovery and wake-lock behavior are not yet verified.
@@ -159,3 +159,21 @@ Dividend Capture Scanner can run on the same small VPS if isolated by directory,
 - `docs/BOTA_PROFITLAB_HANDOFF.md`
 - `docs/BOTA_CANONICAL_CRONTAB.md`
 - `BOOTLOG.md`
+
+## Phase 4C Daily Proof truth upgrade — CLOSED
+
+VERIFIED as of 2026-07-08 15:44:34 UTC.
+
+- Commit: `5744802` — `tools: strengthen BotA daily proof runtime reporting`
+- File changed: `tools/daily_summary.sh`
+- Remote push: success, no force push.
+- No crontab, boot, strategy, threshold, H1, Supabase, ProfitLab, or Telegram config changes.
+- Dry-run output showed:
+  - `Runtime: HEALTHY`
+  - supervisor freshness
+  - watcher/updater/closer/shadow ages
+  - `Canonical crontab: PASS`
+  - `Hash match: YES`
+  - `Reasons: none`
+- Failure-mode tests passed for missing, corrupt, stale `runtime_health.json`, verifier missing, and cron-like environment.
+- Current next open phase: Phase 5 — push local `state/runtime_health.json` into Supabase runtime health storage.

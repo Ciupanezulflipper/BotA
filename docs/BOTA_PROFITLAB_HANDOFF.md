@@ -19,14 +19,14 @@ BotA supervisor -> runtime_health -> Supabase -> ProfitLab Admin Health Panel
 - BotA powers ProfitLab through Supabase `public.signals`.
 - ProfitLab can display signals, but currently has no verified BotA runtime-health source.
 - BotA local supervisor exists and is intended to check runtime health.
-- BotA runtime cron was restored by C1C, but C2 liveness proof remains required.
-- Daily Proof currently needs stronger truth fields.
+- BotA runtime cron was restored and C2 liveness proof passed.
+- Daily Proof truth fields are now upgraded by commit `5744802`.
 
 ## Remaining risks
 
 - Termux:Boot not yet verified.
 - Wake lock not yet verified.
-- Canonical crontab not yet committed as source of truth.
+- Canonical crontab is committed as source of truth and verified.
 - Runtime health not yet pushed to Supabase.
 - ProfitLab does not yet display HEALTHY/DEGRADED/OFFLINE.
 - Phone/mobile internet loss can still stop Termux-hosted BotA.
@@ -97,7 +97,7 @@ last_recovery_utc:
 1. Prove C2 liveness after restored cron.
 2. Commit canonical crontab template and verification script.
 3. Verify Termux:Boot and wake lock.
-4. Upgrade Daily Proof truth fields.
+4. Upgrade Daily Proof truth fields. CLOSED by commit `5744802`.
 5. Push `runtime_health` to Supabase.
 6. Only then wire ProfitLab health panel.
 
@@ -113,3 +113,22 @@ Reason for current score:
 - Supervisor exists.
 - Daily Proof and Telegram can send.
 - But silent failure can still occur from ProfitLab's perspective until runtime health is pushed and displayed.
+
+## Phase 4C handoff update
+
+Timestamp: 2026-07-08 15:44:34 UTC
+
+Daily Proof truth upgrade is complete.
+
+Commit:
+- `5744802` — `tools: strengthen BotA daily proof runtime reporting`
+
+Impact for ProfitLab:
+- ProfitLab still cannot see runtime health directly.
+- BotA now produces a stronger local Daily Proof message that distinguishes quiet markets from stale runtime evidence.
+- Next product/backend requirement remains: push `runtime_health` to Supabase, then expose it in a ProfitLab Admin Health Panel.
+
+Still not done:
+- Supabase runtime health table/row.
+- ProfitLab Admin Health Panel.
+- Real reboot recovery proof.

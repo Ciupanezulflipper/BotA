@@ -159,6 +159,36 @@ Cross-check:
 - Force/stage one stale component and verify Daily Proof turns red/degraded.
 - Ensure Telegram sends only one transition alert, not spam.
 
+
+### Phase 4C closure status
+
+Status: CLOSED / PASS.
+
+Commit:
+- `5744802` — `tools: strengthen BotA daily proof runtime reporting`
+
+Acceptance proof:
+- `tools/daily_summary.sh` now prints runtime truth fields:
+  - runtime status
+  - reported bot mode
+  - supervisor age and timestamp
+  - watcher/updater/closer/shadow ages
+  - cache ages available in `runtime_health.json`
+  - canonical crontab verification
+  - live hash match
+  - reasons
+- Missing, corrupt, stale health JSON and missing verifier cases are handled without crashing the Daily Proof.
+- Cron-like environment dry-run passed.
+- No Telegram send during tests.
+- No strategy, crontab, boot, Supabase, or ProfitLab changes.
+
+Gate 4 result:
+- Daily Proof shows real liveness: PASS.
+
+Next phase:
+- Phase 5 — runtime_health Supabase push.
+
+
 ## Phase 5 — runtime_health Supabase push
 
 Purpose: make BotA status visible outside the phone.

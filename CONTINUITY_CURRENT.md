@@ -158,7 +158,7 @@ Do not claim these are solved until evidence proves them:
 
 - Termux:Boot installed and configured
 - wake lock active
-- Daily Proof upgraded to prove watcher/updater/closer/supervisor freshness
+- Daily Proof upgraded to prove watcher/updater/closer/shadow/supervisor freshness — CLOSED by commit `5744802`.
 - runtime health pushed to Supabase
 - ProfitLab Admin Health Panel displaying BotA health
 - reboot recovery proof
@@ -207,7 +207,7 @@ ProfitLab must add runtime-health visibility so it can distinguish:
 
 ## Production readiness
 
-Current reliability score: 68/100.
+Current reliability score: 72/100.
 
 Reason for increase from 64:
 
@@ -218,8 +218,49 @@ Reason for increase from 64:
 - Dividend Capture Scanner preservation confirmed
 - BotA UTC timezone separation confirmed
 
-Still below production-hardened because boot recovery, Daily Proof truth upgrade, Supabase runtime health, and ProfitLab health panel remain open.
+Still below production-hardened because real reboot recovery, Supabase runtime health push, and ProfitLab Admin Health panel remain open. Daily Proof truth upgrade is now closed.
 
 Target after minimal reliability roadmap: 85/100.
 
 A phone-based Termux runtime should not be scored above 90 unless an independent cloud watchdog or VPS deployment exists.
+
+## Phase 4C closure — Daily Proof truth upgrade PASS
+
+Timestamp: 2026-07-08 15:44:34 UTC
+
+Commit pushed:
+- `5744802` — `tools: strengthen BotA daily proof runtime reporting`
+
+Changed file:
+- `tools/daily_summary.sh`
+
+Verified behavior:
+- Daily Proof now reports `Runtime`, `Reported`, supervisor age, watcher/updater/closer/shadow ages, cache ages, canonical crontab status, hash match, and reasons.
+- Real dry-run after rebase:
+  - `Runtime: HEALTHY`
+  - `Canonical crontab: PASS`
+  - `Hash match: YES`
+  - `Reasons: none`
+- Failure-mode tests passed:
+  - missing `runtime_health.json` -> `UNKNOWN`, no crash
+  - corrupt `runtime_health.json` -> `DEGRADED`, no crash
+  - stale `runtime_health.json` -> `DEGRADED`, no crash
+  - missing verifier -> `UNKNOWN`, no crash
+  - cron-like environment -> pass
+  - secret leak check -> pass
+
+Explicitly not changed:
+- crontab
+- boot files
+- trading strategy
+- thresholds
+- H1 logic
+- pair selection
+- Supabase schema/signals
+- ProfitLab UI
+- Telegram config
+
+Reliability score updated: 72/100.
+
+Next open phase:
+- Phase 5 — push `state/runtime_health.json` to Supabase runtime health storage.
