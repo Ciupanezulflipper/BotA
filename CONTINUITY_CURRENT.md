@@ -289,6 +289,9 @@ Latest Phase 5 commits:
 - `b715729 ops: add BotA runtime health push cron`
 
 Next open work:
-1. Document and commit Phase 5 closure.
-2. Phase 6: ProfitLab Admin Health panel.
-3. Reboot/Termux:Boot recovery proof remains open.
+1. Phase 6: ProfitLab Admin Health panel.
+2. Reboot/Termux:Boot recovery proof remains open.
+3. Profitability/proof scoring remains separate from runtime reliability.
+
+Phase 5 closure docs committed:
+- `633f873 docs: close BotA Phase 5 runtime health push`
