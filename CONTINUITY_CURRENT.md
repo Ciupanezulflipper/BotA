@@ -1,6 +1,42 @@
 # BotA Current Continuity State
 
-Last updated: 2026-07-08
+## 2026-07-09 — BotA Clock-Health Truth Fix Closed
+
+Status: CLOSED and pushed.
+
+Commit:
+- e42ad60 — ops: degrade runtime health on unsafe clock
+
+What changed:
+- `tools/bota_supervisor.sh` now treats unsafe/local-drifted clock state as a runtime health degradation.
+- If `logs/clock_drift_status.json` reports `DRIFT_WARN` or `local_clock_unsafe=true`, BotA runtime health becomes `DEGRADED` with reason `local_clock_drift`.
+- If server clock is unavailable, BotA runtime health becomes `DEGRADED` with reason `server_clock_unavailable`.
+
+Why:
+- Android/Termux system time is intentionally manual because ship-time alarms are operationally critical.
+- BotA must not report green `HEALTHY` while the local clock is unsafe.
+- We fixed the health truth layer, not the phone clock.
+
+Proof:
+- Cron supervisor proof passed after absolute-path fix.
+- `state/runtime_health.json` showed `bot_mode=DEGRADED`.
+- `failure_reasons=local_clock_drift`.
+- Supabase live row confirmed `bot_mode=DEGRADED`, `failure_reasons=local_clock_drift`, and fresh cache ages.
+
+Scope:
+- File committed: `tools/bota_supervisor.sh` only.
+- Trading logic changed: NO.
+- Scoring/thresholds/pairs changed: NO.
+- Cron changed: NO.
+- Supabase schema changed: NO.
+- ProfitLab changed: NO.
+
+Next:
+- Return to ProfitLab repo in Termux.
+- Inspect remote divergence before touching files.
+- Continue safe deployment path for `bota-health-admin` via GitHub Actions.
+
+Last updated: 2026-07-09
 
 This file is the compact current handoff. It does not replace the historical `CONTINUITY.md`; it prevents new AI sessions from relying on stale assumptions.
 
