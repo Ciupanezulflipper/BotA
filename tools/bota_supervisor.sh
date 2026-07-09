@@ -286,6 +286,43 @@ NOW_EPOCH=$(date +%s)
 BOT_MODE="HEALTHY"
 FAILURE_STR=""
 
+# Clock drift truth layer:
+# Android time may intentionally remain manual for ship-time alarms.
+# If BotA clock audit says local clock is unsafe or server clock is unavailable,
+# runtime health must be DEGRADED even if trading-critical watcher/closer logic is protected.
+CLOCK_STATUS=$(python3 - <<'PY2'
+import json
+from pathlib import Path
+p = Path("/data/data/com.termux/files/home/BotA/logs/clock_drift_status.json")
+try:
+    data = json.loads(p.read_text())
+    print(str(data.get("status") or "UNKNOWN"))
+except Exception:
+    print("UNKNOWN")
+PY2
+)
+
+LOCAL_CLOCK_UNSAFE=$(python3 - <<'PY2'
+import json
+from pathlib import Path
+p = Path("/data/data/com.termux/files/home/BotA/logs/clock_drift_status.json")
+try:
+    data = json.loads(p.read_text())
+    v = data.get("local_clock_unsafe")
+    print("YES" if v is True else "NO" if v is False else "UNKNOWN")
+except Exception:
+    print("UNKNOWN")
+PY2
+)
+
+if [[ "${CLOCK_STATUS}" == "DRIFT_WARN" || "${LOCAL_CLOCK_UNSAFE}" == "YES" ]]; then
+  FAILURES+=("local_clock_drift")
+  log "FAIL: local clock drift unsafe via clock_drift_status.json"
+elif [[ "${CLOCK_STATUS}" == "SERVER_CLOCK_UNAVAILABLE" ]]; then
+  FAILURES+=("server_clock_unavailable")
+  log "FAIL: server clock unavailable via clock_drift_status.json"
+fi
+
 if (( ${#FAILURES[@]} > 0 )); then
   BOT_MODE="DEGRADED"
   FAILURE_STR=$(IFS='|'; echo "${FAILURES[*]}")
