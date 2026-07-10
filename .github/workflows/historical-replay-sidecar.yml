@@ -36,3 +36,18 @@ jobs:
           fi
       - name: Run synthetic tests
         run: python -m pytest -q audit/historical_replay_20260601_20260710/tests
+      - name: Run machine-readable integrity proof
+        run: python -m audit.historical_replay_20260601_20260710.src.proof_runner > synthetic-proof-report.json
+      - name: Validate proof report status
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("synthetic-proof-report.json").read_text(encoding="utf-8"))
+          if report.get("status") != "PASS":
+              raise SystemExit("synthetic proof did not pass")
+          if not report.get("tamper_detection", {}).get("detected"):
+              raise SystemExit("tamper detection was not proven")
+          print("SYNTHETIC_PROOF_STATUS=PASS")
+          PY
