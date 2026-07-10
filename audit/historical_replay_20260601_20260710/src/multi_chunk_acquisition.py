@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from .artifact_index import build_artifact_index
-from .boundary_reconciliation import reconcile_chunk_candles
+from .boundary_reconciliation import reconcile_chunk_boundaries
 from .chunk_plan import plan_chunks
 from .live_oanda import fetch_oanda_chunk
 from .oanda_payload import parse_oanda_mid_payload
@@ -50,7 +50,7 @@ def acquire_oanda_range(
         granularity=granularity,
     )
 
-    chunk_candles: list[list[dict]] = []
+    parsed_chunks: list[list[object]] = []
     artifact_paths: list[Path] = []
     chunk_records: list[dict] = []
 
@@ -70,8 +70,7 @@ def acquire_oanda_range(
         )
         raw_body = result["body"]
         parsed = parse_oanda_mid_payload(raw_body)
-        rows = [_candle_row(candle) for candle in parsed]
-        chunk_candles.append(rows)
+        parsed_chunks.append(parsed)
 
         chunk_id = f"chunk-{index:04d}"
         raw = write_once(root, f"raw/{run_id}/{chunk_id}.json", raw_body)
@@ -92,14 +91,22 @@ def acquire_oanda_range(
                 "start_utc": chunk.start_utc.isoformat().replace("+00:00", "Z"),
                 "end_utc": chunk.end_utc.isoformat().replace("+00:00", "Z"),
                 "expected_max_candles": chunk.expected_max_candles,
-                "returned_candles": len(rows),
+                "returned_candles": len(parsed),
                 "request_id": result["response"].request_id,
             }
         )
 
-    reconciled = reconcile_chunk_candles(chunk_candles)
+    reconciled, boundary = reconcile_chunk_boundaries(parsed_chunks)
+    if not boundary.ok:
+        raise ValueError(
+            "conflicting duplicate candle timestamps: " + ",".join(boundary.overlap_conflicts)
+        )
+
     derived_doc = json.dumps(
-        reconciled, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        [_candle_row(candle) for candle in reconciled],
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
     ).encode("utf-8") + b"\n"
     derived = write_once(root, f"derived/{run_id}/candles.json", derived_doc)
     artifact_paths.append(root / derived.relative_path)
@@ -116,6 +123,7 @@ def acquire_oanda_range(
             "range_start_utc": start_utc.isoformat().replace("+00:00", "Z"),
             "range_end_utc": end_utc.isoformat().replace("+00:00", "Z"),
             "chunks": chunk_records,
+            "boundary_duplicates_removed": list(boundary.duplicates_removed),
             "reconciled_candle_count": len(reconciled),
             "artifacts": index,
         },
@@ -125,5 +133,6 @@ def acquire_oanda_range(
         "manifest_path": manifest.relative_to(root).as_posix(),
         "chunk_count": len(chunks),
         "reconciled_candle_count": len(reconciled),
+        "boundary_duplicates_removed": list(boundary.duplicates_removed),
         "artifacts": index,
     }
