@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 
-class PathGuardError(RuntimeError):
+class PathGuardError(ValueError):
     pass
 
 
@@ -23,7 +23,7 @@ def _resolved_existing_parent(path: Path) -> Path:
 
 
 def assert_safe_output(root: Path, target: Path) -> Path:
-    root_resolved = root.resolve(strict=True)
+    root_resolved = root.resolve(strict=False)
     target_abs = target if target.is_absolute() else root_resolved / target
     target_resolved = _resolved_existing_parent(target_abs)
 
@@ -36,16 +36,14 @@ def assert_safe_output(root: Path, target: Path) -> Path:
     while current != root_resolved:
         if current.exists() and current.is_symlink():
             raise PathGuardError(f"symlink component rejected: {current}")
-        current = current.parent
+        parent = current.parent
+        if parent == current:
+            raise PathGuardError(f"cannot reach audit root from target: {target_abs}")
+        current = parent
 
     return target_resolved
 
 
 def ensure_within_root(root: Path, target: Path) -> Path:
-    """Compatibility entry point for sidecar modules.
-
-    All callers receive the same containment and symlink protections implemented
-    by ``assert_safe_output``. Keeping one implementation avoids drift between
-    read-verification and write-path guards.
-    """
+    """Return a path proven to remain inside the audit output root."""
     return assert_safe_output(root, target)
