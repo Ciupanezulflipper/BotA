@@ -39,3 +39,13 @@ def assert_safe_output(root: Path, target: Path) -> Path:
         current = current.parent
 
     return target_resolved
+
+
+def ensure_within_root(root: Path, target: Path) -> Path:
+    """Compatibility entry point for sidecar modules.
+
+    All callers receive the same containment and symlink protections implemented
+    by ``assert_safe_output``. Keeping one implementation avoids drift between
+    read-verification and write-path guards.
+    """
+    return assert_safe_output(root, target)
