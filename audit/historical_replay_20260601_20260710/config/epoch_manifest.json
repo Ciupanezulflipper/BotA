@@ -1,0 +1,56 @@
+{
+  "manifest_version": 1,
+  "strategy_epoch": {
+    "id": "S1",
+    "claim_status": "inferred",
+    "start_utc": "2026-06-01T00:00:00Z",
+    "end_utc": "2026-07-11T00:00:00Z",
+    "base_commit": "8425d3bb3e33c8cf804c2235b6aeedf2f53c5acf",
+    "strategy_files_unchanged_through_commit": "fa289ad3f7b6ff430f13609950e5af341aee2e9d",
+    "dirty_tree_caveat": true
+  },
+  "runtime_epochs": [
+    {
+      "id": "R1",
+      "claim_status": "inferred",
+      "description": "watcher expected to be scheduled before the late-June outage",
+      "start_utc": "2026-06-01T00:00:00Z",
+      "end_utc": null
+    },
+    {
+      "id": "R2",
+      "claim_status": "proven",
+      "description": "late-June through early-July watcher or scheduling failure",
+      "start_utc": null,
+      "end_utc": null
+    },
+    {
+      "id": "R3",
+      "claim_status": "proven",
+      "description": "runtime restored, pre-Observability-V4 decision journaling",
+      "start_utc": null,
+      "end_utc": "2026-07-10T00:00:00Z"
+    },
+    {
+      "id": "R4",
+      "claim_status": "proven",
+      "description": "canonical UTC crontab installed",
+      "start_utc": "2026-07-08T13:25:21Z",
+      "end_utc": null
+    }
+  ],
+  "observability_epochs": [
+    {
+      "id": "O1",
+      "claim_status": "proven",
+      "description": "content dedup could precede decision journaling",
+      "end_commit": "fa289ad3f7b6ff430f13609950e5af341aee2e9d"
+    },
+    {
+      "id": "O2",
+      "claim_status": "proven",
+      "description": "every completed decision journaled before delivery exits",
+      "start_commit": "fa289ad3f7b6ff430f13609950e5af341aee2e9d"
+    }
+  ]
+}
