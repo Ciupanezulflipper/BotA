@@ -36,7 +36,7 @@ def test_preview_is_no_network_and_contains_no_token():
     assert preview["mode"] == "preview"
     assert preview["network_permitted"] is False
     assert preview["plan"]["request_count"] == 1
-    assert "count=" not in preview["plan"]["requests"][0]["url"]
+    assert "count=" not in preview["plan"]["requests"][0]["path_and_query"]
     assert "super-secret" not in encoded
 
 
