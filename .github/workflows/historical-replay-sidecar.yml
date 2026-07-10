@@ -35,7 +35,7 @@ jobs:
             exit 1
           fi
       - name: Run synthetic tests
-        run: python -m pytest -q audit/historical_replay_20260601_20260710/tests
+        run: python -m pytest -q --junitxml=synthetic-tests.xml audit/historical_replay_20260601_20260710/tests
       - name: Run machine-readable integrity proof
         run: python -m audit.historical_replay_20260601_20260710.src.proof_runner > synthetic-proof-report.json
       - name: Validate proof report status
@@ -51,3 +51,13 @@ jobs:
               raise SystemExit("tamper detection was not proven")
           print("SYNTHETIC_PROOF_STATUS=PASS")
           PY
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-replay-synthetic-validation
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            synthetic-tests.xml
+            synthetic-proof-report.json
