@@ -35,19 +35,16 @@ def acquire_oanda_range(
     enabled: bool = False,
     base_url: str = "https://api-fxpractice.oanda.com",
     timeout_seconds: float = 30.0,
+    max_candles_per_chunk: int = 5000,
     fetcher: Fetcher = fetch_oanda_chunk,
 ) -> dict:
-    """Acquire, persist, reconcile, and manifest one bounded OANDA range.
-
-    Network access remains fail-closed because every delegated chunk fetch still
-    requires enabled=True and an explicit token. Tests may inject a synthetic
-    fetcher without touching the network.
-    """
+    """Acquire, persist, reconcile, and manifest one bounded OANDA range."""
     root = output_root.resolve()
     chunks = plan_chunks(
         start_utc=start_utc,
         end_utc=end_utc,
         granularity=granularity,
+        max_candles=max_candles_per_chunk,
     )
 
     parsed_chunks: list[list[object]] = []
@@ -55,11 +52,7 @@ def acquire_oanda_range(
     chunk_records: list[dict] = []
 
     for index, chunk in enumerate(chunks):
-        request = serialize_planned_chunk(
-            chunk,
-            instrument=instrument,
-            granularity=granularity,
-        )
+        request = serialize_planned_chunk(chunk, instrument=instrument, granularity=granularity)
         result = fetcher(
             output_root=root,
             request_path_and_query=request["url"],
@@ -74,60 +67,41 @@ def acquire_oanda_range(
 
         chunk_id = f"chunk-{index:04d}"
         raw = write_once(root, f"raw/{run_id}/{chunk_id}.json", raw_body)
-        request_doc = json.dumps(
-            asdict(result["request"]), sort_keys=True, separators=(",", ":")
-        ).encode("utf-8") + b"\n"
-        response_doc = json.dumps(
-            asdict(result["response"]), sort_keys=True, separators=(",", ":")
-        ).encode("utf-8") + b"\n"
+        request_doc = json.dumps(asdict(result["request"]), sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
+        response_doc = json.dumps(asdict(result["response"]), sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
         req = write_once(root, f"metadata/{run_id}/{chunk_id}.request.json", request_doc)
         resp = write_once(root, f"metadata/{run_id}/{chunk_id}.response.json", response_doc)
-        artifact_paths.extend(
-            [root / raw.relative_path, root / req.relative_path, root / resp.relative_path]
-        )
-        chunk_records.append(
-            {
-                "chunk": chunk_id,
-                "start_utc": chunk.start_utc.isoformat().replace("+00:00", "Z"),
-                "end_utc": chunk.end_utc.isoformat().replace("+00:00", "Z"),
-                "expected_max_candles": chunk.expected_max_candles,
-                "returned_candles": len(parsed),
-                "request_id": result["response"].request_id,
-            }
-        )
+        artifact_paths.extend([root / raw.relative_path, root / req.relative_path, root / resp.relative_path])
+        chunk_records.append({
+            "chunk": chunk_id,
+            "start_utc": chunk.start_utc.isoformat().replace("+00:00", "Z"),
+            "end_utc": chunk.end_utc.isoformat().replace("+00:00", "Z"),
+            "expected_max_candles": chunk.expected_max_candles,
+            "returned_candles": len(parsed),
+            "request_id": result["response"].request_id,
+        })
 
     reconciled, boundary = reconcile_chunk_boundaries(parsed_chunks)
     if not boundary.ok:
-        raise ValueError(
-            "conflicting duplicate candle timestamps: " + ",".join(boundary.overlap_conflicts)
-        )
+        raise ValueError("conflicting duplicate candle timestamps: " + ",".join(boundary.overlap_conflicts))
 
-    derived_doc = json.dumps(
-        [_candle_row(candle) for candle in reconciled],
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8") + b"\n"
+    derived_doc = json.dumps([_candle_row(candle) for candle in reconciled], sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8") + b"\n"
     derived = write_once(root, f"derived/{run_id}/candles.json", derived_doc)
     artifact_paths.append(root / derived.relative_path)
 
     index = build_artifact_index(root, artifact_paths)
-    manifest = write_run_manifest(
-        root,
-        run_id,
-        {
-            "provider": "oanda",
-            "mode": "live" if enabled else "synthetic",
-            "instrument": instrument,
-            "granularity": granularity,
-            "range_start_utc": start_utc.isoformat().replace("+00:00", "Z"),
-            "range_end_utc": end_utc.isoformat().replace("+00:00", "Z"),
-            "chunks": chunk_records,
-            "boundary_duplicates_removed": list(boundary.duplicates_removed),
-            "reconciled_candle_count": len(reconciled),
-            "artifacts": index,
-        },
-    )
+    manifest = write_run_manifest(root, run_id, {
+        "provider": "oanda",
+        "mode": "live" if enabled else "synthetic",
+        "instrument": instrument,
+        "granularity": granularity,
+        "range_start_utc": start_utc.isoformat().replace("+00:00", "Z"),
+        "range_end_utc": end_utc.isoformat().replace("+00:00", "Z"),
+        "chunks": chunk_records,
+        "boundary_duplicates_removed": list(boundary.duplicates_removed),
+        "reconciled_candle_count": len(reconciled),
+        "artifacts": index,
+    })
     return {
         "run_id": run_id,
         "manifest_path": manifest.relative_to(root).as_posix(),
