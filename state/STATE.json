@@ -229,12 +229,12 @@
     },
     {
       "id": "signal-mutation-auditability",
-      "title": "No audit trail for signal status mutations \u2014 March 19 source permanently unresolvable",
+      "title": "No audit trail for signal status mutations — March 19 source permanently unresolvable",
       "status": "open",
       "priority": "next_engineering_session",
       "proposed_fix": "Add closed_source, closed_by, close_reason columns to signals table, or implement append-only mutation log",
       "why": "Without this, any future batch close event cannot be attributed to an actor or tool",
-      "constraint": "Do not implement before commercial validation is underway \u2014 schema change requires ProfitLab coordination"
+      "constraint": "Do not implement before commercial validation is underway — schema change requires ProfitLab coordination"
     }
   ],
   "resolved": [
@@ -375,15 +375,15 @@
     "march13_bulk_close": {
       "count": 24,
       "classification": "manual_or_semi_manual_batch_close",
-      "root_cause": "live execution of signal_closer.py \u2014 proven via log sequence",
+      "root_cause": "live execution of signal_closer.py — proven via log sequence",
       "ids_excluded": 24
     },
     "march19_batch": {
       "count": 4,
       "closed_at_utc": "2026-03-19T19:15:13 to 19:15:15",
       "pattern": "4 signals closed in 1.5 seconds, all at exactly +60.0 pips",
-      "signal_closer_log_finding": "signal_closer.py ran at 19:16 UTC, found 2 active signals, closed zero \u2014 does not explain the 19:15 batch",
-      "classification": "UNPROVEN \u2014 source unknown. signal_closer.py 19:16 run ruled out. Shadow manager ruled out. No audit metadata in DB to determine actor.",
+      "signal_closer_log_finding": "signal_closer.py ran at 19:16 UTC, found 2 active signals, closed zero — does not explain the 19:15 batch",
+      "classification": "UNPROVEN — source unknown. signal_closer.py 19:16 run ruled out. Shadow manager ruled out. No audit metadata in DB to determine actor.",
       "status": "confirmed_excluded",
       "ids_confirmed": [
         "956ecc3a-f9bd-41e1-bf00-6f2bb3024d2e",
@@ -397,7 +397,7 @@
     },
     "null_closed_at_signals": {
       "count": 2,
-      "note": "result_pips set but closed_at is NULL \u2014 data integrity issue, excluded from baseline"
+      "note": "result_pips set but closed_at is NULL — data integrity issue, excluded from baseline"
     },
     "provisional_baseline_after_excluding_march13": {
       "baseline_status": "SUPERSEDED — see clean_baseline_after_excluding_both_batches",
@@ -451,5 +451,72 @@
     "pat_revoked": "UNPROVEN",
     "migrated_at": "2026-04-26",
     "note": "BotA remote now uses SSH for normal git pull/push. Global credential.helper=store still exists, but BotA remote is SSH. PAT is no longer the primary git path for BotA."
+  },
+  "observability_v4_2026_07_10": {
+    "claim_status": "proven",
+    "status": "resolved_and_live_verified",
+    "marker": "BOTA_OBSERVABILITY_V4_2026_07_10",
+    "preserved_at_utc": "2026-07-10T17:14:24.939195+00:00",
+    "watcher_path": "tools/signal_watcher_pro.sh",
+    "watcher_sha256": "b8a3adf46582e3a69d5b22d12a4da070bc8be2ceff76a4aa99e9d6c96544a9ef",
+    "active_pairs": [
+      "EURUSD",
+      "GBPUSD"
+    ],
+    "active_timeframes": [
+      "M15"
+    ],
+    "decision_journal": "logs/alerts.csv",
+    "journal_before_rejection_and_delivery_gates": true,
+    "delivery_hash_compare_read_only_before_send": true,
+    "delivery_hash_mark_after_successful_real_telegram_send": true,
+    "delivery_hash_identity": [
+      "pair",
+      "tf",
+      "direction",
+      "score",
+      "entry",
+      "sl",
+      "tp"
+    ],
+    "existing_hashes_reset": false,
+    "existing_last_sent_reset": false,
+    "strategy_changed": false,
+    "h1_logic_changed": false,
+    "adx_logic_changed": false,
+    "thresholds_changed": false,
+    "pairs_changed": false,
+    "timeframes_changed": false,
+    "cron_changed": false,
+    "natural_cycle_proof": {
+      "passed": true,
+      "alerts_lines_before": 1590,
+      "alerts_lines_after": 1592,
+      "row_delta": 2,
+      "eurusd_row": {
+        "direction": "HOLD",
+        "score": 0.0,
+        "confidence": 40.0,
+        "rejected": true,
+        "reason": "no_signal|phase=Open"
+      },
+      "gbpusd_row": {
+        "direction": "HOLD",
+        "score": 0.0,
+        "confidence": 40.0,
+        "rejected": true,
+        "reason": "no_signal|phase=Open"
+      },
+      "delivery_hashes_unchanged": true,
+      "last_sent_files_unchanged": true,
+      "telegram_sent": false
+    },
+    "historical_june_outage": {
+      "runtime_or_scheduling_failure": "proven",
+      "post_recovery_rejected_hold_state": "proven",
+      "valid_alert_suppressed": "not_proven",
+      "fully_reconstruct_old_omitted_decisions": false
+    },
+    "next_action": "Generate and verify handoff pack, then review exact git diff before commit and push."
   }
 }

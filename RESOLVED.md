@@ -75,3 +75,22 @@
 - Cron changed: NO.
 - Supabase publish for Market Pulse: NO (remains false).
 - ProfitLab executable signal behavior: UNCHANGED.
+
+---
+
+## 2026-07-10 — Watcher pre-journal dedup observability defect
+
+<!-- BOTA_OBSERVABILITY_V4_2026_07_10 -->
+
+- Status: RESOLVED
+- [proven] Root cause: content dedup executed before `alerts.csv` journaling and wrote hash state before confirmed Telegram delivery.
+- [proven] Fix: journal every completed parsed decision before rejection and Telegram delivery gates.
+- [proven] Fix: split delivery hash calculation, read-only comparison, and post-success marking.
+- [proven] Fix: update delivery hash only after successful real Telegram send.
+- [proven] Static validation: PASS.
+- [proven] Atomic deployment: PASS.
+- [proven] Natural cron-cycle validation: PASS.
+- [proven] Natural proof wrote two rejected HOLD rows while preserving both delivery hashes and both `last_sent` files.
+- [proven] Installed watcher SHA-256: `b8a3adf46582e3a69d5b22d12a4da070bc8be2ceff76a4aa99e9d6c96544a9ef`.
+- [proven] Strategy and production selection rules changed: NO.
+- [not proven] Whether any valid signal was missed during the historical June outage remains unresolved.

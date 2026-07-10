@@ -304,25 +304,55 @@ payload_is_blank() {
   [[ -z "$(printf '%s' "${s}" | tr -d ' \t\r\n')" ]]
 }
 
-# Content-based signal dedup.
-# Returns 0 if NEW, 1 if DUPLICATE.
-signal_is_new() {
+# Content-based delivery dedup.
+# Hash identity is intentionally unchanged:
+# pair|tf|direction|score|entry|sl|tp
+signal_delivery_hash() {
   local pair="$1" tf="$2" direction="$3" score="$4" entry="$5" sl="$6" tp="$7"
   local hash_input="${pair}|${tf}|${direction}|${score}|${entry}|${sl}|${tp}"
+
+  printf '%s' "${hash_input}" |
+    md5sum 2>/dev/null |
+    cut -d' ' -f1 ||
+    printf '%s' "${hash_input}" |
+      cksum |
+      cut -d' ' -f1
+}
+
+# Returns 0 if not previously delivered, 1 if duplicate.
+# This function is read-only: it does not update the delivery hash.
+signal_delivery_is_new() {
+  local pair="$1" tf="$2" direction="$3" score="$4" entry="$5" sl="$6" tp="$7"
   local sig_hash hash_file old_hash
 
-  sig_hash="$(printf '%s' "${hash_input}" | md5sum 2>/dev/null | cut -d' ' -f1 || printf '%s' "${hash_input}" | cksum | cut -d' ' -f1)"
+  sig_hash="$(
+    signal_delivery_hash       "${pair}" "${tf}" "${direction}" "${score}"       "${entry}" "${sl}" "${tp}"
+  )"
+
   hash_file="${STATE}/last_hash_${pair}_${tf}.txt"
 
   if [[ -f "${hash_file}" ]]; then
     old_hash="$(cat "${hash_file}" 2>/dev/null || echo "")"
+
     if [[ "${old_hash}" == "${sig_hash}" ]]; then
       return 1
     fi
   fi
 
-  printf '%s' "${sig_hash}" > "${hash_file}" 2>/dev/null || true
   return 0
+}
+
+# Update the delivery hash only after a successful real Telegram send.
+signal_delivery_mark() {
+  local pair="$1" tf="$2" direction="$3" score="$4" entry="$5" sl="$6" tp="$7"
+  local sig_hash hash_file
+
+  sig_hash="$(
+    signal_delivery_hash       "${pair}" "${tf}" "${direction}" "${score}"       "${entry}" "${sl}" "${tp}"
+  )"
+
+  hash_file="${STATE}/last_hash_${pair}_${tf}.txt"
+  printf '%s' "${sig_hash}" > "${hash_file}" 2>/dev/null || true
 }
 
 raw_cache_path() {
@@ -851,12 +881,6 @@ print(json.dumps({
   local now
   now="$(ts_iso)"
 
-  # Dedup: skip CSV + Telegram if unchanged.
-  if ! signal_is_new "${pair_o}" "${tf_o}" "${direction}" "${score}" "${entry}" "${sl}" "${tp}"; then
-    log "DEDUP" "${pair_o} ${tf_o} signal unchanged -> skip"
-    return 0
-  fi
-
   # Extract A3 components from reasons for CSV logging
   local _ema_comp _rsi_comp _macd_comp _adx_comp _adx_raw _rsi_raw _macd_hist_raw _macro6 _h1_trend _tier_csv _session _adx_regime=""
   _ema_comp="$(echo "${reasons}" | grep -oP 'ema_comp=\K[\d.]+' || true)"
@@ -928,6 +952,13 @@ except Exception:
     return 0
   fi
 
+  # Delivery dedup is evaluated only after all decision and Telegram gates.
+  # It is read-only here; the hash is marked only after a successful real send.
+  if ! signal_delivery_is_new "${pair_o}" "${tf_o}" "${direction}" "${score}" "${entry}" "${sl}" "${tp}"; then
+    log "DEDUP" "${pair_o} ${tf_o} already delivered -> skip Telegram/Supabase"
+    return 0
+  fi
+
   local msg
   if [[ "${tier}" = "GREEN" ]]; then
     msg="${emoji} BotA ${pair_o} ${tf_o} ${direction}\n📊 Score: ${score} | ${filter_str}\n💰 Entry: ${entry}\n🛑 SL: ${sl}  🎯 TP: ${tp}"
@@ -959,9 +990,10 @@ except Exception:
         log "CHART" "${pair_o} ${tf_o} chart generation failed"
       fi
     fi
-    # Cooldown is only meaningful on real sends (not DRY_RUN, not disabled).
+    # Cooldown and delivery hash are meaningful only after a real successful send.
     if ! is_true "${DRY_RUN_MODE:-false}" && ! is_false "${TELEGRAM_ENABLED:-1}"; then
       telegram_cooldown_mark "${pair_o}" "${tf_o}"
+      signal_delivery_mark "${pair_o}" "${tf_o}" "${direction}" "${score}" "${entry}" "${sl}" "${tp}"
     # Publish to ProfitLab dashboard — GREEN tier only.
     if [[ "${tier}" = "GREEN" ]]; then
       if [[ -f "${TOOLS}/supabase_publish.py" ]] && [[ -n "${SUPABASE_SERVICE_KEY:-}" ]]; then

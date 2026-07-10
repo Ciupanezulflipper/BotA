@@ -1539,3 +1539,65 @@ Changed only `tools/product_message_v1.py` — `format_market_pulse`:
 
 - Run `bash tools/run_daily_pulse.sh` manually each day (or wait for cron approval).
 - After 3 confirmed private sends, bring proof and request cron/main channel decision.
+
+---
+
+## 2026-07-10 — BotA Watcher Observability V4
+
+<!-- BOTA_OBSERVABILITY_V4_2026_07_10 -->
+
+### Incident findings
+
+- [proven] Alert silence from approximately 2026-06-26 through early July included a watcher/cron runtime outage.
+- [proven] After runtime recovery, the active watched universe remained `EURUSD GBPUSD` on `M15`.
+- [proven] Current watched decisions are legitimate rejected HOLD outcomes rather than alert-grade BUY/SELL signals.
+- [not proven] No preserved evidence proves that an otherwise valid alert was suppressed during the historical outage.
+
+### Defect found
+
+- [proven] The watcher previously applied content dedup before `alerts.csv` journaling.
+- [proven] Repeated HOLD and rejected decisions were therefore omitted from the decision journal.
+- [proven] The old hash function wrote `last_hash_*` before Telegram gates and before confirmed Telegram delivery.
+- [inferred] That ordering could make a hash represent a processed candidate rather than a successfully delivered signal.
+
+### Repair installed
+
+- [proven] `tools/signal_watcher_pro.sh` was replaced atomically with the validated Observability V4 implementation.
+- [proven] Installed watcher SHA-256 is `b8a3adf46582e3a69d5b22d12a4da070bc8be2ceff76a4aa99e9d6c96544a9ef`.
+- [proven] Every completed parsed decision is now appended to `logs/alerts.csv` before rejection, score, tier, cooldown, and delivery-dedup exits.
+- [proven] Delivery dedup is checked only after rejection, score, tier, and cooldown gates.
+- [proven] Delivery hash state is written only after a successful real Telegram send.
+- [proven] Existing hash identity remains `pair|tf|direction|score|entry|sl|tp`.
+- [proven] Existing `last_hash_*` and `last_sent_*` files were not reset during deployment.
+- [proven] Strategy, H1 logic, ADX rules, score thresholds, pairs, timeframe, risk rules, Telegram tiers, cooldown duration, cron cadence, and Supabase eligibility were unchanged.
+
+### Static proof
+
+- [proven] Candidate transformation passed.
+- [proven] `bash -n` passed.
+- [proven] Structural order validation passed.
+- [proven] Semantic static validation passed.
+- [proven] Atomic deployment passed without rollback.
+
+### Natural cron-cycle proof
+
+- [proven] A natural scheduled watcher cycle advanced `logs/alerts.csv` from 1590 to 1592 rows.
+- [proven] Exactly two new rows were written: EURUSD M15 HOLD and GBPUSD M15 HOLD.
+- [proven] Both rows had score `0.00`, confidence `40.00`, provider `engine_A3`, rejection status `true`, and reason `no_signal|phase=Open`.
+- [proven] EURUSD and GBPUSD delivery-hash contents and mtimes remained unchanged.
+- [proven] EURUSD and GBPUSD `last_sent` contents and mtimes remained unchanged.
+- [proven] No Telegram delivery occurred for the rejected HOLD rows.
+- [proven] `NATURAL_CYCLE_PROOF_PASS=YES`.
+
+### Current interpretation
+
+- [proven] BotA now preserves evidence distinguishing “no valid setup” from runtime or delivery failure.
+- [proven] The 2026-07-10 live snapshot had no alert-grade setup inside the active watcher universe.
+- [not proven] Historical market decisions omitted by the old pre-journal dedup cannot be reconstructed completely.
+- [inferred] Future signal-drought investigations can now use `alerts.csv` as the completed-decision journal.
+
+### Scope lock
+
+- [proven] This was an observability and delivery-state correction only.
+- [proven] No strategy-frequency change was approved.
+- [proven] Do not loosen H1 veto, ADX gates, score thresholds, or watcher scope based only on signal-drought frustration.

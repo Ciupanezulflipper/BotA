@@ -87,3 +87,18 @@
   - Step 6 commit `6aa985e`, tag `step-6-wrapper-gates-2026-05-27`
   - Step 6A layout commit `65d1137`
   - First private wrapper send: `LIVE_SEND_EXIT_CODE=0`, `telegram_sent=True`, `supabase_published=False`
+
+---
+
+## 2026-07-10 — Watcher decision journaling and delivery dedup
+
+<!-- BOTA_OBSERVABILITY_V4_2026_07_10 -->
+
+- [proven] Decision: `logs/alerts.csv` is the completed-decision journal and must be written before rejection or delivery exits.
+- [proven] Decision: Telegram/Supabase delivery dedup must remain separate from decision journaling.
+- [proven] Decision: `last_hash_<PAIR>_<TF>.txt` represents successful real Telegram delivery, not merely candidate evaluation.
+- [proven] Decision: delivery-hash comparison is read-only before send; the hash is marked only after successful real Telegram delivery.
+- [proven] Decision: preserve the existing seven-field hash identity for this repair.
+- [proven] Decision: do not reset historical delivery hashes or cooldown files.
+- [proven] Decision: do not modify strategy, H1 veto, ADX handling, thresholds, watched pairs/timeframe, RR rules, Telegram tiers, or cron cadence in this repair.
+- [inferred] Separate Supabase-specific delivery retry state may be evaluated later, but it is outside this approved observability repair.
