@@ -1,20 +1,13 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import pytest
 
-from audit.historical_replay_20260601_20260710.src.multi_chunk_acquisition import (
-    acquire_oanda_range,
-)
-from audit.historical_replay_20260601_20260710.src.request_metadata import (
-    build_request_metadata,
-)
-from audit.historical_replay_20260601_20260710.src.response_metadata import (
-    capture_response_metadata,
-)
+from audit.historical_replay_20260601_20260710.src.multi_chunk_acquisition import acquire_oanda_range
+from audit.historical_replay_20260601_20260710.src.request_metadata import build_request_metadata
+from audit.historical_replay_20260601_20260710.src.response_metadata import capture_response_metadata
 from audit.historical_replay_20260601_20260710.src.verify_run import verify_completed_run
 
 UTC = timezone.utc
@@ -25,14 +18,12 @@ def _payload(start_minute: int, count: int) -> bytes:
     for offset in range(count):
         minute = start_minute + offset * 15
         hour, minute_of_hour = divmod(minute, 60)
-        candles.append(
-            {
-                "complete": True,
-                "volume": 10,
-                "time": f"2026-06-01T{hour:02d}:{minute_of_hour:02d}:00Z",
-                "mid": {"o": "1.1000", "h": "1.1010", "l": "1.0990", "c": "1.1005"},
-            }
-        )
+        candles.append({
+            "complete": True,
+            "volume": 10,
+            "time": f"2026-06-01T{hour:02d}:{minute_of_hour:02d}:00Z",
+            "mid": {"o": "1.1000", "h": "1.1010", "l": "1.0990", "c": "1.1005"},
+        })
     return json.dumps({"candles": candles}).encode("utf-8")
 
 
@@ -43,14 +34,8 @@ def test_pipeline_persists_reconciles_and_verifies(tmp_path):
         calls.append(kwargs)
         body = _payload(0, 2)
         return {
-            "request": build_request_metadata(
-                method="GET",
-                url="https://api-fxpractice.oanda.com" + kwargs["request_path_and_query"],
-                headers={"Authorization": "Bearer secret"},
-            ),
-            "response": capture_response_metadata(
-                200, {"Content-Type": "application/json", "RequestID": f"req-{len(calls)}"}
-            ),
+            "request": build_request_metadata(method="GET", url="https://api-fxpractice.oanda.com" + kwargs["request_path_and_query"], headers={"Authorization": "Bearer secret"}),
+            "response": capture_response_metadata(200, {"Content-Type": "application/json", "RequestID": f"req-{len(calls)}"}),
             "body": body,
         }
 
@@ -65,12 +50,10 @@ def test_pipeline_persists_reconciles_and_verifies(tmp_path):
         enabled=False,
         fetcher=fake_fetcher,
     )
-
     assert result["chunk_count"] == 1
     assert result["reconciled_candle_count"] == 2
     assert calls[0]["enabled"] is False
     assert "count=" not in calls[0]["request_path_and_query"]
-
     manifest = json.loads((tmp_path / result["manifest_path"]).read_text())
     assert manifest["chunks"][0]["request_id"] == "req-1"
     assert manifest["reconciled_candle_count"] == 2
@@ -129,5 +112,6 @@ def test_pipeline_fails_on_conflicting_boundary_duplicates(tmp_path):
             end_utc=datetime(2026, 7, 11, 0, 0, tzinfo=UTC),
             token="token",
             enabled=False,
+            max_candles_per_chunk=3000,
             fetcher=fake_fetcher,
         )
