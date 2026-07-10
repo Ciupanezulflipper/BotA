@@ -9,10 +9,14 @@ ALLOWED_INSTRUMENTS = {"EUR_USD", "GBP_USD"}
 ALLOWED_GRANULARITIES = {"M15", "H1", "H4", "D"}
 
 
-def _utc_z(value: datetime) -> str:
+def _utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         raise ValueError("timestamp must be timezone-aware")
-    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return value.astimezone(timezone.utc)
+
+
+def _utc_z(value: datetime) -> str:
+    return _utc(value).isoformat().replace("+00:00", "Z")
 
 
 def serialize_chunk_request(
@@ -32,12 +36,15 @@ def serialize_chunk_request(
         raise ValueError("unsupported granularity")
     if price != "M":
         raise ValueError("historical replay requires midpoint price=M")
-    if end <= start:
+
+    start_utc = _utc(start)
+    end_utc = _utc(end)
+    if end_utc <= start_utc:
         raise ValueError("end must be after start")
 
     params = {
-        "from": _utc_z(start),
-        "to": _utc_z(end),
+        "from": _utc_z(start_utc),
+        "to": _utc_z(end_utc),
         "granularity": granularity,
         "price": price,
     }
