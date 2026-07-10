@@ -36,6 +36,31 @@ jobs:
           fi
       - name: Run synthetic tests
         run: python -m pytest -q --junitxml=synthetic-tests.xml audit/historical_replay_20260601_20260710/tests
+      - name: Build no-network acquisition plan
+        run: |
+          python -m audit.historical_replay_20260601_20260710.src.acquisition_dry_run \
+            --start 2026-06-01T00:00:00Z \
+            --end 2026-07-11T00:00:00Z \
+            > acquisition-dry-run.json
+      - name: Validate no-network acquisition plan
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          plan = json.loads(Path("acquisition-dry-run.json").read_text(encoding="utf-8"))
+          if plan.get("mode") != "dry_run_no_network":
+              raise SystemExit("acquisition plan was not no-network mode")
+          if plan.get("instruments") != ["EUR_USD", "GBP_USD"]:
+              raise SystemExit("unexpected acquisition instrument scope")
+          if plan.get("granularities") != ["M15", "H1", "H4", "D"]:
+              raise SystemExit("unexpected acquisition timeframe scope")
+          if not plan.get("plan_sha256") or plan.get("request_count") != len(plan.get("requests", [])):
+              raise SystemExit("invalid acquisition plan integrity fields")
+          if any("count=" in row.get("path_and_query", "") for row in plan["requests"]):
+              raise SystemExit("count parameter found in explicit from/to acquisition plan")
+          print("ACQUISITION_DRY_RUN_STATUS=PASS")
+          PY
       - name: Run machine-readable integrity proof
         run: python -m audit.historical_replay_20260601_20260710.src.proof_runner > synthetic-proof-report.json
       - name: Validate proof report status
@@ -61,3 +86,4 @@ jobs:
           path: |
             synthetic-tests.xml
             synthetic-proof-report.json
+            acquisition-dry-run.json
