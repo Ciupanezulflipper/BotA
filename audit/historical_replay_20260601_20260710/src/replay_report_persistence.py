@@ -16,7 +16,6 @@ def _canonical_without_hash(report: Mapping[str, Any]) -> bytes:
 
 
 def verify_replay_report(report: Mapping[str, Any]) -> dict[str, Any]:
-    """Verify the self-hash and minimal structural invariants of a replay report."""
     if report.get("schema_version") != 1:
         raise ValueError("unsupported replay report schema_version")
     rows = report.get("rows")
@@ -25,7 +24,6 @@ def verify_replay_report(report: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("replay report rows or summary missing")
     if report.get("cycle_count") != len(rows):
         raise ValueError("replay report cycle_count mismatch")
-
     cycle_ids: set[str] = set()
     for row in rows:
         if not isinstance(row, dict):
@@ -34,22 +32,15 @@ def verify_replay_report(report: Mapping[str, Any]) -> dict[str, Any]:
         if not cycle_id or cycle_id in cycle_ids:
             raise ValueError("replay report cycle ids must be non-empty and unique")
         cycle_ids.add(cycle_id)
-
     expected = sha256(_canonical_without_hash(report)).hexdigest()
     if report.get("report_sha256") != expected:
         raise ValueError("replay report sha256 mismatch")
     if sum(int(value) for value in summary.values()) != len(rows):
         raise ValueError("replay report summary total mismatch")
-
-    return {
-        "status": "PASS",
-        "cycle_count": len(rows),
-        "report_sha256": expected,
-    }
+    return {"status": "PASS", "cycle_count": len(rows), "report_sha256": expected}
 
 
 def persist_replay_report(root: Path, run_id: str, report: Mapping[str, Any]) -> dict[str, Any]:
-    """Verify and immutably persist one deterministic replay report."""
     if not run_id or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_." for ch in run_id):
         raise ValueError("invalid run_id")
     root = root.resolve()
@@ -61,5 +52,5 @@ def persist_replay_report(root: Path, run_id: str, report: Mapping[str, Any]) ->
         **verification,
         "path": artifact.relative_path,
         "artifact_sha256": artifact.sha256,
-        "bytes": artifact.bytes,
+        "bytes": artifact.size_bytes,
     }
