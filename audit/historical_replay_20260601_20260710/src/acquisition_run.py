@@ -6,11 +6,17 @@ from pathlib import Path
 from typing import Mapping
 
 from .artifact_index import build_artifact_index
-from .oanda_payload import parse_oanda_mid_candles
+from .oanda_payload import parse_oanda_mid_payload
 from .raw_artifact import write_once
 from .request_metadata import build_request_metadata
 from .response_metadata import capture_response_metadata
 from .run_manifest import write_run_manifest
+
+
+def _candle_to_json(candle) -> dict:
+    row = asdict(candle)
+    row["time"] = candle.time.isoformat().replace("+00:00", "Z")
+    return row
 
 
 def execute_synthetic_acquisition(
@@ -32,14 +38,17 @@ def execute_synthetic_acquisition(
         headers=request_headers,
     )
     response_meta = capture_response_metadata(response_status, response_headers)
-
-    payload = json.loads(response_body.decode("utf-8"))
-    candles = parse_oanda_mid_candles(payload)
+    candles = parse_oanda_mid_payload(response_body)
 
     raw = write_once(root, f"raw/{run_id}/response.json", response_body)
     request_doc = json.dumps(asdict(request_meta), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8") + b"\n"
     response_doc = json.dumps(asdict(response_meta), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8") + b"\n"
-    candle_doc = json.dumps(candles, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8") + b"\n"
+    candle_doc = json.dumps(
+        [_candle_to_json(candle) for candle in candles],
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8") + b"\n"
 
     req_artifact = write_once(root, f"metadata/{run_id}/request.json", request_doc)
     resp_artifact = write_once(root, f"metadata/{run_id}/response.json", response_doc)
