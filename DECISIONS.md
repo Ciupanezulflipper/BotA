@@ -102,3 +102,14 @@
 - [proven] Decision: do not reset historical delivery hashes or cooldown files.
 - [proven] Decision: do not modify strategy, H1 veto, ADX handling, thresholds, watched pairs/timeframe, RR rules, Telegram tiers, or cron cadence in this repair.
 - [inferred] Separate Supabase-specific delivery retry state may be evaluated later, but it is outside this approved observability repair.
+
+## Decision — 2026-07-11 Historical Replay Runtime Safeguards
+
+- [proven] Decision: preserve the 2026-06-22 to 2026-07-08 watcher gap as `UNKNOWN`; do not convert it to `DOWN`.
+- [proven] Decision: treat `logs/cron.runtime_health_push.log` as the authoritative runtime-health delivery artifact, not its empty wrapper log.
+- [proven] Decision: use `.env.runtime` as the canonical heartbeat credential source.
+- [proven] Decision: keep heartbeat deployment separate from audit-branch validation.
+- [proven] Decision: require successful GitHub Actions before considering the heartbeat change test-passing.
+- [proven] Decision: do not modify strategy behavior while runtime, clock, and evidence-integrity questions remain open.
+- [proven] Decision: do not perform further OANDA requests without explicit approval.
+- [inferred] Decision status: runtime repair and device-clock correction take precedence over strategy investigation.

@@ -1601,3 +1601,23 @@ Changed only `tools/product_message_v1.py` — `format_market_pulse`:
 - [proven] This was an observability and delivery-state correction only.
 - [proven] No strategy-frequency change was approved.
 - [proven] Do not loosen H1 veto, ADX gates, score thresholds, or watcher scope based only on signal-drought frustration.
+
+## Session Update — 2026-07-11 Historical Replay Runtime Safeguards
+
+- [proven] Audit branch head `43b2ddf16d5aaed7be6d1d7366ecfb4c37b77957` was pushed to `origin/audit/historical-replay-20260601-20260710`.
+- [proven] GitHub Actions Security Scan run `29169418766` completed successfully.
+- [proven] GitHub Actions Historical replay sidecar run `29169418776` completed successfully.
+- [proven] Canonical runtime evidence preserves the long watcher gap as `UNKNOWN`, not `DOWN`.
+- [proven] The first restored watcher cycle begins at `2026-07-08T11:45:07Z`.
+- [proven] The strict updater audit found no timestamped strict-success record.
+- [proven] Runtime-health delivery was healthy; the earlier stale-wrapper diagnosis was corrected as a false positive.
+- [proven] The Android device clock was approximately `7,267` seconds behind three independent HTTP date sources.
+- [proven] BotA correctly remained `DEGRADED` for `local_clock_drift`.
+- [proven] The heartbeat sourced obsolete `config/tele.env`; the audit branch now sources `.env.runtime`.
+- [proven] The heartbeat repair passed shell syntax, environment-contract, and offline fail-closed validation.
+- [proven] The live production heartbeat has not been deployed.
+- [proven] No Telegram heartbeat test was executed.
+- [proven] No strategy, scoring, threshold, H1, pair-scope, or risk/reward change was made.
+- [proven] Raw runtime captures and `live_runs/` remain untracked and were not committed.
+- [inferred] Next approval boundary: correct Android automatic time, verify drift below 300 seconds, then perform controlled heartbeat deployment and Telegram verification.
+- [not proven] Production is fully healthy while `local_clock_drift` remains open.

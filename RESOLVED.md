@@ -94,3 +94,16 @@
 - [proven] Installed watcher SHA-256: `b8a3adf46582e3a69d5b22d12a4da070bc8be2ceff76a4aa99e9d6c96544a9ef`.
 - [proven] Strategy and production selection rules changed: NO.
 - [not proven] Whether any valid signal was missed during the historical June outage remains unresolved.
+
+## Resolved — 2026-07-11 Historical Replay Runtime Safeguards
+
+- [proven] Resolved: scheduler process detection false negative; `crond` PID `5027` and advancing scheduled logs proved scheduler execution.
+- [proven] Resolved: runtime-health delivery false positive; fresh authoritative logs showed HTTP `200` and `RESULT=PASS rc=0`.
+- [proven] Resolved: heartbeat environment-path root cause; `config/tele.env` was absent while `.env.runtime` contained the required Telegram variable names.
+- [proven] Resolved: audit-branch heartbeat implementation now sources `.env.runtime` and fails closed when unavailable.
+- [proven] Resolved: local operability validation now uses the actual `combine_runtime_and_freshness` API.
+- [proven] Resolved: GitHub Actions passed for audit commit `43b2ddf16d5aaed7be6d1d7366ecfb4c37b77957`.
+- [not proven] Unresolved: Android device clock correction.
+- [not proven] Unresolved: production heartbeat deployment.
+- [not proven] Unresolved: live Telegram heartbeat delivery after deployment.
+- [not proven] Unresolved: full historical data integrity and complete replay parity.
