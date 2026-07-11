@@ -82,7 +82,19 @@
 - [proven] Runtime and freshness evidence must refer to the exact same cycle instant.
 - [proven] Synthetic tests cover runtime boundaries, evidence gaps, overlap rejection, and the complete runtime/freshness operability matrix.
 - [proven] Detailed evidence is preserved in `evidence/RUNTIME_EPOCH_OPERABILITY_CONTRACT_20260711.md`.
+- [proven] Runtime epoch and cycle operability passed Historical replay sidecar and Security Scan workflows at commit `23162a99870469d834ea41efd85260c428325da8`.
 - [not proven] Exact historical watcher `UP` and `DOWN` epochs have not yet been reconstructed from preserved runtime logs.
+
+## 2026-07-11 — Runtime evidence ingestion contract
+
+- [proven] `src/runtime_evidence.py` defines the repository JSON contract for preserved runtime evidence.
+- [proven] The loader requires schema version, investigation window, source commit, non-empty evidence-file provenance, and explicit half-open runtime epochs.
+- [proven] Allowed runtime states remain exactly `UP`, `DOWN`, and `UNKNOWN`.
+- [proven] Out-of-window epochs, overlaps, duplicate evidence identifiers, unsupported states, naive timestamps, malformed JSON, and missing provenance fail closed.
+- [proven] An empty epoch list is valid when provenance exists; no runtime state is invented merely to fill the investigation window.
+- [proven] Tests cover parsing, provenance, bounds, overlap, uniqueness, schema, timestamp, and malformed-file behavior.
+- [proven] Detailed evidence is preserved in `evidence/RUNTIME_EVIDENCE_INGESTION_CONTRACT_20260711.md`.
+- [not proven] Actual historical watcher/cron runtime intervals remain unreconstructed until direct artifacts are collected and mapped into this contract.
 
 ## Remaining gates
 
