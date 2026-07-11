@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from math import isfinite
 from typing import Iterable
 
@@ -18,9 +18,10 @@ class CanonicalCandle:
     close: float
     volume: float
     complete: bool
+    available_at: datetime | None = None
 
     def to_json(self) -> dict:
-        return {
+        payload = {
             "provider": self.provider,
             "instrument": self.instrument,
             "granularity": self.granularity,
@@ -32,11 +33,17 @@ class CanonicalCandle:
             "volume": self.volume,
             "complete": self.complete,
         }
+        if self.available_at is not None:
+            payload["available_at"] = (
+                self.available_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+            )
+        return payload
 
 
 _ALLOWED_PROVIDERS = {"oanda", "dukascopy"}
 _ALLOWED_INSTRUMENTS = {"EURUSD", "GBPUSD"}
 _ALLOWED_GRANULARITIES = {"M15", "H1", "H4", "D1"}
+_D1_PERIOD = timedelta(days=1)
 
 
 def normalize_provider_rows(
@@ -59,6 +66,7 @@ def normalize_provider_rows(
 
     normalized: list[CanonicalCandle] = []
     previous: datetime | None = None
+    d1_alignment: tuple[int, int, int, int] | None = None
     for row in rows:
         stamp = getattr(row, "time", None)
         if not isinstance(stamp, datetime) or stamp.tzinfo is None:
@@ -83,6 +91,24 @@ def normalize_provider_rows(
             raise ValueError("canonical timestamps must be strictly increasing")
         previous = stamp
         complete = bool(getattr(row, "complete", default_complete))
+
+        available_at = getattr(row, "available_at", None)
+        if available_at is not None:
+            if not isinstance(available_at, datetime) or available_at.tzinfo is None:
+                raise ValueError("available_at must be timezone-aware datetime")
+            available_at = available_at.astimezone(timezone.utc)
+            if available_at <= stamp:
+                raise ValueError("available_at must be after candle start")
+
+        if granularity_key == "D1":
+            alignment = (stamp.hour, stamp.minute, stamp.second, stamp.microsecond)
+            if d1_alignment is None:
+                d1_alignment = alignment
+            elif alignment != d1_alignment:
+                raise ValueError("D1 provider alignment changed inside normalized range")
+            if available_at is None and complete:
+                available_at = stamp + _D1_PERIOD
+
         normalized.append(
             CanonicalCandle(
                 provider=provider_key,
@@ -95,6 +121,7 @@ def normalize_provider_rows(
                 close=values["close"],
                 volume=volume,
                 complete=complete,
+                available_at=available_at,
             )
         )
     if not normalized:
