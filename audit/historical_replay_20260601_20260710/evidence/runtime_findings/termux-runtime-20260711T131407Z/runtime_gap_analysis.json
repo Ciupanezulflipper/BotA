@@ -1,0 +1,980 @@
+{
+  "cross_source_quiet_intervals": [
+    {
+      "end_utc": "2026-06-01T06:45:00Z",
+      "hours": 3.0,
+      "seconds": 10800,
+      "start_utc": "2026-06-01T03:45:00Z"
+    },
+    {
+      "end_utc": "2026-06-07T17:45:00Z",
+      "hours": 99.25,
+      "seconds": 357300,
+      "start_utc": "2026-06-03T14:30:00Z"
+    },
+    {
+      "end_utc": "2026-06-08T19:45:00Z",
+      "hours": 11.0,
+      "seconds": 39600,
+      "start_utc": "2026-06-08T08:45:00Z"
+    },
+    {
+      "end_utc": "2026-06-13T22:15:00Z",
+      "hours": 1.0,
+      "seconds": 3600,
+      "start_utc": "2026-06-13T21:15:00Z"
+    },
+    {
+      "end_utc": "2026-07-08T11:45:00Z",
+      "hours": 378.0,
+      "seconds": 1360800,
+      "start_utc": "2026-06-22T17:45:00Z"
+    }
+  ],
+  "sources": {
+    "alerts": {
+      "expected_seconds": 900,
+      "file_present": true,
+      "first_utc": "2026-06-01T08:45:22Z",
+      "large_gap_count": 27,
+      "large_gap_seconds": 2700,
+      "large_gaps": [
+        {
+          "end_utc": "2026-06-01T10:01:19Z",
+          "hours": 0.762,
+          "next_line": 1302,
+          "next_text": "2026-06-01T14:01:19+0400,EURUSD,M15,SELL,63.50,63.50,1.16455,1.16541,1.16283,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=1.9|rsi=40.0|macd_hist=-0.000106|adx=24.0|ema_comp=1.9|rsi_comp=6.0|macd_comp=10.6|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=2.0|session=session_london|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.1",
+          "previous_line": 1301,
+          "previous_text": "2026-06-01T13:15:34+0400,EURUSD,M15,SELL,61.60,61.60,1.16476,1.16563,1.16301,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=1.2|rsi=41.8|macd_hist=-0.000105|adx=20.8|ema_comp=1.2|rsi_comp=4.9|macd_comp=10.5|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=2.0|session=session_london|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.1",
+          "seconds": 2745,
+          "start_utc": "2026-06-01T09:15:34Z"
+        },
+        {
+          "end_utc": "2026-06-01T13:16:05Z",
+          "hours": 1.241,
+          "next_line": 1312,
+          "next_text": "2026-06-01T17:16:05+0400,GBPUSD,M15,SELL,72.50,72.50,1.34372,1.34570,1.33975,engine_A3,true,macro6=3 | H1_trend_neutral,\"ok|ema_bps=7.7|rsi=42.1|macd_hist=-0.000276|adx=31.7|ema_comp=7.7|rsi_comp=4.7|macd_comp=15.0|adx_comp=10.0|bb_comp=-5.0|bb=bb_counter|session_comp=5.0|session=session_overlap|vol_comp=0.0|vol=vol_normal|sr_comp=-5.0|sr=sr_-5|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=",
+          "previous_line": 1311,
+          "previous_text": "2026-06-01T16:01:38+0400,GBPUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,London_NY_overlap,ranging",
+          "seconds": 4467,
+          "start_utc": "2026-06-01T12:01:38Z"
+        },
+        {
+          "end_utc": "2026-06-02T12:30:39Z",
+          "hours": 20.751,
+          "next_line": 1327,
+          "next_text": "2026-06-02T16:30:39+0400,EURUSD,M15,SELL,55.10,55.10,1.16417,1.16502,1.16247,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=0.1|rsi=41.0|macd_hist=-0.000096|adx=21.9|ema_comp=0.1|rsi_comp=5.4|macd_comp=9.6|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=5.0|session=session_overlap|vol_comp=0.0|vol=vol_normal|sr_comp=-8.0|sr=sr_-8|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.16502",
+          "previous_line": 1326,
+          "previous_text": "2026-06-01T19:45:35+0400,EURUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,NY,ranging",
+          "seconds": 74704,
+          "start_utc": "2026-06-01T15:45:35Z"
+        },
+        {
+          "end_utc": "2026-06-02T15:15:50Z",
+          "hours": 2.251,
+          "next_line": 1330,
+          "next_text": "2026-06-02T19:15:50+0400,GBPUSD,M15,SELL,61.80,61.80,1.34662,1.34793,1.34400,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=0.2|rsi=42.8|macd_hist=-0.000092|adx=22.3|ema_comp=0.2|rsi_comp=4.3|macd_comp=9.2|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=5.0|session=session_overlap|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.3",
+          "previous_line": 1329,
+          "previous_text": "2026-06-02T17:00:47+0400,EURUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,NY,ranging",
+          "seconds": 8103,
+          "start_utc": "2026-06-02T13:00:47Z"
+        },
+        {
+          "end_utc": "2026-06-03T05:01:15Z",
+          "hours": 11.264,
+          "next_line": 1341,
+          "next_text": "2026-06-03T09:01:15+0400,EURUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,Asian,ranging",
+          "previous_line": 1340,
+          "previous_text": "2026-06-02T21:45:26+0400,EURUSD,M15,SELL,55.60,55.60,1.16318,1.16412,1.16130,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=2.7|rsi=48.5|macd_hist=0.000075|adx=32.1|ema_comp=2.7|rsi_comp=0.9|macd_comp=0.0|adx_comp=10.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=2.0|session=session_ny|vol_comp=0.0|vol=vol_normal|sr_comp=3.0|sr=sr_+3|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.16412,TP:1.",
+          "seconds": 40549,
+          "start_utc": "2026-06-02T17:45:26Z"
+        },
+        {
+          "end_utc": "2026-06-03T13:45:21Z",
+          "hours": 4.744,
+          "next_line": 1371,
+          "next_text": "2026-06-03T17:45:21+0400,EURUSD,M15,SELL,51.30,51.30,1.16074,1.16216,1.15790,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=1.8|rsi=47.7|macd_hist=0.000051|adx=21.2|ema_comp=1.8|rsi_comp=1.4|macd_comp=0.0|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=5.0|session=session_overlap|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.16",
+          "previous_line": 1370,
+          "previous_text": "2026-06-03T13:00:41+0400,GBPUSD,M15,HOLD,0.00,0.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | atr<=0 | macro6=3,adx_regime_block|adx=19.7|ranging_market,,,,,19.7,,,3,,LOW,London,ranging",
+          "seconds": 17080,
+          "start_utc": "2026-06-03T09:00:41Z"
+        },
+        {
+          "end_utc": "2026-06-08T07:45:28Z",
+          "hours": 113.502,
+          "next_line": 1376,
+          "next_text": "2026-06-08T11:45:28+0400,EURUSD,M15,SELL,48.20,48.20,1.15176,1.15322,1.14885,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=2.8|rsi=49.3|macd_hist=0.000013|adx=21.5|ema_comp=2.8|rsi_comp=0.4|macd_comp=0.0|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=2.0|session=session_london|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.153",
+          "previous_line": 1375,
+          "previous_text": "2026-06-03T18:15:21+0400,GBPUSD,M15,SELL,44.50,44.50,1.34348,1.34513,1.34018,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=2.2|rsi=46.3|macd_hist=0.000088|adx=23.1|ema_comp=2.2|rsi_comp=2.2|macd_comp=0.0|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=5.0|session=session_overlap|vol_comp=0.0|vol=vol_normal|sr_comp=-8.0|sr=sr_-8|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.34513,",
+          "seconds": 408607,
+          "start_utc": "2026-06-03T14:15:21Z"
+        },
+        {
+          "end_utc": "2026-06-09T12:00:32Z",
+          "hours": 27.997,
+          "next_line": 1379,
+          "next_text": "2026-06-09T16:00:32+0400,EURUSD,M15,SELL,80.70,80.70,1.15535,1.15670,1.15264,engine_A3,false,macro6=3 | H1_trend_neutral_overridden,\"ok|ema_bps=0.9|rsi=38.7|macd_hist=-0.000250|adx=29.1|ema_comp=0.9|rsi_comp=6.8|macd_comp=15.0|adx_comp=8.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=5.0|session=session_overlap|vol_comp=0.0|vol=vol_normal|sr_comp=8.0|sr=sr_+8|phase=Open|pullback_entry|d1_filter=SELL | ",
+          "previous_line": 1378,
+          "previous_text": "2026-06-08T12:00:43+0400,EURUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,London_open,ranging",
+          "seconds": 100789,
+          "start_utc": "2026-06-08T08:00:43Z"
+        },
+        {
+          "end_utc": "2026-06-10T06:45:27Z",
+          "hours": 14.995,
+          "next_line": 1405,
+          "next_text": "2026-06-10T10:45:27+0400,EURUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,Asian,ranging",
+          "previous_line": 1404,
+          "previous_text": "2026-06-09T19:45:45+0400,GBPUSD,M15,SELL,53.40,53.40,1.33820,1.33983,1.33494,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=0.8|rsi=45.7|macd_hist=0.000022|adx=25.4|ema_comp=0.8|rsi_comp=2.6|macd_comp=0.0|adx_comp=8.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=5.0|session=session_overlap|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.33",
+          "seconds": 53982,
+          "start_utc": "2026-06-09T15:45:45Z"
+        },
+        {
+          "end_utc": "2026-06-10T08:01:14Z",
+          "hours": 1.258,
+          "next_line": 1407,
+          "next_text": "2026-06-10T12:01:14+0400,EURUSD,M15,SELL,66.90,66.90,1.15378,1.15493,1.15148,engine_A3,true,macro6=3 | H1_trend_neutral,\"ok|ema_bps=1.8|rsi=33.2|macd_hist=-0.000192|adx=20.3|ema_comp=1.8|rsi_comp=10.1|macd_comp=15.0|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=2.0|session=session_london|vol_comp=0.0|vol=vol_normal|sr_comp=-5.0|sr=sr_-5|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=S",
+          "previous_line": 1406,
+          "previous_text": "2026-06-10T10:45:46+0400,GBPUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,Asian,ranging",
+          "seconds": 4528,
+          "start_utc": "2026-06-10T06:45:46Z"
+        },
+        {
+          "end_utc": "2026-06-10T12:30:32Z",
+          "hours": 3.0,
+          "next_line": 1414,
+          "next_text": "2026-06-10T16:30:32+0400,GBPUSD,M15,SELL,64.20,64.20,1.33931,1.34157,1.33480,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=0.1|rsi=48.1|macd_hist=-0.000173|adx=20.7|ema_comp=0.1|rsi_comp=1.1|macd_comp=15.0|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=5.0|session=session_overlap|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.",
+          "previous_line": 1413,
+          "previous_text": "2026-06-10T13:30:32+0400,EURUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,London,ranging",
+          "seconds": 10800,
+          "start_utc": "2026-06-10T09:30:32Z"
+        },
+        {
+          "end_utc": "2026-06-11T08:45:46Z",
+          "hours": 19.745,
+          "next_line": 1417,
+          "next_text": "2026-06-11T12:45:46+0400,GBPUSD,M15,SELL,61.70,61.70,1.33514,1.33707,1.33128,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=4.0|rsi=40.4|macd_hist=-0.000069|adx=20.5|ema_comp=4.0|rsi_comp=5.8|macd_comp=6.9|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=2.0|session=session_london|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.33",
+          "previous_line": 1416,
+          "previous_text": "2026-06-10T17:01:04+0400,GBPUSD,M15,HOLD,0.00,0.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | atr<=0 | macro6=3,adx_regime_block|adx=19.6|ranging_market,,,,,19.6,,,3,,LOW,NY,ranging",
+          "seconds": 71082,
+          "start_utc": "2026-06-10T13:01:04Z"
+        },
+        {
+          "end_utc": "2026-06-15T06:15:20Z",
+          "hours": 89.494,
+          "next_line": 1436,
+          "next_text": "2026-06-15T10:15:20+0400,EURUSD,M15,SELL,62.60,62.60,1.16016,1.16125,1.15797,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=0.6|rsi=43.4|macd_hist=-0.000151|adx=20.4|ema_comp=0.6|rsi_comp=4.0|macd_comp=15.0|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=0.0|session=session_edge|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.161",
+          "previous_line": 1435,
+          "previous_text": "2026-06-11T16:45:43+0400,GBPUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,London_NY_overlap,ranging",
+          "seconds": 322177,
+          "start_utc": "2026-06-11T12:45:43Z"
+        },
+        {
+          "end_utc": "2026-06-15T07:15:30Z",
+          "hours": 1.003,
+          "next_line": 1437,
+          "next_text": "2026-06-15T11:15:30+0400,GBPUSD,M15,SELL,73.60,73.60,1.34282,1.34419,1.34008,engine_A3,true,macro6=3 | H1_trend_neutral,\"ok|ema_bps=3.4|rsi=41.6|macd_hist=-0.000102|adx=27.0|ema_comp=3.4|rsi_comp=5.0|macd_comp=10.2|adx_comp=8.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=2.0|session=session_london|vol_comp=0.0|vol=vol_normal|sr_comp=8.0|sr=sr_+8|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:",
+          "previous_line": 1436,
+          "previous_text": "2026-06-15T10:15:20+0400,EURUSD,M15,SELL,62.60,62.60,1.16016,1.16125,1.15797,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=0.6|rsi=43.4|macd_hist=-0.000151|adx=20.4|ema_comp=0.6|rsi_comp=4.0|macd_comp=15.0|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=0.0|session=session_edge|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.161",
+          "seconds": 3610,
+          "start_utc": "2026-06-15T06:15:20Z"
+        },
+        {
+          "end_utc": "2026-06-15T10:30:27Z",
+          "hours": 3.249,
+          "next_line": 1438,
+          "next_text": "2026-06-15T14:30:27+0400,EURUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,London,ranging",
+          "previous_line": 1437,
+          "previous_text": "2026-06-15T11:15:30+0400,GBPUSD,M15,SELL,73.60,73.60,1.34282,1.34419,1.34008,engine_A3,true,macro6=3 | H1_trend_neutral,\"ok|ema_bps=3.4|rsi=41.6|macd_hist=-0.000102|adx=27.0|ema_comp=3.4|rsi_comp=5.0|macd_comp=10.2|adx_comp=8.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=2.0|session=session_london|vol_comp=0.0|vol=vol_normal|sr_comp=8.0|sr=sr_+8|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:",
+          "seconds": 11697,
+          "start_utc": "2026-06-15T07:15:30Z"
+        },
+        {
+          "end_utc": "2026-06-15T15:30:15Z",
+          "hours": 4.991,
+          "next_line": 1440,
+          "next_text": "2026-06-15T19:30:15+0400,EURUSD,M15,HOLD,0.00,40.00,1.16016,1.15968,1.16064,scoring_engine_market,true,direction_not_tradeable | score<65 | rr<=0 | macro6=3,market phase Closed,,,,,,,,3,,LOW,NY,ranging",
+          "previous_line": 1439,
+          "previous_text": "2026-06-15T14:30:47+0400,GBPUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,London,ranging",
+          "seconds": 17968,
+          "start_utc": "2026-06-15T10:30:47Z"
+        },
+        {
+          "end_utc": "2026-06-16T10:30:37Z",
+          "hours": 18.754,
+          "next_line": 1444,
+          "next_text": "2026-06-16T14:30:37+0400,GBPUSD,M15,SELL,61.80,61.80,1.34118,1.34248,1.33858,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=0.1|rsi=46.3|macd_hist=-0.000144|adx=21.1|ema_comp=0.1|rsi_comp=2.2|macd_comp=14.4|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=2.0|session=session_london|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.3",
+          "previous_line": 1443,
+          "previous_text": "2026-06-15T19:45:23+0400,GBPUSD,M15,HOLD,0.00,0.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | atr<=0 | macro6=3,adx_regime_block|adx=10.7|ranging_market,,,,,10.7,,,3,,LOW,NY,ranging",
+          "seconds": 67514,
+          "start_utc": "2026-06-15T15:45:23Z"
+        },
+        {
+          "end_utc": "2026-06-16T16:15:14Z",
+          "hours": 5.498,
+          "next_line": 1446,
+          "next_text": "2026-06-16T20:15:14+0400,GBPUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,NY,ranging",
+          "previous_line": 1445,
+          "previous_text": "2026-06-16T14:45:21+0400,GBPUSD,M15,SELL,64.20,64.20,1.34097,1.34226,1.33840,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=0.6|rsi=44.0|macd_hist=-0.000159|adx=20.3|ema_comp=0.6|rsi_comp=3.6|macd_comp=15.0|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=2.0|session=session_london|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.3",
+          "seconds": 19793,
+          "start_utc": "2026-06-16T10:45:21Z"
+        },
+        {
+          "end_utc": "2026-06-17T05:45:24Z",
+          "hours": 13.503,
+          "next_line": 1447,
+          "next_text": "2026-06-17T09:45:24+0400,GBPUSD,M15,SELL,63.60,63.60,1.34129,1.34250,1.33888,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=2.8|rsi=35.0|macd_hist=-0.000088|adx=24.9|ema_comp=2.8|rsi_comp=9.0|macd_comp=8.8|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=0.0|session=session_edge|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.3425",
+          "previous_line": 1446,
+          "previous_text": "2026-06-16T20:15:14+0400,GBPUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,NY,ranging",
+          "seconds": 48610,
+          "start_utc": "2026-06-16T16:15:14Z"
+        },
+        {
+          "end_utc": "2026-06-18T10:30:28Z",
+          "hours": 18.747,
+          "next_line": 1504,
+          "next_text": "2026-06-18T14:30:28+0400,GBPUSD,M15,SELL,73.20,73.20,1.32342,1.32590,1.31847,engine_A3,true,macro6=3 | H1_trend_neutral,\"ok|ema_bps=14.4|rsi=39.1|macd_hist=-0.000052|adx=49.6|ema_comp=14.4|rsi_comp=6.6|macd_comp=5.2|adx_comp=10.0|bb_comp=-5.0|bb=bb_counter|session_comp=2.0|session=session_london|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_",
+          "previous_line": 1503,
+          "previous_text": "2026-06-17T19:45:37+0400,GBPUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,NY,ranging",
+          "seconds": 67491,
+          "start_utc": "2026-06-17T15:45:37Z"
+        },
+        {
+          "end_utc": "2026-06-22T10:15:33Z",
+          "hours": 89.753,
+          "next_line": 1546,
+          "next_text": "2026-06-22T14:15:33+0400,GBPUSD,M15,HOLD,0.00,40.00,1.32356,1.32255,1.32457,scoring_engine_market,true,direction_not_tradeable | score<65 | rr<=0 | macro6=3,market phase Closed,,,,,,,,3,,LOW,London,ranging",
+          "previous_line": 1545,
+          "previous_text": "2026-06-18T20:30:22+0400,GBPUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,NY,ranging",
+          "seconds": 323111,
+          "start_utc": "2026-06-18T16:30:22Z"
+        },
+        {
+          "end_utc": "2026-06-22T12:15:50Z",
+          "hours": 2.005,
+          "next_line": 1547,
+          "next_text": "2026-06-22T16:15:50+0400,GBPUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,London_NY_overlap,ranging",
+          "previous_line": 1546,
+          "previous_text": "2026-06-22T14:15:33+0400,GBPUSD,M15,HOLD,0.00,40.00,1.32356,1.32255,1.32457,scoring_engine_market,true,direction_not_tradeable | score<65 | rr<=0 | macro6=3,market phase Closed,,,,,,,,3,,LOW,London,ranging",
+          "seconds": 7217,
+          "start_utc": "2026-06-22T10:15:33Z"
+        },
+        {
+          "end_utc": "2026-06-22T15:16:37Z",
+          "hours": 0.766,
+          "next_line": 1555,
+          "next_text": "2026-06-22T19:16:37+0400,EURUSD,M15,SELL,65.20,65.20,1.14310,1.14456,1.14019,engine_A3,true,macro6=3 | H1_trend_neutral,\"ok|ema_bps=5.2|rsi=39.5|macd_hist=-0.000087|adx=29.4|ema_comp=5.2|rsi_comp=6.3|macd_comp=8.7|adx_comp=8.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=5.0|session=session_overlap|vol_comp=0.0|vol=vol_normal|sr_comp=-5.0|sr=sr_-5|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL",
+          "previous_line": 1554,
+          "previous_text": "2026-06-22T18:30:41+0400,EURUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,NY,ranging",
+          "seconds": 2756,
+          "start_utc": "2026-06-22T14:30:41Z"
+        },
+        {
+          "end_utc": "2026-07-08T11:45:26Z",
+          "hours": 378.748,
+          "next_line": 1562,
+          "next_text": "2026-07-08T13:45:26+0200,EURUSD,M15,SELL,57.60,57.60,1.14033,1.14181,1.13737,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=2.8|rsi=46.0|macd_hist=-0.000033|adx=33.4|ema_comp=2.8|rsi_comp=2.4|macd_comp=3.3|adx_comp=10.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=2.0|session=session_london|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.1",
+          "previous_line": 1561,
+          "previous_text": "2026-06-22T21:00:33+0400,EURUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,NY_close,ranging",
+          "seconds": 1363493,
+          "start_utc": "2026-06-22T17:00:33Z"
+        },
+        {
+          "end_utc": "2026-07-09T06:15:29Z",
+          "hours": 15.253,
+          "next_line": 1575,
+          "next_text": "2026-07-09T08:15:29+0200,GBPUSD,M15,BUY,64.00,64.00,1.34151,1.34018,1.34418,engine_A3,true,score<65 | macro6=3,\"ok|ema_bps=5.1|rsi=58.1|macd_hist=0.000090|adx=29.6|ema_comp=5.1|rsi_comp=4.9|macd_comp=9.0|adx_comp=8.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=0.0|session=session_edge|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=BUY | sl_tp_rec=SL:1.34018,T",
+          "previous_line": 1574,
+          "previous_text": "2026-07-08T17:00:18+0200,EURUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,NY,ranging",
+          "seconds": 54911,
+          "start_utc": "2026-07-08T15:00:18Z"
+        },
+        {
+          "end_utc": "2026-07-09T09:30:17Z",
+          "hours": 0.988,
+          "next_line": 1587,
+          "next_text": "2026-07-09T11:30:17+0200,GBPUSD,M15,HOLD,0.00,40.00,1.33928,1.33858,1.33998,scoring_engine_market,true,direction_not_tradeable | score<65 | rr<=0 | macro6=3,market phase Closed,,,,,,,,3,,LOW,London,ranging",
+          "previous_line": 1586,
+          "previous_text": "2026-07-09T10:30:59+0200,EURUSD,M15,HOLD,0.00,0.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | atr<=0 | macro6=3,adx_regime_block|adx=19.9|ranging_market,,,,,19.9,,,3,,LOW,London_open,ranging",
+          "seconds": 3558,
+          "start_utc": "2026-07-09T08:30:59Z"
+        },
+        {
+          "end_utc": "2026-07-10T16:45:19Z",
+          "hours": 31.0,
+          "next_line": 1589,
+          "next_text": "2026-07-10T18:45:19+0200,EURUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,NY,ranging",
+          "previous_line": 1588,
+          "previous_text": "2026-07-09T11:45:19+0200,GBPUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,London,ranging",
+          "seconds": 111600,
+          "start_utc": "2026-07-09T09:45:19Z"
+        }
+      ],
+      "last_utc": "2026-07-10T17:45:25Z",
+      "path": "logs/alerts.csv",
+      "timestamp_count": 300
+    },
+    "autostatus": {
+      "expected_seconds": 3600,
+      "file_present": true,
+      "first_utc": "2026-06-01T00:04:00Z",
+      "large_gap_count": 9,
+      "large_gap_seconds": 7200,
+      "large_gaps": [
+        {
+          "end_utc": "2026-06-01T07:04:01Z",
+          "hours": 4.0,
+          "next_line": 1370,
+          "next_text": "[2026-06-01 07:04:01 UTC] \u274c tele.env missing",
+          "previous_line": 1369,
+          "previous_text": "[2026-06-01 03:04:01 UTC] \u274c tele.env missing",
+          "seconds": 14400,
+          "start_utc": "2026-06-01T03:04:01Z"
+        },
+        {
+          "end_utc": "2026-06-02T04:04:00Z",
+          "hours": 2.0,
+          "next_line": 1390,
+          "next_text": "[2026-06-02 04:04:00 UTC] \u274c tele.env missing",
+          "previous_line": 1389,
+          "previous_text": "[2026-06-02 02:04:00 UTC] \u274c tele.env missing",
+          "seconds": 7200,
+          "start_utc": "2026-06-02T02:04:00Z"
+        },
+        {
+          "end_utc": "2026-06-07T18:04:00Z",
+          "hours": 100.0,
+          "next_line": 1425,
+          "next_text": "[2026-06-07 18:04:00 UTC] \u274c tele.env missing",
+          "previous_line": 1424,
+          "previous_text": "[2026-06-03 14:04:00 UTC] \u274c tele.env missing",
+          "seconds": 360000,
+          "start_utc": "2026-06-03T14:04:00Z"
+        },
+        {
+          "end_utc": "2026-06-08T20:04:00Z",
+          "hours": 12.0,
+          "next_line": 1440,
+          "next_text": "[2026-06-08 20:04:00 UTC] \u274c tele.env missing",
+          "previous_line": 1439,
+          "previous_text": "[2026-06-08 08:04:00 UTC] \u274c tele.env missing",
+          "seconds": 43200,
+          "start_utc": "2026-06-08T08:04:00Z"
+        },
+        {
+          "end_utc": "2026-06-12T22:04:00Z",
+          "hours": 2.0,
+          "next_line": 1539,
+          "next_text": "[2026-06-12 22:04:00 UTC] \u274c tele.env missing",
+          "previous_line": 1538,
+          "previous_text": "[2026-06-12 20:04:00 UTC] \u274c tele.env missing",
+          "seconds": 7200,
+          "start_utc": "2026-06-12T20:04:00Z"
+        },
+        {
+          "end_utc": "2026-06-13T23:04:00Z",
+          "hours": 2.0,
+          "next_line": 1563,
+          "next_text": "[2026-06-13 23:04:00 UTC] \u274c tele.env missing",
+          "previous_line": 1562,
+          "previous_text": "[2026-06-13 21:04:00 UTC] \u274c tele.env missing",
+          "seconds": 7200,
+          "start_utc": "2026-06-13T21:04:00Z"
+        },
+        {
+          "end_utc": "2026-06-17T22:04:00Z",
+          "hours": 2.0,
+          "next_line": 1657,
+          "next_text": "[2026-06-17 22:04:00 UTC] \u274c tele.env missing",
+          "previous_line": 1656,
+          "previous_text": "[2026-06-17 20:04:00 UTC] \u274c tele.env missing",
+          "seconds": 7200,
+          "start_utc": "2026-06-17T20:04:00Z"
+        },
+        {
+          "end_utc": "2026-06-18T04:04:00Z",
+          "hours": 2.0,
+          "next_line": 1662,
+          "next_text": "[2026-06-18 04:04:00 UTC] \u274c tele.env missing",
+          "previous_line": 1661,
+          "previous_text": "[2026-06-18 02:04:00 UTC] \u274c tele.env missing",
+          "seconds": 7200,
+          "start_utc": "2026-06-18T02:04:00Z"
+        },
+        {
+          "end_utc": "2026-07-08T12:04:01Z",
+          "hours": 379.0,
+          "next_line": 1772,
+          "next_text": "[2026-07-08 12:04:01 UTC] \u274c tele.env missing",
+          "previous_line": 1771,
+          "previous_text": "[2026-06-22 17:04:00 UTC] \u274c tele.env missing",
+          "seconds": 1364401,
+          "start_utc": "2026-06-22T17:04:00Z"
+        }
+      ],
+      "last_utc": "2026-07-10T23:04:00Z",
+      "path": "logs/cron.autostatus.log",
+      "timestamp_count": 464
+    },
+    "heartbeat": {
+      "expected_seconds": 3600,
+      "file_present": true,
+      "first_utc": "2026-06-01T00:00:00Z",
+      "large_gap_count": 6,
+      "large_gap_seconds": 7200,
+      "large_gaps": [
+        {
+          "end_utc": "2026-06-01T07:00:00Z",
+          "hours": 4.0,
+          "next_line": 1362,
+          "next_text": "[2026-06-01 07:00:00 UTC] \u274c tele.env missing",
+          "previous_line": 1361,
+          "previous_text": "[2026-06-01 03:00:00 UTC] \u274c tele.env missing",
+          "seconds": 14400,
+          "start_utc": "2026-06-01T03:00:00Z"
+        },
+        {
+          "end_utc": "2026-06-07T18:00:00Z",
+          "hours": 100.0,
+          "next_line": 1417,
+          "next_text": "[2026-06-07 18:00:00 UTC] \u274c tele.env missing",
+          "previous_line": 1416,
+          "previous_text": "[2026-06-03 14:00:00 UTC] \u274c tele.env missing",
+          "seconds": 360000,
+          "start_utc": "2026-06-03T14:00:00Z"
+        },
+        {
+          "end_utc": "2026-06-08T20:00:01Z",
+          "hours": 12.0,
+          "next_line": 1432,
+          "next_text": "[2026-06-08 20:00:01 UTC] \u274c tele.env missing",
+          "previous_line": 1431,
+          "previous_text": "[2026-06-08 08:00:01 UTC] \u274c tele.env missing",
+          "seconds": 43200,
+          "start_utc": "2026-06-08T08:00:01Z"
+        },
+        {
+          "end_utc": "2026-06-12T22:00:00Z",
+          "hours": 2.0,
+          "next_line": 1531,
+          "next_text": "[2026-06-12 22:00:00 UTC] \u274c tele.env missing",
+          "previous_line": 1530,
+          "previous_text": "[2026-06-12 20:00:00 UTC] \u274c tele.env missing",
+          "seconds": 7200,
+          "start_utc": "2026-06-12T20:00:00Z"
+        },
+        {
+          "end_utc": "2026-06-13T23:00:00Z",
+          "hours": 2.0,
+          "next_line": 1555,
+          "next_text": "[2026-06-13 23:00:00 UTC] \u274c tele.env missing",
+          "previous_line": 1554,
+          "previous_text": "[2026-06-13 21:00:00 UTC] \u274c tele.env missing",
+          "seconds": 7200,
+          "start_utc": "2026-06-13T21:00:00Z"
+        },
+        {
+          "end_utc": "2026-07-08T12:00:00Z",
+          "hours": 379.0,
+          "next_line": 1765,
+          "next_text": "[2026-07-08 12:00:00 UTC] \u274c tele.env missing",
+          "previous_line": 1764,
+          "previous_text": "[2026-06-22 17:00:00 UTC] \u274c tele.env missing",
+          "seconds": 1364400,
+          "start_utc": "2026-06-22T17:00:00Z"
+        }
+      ],
+      "last_utc": "2026-07-10T23:00:00Z",
+      "path": "logs/cron.heartbeat.log",
+      "timestamp_count": 466
+    },
+    "shadow_heartbeat": {
+      "expected_seconds": 900,
+      "file_present": true,
+      "first_utc": "2026-06-01T00:00:24.246961Z",
+      "large_gap_count": 8,
+      "large_gap_seconds": 2700,
+      "large_gaps": [
+        {
+          "end_utc": "2026-06-01T07:00:03.382307Z",
+          "hours": 3.489,
+          "next_line": 3637,
+          "next_text": "2026-06-01T07:00:03.382307+00:00 | ERROR | schema compatibility check failed -- see shadow_manager.log",
+          "previous_line": 3635,
+          "previous_text": "2026-06-01T03:30:43.801002+00:00 | OK | 2 active | 33.6s",
+          "seconds": 12559,
+          "start_utc": "2026-06-01T03:30:43.801002Z"
+        },
+        {
+          "end_utc": "2026-06-02T03:30:07.290007Z",
+          "hours": 1.249,
+          "next_line": 3714,
+          "next_text": "2026-06-02T03:30:07.290007+00:00 | ERROR | schema compatibility check failed -- see shadow_manager.log",
+          "previous_line": 3713,
+          "previous_text": "2026-06-02T02:15:11.162455+00:00 | OK | 2 active | 7.0s",
+          "seconds": 4496,
+          "start_utc": "2026-06-02T02:15:11.162455Z"
+        },
+        {
+          "end_utc": "2026-06-07T17:45:08.916253Z",
+          "hours": 99.501,
+          "next_line": 3853,
+          "next_text": "2026-06-07T17:45:08.916253+00:00 | OK | 0 active signals",
+          "previous_line": 3852,
+          "previous_text": "2026-06-03T14:15:03.814241+00:00 | OK | 0 active signals",
+          "seconds": 358205,
+          "start_utc": "2026-06-03T14:15:03.814241Z"
+        },
+        {
+          "end_utc": "2026-06-08T20:00:10.981342Z",
+          "hours": 11.501,
+          "next_line": 3913,
+          "next_text": "2026-06-08T20:00:10.981342+00:00 | OK | 0 active signals",
+          "previous_line": 3912,
+          "previous_text": "2026-06-08T08:30:08.615509+00:00 | OK | 0 active signals",
+          "seconds": 41402,
+          "start_utc": "2026-06-08T08:30:08.615509Z"
+        },
+        {
+          "end_utc": "2026-06-12T21:30:08.457387Z",
+          "hours": 1.251,
+          "next_line": 4307,
+          "next_text": "2026-06-12T21:30:08.457387+00:00 | OK | 0 active signals",
+          "previous_line": 4306,
+          "previous_text": "2026-06-12T20:15:04.710809+00:00 | OK | 0 active signals",
+          "seconds": 4503,
+          "start_utc": "2026-06-12T20:15:04.710809Z"
+        },
+        {
+          "end_utc": "2026-06-13T22:15:05.467072Z",
+          "hours": 1.249,
+          "next_line": 4402,
+          "next_text": "2026-06-13T22:15:05.467072+00:00 | OK | 0 active signals",
+          "previous_line": 4401,
+          "previous_text": "2026-06-13T21:00:06.561236+00:00 | OK | 0 active signals",
+          "seconds": 4498,
+          "start_utc": "2026-06-13T21:00:06.561236Z"
+        },
+        {
+          "end_utc": "2026-06-17T21:30:44.860060Z",
+          "hours": 1.011,
+          "next_line": 4780,
+          "next_text": "2026-06-17T21:30:44.860060+00:00 | OK | 0 active signals",
+          "previous_line": 4779,
+          "previous_text": "2026-06-17T20:30:04.234095+00:00 | OK | 0 active signals",
+          "seconds": 3640,
+          "start_utc": "2026-06-17T20:30:04.234095Z"
+        },
+        {
+          "end_utc": "2026-07-08T11:45:03.800829Z",
+          "hours": 378.497,
+          "next_line": 5243,
+          "next_text": "2026-07-08T11:45:03.800829+00:00 | OK | 0 active signals",
+          "previous_line": 5242,
+          "previous_text": "2026-06-22T17:15:13.506268+00:00 | OK | 1 active | 8.8s",
+          "seconds": 1362590,
+          "start_utc": "2026-06-22T17:15:13.506268Z"
+        }
+      ],
+      "last_utc": "2026-07-10T23:45:04.923623Z",
+      "path": "logs/shadow_manager_heartbeat.txt",
+      "timestamp_count": 1866
+    },
+    "signals": {
+      "expected_seconds": 900,
+      "file_present": true,
+      "first_utc": "2026-06-01T07:15:10Z",
+      "large_gap_count": 28,
+      "large_gap_seconds": 2700,
+      "large_gaps": [
+        {
+          "end_utc": "2026-06-02T06:30:07Z",
+          "hours": 12.738,
+          "next_line": 20423,
+          "next_text": "[WATCHER 2026-06-02T10:30:07+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 20375,
+          "previous_text": "[DEDUP 2026-06-01T21:45:51+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 45856,
+          "start_utc": "2026-06-01T17:45:51Z"
+        },
+        {
+          "end_utc": "2026-06-03T05:00:35Z",
+          "hours": 11.249,
+          "next_line": 20770,
+          "next_text": "[WATCHER 2026-06-03T09:00:35+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 20724,
+          "previous_text": "[DEDUP 2026-06-02T21:45:40+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 40495,
+          "start_utc": "2026-06-02T17:45:40Z"
+        },
+        {
+          "end_utc": "2026-06-03T13:45:03Z",
+          "hours": 4.739,
+          "next_line": 20912,
+          "next_text": "[WATCHER 2026-06-03T17:45:03+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 20892,
+          "previous_text": "[FILTER 2026-06-03T13:00:42+0400] GBPUSD M15 rejected_by_filter score=0.00 conf=0.00 filters=direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | atr<=0 | macro6=3",
+          "seconds": 17061,
+          "start_utc": "2026-06-03T09:00:42Z"
+        },
+        {
+          "end_utc": "2026-06-08T07:45:06Z",
+          "hours": 113.496,
+          "next_line": 20989,
+          "next_text": "[WATCHER 2026-06-08T11:45:06+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 20931,
+          "previous_text": "[FILTER 2026-06-03T18:15:21+0400] GBPUSD M15 rejected_by_filter score=44.50 conf=44.50 filters=score<65 | macro6=3",
+          "seconds": 408585,
+          "start_utc": "2026-06-03T14:15:21Z"
+        },
+        {
+          "end_utc": "2026-06-09T03:00:18Z",
+          "hours": 18.495,
+          "next_line": 21049,
+          "next_text": "[WATCHER 2026-06-09T07:00:18+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 21015,
+          "previous_text": "[DEDUP 2026-06-08T12:30:36+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 66582,
+          "start_utc": "2026-06-08T08:30:36Z"
+        },
+        {
+          "end_utc": "2026-06-09T07:15:09Z",
+          "hours": 4.247,
+          "next_line": 21068,
+          "next_text": "[WATCHER 2026-06-09T11:15:09+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 21049,
+          "previous_text": "[WATCHER 2026-06-09T07:00:18+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "seconds": 15291,
+          "start_utc": "2026-06-09T03:00:18Z"
+        },
+        {
+          "end_utc": "2026-06-10T06:45:05Z",
+          "hours": 14.989,
+          "next_line": 21385,
+          "next_text": "[WATCHER 2026-06-10T10:45:05+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 21324,
+          "previous_text": "[FILTER 2026-06-09T19:45:45+0400] GBPUSD M15 rejected_by_filter score=53.40 conf=53.40 filters=score<65 | macro6=3",
+          "seconds": 53960,
+          "start_utc": "2026-06-09T15:45:45Z"
+        },
+        {
+          "end_utc": "2026-06-11T07:00:08Z",
+          "hours": 15.239,
+          "next_line": 21696,
+          "next_text": "[WATCHER 2026-06-11T11:00:08+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 21630,
+          "previous_text": "[DEDUP 2026-06-10T19:45:46+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 54862,
+          "start_utc": "2026-06-10T15:45:46Z"
+        },
+        {
+          "end_utc": "2026-06-12T02:00:06Z",
+          "hours": 11.242,
+          "next_line": 21964,
+          "next_text": "[WATCHER 2026-06-12T06:00:06+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 21918,
+          "previous_text": "[DEDUP 2026-06-11T18:45:34+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 40472,
+          "start_utc": "2026-06-11T14:45:34Z"
+        },
+        {
+          "end_utc": "2026-06-12T06:15:05Z",
+          "hours": 3.741,
+          "next_line": 21999,
+          "next_text": "[WATCHER 2026-06-12T10:15:05+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 21983,
+          "previous_text": "[DEDUP 2026-06-12T06:30:39+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 13466,
+          "start_utc": "2026-06-12T02:30:39Z"
+        },
+        {
+          "end_utc": "2026-06-12T09:00:05Z",
+          "hours": 2.494,
+          "next_line": 22022,
+          "next_text": "[WATCHER 2026-06-12T13:00:05+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 22011,
+          "previous_text": "[DEDUP 2026-06-12T10:30:25+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 8980,
+          "start_utc": "2026-06-12T06:30:25Z"
+        },
+        {
+          "end_utc": "2026-06-15T05:00:05Z",
+          "hours": 62.24,
+          "next_line": 22430,
+          "next_text": "[WATCHER 2026-06-15T09:00:05+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 22188,
+          "previous_text": "[DEDUP 2026-06-12T18:45:41+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 224064,
+          "start_utc": "2026-06-12T14:45:41Z"
+        },
+        {
+          "end_utc": "2026-06-15T06:15:03Z",
+          "hours": 1.248,
+          "next_line": 22437,
+          "next_text": "[WATCHER 2026-06-15T10:15:03+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 22431,
+          "previous_text": "[CLOCK 2026-06-15T09:00:11+0400] server_clock_unavailable -> SKIP_SCAN fail_closed",
+          "seconds": 4492,
+          "start_utc": "2026-06-15T05:00:11Z"
+        },
+        {
+          "end_utc": "2026-06-15T07:15:11Z",
+          "hours": 0.993,
+          "next_line": 22447,
+          "next_text": "[WATCHER 2026-06-15T11:15:11+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 22442,
+          "previous_text": "[DEDUP 2026-06-15T10:15:35+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 3576,
+          "start_utc": "2026-06-15T06:15:35Z"
+        },
+        {
+          "end_utc": "2026-06-15T10:30:08Z",
+          "hours": 3.244,
+          "next_line": 22465,
+          "next_text": "[WATCHER 2026-06-15T14:30:08+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 22451,
+          "previous_text": "[FILTER 2026-06-15T11:15:31+0400] GBPUSD M15 rejected_by_filter score=73.60 conf=73.60 filters=macro6=3 | H1_trend_neutral",
+          "seconds": 11677,
+          "start_utc": "2026-06-15T07:15:31Z"
+        },
+        {
+          "end_utc": "2026-06-16T04:45:09Z",
+          "hours": 11.993,
+          "next_line": 22694,
+          "next_text": "[WATCHER 2026-06-16T08:45:09+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 22645,
+          "previous_text": "[DEDUP 2026-06-15T20:45:34+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 43175,
+          "start_utc": "2026-06-15T16:45:34Z"
+        },
+        {
+          "end_utc": "2026-06-16T07:30:05Z",
+          "hours": 2.746,
+          "next_line": 22710,
+          "next_text": "[WATCHER 2026-06-16T11:30:05+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 22698,
+          "previous_text": "[DEDUP 2026-06-16T08:45:19+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 9886,
+          "start_utc": "2026-06-16T04:45:19Z"
+        },
+        {
+          "end_utc": "2026-06-16T16:15:05Z",
+          "hours": 5.495,
+          "next_line": 22828,
+          "next_text": "[WATCHER 2026-06-16T20:15:05+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 22805,
+          "previous_text": "[FILTER 2026-06-16T14:45:22+0400] GBPUSD M15 rejected_by_filter score=64.20 conf=64.20 filters=score<65 | macro6=3",
+          "seconds": 19783,
+          "start_utc": "2026-06-16T10:45:22Z"
+        },
+        {
+          "end_utc": "2026-06-17T05:45:04Z",
+          "hours": 12.994,
+          "next_line": 22899,
+          "next_text": "[WATCHER 2026-06-17T09:45:04+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 22846,
+          "previous_text": "[DEDUP 2026-06-16T20:45:24+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 46780,
+          "start_utc": "2026-06-16T16:45:24Z"
+        },
+        {
+          "end_utc": "2026-06-18T07:00:06Z",
+          "hours": 14.24,
+          "next_line": 23265,
+          "next_text": "[WATCHER 2026-06-18T11:00:06+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 23211,
+          "previous_text": "[DEDUP 2026-06-17T20:45:41+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 51265,
+          "start_utc": "2026-06-17T16:45:41Z"
+        },
+        {
+          "end_utc": "2026-06-19T06:45:07Z",
+          "hours": 13.246,
+          "next_line": 23618,
+          "next_text": "[WATCHER 2026-06-19T10:45:07+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 23564,
+          "previous_text": "[DEDUP 2026-06-18T21:30:22+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 47685,
+          "start_utc": "2026-06-18T17:30:22Z"
+        },
+        {
+          "end_utc": "2026-06-19T11:00:07Z",
+          "hours": 3.989,
+          "next_line": 23647,
+          "next_text": "[WATCHER 2026-06-19T15:00:07+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 23630,
+          "previous_text": "[DEDUP 2026-06-19T11:00:47+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 14360,
+          "start_utc": "2026-06-19T07:00:47Z"
+        },
+        {
+          "end_utc": "2026-06-22T10:15:06Z",
+          "hours": 64.492,
+          "next_line": 24088,
+          "next_text": "[WATCHER 2026-06-22T14:15:06+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 23829,
+          "previous_text": "[DEDUP 2026-06-19T21:45:36+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 232170,
+          "start_utc": "2026-06-19T17:45:36Z"
+        },
+        {
+          "end_utc": "2026-06-22T12:15:19Z",
+          "hours": 1.996,
+          "next_line": 24102,
+          "next_text": "[WATCHER 2026-06-22T16:15:19+0400] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 24093,
+          "previous_text": "[FILTER 2026-06-22T14:15:34+0400] GBPUSD M15 rejected_by_filter score=0.00 conf=40.00 filters=direction_not_tradeable | score<65 | rr<=0 | macro6=3",
+          "seconds": 7185,
+          "start_utc": "2026-06-22T10:15:34Z"
+        },
+        {
+          "end_utc": "2026-07-08T11:45:07Z",
+          "hours": 378.485,
+          "next_line": 24236,
+          "next_text": "[WATCHER 2026-07-08T13:45:07+0200] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 24233,
+          "previous_text": "[DEDUP 2026-06-22T21:16:01+0400] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 1362546,
+          "start_utc": "2026-06-22T17:16:01Z"
+        },
+        {
+          "end_utc": "2026-07-09T05:00:03Z",
+          "hours": 11.226,
+          "next_line": 24455,
+          "next_text": "[WATCHER 2026-07-09T07:00:03+0200] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 24409,
+          "previous_text": "[DEDUP 2026-07-08T19:46:30+0200] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 40413,
+          "start_utc": "2026-07-08T17:46:30Z"
+        },
+        {
+          "end_utc": "2026-07-09T14:30:09Z",
+          "hours": 4.747,
+          "next_line": 24607,
+          "next_text": "[WATCHER 2026-07-09T16:30:09+0200] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 24587,
+          "previous_text": "[FILTER 2026-07-09T11:45:19+0200] GBPUSD M15 rejected_by_filter score=0.00 conf=40.00 filters=direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3",
+          "seconds": 17090,
+          "start_utc": "2026-07-09T09:45:19Z"
+        },
+        {
+          "end_utc": "2026-07-10T10:00:10Z",
+          "hours": 16.234,
+          "next_line": 24765,
+          "next_text": "[WATCHER 2026-07-10T12:00:10+0200] SANITY: PAIRS=\"EURUSD GBPUSD\" TIMEFRAMES=\"M15\" ALERTS_CSV=\"/data/data/com.termux/files/home/BotA/logs/alerts.csv\" DRY_RUN_MODE=\"0\" TELEGRAM_ENABLED=\"1\" TELEGRAM_MIN_SCORE=\"70\" FILTER_SCORE_MIN=\"65\" FILTER_SCORE_MIN_ALL=\"65\" MAPPED_FILTER_SCORE_MIN_ALL=\"0\" TELEGRAM_TIER_YELLOW_MIN=\"70\" TELEGRAM_TIER_GREEN_MIN=\"75\" TELEGRAM_TIER_YELLOW_MIN_INT=\"70\" TELEGRAM_TIER_GR",
+          "previous_line": 24699,
+          "previous_text": "[DEDUP 2026-07-09T19:46:07+0200] GBPUSD M15 signal unchanged -> skip",
+          "seconds": 58443,
+          "start_utc": "2026-07-09T17:46:07Z"
+        }
+      ],
+      "last_utc": "2026-07-10T17:45:25Z",
+      "path": "logs/cron.signals.log",
+      "timestamp_count": 2068
+    },
+    "supervisor": {
+      "expected_seconds": 300,
+      "file_present": true,
+      "first_utc": "2026-06-01T00:00:00Z",
+      "large_gap_count": 9,
+      "large_gap_seconds": 900,
+      "large_gaps": [
+        {
+          "end_utc": "2026-06-01T06:55:01Z",
+          "hours": 3.333,
+          "next_line": 132098,
+          "next_text": "[SUPERVISOR 2026-06-01T06:55:01Z] === SUPERVISOR START ===",
+          "previous_line": 132083,
+          "previous_text": "[SUPERVISOR 2026-06-01T03:35:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===",
+          "seconds": 11999,
+          "start_utc": "2026-06-01T03:35:02Z"
+        },
+        {
+          "end_utc": "2026-06-02T03:25:00Z",
+          "hours": 1.166,
+          "next_line": 135365,
+          "next_text": "[SUPERVISOR 2026-06-02T03:25:00Z] === SUPERVISOR START ===",
+          "previous_line": 135357,
+          "previous_text": "[SUPERVISOR 2026-06-02T02:15:02Z] OK: EURUSD M15 cache age=1min",
+          "seconds": 4198,
+          "start_utc": "2026-06-02T02:15:02Z"
+        },
+        {
+          "end_utc": "2026-06-07T17:45:00Z",
+          "hours": 99.333,
+          "next_line": 141278,
+          "next_text": "[SUPERVISOR 2026-06-07T17:45:00Z] === SUPERVISOR START ===",
+          "previous_line": 141277,
+          "previous_text": "[SUPERVISOR 2026-06-03T14:25:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===",
+          "seconds": 357598,
+          "start_utc": "2026-06-03T14:25:02Z"
+        },
+        {
+          "end_utc": "2026-06-08T19:50:00Z",
+          "hours": 11.166,
+          "next_line": 143803,
+          "next_text": "[SUPERVISOR 2026-06-08T19:50:00Z] === SUPERVISOR START ===",
+          "previous_line": 143798,
+          "previous_text": "[SUPERVISOR 2026-06-08T08:40:02Z] OK: GBPUSD H1 cache age=11min",
+          "seconds": 40198,
+          "start_utc": "2026-06-08T08:40:02Z"
+        },
+        {
+          "end_utc": "2026-06-12T21:25:00Z",
+          "hours": 1.083,
+          "next_line": 160402,
+          "next_text": "[SUPERVISOR 2026-06-12T21:25:00Z] === SUPERVISOR START ===",
+          "previous_line": 160394,
+          "previous_text": "[SUPERVISOR 2026-06-12T20:20:01Z] OK: EURUSD M15 cache age=6min",
+          "seconds": 3899,
+          "start_utc": "2026-06-12T20:20:01Z"
+        },
+        {
+          "end_utc": "2026-06-13T22:15:00Z",
+          "hours": 1.083,
+          "next_line": 164410,
+          "next_text": "[SUPERVISOR 2026-06-13T22:15:00Z] === SUPERVISOR START ===",
+          "previous_line": 164399,
+          "previous_text": "[SUPERVISOR 2026-06-13T21:10:01Z] OK: updater log age=11min",
+          "seconds": 3899,
+          "start_utc": "2026-06-13T21:10:01Z"
+        },
+        {
+          "end_utc": "2026-06-17T21:30:33Z",
+          "hours": 1.009,
+          "next_line": 180299,
+          "next_text": "[SUPERVISOR 2026-06-17T21:30:33Z] === SUPERVISOR START ===",
+          "previous_line": 180291,
+          "previous_text": "[SUPERVISOR 2026-06-17T20:30:01Z] OK: EURUSD M15 cache age=1min",
+          "seconds": 3632,
+          "start_utc": "2026-06-17T20:30:01Z"
+        },
+        {
+          "end_utc": "2026-06-18T12:20:00Z",
+          "hours": 0.25,
+          "next_line": 182757,
+          "next_text": "[SUPERVISOR 2026-06-18T12:20:00Z] === SUPERVISOR START ===",
+          "previous_line": 182727,
+          "previous_text": "[SUPERVISOR 2026-06-18T12:05:00Z] === SUPERVISOR START ===",
+          "seconds": 900,
+          "start_utc": "2026-06-18T12:05:00Z"
+        },
+        {
+          "end_utc": "2026-07-08T11:45:00Z",
+          "hours": 378.083,
+          "next_line": 199840,
+          "next_text": "[SUPERVISOR 2026-07-08T11:45:00Z] === SUPERVISOR START ===",
+          "previous_line": 199833,
+          "previous_text": "[SUPERVISOR 2026-06-22T17:40:01Z] OK: EURUSD H1 cache age=11min",
+          "seconds": 1361099,
+          "start_utc": "2026-06-22T17:40:01Z"
+        }
+      ],
+      "last_utc": "2026-07-10T23:55:00Z",
+      "path": "logs/cron.supervisor.log",
+      "timestamp_count": 11657
+    }
+  },
+  "window_end_utc": "2026-07-11T00:00:00Z",
+  "window_start_utc": "2026-06-01T00:00:00Z"
+}

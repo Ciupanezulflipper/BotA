@@ -1,0 +1,849 @@
+# Runtime Interval Adjudication
+
+- [proven] This report uses only captured Termux evidence.
+- [proven] Quiet intervals are evaluated individually.
+- [proven] No interval is automatically converted to runtime DOWN.
+
+## Q1
+
+- [not proven] Candidate state: `UNKNOWN`
+- [proven] Interval: `2026-06-01T03:45:00Z` to `2026-06-01T06:45:00Z`
+- [proven] Duration: `3.0` hours
+- [not proven] Reason: insufficient independent corroboration
+- [proven] Independent sources before interval: `12`
+- [proven] Independent sources after interval: `13`
+- [proven] Keyword evidence inside interval: `2`
+
+### Last evidence before interval
+
+- [proven] `2026-02-13T11:30:02Z` `logs/cron.supervisor.log:132097` — `[SUPERVISOR 2026-02-13T11:30:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-01T03:00:00Z` `logs/cron.heartbeat.log:1361` — `[2026-06-01 03:00:00 UTC] ❌ tele.env missing`
+- [proven] `2026-05-29T18:30:36Z` `logs/cron.signals.log:19854` — `[DONE 2026-05-29T22:30:36+0400] manual --once scan complete`
+- [proven] `2026-05-29T12:30:36Z` `logs/alerts.csv:1298` — `2026-05-29T16:30:36+0400,GBPUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,London_NY_overlap,ranging`
+- [proven] `2026-02-13T11:30:02.218151Z` `logs/shadow_manager_heartbeat.txt:3636` — `2026-02-13T11:30:02.218151+00:00 | ERROR | schema compatibility check failed -- see shadow_manager.log`
+- [proven] `2026-06-01T03:04:01Z` `logs/cron.autostatus.log:1369` — `[2026-06-01 03:04:01 UTC] ❌ tele.env missing`
+- [proven] `2026-02-13T11:25:18Z` `logs/boot.log:8` — `2026-02-13T11:25:18Z BOOT_OK crond_pid=17617`
+- [proven] `2026-02-13T15:25:06Z` `logs/boot_proof.log:38` — `BOOT_PROOF 2026-02-13 15:25:06 +04`
+- [proven] `2026-05-27T11:15:32Z` `logs/pulse_cron.log:11` — `[2026-05-27T11:15:32Z] [DRY_RUN] SKIP already sent today (UTC 2026-05-27) — /data/data/com.termux/files/home/BotA/state/daily_pulse_sent_2026-05-27.ok exists`
+- [proven] `2026-06-01T03:44:21Z` `logs/error.log:794620` — `2026-06-01 03:44:21 [indicators] Yahoo chart candles loaded: 499 rows`
+- [proven] `2026-06-01T03:09:46Z` `logs/cron.daily.log:641` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-01T03:09:46Z server_hour=3 drift=-3585 detail=target_hour=20;clock_source=live;status=DRIFT_WARN`
+- [proven] `2026-06-01T01:55:01Z` `logs/cron.clock_drift.log:4659` — `Local UTC: 2026-06-01T01:55:01Z`
+
+### First evidence after interval
+
+- [proven] `2026-06-01T06:55:01Z` `logs/cron.supervisor.log:132098` — `[SUPERVISOR 2026-06-01T06:55:01Z] === SUPERVISOR START ===`
+- [proven] `2026-06-01T07:00:00Z` `logs/cron.heartbeat.log:1362` — `[2026-06-01 07:00:00 UTC] ❌ tele.env missing`
+- [proven] `2026-06-01T07:15:10Z` `logs/cron.signals.log:20089` — `[WATCHER 2026-06-01T11:15:10+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [proven] `2026-06-01T08:45:22Z` `logs/alerts.csv:1299` — `2026-06-01T12:45:22+0400,EURUSD,M15,SELL,61.00,61.00,1.16486,1.16576,1.16307,engine_A3,true,score<65 | macro6=3,"ok|ema_bps=0.9|rsi=43.0|macd_hist=-0.000109|adx=21.4|ema_comp=0.9|rsi_comp=4.2|macd_comp=10.9|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=2.0|session=session_london|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.16576,TP:1.16307,ATRx(2.0/4.0)",0.9,4.2,10.9,6.0,21.4,43.0,-0.000109,3,,LOW,London_open,trending`
+- [proven] `2026-06-01T07:00:03.382307Z` `logs/shadow_manager_heartbeat.txt:3637` — `2026-06-01T07:00:03.382307+00:00 | ERROR | schema compatibility check failed -- see shadow_manager.log`
+- [proven] `2026-06-01T07:04:01Z` `logs/cron.autostatus.log:1370` — `[2026-06-01 07:04:01 UTC] ❌ tele.env missing`
+- [proven] `2026-06-02T03:23:13Z` `logs/boot.log:9` — `2026-06-02T03:23:13Z BOOT_OK crond_pid=10704`
+- [proven] `2026-06-02T07:23:00Z` `logs/boot_proof.log:41` — `BOOT_PROOF 2026-06-02 07:23:00 +04`
+- [proven] `2026-07-08T20:11:19Z` `logs/cron.runtime_health_push.log:1` — `=== BotA runtime health push start: 2026-07-08T20:11:19Z ===`
+- [proven] `2026-07-05T10:50:37Z` `logs/pulse_cron.log:12` — `[2026-07-05T10:50:37Z] [DRY_RUN] SKIP weekend (DOW=7 UTC)`
+- [proven] `2026-06-01T06:58:07Z` `logs/error.log:796176` — `2026-06-01 06:58:07 [indicators] Yahoo chart candles loaded: 499 rows`
+- [proven] `2026-06-01T09:10:51Z` `logs/cron.daily.log:644` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-01T09:10:51Z server_hour=9 drift=-7250 detail=target_hour=20;clock_source=live;status=DRIFT_WARN`
+- [proven] `2026-06-01T06:55:05Z` `logs/cron.clock_drift.log:4690` — `Generated UTC: 2026-06-01T06:55:05Z`
+
+### Nearby explicit runtime evidence
+
+- [proven] `2026-05-31T21:45:00Z` `logs/cron.supervisor.log:130922` — `[SUPERVISOR 2026-05-31T21:45:00Z] === SUPERVISOR START ===`
+- [proven] `2026-05-31T21:45:01Z` `logs/cron.supervisor.log:130923` — `[SUPERVISOR 2026-05-31T21:45:01Z] OK: crond PID=22435`
+- [proven] `2026-05-31T21:45:01Z` `logs/cron.supervisor.log:130924` — `[SUPERVISOR 2026-05-31T21:45:01Z] OK: watcher log age=14min`
+- [proven] `2026-05-31T21:45:01Z` `logs/cron.supervisor.log:130925` — `[SUPERVISOR 2026-05-31T21:45:01Z] OK: updater log age=0min`
+- [proven] `2026-05-31T21:45:01Z` `logs/cron.supervisor.log:130926` — `[SUPERVISOR 2026-05-31T21:45:01Z] OK: shadow log age=14min`
+- [proven] `2026-05-31T21:45:01Z` `logs/cron.supervisor.log:130927` — `[SUPERVISOR 2026-05-31T21:45:01Z] OK: no watcher.lock present`
+- [proven] `2026-05-31T21:45:02Z` `logs/cron.supervisor.log:130928` — `[SUPERVISOR 2026-05-31T21:45:02Z] OK: EURUSD M15 cache age=1min`
+- [proven] `2026-05-31T21:45:02Z` `logs/cron.supervisor.log:130929` — `[SUPERVISOR 2026-05-31T21:45:02Z] OK: GBPUSD M15 cache age=1min`
+- [proven] `2026-05-31T21:45:02Z` `logs/cron.supervisor.log:130930` — `[SUPERVISOR 2026-05-31T21:45:02Z] OK: EURUSD H1 cache age=1min`
+- [proven] `2026-05-31T21:45:02Z` `logs/cron.supervisor.log:130931` — `[SUPERVISOR 2026-05-31T21:45:02Z] OK: GBPUSD H1 cache age=1min`
+- [proven] `2026-05-31T21:45:02Z` `logs/cron.supervisor.log:130932` — `[SUPERVISOR 2026-05-31T21:45:02Z] HEALTHY: all checks passed`
+- [proven] `2026-05-31T21:45:02Z` `logs/cron.supervisor.log:130935` — `[SUPERVISOR 2026-05-31T21:45:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-05-31T21:50:00Z` `logs/cron.supervisor.log:130936` — `[SUPERVISOR 2026-05-31T21:50:00Z] === SUPERVISOR START ===`
+- [proven] `2026-05-31T21:50:00Z` `logs/cron.supervisor.log:130937` — `[SUPERVISOR 2026-05-31T21:50:00Z] OK: crond PID=22435`
+- [proven] `2026-05-31T21:50:00Z` `logs/cron.supervisor.log:130938` — `[SUPERVISOR 2026-05-31T21:50:00Z] OK: watcher log age=4min`
+- [proven] `2026-05-31T21:50:00Z` `logs/cron.supervisor.log:130939` — `[SUPERVISOR 2026-05-31T21:50:00Z] OK: updater log age=5min`
+- [proven] `2026-05-31T21:50:00Z` `logs/cron.supervisor.log:130940` — `[SUPERVISOR 2026-05-31T21:50:00Z] OK: shadow log age=4min`
+- [proven] `2026-05-31T21:50:00Z` `logs/cron.supervisor.log:130941` — `[SUPERVISOR 2026-05-31T21:50:00Z] OK: no watcher.lock present`
+- [proven] `2026-05-31T21:50:01Z` `logs/cron.supervisor.log:130942` — `[SUPERVISOR 2026-05-31T21:50:01Z] OK: EURUSD M15 cache age=6min`
+- [proven] `2026-05-31T21:50:01Z` `logs/cron.supervisor.log:130943` — `[SUPERVISOR 2026-05-31T21:50:01Z] OK: GBPUSD M15 cache age=6min`
+- [proven] `2026-05-31T21:50:01Z` `logs/cron.supervisor.log:130944` — `[SUPERVISOR 2026-05-31T21:50:01Z] OK: EURUSD H1 cache age=6min`
+- [proven] `2026-05-31T21:50:01Z` `logs/cron.supervisor.log:130945` — `[SUPERVISOR 2026-05-31T21:50:01Z] OK: GBPUSD H1 cache age=6min`
+- [proven] `2026-05-31T21:50:01Z` `logs/cron.supervisor.log:130946` — `[SUPERVISOR 2026-05-31T21:50:01Z] HEALTHY: all checks passed`
+- [proven] `2026-05-31T21:50:02Z` `logs/cron.supervisor.log:130949` — `[SUPERVISOR 2026-05-31T21:50:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-05-31T21:55:00Z` `logs/cron.supervisor.log:130950` — `[SUPERVISOR 2026-05-31T21:55:00Z] === SUPERVISOR START ===`
+- [proven] `2026-05-31T21:55:00Z` `logs/cron.supervisor.log:130951` — `[SUPERVISOR 2026-05-31T21:55:00Z] OK: crond PID=22435`
+- [proven] `2026-05-31T21:55:00Z` `logs/cron.supervisor.log:130952` — `[SUPERVISOR 2026-05-31T21:55:00Z] OK: watcher log age=9min`
+- [proven] `2026-05-31T21:55:00Z` `logs/cron.supervisor.log:130953` — `[SUPERVISOR 2026-05-31T21:55:00Z] OK: updater log age=10min`
+- [proven] `2026-05-31T21:55:00Z` `logs/cron.supervisor.log:130954` — `[SUPERVISOR 2026-05-31T21:55:00Z] OK: shadow log age=9min`
+- [proven] `2026-05-31T21:55:00Z` `logs/cron.supervisor.log:130955` — `[SUPERVISOR 2026-05-31T21:55:00Z] OK: no watcher.lock present`
+- [proven] `2026-05-31T21:55:01Z` `logs/cron.supervisor.log:130956` — `[SUPERVISOR 2026-05-31T21:55:01Z] OK: EURUSD M15 cache age=11min`
+- [proven] `2026-05-31T21:55:01Z` `logs/cron.supervisor.log:130957` — `[SUPERVISOR 2026-05-31T21:55:01Z] OK: GBPUSD M15 cache age=11min`
+- [proven] `2026-05-31T21:55:01Z` `logs/cron.supervisor.log:130958` — `[SUPERVISOR 2026-05-31T21:55:01Z] OK: EURUSD H1 cache age=11min`
+- [proven] `2026-05-31T21:55:01Z` `logs/cron.supervisor.log:130959` — `[SUPERVISOR 2026-05-31T21:55:01Z] OK: GBPUSD H1 cache age=11min`
+- [proven] `2026-05-31T21:55:01Z` `logs/cron.supervisor.log:130960` — `[SUPERVISOR 2026-05-31T21:55:01Z] HEALTHY: all checks passed`
+- [proven] `2026-05-31T21:55:01Z` `logs/cron.supervisor.log:130963` — `[SUPERVISOR 2026-05-31T21:55:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-05-31T22:00:00Z` `logs/cron.supervisor.log:130964` — `[SUPERVISOR 2026-05-31T22:00:00Z] === SUPERVISOR START ===`
+- [proven] `2026-05-31T22:00:00Z` `logs/cron.supervisor.log:130965` — `[SUPERVISOR 2026-05-31T22:00:00Z] OK: crond PID=22435`
+- [proven] `2026-05-31T22:00:00Z` `logs/cron.supervisor.log:130966` — `[SUPERVISOR 2026-05-31T22:00:00Z] OK: watcher log age=14min`
+- [proven] `2026-05-31T22:00:00Z` `logs/cron.supervisor.log:130967` — `[SUPERVISOR 2026-05-31T22:00:00Z] OK: updater log age=0min`
+- [proven] `2026-05-31T22:00:00Z` `logs/cron.supervisor.log:130968` — `[SUPERVISOR 2026-05-31T22:00:00Z] OK: shadow log age=14min`
+- [proven] `2026-05-31T22:00:00Z` `logs/cron.supervisor.log:130969` — `[SUPERVISOR 2026-05-31T22:00:00Z] OK: no watcher.lock present`
+- [proven] `2026-05-31T22:00:01Z` `logs/cron.supervisor.log:130970` — `[SUPERVISOR 2026-05-31T22:00:01Z] OK: EURUSD M15 cache age=16min`
+- [proven] `2026-05-31T22:00:01Z` `logs/cron.supervisor.log:130971` — `[SUPERVISOR 2026-05-31T22:00:01Z] OK: GBPUSD M15 cache age=16min`
+- [proven] `2026-05-31T22:00:01Z` `logs/cron.supervisor.log:130972` — `[SUPERVISOR 2026-05-31T22:00:01Z] OK: EURUSD H1 cache age=16min`
+- [proven] `2026-05-31T22:00:01Z` `logs/cron.supervisor.log:130973` — `[SUPERVISOR 2026-05-31T22:00:01Z] OK: GBPUSD H1 cache age=16min`
+- [proven] `2026-05-31T22:00:01Z` `logs/cron.supervisor.log:130974` — `[SUPERVISOR 2026-05-31T22:00:01Z] HEALTHY: all checks passed`
+- [proven] `2026-05-31T22:00:01Z` `logs/cron.supervisor.log:130977` — `[SUPERVISOR 2026-05-31T22:00:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-05-31T22:05:01Z` `logs/cron.supervisor.log:130978` — `[SUPERVISOR 2026-05-31T22:05:01Z] === SUPERVISOR START ===`
+- [proven] `2026-05-31T22:05:01Z` `logs/cron.supervisor.log:130979` — `[SUPERVISOR 2026-05-31T22:05:01Z] OK: crond PID=22435`
+- [proven] `2026-05-31T22:05:01Z` `logs/cron.supervisor.log:130980` — `[SUPERVISOR 2026-05-31T22:05:01Z] OK: watcher log age=4min`
+- [proven] `2026-05-31T22:05:01Z` `logs/cron.supervisor.log:130981` — `[SUPERVISOR 2026-05-31T22:05:01Z] OK: updater log age=0min`
+- [proven] `2026-05-31T22:05:01Z` `logs/cron.supervisor.log:130982` — `[SUPERVISOR 2026-05-31T22:05:01Z] OK: shadow log age=4min`
+- [proven] `2026-05-31T22:05:01Z` `logs/cron.supervisor.log:130983` — `[SUPERVISOR 2026-05-31T22:05:01Z] OK: no watcher.lock present`
+- [proven] `2026-05-31T22:05:02Z` `logs/cron.supervisor.log:130984` — `[SUPERVISOR 2026-05-31T22:05:02Z] OK: EURUSD M15 cache age=21min`
+- [proven] `2026-05-31T22:05:02Z` `logs/cron.supervisor.log:130985` — `[SUPERVISOR 2026-05-31T22:05:02Z] OK: GBPUSD M15 cache age=21min`
+- [proven] `2026-05-31T22:05:02Z` `logs/cron.supervisor.log:130986` — `[SUPERVISOR 2026-05-31T22:05:02Z] OK: EURUSD H1 cache age=21min`
+- [proven] `2026-05-31T22:05:02Z` `logs/cron.supervisor.log:130987` — `[SUPERVISOR 2026-05-31T22:05:02Z] OK: GBPUSD H1 cache age=21min`
+- [proven] `2026-05-31T22:05:02Z` `logs/cron.supervisor.log:130988` — `[SUPERVISOR 2026-05-31T22:05:02Z] HEALTHY: all checks passed`
+- [proven] `2026-05-31T22:05:02Z` `logs/cron.supervisor.log:130991` — `[SUPERVISOR 2026-05-31T22:05:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-05-31T22:10:00Z` `logs/cron.supervisor.log:130992` — `[SUPERVISOR 2026-05-31T22:10:00Z] === SUPERVISOR START ===`
+- [proven] `2026-05-31T22:10:00Z` `logs/cron.supervisor.log:130993` — `[SUPERVISOR 2026-05-31T22:10:00Z] OK: crond PID=22435`
+- [proven] `2026-05-31T22:10:00Z` `logs/cron.supervisor.log:130994` — `[SUPERVISOR 2026-05-31T22:10:00Z] OK: watcher log age=9min`
+- [proven] `2026-05-31T22:10:00Z` `logs/cron.supervisor.log:130995` — `[SUPERVISOR 2026-05-31T22:10:00Z] OK: updater log age=2min`
+- [proven] `2026-05-31T22:10:01Z` `logs/cron.supervisor.log:130996` — `[SUPERVISOR 2026-05-31T22:10:01Z] OK: shadow log age=9min`
+- [proven] `2026-05-31T22:10:01Z` `logs/cron.supervisor.log:130997` — `[SUPERVISOR 2026-05-31T22:10:01Z] OK: no watcher.lock present`
+- [proven] `2026-05-31T22:10:01Z` `logs/cron.supervisor.log:130998` — `[SUPERVISOR 2026-05-31T22:10:01Z] OK: EURUSD M15 cache age=26min`
+- [proven] `2026-05-31T22:10:01Z` `logs/cron.supervisor.log:130999` — `[SUPERVISOR 2026-05-31T22:10:01Z] OK: GBPUSD M15 cache age=26min`
+- [proven] `2026-05-31T22:10:01Z` `logs/cron.supervisor.log:131000` — `[SUPERVISOR 2026-05-31T22:10:01Z] OK: EURUSD H1 cache age=26min`
+- [proven] `2026-05-31T22:10:01Z` `logs/cron.supervisor.log:131001` — `[SUPERVISOR 2026-05-31T22:10:01Z] OK: GBPUSD H1 cache age=26min`
+- [proven] `2026-05-31T22:10:01Z` `logs/cron.supervisor.log:131002` — `[SUPERVISOR 2026-05-31T22:10:01Z] HEALTHY: all checks passed`
+- [proven] `2026-05-31T22:10:01Z` `logs/cron.supervisor.log:131005` — `[SUPERVISOR 2026-05-31T22:10:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-05-31T22:15:00Z` `logs/cron.supervisor.log:131006` — `[SUPERVISOR 2026-05-31T22:15:00Z] === SUPERVISOR START ===`
+- [proven] `2026-05-31T22:15:00Z` `logs/cron.supervisor.log:131007` — `[SUPERVISOR 2026-05-31T22:15:00Z] OK: crond PID=22435`
+- [proven] `2026-05-31T22:15:01Z` `logs/cron.supervisor.log:131008` — `[SUPERVISOR 2026-05-31T22:15:01Z] OK: watcher log age=14min`
+- [proven] `2026-05-31T22:15:01Z` `logs/cron.supervisor.log:131009` — `[SUPERVISOR 2026-05-31T22:15:01Z] OK: updater log age=0min`
+- [proven] `2026-05-31T22:15:01Z` `logs/cron.supervisor.log:131010` — `[SUPERVISOR 2026-05-31T22:15:01Z] OK: shadow log age=14min`
+- [proven] `2026-05-31T22:15:01Z` `logs/cron.supervisor.log:131011` — `[SUPERVISOR 2026-05-31T22:15:01Z] OK: no watcher.lock present`
+- [proven] `2026-05-31T22:15:02Z` `logs/cron.supervisor.log:131012` — `[SUPERVISOR 2026-05-31T22:15:02Z] OK: EURUSD M15 cache age=31min`
+- [proven] `2026-05-31T22:15:02Z` `logs/cron.supervisor.log:131013` — `[SUPERVISOR 2026-05-31T22:15:02Z] OK: GBPUSD M15 cache age=31min`
+- [proven] `2026-05-31T22:15:02Z` `logs/cron.supervisor.log:131014` — `[SUPERVISOR 2026-05-31T22:15:02Z] OK: EURUSD H1 cache age=31min`
+- [proven] `2026-05-31T22:15:02Z` `logs/cron.supervisor.log:131015` — `[SUPERVISOR 2026-05-31T22:15:02Z] OK: GBPUSD H1 cache age=31min`
+- [proven] `2026-05-31T22:15:02Z` `logs/cron.supervisor.log:131016` — `[SUPERVISOR 2026-05-31T22:15:02Z] HEALTHY: all checks passed`
+- [proven] `2026-05-31T22:15:02Z` `logs/cron.supervisor.log:131019` — `[SUPERVISOR 2026-05-31T22:15:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-05-31T22:20:00Z` `logs/cron.supervisor.log:131020` — `[SUPERVISOR 2026-05-31T22:20:00Z] === SUPERVISOR START ===`
+- [proven] `2026-05-31T22:20:00Z` `logs/cron.supervisor.log:131021` — `[SUPERVISOR 2026-05-31T22:20:00Z] OK: crond PID=22435`
+- [proven] `2026-05-31T22:20:00Z` `logs/cron.supervisor.log:131022` — `[SUPERVISOR 2026-05-31T22:20:00Z] OK: watcher log age=4min`
+- [proven] `2026-05-31T22:20:00Z` `logs/cron.supervisor.log:131023` — `[SUPERVISOR 2026-05-31T22:20:00Z] OK: updater log age=0min`
+- [proven] `2026-05-31T22:20:00Z` `logs/cron.supervisor.log:131024` — `[SUPERVISOR 2026-05-31T22:20:00Z] OK: shadow log age=4min`
+- [proven] `2026-05-31T22:20:00Z` `logs/cron.supervisor.log:131025` — `[SUPERVISOR 2026-05-31T22:20:00Z] OK: no watcher.lock present`
+- [proven] `2026-05-31T22:20:00Z` `logs/cron.supervisor.log:131026` — `[SUPERVISOR 2026-05-31T22:20:00Z] OK: EURUSD M15 cache age=36min`
+- [proven] `2026-05-31T22:20:01Z` `logs/cron.supervisor.log:131027` — `[SUPERVISOR 2026-05-31T22:20:01Z] OK: GBPUSD M15 cache age=4min`
+- [proven] `2026-05-31T22:20:01Z` `logs/cron.supervisor.log:131028` — `[SUPERVISOR 2026-05-31T22:20:01Z] OK: EURUSD H1 cache age=36min`
+- [proven] `2026-05-31T22:20:01Z` `logs/cron.supervisor.log:131029` — `[SUPERVISOR 2026-05-31T22:20:01Z] OK: GBPUSD H1 cache age=4min`
+- [proven] `2026-05-31T22:20:01Z` `logs/cron.supervisor.log:131030` — `[SUPERVISOR 2026-05-31T22:20:01Z] HEALTHY: all checks passed`
+- [proven] `2026-05-31T22:20:01Z` `logs/cron.supervisor.log:131033` — `[SUPERVISOR 2026-05-31T22:20:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-05-31T22:25:01Z` `logs/cron.supervisor.log:131034` — `[SUPERVISOR 2026-05-31T22:25:01Z] === SUPERVISOR START ===`
+- [proven] `2026-05-31T22:25:01Z` `logs/cron.supervisor.log:131035` — `[SUPERVISOR 2026-05-31T22:25:01Z] OK: crond PID=22435`
+- [proven] `2026-05-31T22:25:02Z` `logs/cron.supervisor.log:131036` — `[SUPERVISOR 2026-05-31T22:25:02Z] OK: watcher log age=9min`
+- [proven] `2026-05-31T22:25:02Z` `logs/cron.supervisor.log:131037` — `[SUPERVISOR 2026-05-31T22:25:02Z] OK: updater log age=4min`
+- [proven] `2026-05-31T22:25:02Z` `logs/cron.supervisor.log:131038` — `[SUPERVISOR 2026-05-31T22:25:02Z] OK: shadow log age=9min`
+- [proven] `2026-05-31T22:25:02Z` `logs/cron.supervisor.log:131039` — `[SUPERVISOR 2026-05-31T22:25:02Z] OK: no watcher.lock present`
+- [proven] `2026-05-31T22:25:02Z` `logs/cron.supervisor.log:131040` — `[SUPERVISOR 2026-05-31T22:25:02Z] OK: EURUSD M15 cache age=41min`
+- [proven] `2026-05-31T22:25:02Z` `logs/cron.supervisor.log:131041` — `[SUPERVISOR 2026-05-31T22:25:02Z] OK: GBPUSD M15 cache age=9min`
+- [proven] `2026-05-31T22:25:02Z` `logs/cron.supervisor.log:131042` — `[SUPERVISOR 2026-05-31T22:25:02Z] OK: EURUSD H1 cache age=41min`
+- [proven] `2026-05-31T22:25:02Z` `logs/cron.supervisor.log:131043` — `[SUPERVISOR 2026-05-31T22:25:02Z] OK: GBPUSD H1 cache age=9min`
+- [proven] `2026-05-31T22:25:03Z` `logs/cron.supervisor.log:131044` — `[SUPERVISOR 2026-05-31T22:25:03Z] HEALTHY: all checks passed`
+- [proven] `2026-05-31T22:25:03Z` `logs/cron.supervisor.log:131047` — `[SUPERVISOR 2026-05-31T22:25:03Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-05-31T22:30:00Z` `logs/cron.supervisor.log:131048` — `[SUPERVISOR 2026-05-31T22:30:00Z] === SUPERVISOR START ===`
+- [proven] `2026-05-31T22:30:00Z` `logs/cron.supervisor.log:131049` — `[SUPERVISOR 2026-05-31T22:30:00Z] OK: crond PID=22435`
+- [proven] `2026-05-31T22:30:00Z` `logs/cron.supervisor.log:131050` — `[SUPERVISOR 2026-05-31T22:30:00Z] OK: watcher log age=14min`
+- [proven] `2026-05-31T22:30:00Z` `logs/cron.supervisor.log:131051` — `[SUPERVISOR 2026-05-31T22:30:00Z] OK: updater log age=0min`
+- [proven] `2026-05-31T22:30:00Z` `logs/cron.supervisor.log:131052` — `[SUPERVISOR 2026-05-31T22:30:00Z] OK: shadow log age=14min`
+- [proven] `2026-05-31T22:30:00Z` `logs/cron.supervisor.log:131053` — `[SUPERVISOR 2026-05-31T22:30:00Z] OK: no watcher.lock present`
+- [proven] `2026-05-31T22:30:00Z` `logs/cron.supervisor.log:131054` — `[SUPERVISOR 2026-05-31T22:30:00Z] OK: EURUSD M15 cache age=1min`
+- [proven] `2026-05-31T22:30:00Z` `logs/cron.supervisor.log:131055` — `[SUPERVISOR 2026-05-31T22:30:00Z] OK: GBPUSD M15 cache age=1min`
+- [proven] `2026-05-31T22:30:00Z` `logs/cron.supervisor.log:131056` — `[SUPERVISOR 2026-05-31T22:30:00Z] OK: EURUSD H1 cache age=1min`
+- [proven] `2026-05-31T22:30:01Z` `logs/cron.supervisor.log:131057` — `[SUPERVISOR 2026-05-31T22:30:01Z] OK: GBPUSD H1 cache age=1min`
+- [proven] `2026-05-31T22:30:01Z` `logs/cron.supervisor.log:131058` — `[SUPERVISOR 2026-05-31T22:30:01Z] HEALTHY: all checks passed`
+- [proven] `2026-05-31T22:30:01Z` `logs/cron.supervisor.log:131061` — `[SUPERVISOR 2026-05-31T22:30:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+
+## Q2
+
+- [not proven] Candidate state: `UNKNOWN`
+- [proven] Interval: `2026-06-03T14:30:00Z` to `2026-06-07T17:45:00Z`
+- [proven] Duration: `99.25` hours
+- [not proven] Reason: insufficient independent corroboration
+- [proven] Independent sources before interval: `12`
+- [proven] Independent sources after interval: `13`
+- [proven] Keyword evidence inside interval: `3`
+
+### Last evidence before interval
+
+- [proven] `2026-06-03T14:25:02Z` `logs/cron.supervisor.log:141277` — `[SUPERVISOR 2026-06-03T14:25:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-03T14:00:00Z` `logs/cron.heartbeat.log:1416` — `[2026-06-03 14:00:00 UTC] ❌ tele.env missing`
+- [proven] `2026-06-03T14:15:21Z` `logs/cron.signals.log:20932` — `[DONE 2026-06-03T18:15:21+0400] manual --once scan complete`
+- [proven] `2026-06-03T14:15:21Z` `logs/alerts.csv:1375` — `2026-06-03T18:15:21+0400,GBPUSD,M15,SELL,44.50,44.50,1.34348,1.34513,1.34018,engine_A3,true,score<65 | macro6=3,"ok|ema_bps=2.2|rsi=46.3|macd_hist=0.000088|adx=23.1|ema_comp=2.2|rsi_comp=2.2|macd_comp=0.0|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=5.0|session=session_overlap|vol_comp=0.0|vol=vol_normal|sr_comp=-8.0|sr=sr_-8|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.34513,TP:1.34018,ATRx(2.0/4.0)",2.2,2.2,0.0,6.0,23.1,46.3,0.000088,3,,LOW,NY,trending`
+- [proven] `2026-06-03T14:15:03.814241Z` `logs/shadow_manager_heartbeat.txt:3852` — `2026-06-03T14:15:03.814241+00:00 | OK | 0 active signals`
+- [proven] `2026-06-03T14:04:00Z` `logs/cron.autostatus.log:1424` — `[2026-06-03 14:04:00 UTC] ❌ tele.env missing`
+- [proven] `2026-06-02T03:23:13Z` `logs/boot.log:9` — `2026-06-02T03:23:13Z BOOT_OK crond_pid=10704`
+- [proven] `2026-06-02T07:23:00Z` `logs/boot_proof.log:41` — `BOOT_PROOF 2026-06-02 07:23:00 +04`
+- [proven] `2026-05-27T11:15:32Z` `logs/pulse_cron.log:11` — `[2026-05-27T11:15:32Z] [DRY_RUN] SKIP already sent today (UTC 2026-05-27) — /data/data/com.termux/files/home/BotA/state/daily_pulse_sent_2026-05-27.ok exists`
+- [proven] `2026-06-03T12:58:57Z` `logs/error.log:815725` — `2026-06-03 12:58:57 [indicators] Yahoo chart candles loaded: 499 rows`
+- [proven] `2026-06-03T14:10:50Z` `logs/cron.daily.log:740` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-03T14:10:50Z server_hour=14 drift=-7249 detail=target_hour=20;clock_source=last_good;status=FALLBACK_LAST_GOOD;live_status=SERVER_CLOCK_UNAVAILABLE;age_secs=10800;max_age_secs=28800;last_drift=-7249`
+- [proven] `2026-06-03T13:55:00Z` `logs/cron.clock_drift.log:5539` — `Local UTC: 2026-06-03T13:55:00Z`
+
+### First evidence after interval
+
+- [proven] `2026-06-07T17:45:00Z` `logs/cron.supervisor.log:141278` — `[SUPERVISOR 2026-06-07T17:45:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-07T18:00:00Z` `logs/cron.heartbeat.log:1417` — `[2026-06-07 18:00:00 UTC] ❌ tele.env missing`
+- [proven] `2026-06-08T07:45:06Z` `logs/cron.signals.log:20989` — `[WATCHER 2026-06-08T11:45:06+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [proven] `2026-06-08T07:45:28Z` `logs/alerts.csv:1376` — `2026-06-08T11:45:28+0400,EURUSD,M15,SELL,48.20,48.20,1.15176,1.15322,1.14885,engine_A3,true,score<65 | macro6=3,"ok|ema_bps=2.8|rsi=49.3|macd_hist=0.000013|adx=21.5|ema_comp=2.8|rsi_comp=0.4|macd_comp=0.0|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=2.0|session=session_london|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.15322,TP:1.14885,ATRx(2.0/4.0)",2.8,0.4,0.0,6.0,21.5,49.3,0.000013,3,,LOW,London_open,trending`
+- [proven] `2026-06-07T17:45:08.916253Z` `logs/shadow_manager_heartbeat.txt:3853` — `2026-06-07T17:45:08.916253+00:00 | OK | 0 active signals`
+- [proven] `2026-06-07T18:04:00Z` `logs/cron.autostatus.log:1425` — `[2026-06-07 18:04:00 UTC] ❌ tele.env missing`
+- [proven] `2026-06-08T19:54:27Z` `logs/boot.log:11` — `2026-06-08T19:54:27Z BOOT_OK crond_pid=32470`
+- [proven] `2026-06-07T21:42:13Z` `logs/boot_proof.log:44` — `BOOT_PROOF 2026-06-07 21:42:13 +04`
+- [proven] `2026-07-08T20:11:19Z` `logs/cron.runtime_health_push.log:1` — `=== BotA runtime health push start: 2026-07-08T20:11:19Z ===`
+- [proven] `2026-07-05T10:50:37Z` `logs/pulse_cron.log:12` — `[2026-07-05T10:50:37Z] [DRY_RUN] SKIP weekend (DOW=7 UTC)`
+- [proven] `2026-06-07T21:43:06Z` `logs/error.log:823117` — `2026-06-07 21:43:06 [indicators] Yahoo chart candles loaded: 500 rows`
+- [proven] `2026-06-07T21:11:29Z` `logs/cron.daily.log:743` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-07T21:11:29Z server_hour=21 drift=-10888 detail=target_hour=20;clock_source=live;status=DRIFT_WARN`
+- [proven] `2026-06-07T17:55:02Z` `logs/cron.clock_drift.log:5554` — `Generated UTC: 2026-06-07T17:55:02Z`
+
+### Nearby explicit runtime evidence
+
+- [proven] `2026-06-03T08:30:00Z` `logs/cron.supervisor.log:140265` — `[SUPERVISOR 2026-06-03T08:30:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-03T08:30:00Z` `logs/cron.supervisor.log:140266` — `[SUPERVISOR 2026-06-03T08:30:00Z] OK: crond PID=10704`
+- [proven] `2026-06-03T08:30:01Z` `logs/cron.supervisor.log:140267` — `[SUPERVISOR 2026-06-03T08:30:01Z] OK: watcher log age=14min`
+- [proven] `2026-06-03T08:30:01Z` `logs/cron.supervisor.log:140268` — `[SUPERVISOR 2026-06-03T08:30:01Z] OK: updater log age=1min`
+- [proven] `2026-06-03T08:30:01Z` `logs/cron.supervisor.log:140269` — `[SUPERVISOR 2026-06-03T08:30:01Z] OK: shadow log age=14min`
+- [proven] `2026-06-03T08:30:01Z` `logs/cron.supervisor.log:140270` — `[SUPERVISOR 2026-06-03T08:30:01Z] OK: watcher.lock age=884s`
+- [proven] `2026-06-03T08:30:01Z` `logs/cron.supervisor.log:140271` — `[SUPERVISOR 2026-06-03T08:30:01Z] OK: EURUSD M15 cache age=1min`
+- [proven] `2026-06-03T08:30:01Z` `logs/cron.supervisor.log:140272` — `[SUPERVISOR 2026-06-03T08:30:01Z] OK: GBPUSD M15 cache age=1min`
+- [proven] `2026-06-03T08:30:01Z` `logs/cron.supervisor.log:140273` — `[SUPERVISOR 2026-06-03T08:30:01Z] OK: EURUSD H1 cache age=1min`
+- [proven] `2026-06-03T08:30:01Z` `logs/cron.supervisor.log:140274` — `[SUPERVISOR 2026-06-03T08:30:01Z] OK: GBPUSD H1 cache age=1min`
+- [proven] `2026-06-03T08:30:01Z` `logs/cron.supervisor.log:140275` — `[SUPERVISOR 2026-06-03T08:30:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-03T08:30:01Z` `logs/cron.supervisor.log:140278` — `[SUPERVISOR 2026-06-03T08:30:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-03T08:35:01Z` `logs/cron.supervisor.log:140279` — `[SUPERVISOR 2026-06-03T08:35:01Z] === SUPERVISOR START ===`
+- [proven] `2026-06-03T08:35:01Z` `logs/cron.supervisor.log:140280` — `[SUPERVISOR 2026-06-03T08:35:01Z] OK: crond PID=10704`
+- [proven] `2026-06-03T08:35:01Z` `logs/cron.supervisor.log:140281` — `[SUPERVISOR 2026-06-03T08:35:01Z] OK: watcher log age=4min`
+- [proven] `2026-06-03T08:35:01Z` `logs/cron.supervisor.log:140282` — `[SUPERVISOR 2026-06-03T08:35:01Z] OK: updater log age=6min`
+- [proven] `2026-06-03T08:35:01Z` `logs/cron.supervisor.log:140283` — `[SUPERVISOR 2026-06-03T08:35:01Z] OK: shadow log age=4min`
+- [proven] `2026-06-03T08:35:01Z` `logs/cron.supervisor.log:140284` — `[SUPERVISOR 2026-06-03T08:35:01Z] OK: watcher.lock age=295s`
+- [proven] `2026-06-03T08:35:01Z` `logs/cron.supervisor.log:140285` — `[SUPERVISOR 2026-06-03T08:35:01Z] OK: EURUSD M15 cache age=6min`
+- [proven] `2026-06-03T08:35:01Z` `logs/cron.supervisor.log:140286` — `[SUPERVISOR 2026-06-03T08:35:01Z] OK: GBPUSD M15 cache age=6min`
+- [proven] `2026-06-03T08:35:01Z` `logs/cron.supervisor.log:140287` — `[SUPERVISOR 2026-06-03T08:35:01Z] OK: EURUSD H1 cache age=6min`
+- [proven] `2026-06-03T08:35:01Z` `logs/cron.supervisor.log:140288` — `[SUPERVISOR 2026-06-03T08:35:01Z] OK: GBPUSD H1 cache age=6min`
+- [proven] `2026-06-03T08:35:01Z` `logs/cron.supervisor.log:140289` — `[SUPERVISOR 2026-06-03T08:35:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-03T08:35:02Z` `logs/cron.supervisor.log:140292` — `[SUPERVISOR 2026-06-03T08:35:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-03T08:40:00Z` `logs/cron.supervisor.log:140293` — `[SUPERVISOR 2026-06-03T08:40:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-03T08:40:00Z` `logs/cron.supervisor.log:140294` — `[SUPERVISOR 2026-06-03T08:40:00Z] OK: crond PID=10704`
+- [proven] `2026-06-03T08:40:00Z` `logs/cron.supervisor.log:140295` — `[SUPERVISOR 2026-06-03T08:40:00Z] OK: watcher log age=9min`
+- [proven] `2026-06-03T08:40:00Z` `logs/cron.supervisor.log:140296` — `[SUPERVISOR 2026-06-03T08:40:00Z] OK: updater log age=11min`
+- [proven] `2026-06-03T08:40:00Z` `logs/cron.supervisor.log:140297` — `[SUPERVISOR 2026-06-03T08:40:00Z] OK: shadow log age=9min`
+- [proven] `2026-06-03T08:40:00Z` `logs/cron.supervisor.log:140298` — `[SUPERVISOR 2026-06-03T08:40:00Z] OK: watcher.lock age=594s`
+- [proven] `2026-06-03T08:40:01Z` `logs/cron.supervisor.log:140299` — `[SUPERVISOR 2026-06-03T08:40:01Z] OK: EURUSD M15 cache age=11min`
+- [proven] `2026-06-03T08:40:01Z` `logs/cron.supervisor.log:140300` — `[SUPERVISOR 2026-06-03T08:40:01Z] OK: GBPUSD M15 cache age=11min`
+- [proven] `2026-06-03T08:40:01Z` `logs/cron.supervisor.log:140301` — `[SUPERVISOR 2026-06-03T08:40:01Z] OK: EURUSD H1 cache age=11min`
+- [proven] `2026-06-03T08:40:01Z` `logs/cron.supervisor.log:140302` — `[SUPERVISOR 2026-06-03T08:40:01Z] OK: GBPUSD H1 cache age=11min`
+- [proven] `2026-06-03T08:40:01Z` `logs/cron.supervisor.log:140303` — `[SUPERVISOR 2026-06-03T08:40:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-03T08:40:01Z` `logs/cron.supervisor.log:140306` — `[SUPERVISOR 2026-06-03T08:40:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-03T08:45:00Z` `logs/cron.supervisor.log:140307` — `[SUPERVISOR 2026-06-03T08:45:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-03T08:45:00Z` `logs/cron.supervisor.log:140308` — `[SUPERVISOR 2026-06-03T08:45:00Z] OK: crond PID=10704`
+- [proven] `2026-06-03T08:45:00Z` `logs/cron.supervisor.log:140309` — `[SUPERVISOR 2026-06-03T08:45:00Z] OK: watcher log age=14min`
+- [proven] `2026-06-03T08:45:00Z` `logs/cron.supervisor.log:140310` — `[SUPERVISOR 2026-06-03T08:45:00Z] OK: updater log age=1min`
+- [proven] `2026-06-03T08:45:00Z` `logs/cron.supervisor.log:140311` — `[SUPERVISOR 2026-06-03T08:45:00Z] OK: shadow log age=14min`
+- [proven] `2026-06-03T08:45:00Z` `logs/cron.supervisor.log:140312` — `[SUPERVISOR 2026-06-03T08:45:00Z] OK: watcher.lock age=894s`
+- [proven] `2026-06-03T08:45:01Z` `logs/cron.supervisor.log:140313` — `[SUPERVISOR 2026-06-03T08:45:01Z] OK: EURUSD M15 cache age=1min`
+- [proven] `2026-06-03T08:45:01Z` `logs/cron.supervisor.log:140314` — `[SUPERVISOR 2026-06-03T08:45:01Z] OK: GBPUSD M15 cache age=1min`
+- [proven] `2026-06-03T08:45:01Z` `logs/cron.supervisor.log:140315` — `[SUPERVISOR 2026-06-03T08:45:01Z] OK: EURUSD H1 cache age=1min`
+- [proven] `2026-06-03T08:45:01Z` `logs/cron.supervisor.log:140316` — `[SUPERVISOR 2026-06-03T08:45:01Z] OK: GBPUSD H1 cache age=1min`
+- [proven] `2026-06-03T08:45:01Z` `logs/cron.supervisor.log:140317` — `[SUPERVISOR 2026-06-03T08:45:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-03T08:45:01Z` `logs/cron.supervisor.log:140320` — `[SUPERVISOR 2026-06-03T08:45:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-03T08:50:00Z` `logs/cron.supervisor.log:140321` — `[SUPERVISOR 2026-06-03T08:50:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-03T08:50:00Z` `logs/cron.supervisor.log:140322` — `[SUPERVISOR 2026-06-03T08:50:00Z] OK: crond PID=10704`
+- [proven] `2026-06-03T08:50:00Z` `logs/cron.supervisor.log:140323` — `[SUPERVISOR 2026-06-03T08:50:00Z] OK: watcher log age=4min`
+- [proven] `2026-06-03T08:50:00Z` `logs/cron.supervisor.log:140324` — `[SUPERVISOR 2026-06-03T08:50:00Z] OK: updater log age=6min`
+- [proven] `2026-06-03T08:50:00Z` `logs/cron.supervisor.log:140325` — `[SUPERVISOR 2026-06-03T08:50:00Z] OK: shadow log age=4min`
+- [proven] `2026-06-03T08:50:00Z` `logs/cron.supervisor.log:140326` — `[SUPERVISOR 2026-06-03T08:50:00Z] OK: watcher.lock age=289s`
+- [proven] `2026-06-03T08:50:01Z` `logs/cron.supervisor.log:140327` — `[SUPERVISOR 2026-06-03T08:50:01Z] OK: EURUSD M15 cache age=6min`
+- [proven] `2026-06-03T08:50:01Z` `logs/cron.supervisor.log:140328` — `[SUPERVISOR 2026-06-03T08:50:01Z] OK: GBPUSD M15 cache age=6min`
+- [proven] `2026-06-03T08:50:01Z` `logs/cron.supervisor.log:140329` — `[SUPERVISOR 2026-06-03T08:50:01Z] OK: EURUSD H1 cache age=6min`
+- [proven] `2026-06-03T08:50:01Z` `logs/cron.supervisor.log:140330` — `[SUPERVISOR 2026-06-03T08:50:01Z] OK: GBPUSD H1 cache age=6min`
+- [proven] `2026-06-03T08:50:01Z` `logs/cron.supervisor.log:140331` — `[SUPERVISOR 2026-06-03T08:50:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-03T08:50:01Z` `logs/cron.supervisor.log:140334` — `[SUPERVISOR 2026-06-03T08:50:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-03T08:55:00Z` `logs/cron.supervisor.log:140335` — `[SUPERVISOR 2026-06-03T08:55:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-03T08:55:01Z` `logs/cron.supervisor.log:140336` — `[SUPERVISOR 2026-06-03T08:55:01Z] OK: crond PID=10704`
+- [proven] `2026-06-03T08:55:01Z` `logs/cron.supervisor.log:140337` — `[SUPERVISOR 2026-06-03T08:55:01Z] OK: watcher log age=9min`
+- [proven] `2026-06-03T08:55:01Z` `logs/cron.supervisor.log:140338` — `[SUPERVISOR 2026-06-03T08:55:01Z] OK: updater log age=11min`
+- [proven] `2026-06-03T08:55:01Z` `logs/cron.supervisor.log:140339` — `[SUPERVISOR 2026-06-03T08:55:01Z] OK: shadow log age=9min`
+- [proven] `2026-06-03T08:55:01Z` `logs/cron.supervisor.log:140340` — `[SUPERVISOR 2026-06-03T08:55:01Z] OK: watcher.lock age=590s`
+- [proven] `2026-06-03T08:55:01Z` `logs/cron.supervisor.log:140341` — `[SUPERVISOR 2026-06-03T08:55:01Z] OK: EURUSD M15 cache age=11min`
+- [proven] `2026-06-03T08:55:01Z` `logs/cron.supervisor.log:140342` — `[SUPERVISOR 2026-06-03T08:55:01Z] OK: GBPUSD M15 cache age=11min`
+- [proven] `2026-06-03T08:55:01Z` `logs/cron.supervisor.log:140343` — `[SUPERVISOR 2026-06-03T08:55:01Z] OK: EURUSD H1 cache age=11min`
+- [proven] `2026-06-03T08:55:01Z` `logs/cron.supervisor.log:140344` — `[SUPERVISOR 2026-06-03T08:55:01Z] OK: GBPUSD H1 cache age=11min`
+- [proven] `2026-06-03T08:55:01Z` `logs/cron.supervisor.log:140345` — `[SUPERVISOR 2026-06-03T08:55:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-03T08:55:02Z` `logs/cron.supervisor.log:140348` — `[SUPERVISOR 2026-06-03T08:55:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-03T09:00:00Z` `logs/cron.supervisor.log:140349` — `[SUPERVISOR 2026-06-03T09:00:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-03T09:00:00Z` `logs/cron.supervisor.log:140350` — `[SUPERVISOR 2026-06-03T09:00:00Z] OK: crond PID=10704`
+- [proven] `2026-06-03T09:00:00Z` `logs/cron.supervisor.log:140351` — `[SUPERVISOR 2026-06-03T09:00:00Z] OK: watcher log age=14min`
+- [proven] `2026-06-03T09:00:00Z` `logs/cron.supervisor.log:140352` — `[SUPERVISOR 2026-06-03T09:00:00Z] OK: updater log age=1min`
+- [proven] `2026-06-03T09:00:00Z` `logs/cron.supervisor.log:140353` — `[SUPERVISOR 2026-06-03T09:00:00Z] OK: shadow log age=14min`
+- [proven] `2026-06-03T09:00:01Z` `logs/cron.supervisor.log:140354` — `[SUPERVISOR 2026-06-03T09:00:01Z] OK: watcher.lock age=890s`
+- [proven] `2026-06-03T09:00:01Z` `logs/cron.supervisor.log:140355` — `[SUPERVISOR 2026-06-03T09:00:01Z] OK: EURUSD M15 cache age=1min`
+- [proven] `2026-06-03T09:00:01Z` `logs/cron.supervisor.log:140356` — `[SUPERVISOR 2026-06-03T09:00:01Z] OK: GBPUSD M15 cache age=1min`
+- [proven] `2026-06-03T09:00:01Z` `logs/cron.supervisor.log:140357` — `[SUPERVISOR 2026-06-03T09:00:01Z] OK: EURUSD H1 cache age=1min`
+- [proven] `2026-06-03T09:00:01Z` `logs/cron.supervisor.log:140358` — `[SUPERVISOR 2026-06-03T09:00:01Z] OK: GBPUSD H1 cache age=1min`
+- [proven] `2026-06-03T09:00:01Z` `logs/cron.supervisor.log:140359` — `[SUPERVISOR 2026-06-03T09:00:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-03T09:00:01Z` `logs/cron.supervisor.log:140362` — `[SUPERVISOR 2026-06-03T09:00:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-03T09:05:00Z` `logs/cron.supervisor.log:140363` — `[SUPERVISOR 2026-06-03T09:05:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-03T09:05:00Z` `logs/cron.supervisor.log:140364` — `[SUPERVISOR 2026-06-03T09:05:00Z] OK: crond PID=10704`
+- [proven] `2026-06-03T09:05:00Z` `logs/cron.supervisor.log:140365` — `[SUPERVISOR 2026-06-03T09:05:00Z] OK: watcher log age=4min`
+- [proven] `2026-06-03T09:05:00Z` `logs/cron.supervisor.log:140366` — `[SUPERVISOR 2026-06-03T09:05:00Z] OK: updater log age=6min`
+- [proven] `2026-06-03T09:05:00Z` `logs/cron.supervisor.log:140367` — `[SUPERVISOR 2026-06-03T09:05:00Z] OK: shadow log age=4min`
+- [proven] `2026-06-03T09:05:01Z` `logs/cron.supervisor.log:140368` — `[SUPERVISOR 2026-06-03T09:05:01Z] OK: watcher.lock age=293s`
+- [proven] `2026-06-03T09:05:01Z` `logs/cron.supervisor.log:140369` — `[SUPERVISOR 2026-06-03T09:05:01Z] OK: EURUSD M15 cache age=6min`
+- [proven] `2026-06-03T09:05:01Z` `logs/cron.supervisor.log:140370` — `[SUPERVISOR 2026-06-03T09:05:01Z] OK: GBPUSD M15 cache age=6min`
+- [proven] `2026-06-03T09:05:01Z` `logs/cron.supervisor.log:140371` — `[SUPERVISOR 2026-06-03T09:05:01Z] OK: EURUSD H1 cache age=6min`
+- [proven] `2026-06-03T09:05:01Z` `logs/cron.supervisor.log:140372` — `[SUPERVISOR 2026-06-03T09:05:01Z] OK: GBPUSD H1 cache age=6min`
+- [proven] `2026-06-03T09:05:01Z` `logs/cron.supervisor.log:140373` — `[SUPERVISOR 2026-06-03T09:05:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-03T09:05:01Z` `logs/cron.supervisor.log:140376` — `[SUPERVISOR 2026-06-03T09:05:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-03T09:10:00Z` `logs/cron.supervisor.log:140377` — `[SUPERVISOR 2026-06-03T09:10:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-03T09:10:01Z` `logs/cron.supervisor.log:140378` — `[SUPERVISOR 2026-06-03T09:10:01Z] OK: crond PID=10704`
+- [proven] `2026-06-03T09:10:01Z` `logs/cron.supervisor.log:140379` — `[SUPERVISOR 2026-06-03T09:10:01Z] OK: watcher log age=9min`
+- [proven] `2026-06-03T09:10:01Z` `logs/cron.supervisor.log:140380` — `[SUPERVISOR 2026-06-03T09:10:01Z] OK: updater log age=11min`
+- [proven] `2026-06-03T09:10:01Z` `logs/cron.supervisor.log:140381` — `[SUPERVISOR 2026-06-03T09:10:01Z] OK: shadow log age=9min`
+- [proven] `2026-06-03T09:10:01Z` `logs/cron.supervisor.log:140382` — `[SUPERVISOR 2026-06-03T09:10:01Z] OK: watcher.lock age=593s`
+- [proven] `2026-06-03T09:10:01Z` `logs/cron.supervisor.log:140383` — `[SUPERVISOR 2026-06-03T09:10:01Z] OK: EURUSD M15 cache age=11min`
+- [proven] `2026-06-03T09:10:01Z` `logs/cron.supervisor.log:140384` — `[SUPERVISOR 2026-06-03T09:10:01Z] OK: GBPUSD M15 cache age=11min`
+- [proven] `2026-06-03T09:10:01Z` `logs/cron.supervisor.log:140385` — `[SUPERVISOR 2026-06-03T09:10:01Z] OK: EURUSD H1 cache age=11min`
+- [proven] `2026-06-03T09:10:01Z` `logs/cron.supervisor.log:140386` — `[SUPERVISOR 2026-06-03T09:10:01Z] OK: GBPUSD H1 cache age=11min`
+- [proven] `2026-06-03T09:10:02Z` `logs/cron.supervisor.log:140387` — `[SUPERVISOR 2026-06-03T09:10:02Z] HEALTHY: all checks passed`
+- [proven] `2026-06-03T09:10:02Z` `logs/cron.supervisor.log:140390` — `[SUPERVISOR 2026-06-03T09:10:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-03T09:15:00Z` `logs/cron.supervisor.log:140391` — `[SUPERVISOR 2026-06-03T09:15:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-03T09:15:00Z` `logs/cron.supervisor.log:140392` — `[SUPERVISOR 2026-06-03T09:15:00Z] OK: crond PID=10704`
+- [proven] `2026-06-03T09:15:01Z` `logs/cron.supervisor.log:140393` — `[SUPERVISOR 2026-06-03T09:15:01Z] OK: watcher log age=14min`
+- [proven] `2026-06-03T09:15:01Z` `logs/cron.supervisor.log:140394` — `[SUPERVISOR 2026-06-03T09:15:01Z] OK: updater log age=0min`
+- [proven] `2026-06-03T09:15:01Z` `logs/cron.supervisor.log:140395` — `[SUPERVISOR 2026-06-03T09:15:01Z] OK: shadow log age=14min`
+- [proven] `2026-06-03T09:15:01Z` `logs/cron.supervisor.log:140396` — `[SUPERVISOR 2026-06-03T09:15:01Z] OK: watcher.lock age=893s`
+- [proven] `2026-06-03T09:15:01Z` `logs/cron.supervisor.log:140397` — `[SUPERVISOR 2026-06-03T09:15:01Z] OK: EURUSD M15 cache age=16min`
+- [proven] `2026-06-03T09:15:01Z` `logs/cron.supervisor.log:140398` — `[SUPERVISOR 2026-06-03T09:15:01Z] OK: GBPUSD M15 cache age=16min`
+- [proven] `2026-06-03T09:15:01Z` `logs/cron.supervisor.log:140399` — `[SUPERVISOR 2026-06-03T09:15:01Z] OK: EURUSD H1 cache age=16min`
+- [proven] `2026-06-03T09:15:01Z` `logs/cron.supervisor.log:140400` — `[SUPERVISOR 2026-06-03T09:15:01Z] OK: GBPUSD H1 cache age=16min`
+- [proven] `2026-06-03T09:15:01Z` `logs/cron.supervisor.log:140401` — `[SUPERVISOR 2026-06-03T09:15:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-03T09:15:02Z` `logs/cron.supervisor.log:140404` — `[SUPERVISOR 2026-06-03T09:15:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+
+## Q3
+
+- [not proven] Candidate state: `UNKNOWN`
+- [proven] Interval: `2026-06-08T08:45:00Z` to `2026-06-08T19:45:00Z`
+- [proven] Duration: `11.0` hours
+- [not proven] Reason: insufficient independent corroboration
+- [proven] Independent sources before interval: `12`
+- [proven] Independent sources after interval: `13`
+- [proven] Keyword evidence inside interval: `3`
+
+### Last evidence before interval
+
+- [proven] `2026-06-08T08:40:02Z` `logs/cron.supervisor.log:143802` — `[SUPERVISOR 2026-06-08T08:40:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-08T08:00:01Z` `logs/cron.heartbeat.log:1431` — `[2026-06-08 08:00:01 UTC] ❌ tele.env missing`
+- [proven] `2026-06-08T08:30:36Z` `logs/cron.signals.log:21016` — `[DONE 2026-06-08T12:30:36+0400] manual --once scan complete`
+- [proven] `2026-06-08T08:00:43Z` `logs/alerts.csv:1378` — `2026-06-08T12:00:43+0400,EURUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,London_open,ranging`
+- [proven] `2026-06-08T08:30:08.615509Z` `logs/shadow_manager_heartbeat.txt:3912` — `2026-06-08T08:30:08.615509+00:00 | OK | 0 active signals`
+- [proven] `2026-06-08T08:04:00Z` `logs/cron.autostatus.log:1439` — `[2026-06-08 08:04:00 UTC] ❌ tele.env missing`
+- [proven] `2026-06-07T17:42:25Z` `logs/boot.log:10` — `2026-06-07T17:42:25Z BOOT_OK crond_pid=23603`
+- [proven] `2026-06-07T21:42:13Z` `logs/boot_proof.log:44` — `BOOT_PROOF 2026-06-07 21:42:13 +04`
+- [proven] `2026-05-27T11:15:32Z` `logs/pulse_cron.log:11` — `[2026-05-27T11:15:32Z] [DRY_RUN] SKIP already sent today (UTC 2026-05-27) — /data/data/com.termux/files/home/BotA/state/daily_pulse_sent_2026-05-27.ok exists`
+- [proven] `2026-06-08T06:43:56Z` `logs/error.log:826218` — `2026-06-08 06:43:56 [indicators] Yahoo chart candles loaded: 499 rows`
+- [proven] `2026-06-08T08:11:30Z` `logs/cron.daily.log:754` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-08T08:11:30Z server_hour=8 drift=-10889 detail=target_hour=20;clock_source=last_good;status=FALLBACK_LAST_GOOD;live_status=SERVER_CLOCK_UNAVAILABLE;age_secs=8100;max_age_secs=28800;last_drift=-10889`
+- [proven] `2026-06-08T07:55:01Z` `logs/cron.clock_drift.log:5771` — `Local UTC: 2026-06-08T07:55:01Z`
+
+### First evidence after interval
+
+- [proven] `2026-06-08T19:50:00Z` `logs/cron.supervisor.log:143803` — `[SUPERVISOR 2026-06-08T19:50:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-08T20:00:01Z` `logs/cron.heartbeat.log:1432` — `[2026-06-08 20:00:01 UTC] ❌ tele.env missing`
+- [proven] `2026-06-09T03:00:18Z` `logs/cron.signals.log:21049` — `[WATCHER 2026-06-09T07:00:18+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [proven] `2026-06-09T12:00:32Z` `logs/alerts.csv:1379` — `2026-06-09T16:00:32+0400,EURUSD,M15,SELL,80.70,80.70,1.15535,1.15670,1.15264,engine_A3,false,macro6=3 | H1_trend_neutral_overridden,"ok|ema_bps=0.9|rsi=38.7|macd_hist=-0.000250|adx=29.1|ema_comp=0.9|rsi_comp=6.8|macd_comp=15.0|adx_comp=8.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=5.0|session=session_overlap|vol_comp=0.0|vol=vol_normal|sr_comp=8.0|sr=sr_+8|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.15670,TP:1.15264,ATRx(2.0/4.0)",0.9,6.8,15.0,8.0,29.1,38.7,-0.000250,3,neutral_overridden,GREEN,London_NY_overlap,trending`
+- [proven] `2026-06-08T20:00:10.981342Z` `logs/shadow_manager_heartbeat.txt:3913` — `2026-06-08T20:00:10.981342+00:00 | OK | 0 active signals`
+- [proven] `2026-06-08T20:04:00Z` `logs/cron.autostatus.log:1440` — `[2026-06-08 20:04:00 UTC] ❌ tele.env missing`
+- [proven] `2026-06-08T19:54:27Z` `logs/boot.log:11` — `2026-06-08T19:54:27Z BOOT_OK crond_pid=32470`
+- [proven] `2026-06-08T23:54:10Z` `logs/boot_proof.log:47` — `BOOT_PROOF 2026-06-08 23:54:10 +04`
+- [proven] `2026-07-08T20:11:19Z` `logs/cron.runtime_health_push.log:1` — `=== BotA runtime health push start: 2026-07-08T20:11:19Z ===`
+- [proven] `2026-07-05T10:50:37Z` `logs/pulse_cron.log:12` — `[2026-07-05T10:50:37Z] [DRY_RUN] SKIP weekend (DOW=7 UTC)`
+- [proven] `2026-06-08T23:58:08Z` `logs/error.log:830695` — `2026-06-08 23:58:08 [indicators] Yahoo chart candles loaded: 499 rows`
+- [proven] `2026-06-08T23:11:32Z` `logs/cron.daily.log:758` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-08T23:11:32Z server_hour=23 drift=-10890 detail=target_hour=20;clock_source=live;status=DRIFT_WARN`
+- [proven] `2026-06-08T19:55:00Z` `logs/cron.clock_drift.log:5786` — `Generated UTC: 2026-06-08T19:55:00Z`
+
+### Nearby explicit runtime evidence
+
+- [proven] `2026-06-08T02:45:00Z` `logs/cron.supervisor.log:142793` — `[SUPERVISOR 2026-06-08T02:45:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-08T02:45:00Z` `logs/cron.supervisor.log:142794` — `[SUPERVISOR 2026-06-08T02:45:00Z] OK: crond PID=23603`
+- [proven] `2026-06-08T02:45:00Z` `logs/cron.supervisor.log:142795` — `[SUPERVISOR 2026-06-08T02:45:00Z] OK: watcher log age=14min`
+- [proven] `2026-06-08T02:45:00Z` `logs/cron.supervisor.log:142796` — `[SUPERVISOR 2026-06-08T02:45:00Z] OK: updater log age=1min`
+- [proven] `2026-06-08T02:45:00Z` `logs/cron.supervisor.log:142797` — `[SUPERVISOR 2026-06-08T02:45:00Z] OK: shadow log age=14min`
+- [proven] `2026-06-08T02:45:00Z` `logs/cron.supervisor.log:142798` — `[SUPERVISOR 2026-06-08T02:45:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-08T02:45:00Z` `logs/cron.supervisor.log:142799` — `[SUPERVISOR 2026-06-08T02:45:00Z] OK: EURUSD M15 cache age=1min`
+- [proven] `2026-06-08T02:45:00Z` `logs/cron.supervisor.log:142800` — `[SUPERVISOR 2026-06-08T02:45:00Z] OK: GBPUSD M15 cache age=1min`
+- [proven] `2026-06-08T02:45:00Z` `logs/cron.supervisor.log:142801` — `[SUPERVISOR 2026-06-08T02:45:00Z] OK: EURUSD H1 cache age=1min`
+- [proven] `2026-06-08T02:45:00Z` `logs/cron.supervisor.log:142802` — `[SUPERVISOR 2026-06-08T02:45:00Z] OK: GBPUSD H1 cache age=1min`
+- [proven] `2026-06-08T02:45:01Z` `logs/cron.supervisor.log:142803` — `[SUPERVISOR 2026-06-08T02:45:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-08T02:45:01Z` `logs/cron.supervisor.log:142806` — `[SUPERVISOR 2026-06-08T02:45:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-08T02:50:00Z` `logs/cron.supervisor.log:142807` — `[SUPERVISOR 2026-06-08T02:50:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-08T02:50:00Z` `logs/cron.supervisor.log:142808` — `[SUPERVISOR 2026-06-08T02:50:00Z] OK: crond PID=23603`
+- [proven] `2026-06-08T02:50:01Z` `logs/cron.supervisor.log:142809` — `[SUPERVISOR 2026-06-08T02:50:01Z] OK: watcher log age=4min`
+- [proven] `2026-06-08T02:50:01Z` `logs/cron.supervisor.log:142810` — `[SUPERVISOR 2026-06-08T02:50:01Z] OK: updater log age=6min`
+- [proven] `2026-06-08T02:50:01Z` `logs/cron.supervisor.log:142811` — `[SUPERVISOR 2026-06-08T02:50:01Z] OK: shadow log age=4min`
+- [proven] `2026-06-08T02:50:01Z` `logs/cron.supervisor.log:142812` — `[SUPERVISOR 2026-06-08T02:50:01Z] OK: no watcher.lock present`
+- [proven] `2026-06-08T02:50:01Z` `logs/cron.supervisor.log:142813` — `[SUPERVISOR 2026-06-08T02:50:01Z] OK: EURUSD M15 cache age=6min`
+- [proven] `2026-06-08T02:50:01Z` `logs/cron.supervisor.log:142814` — `[SUPERVISOR 2026-06-08T02:50:01Z] OK: GBPUSD M15 cache age=6min`
+- [proven] `2026-06-08T02:50:01Z` `logs/cron.supervisor.log:142815` — `[SUPERVISOR 2026-06-08T02:50:01Z] OK: EURUSD H1 cache age=6min`
+- [proven] `2026-06-08T02:50:01Z` `logs/cron.supervisor.log:142816` — `[SUPERVISOR 2026-06-08T02:50:01Z] OK: GBPUSD H1 cache age=6min`
+- [proven] `2026-06-08T02:50:01Z` `logs/cron.supervisor.log:142817` — `[SUPERVISOR 2026-06-08T02:50:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-08T02:50:01Z` `logs/cron.supervisor.log:142820` — `[SUPERVISOR 2026-06-08T02:50:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-08T02:55:01Z` `logs/cron.supervisor.log:142821` — `[SUPERVISOR 2026-06-08T02:55:01Z] === SUPERVISOR START ===`
+- [proven] `2026-06-08T02:55:01Z` `logs/cron.supervisor.log:142822` — `[SUPERVISOR 2026-06-08T02:55:01Z] OK: crond PID=23603`
+- [proven] `2026-06-08T02:55:01Z` `logs/cron.supervisor.log:142823` — `[SUPERVISOR 2026-06-08T02:55:01Z] OK: watcher log age=9min`
+- [proven] `2026-06-08T02:55:01Z` `logs/cron.supervisor.log:142824` — `[SUPERVISOR 2026-06-08T02:55:01Z] OK: updater log age=11min`
+- [proven] `2026-06-08T02:55:01Z` `logs/cron.supervisor.log:142825` — `[SUPERVISOR 2026-06-08T02:55:01Z] OK: shadow log age=9min`
+- [proven] `2026-06-08T02:55:01Z` `logs/cron.supervisor.log:142826` — `[SUPERVISOR 2026-06-08T02:55:01Z] OK: no watcher.lock present`
+- [proven] `2026-06-08T02:55:01Z` `logs/cron.supervisor.log:142827` — `[SUPERVISOR 2026-06-08T02:55:01Z] OK: EURUSD M15 cache age=11min`
+- [proven] `2026-06-08T02:55:01Z` `logs/cron.supervisor.log:142828` — `[SUPERVISOR 2026-06-08T02:55:01Z] OK: GBPUSD M15 cache age=11min`
+- [proven] `2026-06-08T02:55:01Z` `logs/cron.supervisor.log:142829` — `[SUPERVISOR 2026-06-08T02:55:01Z] OK: EURUSD H1 cache age=11min`
+- [proven] `2026-06-08T02:55:01Z` `logs/cron.supervisor.log:142830` — `[SUPERVISOR 2026-06-08T02:55:01Z] OK: GBPUSD H1 cache age=11min`
+- [proven] `2026-06-08T02:55:01Z` `logs/cron.supervisor.log:142831` — `[SUPERVISOR 2026-06-08T02:55:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-08T02:55:02Z` `logs/cron.supervisor.log:142834` — `[SUPERVISOR 2026-06-08T02:55:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-08T03:00:00Z` `logs/cron.supervisor.log:142835` — `[SUPERVISOR 2026-06-08T03:00:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-08T03:00:00Z` `logs/cron.supervisor.log:142836` — `[SUPERVISOR 2026-06-08T03:00:00Z] OK: crond PID=23603`
+- [proven] `2026-06-08T03:00:00Z` `logs/cron.supervisor.log:142837` — `[SUPERVISOR 2026-06-08T03:00:00Z] OK: watcher log age=14min`
+- [proven] `2026-06-08T03:00:00Z` `logs/cron.supervisor.log:142838` — `[SUPERVISOR 2026-06-08T03:00:00Z] OK: updater log age=0min`
+- [proven] `2026-06-08T03:00:00Z` `logs/cron.supervisor.log:142839` — `[SUPERVISOR 2026-06-08T03:00:00Z] OK: shadow log age=14min`
+- [proven] `2026-06-08T03:00:00Z` `logs/cron.supervisor.log:142840` — `[SUPERVISOR 2026-06-08T03:00:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-08T03:00:00Z` `logs/cron.supervisor.log:142841` — `[SUPERVISOR 2026-06-08T03:00:00Z] OK: EURUSD M15 cache age=16min`
+- [proven] `2026-06-08T03:00:00Z` `logs/cron.supervisor.log:142842` — `[SUPERVISOR 2026-06-08T03:00:00Z] OK: GBPUSD M15 cache age=16min`
+- [proven] `2026-06-08T03:00:01Z` `logs/cron.supervisor.log:142843` — `[SUPERVISOR 2026-06-08T03:00:01Z] OK: EURUSD H1 cache age=16min`
+- [proven] `2026-06-08T03:00:01Z` `logs/cron.supervisor.log:142844` — `[SUPERVISOR 2026-06-08T03:00:01Z] OK: GBPUSD H1 cache age=16min`
+- [proven] `2026-06-08T03:00:01Z` `logs/cron.supervisor.log:142845` — `[SUPERVISOR 2026-06-08T03:00:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-08T03:00:01Z` `logs/cron.supervisor.log:142848` — `[SUPERVISOR 2026-06-08T03:00:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-08T03:05:01Z` `logs/cron.supervisor.log:142849` — `[SUPERVISOR 2026-06-08T03:05:01Z] === SUPERVISOR START ===`
+- [proven] `2026-06-08T03:05:01Z` `logs/cron.supervisor.log:142850` — `[SUPERVISOR 2026-06-08T03:05:01Z] OK: crond PID=23603`
+- [proven] `2026-06-08T03:05:01Z` `logs/cron.supervisor.log:142851` — `[SUPERVISOR 2026-06-08T03:05:01Z] OK: watcher log age=5min`
+- [proven] `2026-06-08T03:05:01Z` `logs/cron.supervisor.log:142852` — `[SUPERVISOR 2026-06-08T03:05:01Z] OK: updater log age=2min`
+- [proven] `2026-06-08T03:05:01Z` `logs/cron.supervisor.log:142853` — `[SUPERVISOR 2026-06-08T03:05:01Z] OK: shadow log age=5min`
+- [proven] `2026-06-08T03:05:01Z` `logs/cron.supervisor.log:142854` — `[SUPERVISOR 2026-06-08T03:05:01Z] OK: no watcher.lock present`
+- [proven] `2026-06-08T03:05:01Z` `logs/cron.supervisor.log:142855` — `[SUPERVISOR 2026-06-08T03:05:01Z] OK: EURUSD M15 cache age=21min`
+- [proven] `2026-06-08T03:05:01Z` `logs/cron.supervisor.log:142856` — `[SUPERVISOR 2026-06-08T03:05:01Z] OK: GBPUSD M15 cache age=21min`
+- [proven] `2026-06-08T03:05:01Z` `logs/cron.supervisor.log:142857` — `[SUPERVISOR 2026-06-08T03:05:01Z] OK: EURUSD H1 cache age=21min`
+- [proven] `2026-06-08T03:05:01Z` `logs/cron.supervisor.log:142858` — `[SUPERVISOR 2026-06-08T03:05:01Z] OK: GBPUSD H1 cache age=21min`
+- [proven] `2026-06-08T03:05:01Z` `logs/cron.supervisor.log:142859` — `[SUPERVISOR 2026-06-08T03:05:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-08T03:05:02Z` `logs/cron.supervisor.log:142862` — `[SUPERVISOR 2026-06-08T03:05:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-08T03:10:00Z` `logs/cron.supervisor.log:142863` — `[SUPERVISOR 2026-06-08T03:10:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-08T03:10:00Z` `logs/cron.supervisor.log:142864` — `[SUPERVISOR 2026-06-08T03:10:00Z] OK: crond PID=23603`
+- [proven] `2026-06-08T03:10:00Z` `logs/cron.supervisor.log:142865` — `[SUPERVISOR 2026-06-08T03:10:00Z] OK: watcher log age=10min`
+- [proven] `2026-06-08T03:10:00Z` `logs/cron.supervisor.log:142866` — `[SUPERVISOR 2026-06-08T03:10:00Z] OK: updater log age=7min`
+- [proven] `2026-06-08T03:10:00Z` `logs/cron.supervisor.log:142867` — `[SUPERVISOR 2026-06-08T03:10:00Z] OK: shadow log age=9min`
+- [proven] `2026-06-08T03:10:00Z` `logs/cron.supervisor.log:142868` — `[SUPERVISOR 2026-06-08T03:10:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-08T03:10:00Z` `logs/cron.supervisor.log:142869` — `[SUPERVISOR 2026-06-08T03:10:00Z] OK: EURUSD M15 cache age=26min`
+- [proven] `2026-06-08T03:10:00Z` `logs/cron.supervisor.log:142870` — `[SUPERVISOR 2026-06-08T03:10:00Z] OK: GBPUSD M15 cache age=26min`
+- [proven] `2026-06-08T03:10:00Z` `logs/cron.supervisor.log:142871` — `[SUPERVISOR 2026-06-08T03:10:00Z] OK: EURUSD H1 cache age=26min`
+- [proven] `2026-06-08T03:10:00Z` `logs/cron.supervisor.log:142872` — `[SUPERVISOR 2026-06-08T03:10:00Z] OK: GBPUSD H1 cache age=26min`
+- [proven] `2026-06-08T03:10:00Z` `logs/cron.supervisor.log:142873` — `[SUPERVISOR 2026-06-08T03:10:00Z] HEALTHY: all checks passed`
+- [proven] `2026-06-08T03:10:01Z` `logs/cron.supervisor.log:142876` — `[SUPERVISOR 2026-06-08T03:10:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-08T03:15:00Z` `logs/cron.supervisor.log:142877` — `[SUPERVISOR 2026-06-08T03:15:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-08T03:15:00Z` `logs/cron.supervisor.log:142878` — `[SUPERVISOR 2026-06-08T03:15:00Z] OK: crond PID=23603`
+- [proven] `2026-06-08T03:15:00Z` `logs/cron.supervisor.log:142879` — `[SUPERVISOR 2026-06-08T03:15:00Z] OK: watcher log age=15min`
+- [proven] `2026-06-08T03:15:00Z` `logs/cron.supervisor.log:142880` — `[SUPERVISOR 2026-06-08T03:15:00Z] OK: updater log age=0min`
+- [proven] `2026-06-08T03:15:00Z` `logs/cron.supervisor.log:142881` — `[SUPERVISOR 2026-06-08T03:15:00Z] OK: shadow log age=14min`
+- [proven] `2026-06-08T03:15:00Z` `logs/cron.supervisor.log:142882` — `[SUPERVISOR 2026-06-08T03:15:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-08T03:15:00Z` `logs/cron.supervisor.log:142883` — `[SUPERVISOR 2026-06-08T03:15:00Z] OK: EURUSD M15 cache age=31min`
+- [proven] `2026-06-08T03:15:00Z` `logs/cron.supervisor.log:142884` — `[SUPERVISOR 2026-06-08T03:15:00Z] OK: GBPUSD M15 cache age=31min`
+- [proven] `2026-06-08T03:15:01Z` `logs/cron.supervisor.log:142885` — `[SUPERVISOR 2026-06-08T03:15:01Z] OK: EURUSD H1 cache age=31min`
+- [proven] `2026-06-08T03:15:01Z` `logs/cron.supervisor.log:142886` — `[SUPERVISOR 2026-06-08T03:15:01Z] OK: GBPUSD H1 cache age=31min`
+- [proven] `2026-06-08T03:15:01Z` `logs/cron.supervisor.log:142887` — `[SUPERVISOR 2026-06-08T03:15:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-08T03:15:01Z` `logs/cron.supervisor.log:142890` — `[SUPERVISOR 2026-06-08T03:15:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-08T03:20:00Z` `logs/cron.supervisor.log:142891` — `[SUPERVISOR 2026-06-08T03:20:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-08T03:20:00Z` `logs/cron.supervisor.log:142892` — `[SUPERVISOR 2026-06-08T03:20:00Z] OK: crond PID=23603`
+- [proven] `2026-06-08T03:20:01Z` `logs/cron.supervisor.log:142893` — `[SUPERVISOR 2026-06-08T03:20:01Z] OK: watcher log age=5min`
+- [proven] `2026-06-08T03:20:01Z` `logs/cron.supervisor.log:142894` — `[SUPERVISOR 2026-06-08T03:20:01Z] OK: updater log age=2min`
+- [proven] `2026-06-08T03:20:01Z` `logs/cron.supervisor.log:142895` — `[SUPERVISOR 2026-06-08T03:20:01Z] OK: shadow log age=5min`
+- [proven] `2026-06-08T03:20:01Z` `logs/cron.supervisor.log:142896` — `[SUPERVISOR 2026-06-08T03:20:01Z] OK: no watcher.lock present`
+- [proven] `2026-06-08T03:20:01Z` `logs/cron.supervisor.log:142897` — `[SUPERVISOR 2026-06-08T03:20:01Z] OK: EURUSD M15 cache age=36min`
+- [proven] `2026-06-08T03:20:01Z` `logs/cron.supervisor.log:142898` — `[SUPERVISOR 2026-06-08T03:20:01Z] OK: GBPUSD M15 cache age=36min`
+- [proven] `2026-06-08T03:20:01Z` `logs/cron.supervisor.log:142899` — `[SUPERVISOR 2026-06-08T03:20:01Z] OK: EURUSD H1 cache age=36min`
+- [proven] `2026-06-08T03:20:01Z` `logs/cron.supervisor.log:142900` — `[SUPERVISOR 2026-06-08T03:20:01Z] OK: GBPUSD H1 cache age=36min`
+- [proven] `2026-06-08T03:20:01Z` `logs/cron.supervisor.log:142901` — `[SUPERVISOR 2026-06-08T03:20:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-08T03:20:01Z` `logs/cron.supervisor.log:142904` — `[SUPERVISOR 2026-06-08T03:20:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-08T03:25:00Z` `logs/cron.supervisor.log:142905` — `[SUPERVISOR 2026-06-08T03:25:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-08T03:25:01Z` `logs/cron.supervisor.log:142906` — `[SUPERVISOR 2026-06-08T03:25:01Z] OK: crond PID=23603`
+- [proven] `2026-06-08T03:25:01Z` `logs/cron.supervisor.log:142907` — `[SUPERVISOR 2026-06-08T03:25:01Z] OK: watcher log age=10min`
+- [proven] `2026-06-08T03:25:01Z` `logs/cron.supervisor.log:142908` — `[SUPERVISOR 2026-06-08T03:25:01Z] OK: updater log age=7min`
+- [proven] `2026-06-08T03:25:01Z` `logs/cron.supervisor.log:142909` — `[SUPERVISOR 2026-06-08T03:25:01Z] OK: shadow log age=10min`
+- [proven] `2026-06-08T03:25:01Z` `logs/cron.supervisor.log:142910` — `[SUPERVISOR 2026-06-08T03:25:01Z] OK: no watcher.lock present`
+- [proven] `2026-06-08T03:25:01Z` `logs/cron.supervisor.log:142911` — `[SUPERVISOR 2026-06-08T03:25:01Z] OK: EURUSD M15 cache age=41min`
+- [proven] `2026-06-08T03:25:01Z` `logs/cron.supervisor.log:142912` — `[SUPERVISOR 2026-06-08T03:25:01Z] OK: GBPUSD M15 cache age=41min`
+- [proven] `2026-06-08T03:25:01Z` `logs/cron.supervisor.log:142913` — `[SUPERVISOR 2026-06-08T03:25:01Z] OK: EURUSD H1 cache age=41min`
+- [proven] `2026-06-08T03:25:01Z` `logs/cron.supervisor.log:142914` — `[SUPERVISOR 2026-06-08T03:25:01Z] OK: GBPUSD H1 cache age=41min`
+- [proven] `2026-06-08T03:25:01Z` `logs/cron.supervisor.log:142915` — `[SUPERVISOR 2026-06-08T03:25:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-08T03:25:02Z` `logs/cron.supervisor.log:142918` — `[SUPERVISOR 2026-06-08T03:25:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-08T03:30:00Z` `logs/cron.supervisor.log:142919` — `[SUPERVISOR 2026-06-08T03:30:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-08T03:30:00Z` `logs/cron.supervisor.log:142920` — `[SUPERVISOR 2026-06-08T03:30:00Z] OK: crond PID=23603`
+- [proven] `2026-06-08T03:30:00Z` `logs/cron.supervisor.log:142921` — `[SUPERVISOR 2026-06-08T03:30:00Z] OK: watcher log age=15min`
+- [proven] `2026-06-08T03:30:00Z` `logs/cron.supervisor.log:142922` — `[SUPERVISOR 2026-06-08T03:30:00Z] OK: updater log age=0min`
+- [proven] `2026-06-08T03:30:00Z` `logs/cron.supervisor.log:142923` — `[SUPERVISOR 2026-06-08T03:30:00Z] OK: shadow log age=14min`
+- [proven] `2026-06-08T03:30:00Z` `logs/cron.supervisor.log:142924` — `[SUPERVISOR 2026-06-08T03:30:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-08T03:30:00Z` `logs/cron.supervisor.log:142925` — `[SUPERVISOR 2026-06-08T03:30:00Z] FAIL: EURUSD M15 cache stale 46min`
+- [proven] `2026-06-08T03:30:00Z` `logs/cron.supervisor.log:142926` — `[SUPERVISOR 2026-06-08T03:30:00Z] FAIL: GBPUSD M15 cache stale 46min`
+- [proven] `2026-06-08T03:30:00Z` `logs/cron.supervisor.log:142927` — `[SUPERVISOR 2026-06-08T03:30:00Z] OK: EURUSD H1 cache age=46min`
+- [proven] `2026-06-08T03:30:00Z` `logs/cron.supervisor.log:142928` — `[SUPERVISOR 2026-06-08T03:30:00Z] OK: GBPUSD H1 cache age=46min`
+- [proven] `2026-06-08T03:30:00Z` `logs/cron.supervisor.log:142929` — `[SUPERVISOR 2026-06-08T03:30:00Z] DEGRADED: eurusd_m15_stale:46min|gbpusd_m15_stale:46min`
+- [proven] `2026-06-08T03:30:01Z` `logs/cron.supervisor.log:142930` — `[SUPERVISOR 2026-06-08T03:30:01Z] ACTION: Telegram DEGRADED alert sent`
+
+## Q4
+
+- [not proven] Candidate state: `UNKNOWN`
+- [proven] Interval: `2026-06-13T21:15:00Z` to `2026-06-13T22:15:00Z`
+- [proven] Duration: `1.0` hours
+- [not proven] Reason: insufficient independent corroboration
+- [proven] Independent sources before interval: `12`
+- [proven] Independent sources after interval: `13`
+- [proven] Keyword evidence inside interval: `1`
+
+### Last evidence before interval
+
+- [proven] `2026-06-13T21:10:01Z` `logs/cron.supervisor.log:164409` — `[SUPERVISOR 2026-06-13T21:10:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-13T21:00:00Z` `logs/cron.heartbeat.log:1554` — `[2026-06-13 21:00:00 UTC] ❌ tele.env missing`
+- [proven] `2026-06-12T14:45:41Z` `logs/cron.signals.log:22189` — `[DONE 2026-06-12T18:45:41+0400] manual --once scan complete`
+- [proven] `2026-06-11T12:45:43Z` `logs/alerts.csv:1435` — `2026-06-11T16:45:43+0400,GBPUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,London_NY_overlap,ranging`
+- [proven] `2026-06-13T21:00:06.561236Z` `logs/shadow_manager_heartbeat.txt:4401` — `2026-06-13T21:00:06.561236+00:00 | OK | 0 active signals`
+- [proven] `2026-06-13T21:04:00Z` `logs/cron.autostatus.log:1562` — `[2026-06-13 21:04:00 UTC] ❌ tele.env missing`
+- [proven] `2026-06-08T19:54:27Z` `logs/boot.log:11` — `2026-06-08T19:54:27Z BOOT_OK crond_pid=32470`
+- [proven] `2026-06-08T23:54:10Z` `logs/boot_proof.log:47` — `BOOT_PROOF 2026-06-08 23:54:10 +04`
+- [proven] `2026-05-27T11:15:32Z` `logs/pulse_cron.log:11` — `[2026-05-27T11:15:32Z] [DRY_RUN] SKIP already sent today (UTC 2026-05-27) — /data/data/com.termux/files/home/BotA/state/daily_pulse_sent_2026-05-27.ok exists`
+- [proven] `2026-06-13T21:13:29Z` `logs/error.log:889385` — `2026-06-13 21:13:29 [indicators] Yahoo chart candles loaded: 500 rows`
+- [proven] `2026-06-13T21:10:45Z` `logs/cron.daily.log:986` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-13T21:10:45Z server_hour=21 drift=-14445 detail=target_hour=20;clock_source=live;status=DRIFT_WARN`
+- [proven] `2026-06-13T17:55:01Z` `logs/cron.clock_drift.log:7625` — `Local UTC: 2026-06-13T17:55:01Z`
+
+### First evidence after interval
+
+- [proven] `2026-06-13T22:15:00Z` `logs/cron.supervisor.log:164410` — `[SUPERVISOR 2026-06-13T22:15:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-13T23:00:00Z` `logs/cron.heartbeat.log:1555` — `[2026-06-13 23:00:00 UTC] ❌ tele.env missing`
+- [proven] `2026-06-15T05:00:05Z` `logs/cron.signals.log:22430` — `[WATCHER 2026-06-15T09:00:05+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [proven] `2026-06-15T06:15:20Z` `logs/alerts.csv:1436` — `2026-06-15T10:15:20+0400,EURUSD,M15,SELL,62.60,62.60,1.16016,1.16125,1.15797,engine_A3,true,score<65 | macro6=3,"ok|ema_bps=0.6|rsi=43.4|macd_hist=-0.000151|adx=20.4|ema_comp=0.6|rsi_comp=4.0|macd_comp=15.0|adx_comp=6.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=0.0|session=session_edge|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.16125,TP:1.15797,ATRx(2.0/4.0)",0.6,4.0,15.0,6.0,20.4,43.4,-0.000151,3,,LOW,Asian,trending`
+- [proven] `2026-06-13T22:15:05.467072Z` `logs/shadow_manager_heartbeat.txt:4402` — `2026-06-13T22:15:05.467072+00:00 | OK | 0 active signals`
+- [proven] `2026-06-13T23:04:00Z` `logs/cron.autostatus.log:1563` — `[2026-06-13 23:04:00 UTC] ❌ tele.env missing`
+- [proven] `2026-06-18T03:07:13Z` `logs/boot.log:12` — `2026-06-18T03:07:13Z BOOT_OK crond_pid=18276`
+- [proven] `2026-06-18T07:06:58Z` `logs/boot_proof.log:50` — `BOOT_PROOF 2026-06-18 07:06:58 +04`
+- [proven] `2026-07-08T20:11:19Z` `logs/cron.runtime_health_push.log:1` — `=== BotA runtime health push start: 2026-07-08T20:11:19Z ===`
+- [proven] `2026-07-05T10:50:37Z` `logs/pulse_cron.log:12` — `[2026-07-05T10:50:37Z] [DRY_RUN] SKIP weekend (DOW=7 UTC)`
+- [proven] `2026-06-13T22:28:05Z` `logs/error.log:889728` — `2026-06-13 22:28:05 [indicators] Yahoo chart candles loaded: 500 rows`
+- [proven] `2026-06-13T23:10:45Z` `logs/cron.daily.log:988` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-13T23:10:45Z server_hour=23 drift=-14444 detail=target_hour=20;clock_source=live;status=DRIFT_WARN`
+- [proven] `2026-06-13T23:55:48Z` `logs/cron.clock_drift.log:7656` — `Server UTC: 2026-06-13T23:55:48Z`
+
+### Nearby explicit runtime evidence
+
+- [proven] `2026-06-13T15:15:00Z` `logs/cron.supervisor.log:163402` — `[SUPERVISOR 2026-06-13T15:15:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-13T15:15:00Z` `logs/cron.supervisor.log:163403` — `[SUPERVISOR 2026-06-13T15:15:00Z] OK: crond PID=32470`
+- [proven] `2026-06-13T15:15:00Z` `logs/cron.supervisor.log:163404` — `[SUPERVISOR 2026-06-13T15:15:00Z] OK: watcher log age=14min`
+- [proven] `2026-06-13T15:15:00Z` `logs/cron.supervisor.log:163405` — `[SUPERVISOR 2026-06-13T15:15:00Z] OK: updater log age=1min`
+- [proven] `2026-06-13T15:15:00Z` `logs/cron.supervisor.log:163406` — `[SUPERVISOR 2026-06-13T15:15:00Z] OK: shadow log age=14min`
+- [proven] `2026-06-13T15:15:00Z` `logs/cron.supervisor.log:163407` — `[SUPERVISOR 2026-06-13T15:15:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-13T15:15:01Z` `logs/cron.supervisor.log:163408` — `[SUPERVISOR 2026-06-13T15:15:01Z] OK: EURUSD M15 cache age=1min`
+- [proven] `2026-06-13T15:15:01Z` `logs/cron.supervisor.log:163409` — `[SUPERVISOR 2026-06-13T15:15:01Z] OK: GBPUSD M15 cache age=1min`
+- [proven] `2026-06-13T15:15:01Z` `logs/cron.supervisor.log:163410` — `[SUPERVISOR 2026-06-13T15:15:01Z] OK: EURUSD H1 cache age=1min`
+- [proven] `2026-06-13T15:15:01Z` `logs/cron.supervisor.log:163411` — `[SUPERVISOR 2026-06-13T15:15:01Z] OK: GBPUSD H1 cache age=1min`
+- [proven] `2026-06-13T15:15:01Z` `logs/cron.supervisor.log:163412` — `[SUPERVISOR 2026-06-13T15:15:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-13T15:15:01Z` `logs/cron.supervisor.log:163415` — `[SUPERVISOR 2026-06-13T15:15:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-13T15:20:00Z` `logs/cron.supervisor.log:163416` — `[SUPERVISOR 2026-06-13T15:20:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-13T15:20:00Z` `logs/cron.supervisor.log:163417` — `[SUPERVISOR 2026-06-13T15:20:00Z] OK: crond PID=32470`
+- [proven] `2026-06-13T15:20:00Z` `logs/cron.supervisor.log:163418` — `[SUPERVISOR 2026-06-13T15:20:00Z] OK: watcher log age=4min`
+- [proven] `2026-06-13T15:20:00Z` `logs/cron.supervisor.log:163419` — `[SUPERVISOR 2026-06-13T15:20:00Z] OK: updater log age=6min`
+- [proven] `2026-06-13T15:20:00Z` `logs/cron.supervisor.log:163420` — `[SUPERVISOR 2026-06-13T15:20:00Z] OK: shadow log age=4min`
+- [proven] `2026-06-13T15:20:00Z` `logs/cron.supervisor.log:163421` — `[SUPERVISOR 2026-06-13T15:20:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-13T15:20:00Z` `logs/cron.supervisor.log:163422` — `[SUPERVISOR 2026-06-13T15:20:00Z] OK: EURUSD M15 cache age=6min`
+- [proven] `2026-06-13T15:20:00Z` `logs/cron.supervisor.log:163423` — `[SUPERVISOR 2026-06-13T15:20:00Z] OK: GBPUSD M15 cache age=6min`
+- [proven] `2026-06-13T15:20:00Z` `logs/cron.supervisor.log:163424` — `[SUPERVISOR 2026-06-13T15:20:00Z] OK: EURUSD H1 cache age=6min`
+- [proven] `2026-06-13T15:20:00Z` `logs/cron.supervisor.log:163425` — `[SUPERVISOR 2026-06-13T15:20:00Z] OK: GBPUSD H1 cache age=6min`
+- [proven] `2026-06-13T15:20:00Z` `logs/cron.supervisor.log:163426` — `[SUPERVISOR 2026-06-13T15:20:00Z] HEALTHY: all checks passed`
+- [proven] `2026-06-13T15:20:01Z` `logs/cron.supervisor.log:163429` — `[SUPERVISOR 2026-06-13T15:20:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-13T15:25:00Z` `logs/cron.supervisor.log:163430` — `[SUPERVISOR 2026-06-13T15:25:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-13T15:25:00Z` `logs/cron.supervisor.log:163431` — `[SUPERVISOR 2026-06-13T15:25:00Z] OK: crond PID=32470`
+- [proven] `2026-06-13T15:25:00Z` `logs/cron.supervisor.log:163432` — `[SUPERVISOR 2026-06-13T15:25:00Z] OK: watcher log age=9min`
+- [proven] `2026-06-13T15:25:00Z` `logs/cron.supervisor.log:163433` — `[SUPERVISOR 2026-06-13T15:25:00Z] OK: updater log age=11min`
+- [proven] `2026-06-13T15:25:00Z` `logs/cron.supervisor.log:163434` — `[SUPERVISOR 2026-06-13T15:25:00Z] OK: shadow log age=9min`
+- [proven] `2026-06-13T15:25:00Z` `logs/cron.supervisor.log:163435` — `[SUPERVISOR 2026-06-13T15:25:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-13T15:25:01Z` `logs/cron.supervisor.log:163436` — `[SUPERVISOR 2026-06-13T15:25:01Z] OK: EURUSD M15 cache age=11min`
+- [proven] `2026-06-13T15:25:01Z` `logs/cron.supervisor.log:163437` — `[SUPERVISOR 2026-06-13T15:25:01Z] OK: GBPUSD M15 cache age=11min`
+- [proven] `2026-06-13T15:25:01Z` `logs/cron.supervisor.log:163438` — `[SUPERVISOR 2026-06-13T15:25:01Z] OK: EURUSD H1 cache age=11min`
+- [proven] `2026-06-13T15:25:01Z` `logs/cron.supervisor.log:163439` — `[SUPERVISOR 2026-06-13T15:25:01Z] OK: GBPUSD H1 cache age=11min`
+- [proven] `2026-06-13T15:25:01Z` `logs/cron.supervisor.log:163440` — `[SUPERVISOR 2026-06-13T15:25:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-13T15:25:01Z` `logs/cron.supervisor.log:163443` — `[SUPERVISOR 2026-06-13T15:25:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-13T15:30:00Z` `logs/cron.supervisor.log:163444` — `[SUPERVISOR 2026-06-13T15:30:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-13T15:30:00Z` `logs/cron.supervisor.log:163445` — `[SUPERVISOR 2026-06-13T15:30:00Z] OK: crond PID=32470`
+- [proven] `2026-06-13T15:30:00Z` `logs/cron.supervisor.log:163446` — `[SUPERVISOR 2026-06-13T15:30:00Z] OK: watcher log age=14min`
+- [proven] `2026-06-13T15:30:00Z` `logs/cron.supervisor.log:163447` — `[SUPERVISOR 2026-06-13T15:30:00Z] OK: updater log age=1min`
+- [proven] `2026-06-13T15:30:01Z` `logs/cron.supervisor.log:163448` — `[SUPERVISOR 2026-06-13T15:30:01Z] OK: shadow log age=14min`
+- [proven] `2026-06-13T15:30:01Z` `logs/cron.supervisor.log:163449` — `[SUPERVISOR 2026-06-13T15:30:01Z] OK: no watcher.lock present`
+- [proven] `2026-06-13T15:30:01Z` `logs/cron.supervisor.log:163450` — `[SUPERVISOR 2026-06-13T15:30:01Z] OK: EURUSD M15 cache age=1min`
+- [proven] `2026-06-13T15:30:01Z` `logs/cron.supervisor.log:163451` — `[SUPERVISOR 2026-06-13T15:30:01Z] OK: GBPUSD M15 cache age=1min`
+- [proven] `2026-06-13T15:30:01Z` `logs/cron.supervisor.log:163452` — `[SUPERVISOR 2026-06-13T15:30:01Z] OK: EURUSD H1 cache age=1min`
+- [proven] `2026-06-13T15:30:01Z` `logs/cron.supervisor.log:163453` — `[SUPERVISOR 2026-06-13T15:30:01Z] OK: GBPUSD H1 cache age=1min`
+- [proven] `2026-06-13T15:30:01Z` `logs/cron.supervisor.log:163454` — `[SUPERVISOR 2026-06-13T15:30:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-13T15:30:01Z` `logs/cron.supervisor.log:163457` — `[SUPERVISOR 2026-06-13T15:30:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-13T15:35:00Z` `logs/cron.supervisor.log:163458` — `[SUPERVISOR 2026-06-13T15:35:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-13T15:35:00Z` `logs/cron.supervisor.log:163459` — `[SUPERVISOR 2026-06-13T15:35:00Z] OK: crond PID=32470`
+- [proven] `2026-06-13T15:35:01Z` `logs/cron.supervisor.log:163460` — `[SUPERVISOR 2026-06-13T15:35:01Z] OK: watcher log age=4min`
+- [proven] `2026-06-13T15:35:01Z` `logs/cron.supervisor.log:163461` — `[SUPERVISOR 2026-06-13T15:35:01Z] OK: updater log age=6min`
+- [proven] `2026-06-13T15:35:01Z` `logs/cron.supervisor.log:163462` — `[SUPERVISOR 2026-06-13T15:35:01Z] OK: shadow log age=4min`
+- [proven] `2026-06-13T15:35:01Z` `logs/cron.supervisor.log:163463` — `[SUPERVISOR 2026-06-13T15:35:01Z] OK: no watcher.lock present`
+- [proven] `2026-06-13T15:35:01Z` `logs/cron.supervisor.log:163464` — `[SUPERVISOR 2026-06-13T15:35:01Z] OK: EURUSD M15 cache age=6min`
+- [proven] `2026-06-13T15:35:01Z` `logs/cron.supervisor.log:163465` — `[SUPERVISOR 2026-06-13T15:35:01Z] OK: GBPUSD M15 cache age=6min`
+- [proven] `2026-06-13T15:35:01Z` `logs/cron.supervisor.log:163466` — `[SUPERVISOR 2026-06-13T15:35:01Z] OK: EURUSD H1 cache age=6min`
+- [proven] `2026-06-13T15:35:01Z` `logs/cron.supervisor.log:163467` — `[SUPERVISOR 2026-06-13T15:35:01Z] OK: GBPUSD H1 cache age=6min`
+- [proven] `2026-06-13T15:35:01Z` `logs/cron.supervisor.log:163468` — `[SUPERVISOR 2026-06-13T15:35:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-13T15:35:01Z` `logs/cron.supervisor.log:163471` — `[SUPERVISOR 2026-06-13T15:35:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-13T15:40:00Z` `logs/cron.supervisor.log:163472` — `[SUPERVISOR 2026-06-13T15:40:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-13T15:40:00Z` `logs/cron.supervisor.log:163473` — `[SUPERVISOR 2026-06-13T15:40:00Z] OK: crond PID=32470`
+- [proven] `2026-06-13T15:40:00Z` `logs/cron.supervisor.log:163474` — `[SUPERVISOR 2026-06-13T15:40:00Z] OK: watcher log age=9min`
+- [proven] `2026-06-13T15:40:00Z` `logs/cron.supervisor.log:163475` — `[SUPERVISOR 2026-06-13T15:40:00Z] OK: updater log age=11min`
+- [proven] `2026-06-13T15:40:00Z` `logs/cron.supervisor.log:163476` — `[SUPERVISOR 2026-06-13T15:40:00Z] OK: shadow log age=9min`
+- [proven] `2026-06-13T15:40:00Z` `logs/cron.supervisor.log:163477` — `[SUPERVISOR 2026-06-13T15:40:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-13T15:40:01Z` `logs/cron.supervisor.log:163478` — `[SUPERVISOR 2026-06-13T15:40:01Z] OK: EURUSD M15 cache age=11min`
+- [proven] `2026-06-13T15:40:01Z` `logs/cron.supervisor.log:163479` — `[SUPERVISOR 2026-06-13T15:40:01Z] OK: GBPUSD M15 cache age=11min`
+- [proven] `2026-06-13T15:40:01Z` `logs/cron.supervisor.log:163480` — `[SUPERVISOR 2026-06-13T15:40:01Z] OK: EURUSD H1 cache age=11min`
+- [proven] `2026-06-13T15:40:01Z` `logs/cron.supervisor.log:163481` — `[SUPERVISOR 2026-06-13T15:40:01Z] OK: GBPUSD H1 cache age=11min`
+- [proven] `2026-06-13T15:40:01Z` `logs/cron.supervisor.log:163482` — `[SUPERVISOR 2026-06-13T15:40:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-13T15:40:01Z` `logs/cron.supervisor.log:163485` — `[SUPERVISOR 2026-06-13T15:40:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-13T15:45:00Z` `logs/cron.supervisor.log:163486` — `[SUPERVISOR 2026-06-13T15:45:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-13T15:45:00Z` `logs/cron.supervisor.log:163487` — `[SUPERVISOR 2026-06-13T15:45:00Z] OK: crond PID=32470`
+- [proven] `2026-06-13T15:45:00Z` `logs/cron.supervisor.log:163488` — `[SUPERVISOR 2026-06-13T15:45:00Z] OK: watcher log age=14min`
+- [proven] `2026-06-13T15:45:00Z` `logs/cron.supervisor.log:163489` — `[SUPERVISOR 2026-06-13T15:45:00Z] OK: updater log age=1min`
+- [proven] `2026-06-13T15:45:00Z` `logs/cron.supervisor.log:163490` — `[SUPERVISOR 2026-06-13T15:45:00Z] OK: shadow log age=14min`
+- [proven] `2026-06-13T15:45:00Z` `logs/cron.supervisor.log:163491` — `[SUPERVISOR 2026-06-13T15:45:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-13T15:45:00Z` `logs/cron.supervisor.log:163492` — `[SUPERVISOR 2026-06-13T15:45:00Z] OK: EURUSD M15 cache age=1min`
+- [proven] `2026-06-13T15:45:00Z` `logs/cron.supervisor.log:163493` — `[SUPERVISOR 2026-06-13T15:45:00Z] OK: GBPUSD M15 cache age=1min`
+- [proven] `2026-06-13T15:45:00Z` `logs/cron.supervisor.log:163494` — `[SUPERVISOR 2026-06-13T15:45:00Z] OK: EURUSD H1 cache age=1min`
+- [proven] `2026-06-13T15:45:00Z` `logs/cron.supervisor.log:163495` — `[SUPERVISOR 2026-06-13T15:45:00Z] OK: GBPUSD H1 cache age=1min`
+- [proven] `2026-06-13T15:45:00Z` `logs/cron.supervisor.log:163496` — `[SUPERVISOR 2026-06-13T15:45:00Z] HEALTHY: all checks passed`
+- [proven] `2026-06-13T15:45:00Z` `logs/cron.supervisor.log:163499` — `[SUPERVISOR 2026-06-13T15:45:00Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-13T15:50:00Z` `logs/cron.supervisor.log:163500` — `[SUPERVISOR 2026-06-13T15:50:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-13T15:50:00Z` `logs/cron.supervisor.log:163501` — `[SUPERVISOR 2026-06-13T15:50:00Z] OK: crond PID=32470`
+- [proven] `2026-06-13T15:50:00Z` `logs/cron.supervisor.log:163502` — `[SUPERVISOR 2026-06-13T15:50:00Z] OK: watcher log age=4min`
+- [proven] `2026-06-13T15:50:00Z` `logs/cron.supervisor.log:163503` — `[SUPERVISOR 2026-06-13T15:50:00Z] OK: updater log age=6min`
+- [proven] `2026-06-13T15:50:00Z` `logs/cron.supervisor.log:163504` — `[SUPERVISOR 2026-06-13T15:50:00Z] OK: shadow log age=4min`
+- [proven] `2026-06-13T15:50:00Z` `logs/cron.supervisor.log:163505` — `[SUPERVISOR 2026-06-13T15:50:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-13T15:50:01Z` `logs/cron.supervisor.log:163506` — `[SUPERVISOR 2026-06-13T15:50:01Z] OK: EURUSD M15 cache age=6min`
+- [proven] `2026-06-13T15:50:01Z` `logs/cron.supervisor.log:163507` — `[SUPERVISOR 2026-06-13T15:50:01Z] OK: GBPUSD M15 cache age=6min`
+- [proven] `2026-06-13T15:50:01Z` `logs/cron.supervisor.log:163508` — `[SUPERVISOR 2026-06-13T15:50:01Z] OK: EURUSD H1 cache age=6min`
+- [proven] `2026-06-13T15:50:01Z` `logs/cron.supervisor.log:163509` — `[SUPERVISOR 2026-06-13T15:50:01Z] OK: GBPUSD H1 cache age=6min`
+- [proven] `2026-06-13T15:50:01Z` `logs/cron.supervisor.log:163510` — `[SUPERVISOR 2026-06-13T15:50:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-13T15:50:01Z` `logs/cron.supervisor.log:163513` — `[SUPERVISOR 2026-06-13T15:50:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-13T15:55:00Z` `logs/cron.supervisor.log:163514` — `[SUPERVISOR 2026-06-13T15:55:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-13T15:55:00Z` `logs/cron.supervisor.log:163515` — `[SUPERVISOR 2026-06-13T15:55:00Z] OK: crond PID=32470`
+- [proven] `2026-06-13T15:55:00Z` `logs/cron.supervisor.log:163516` — `[SUPERVISOR 2026-06-13T15:55:00Z] OK: watcher log age=9min`
+- [proven] `2026-06-13T15:55:00Z` `logs/cron.supervisor.log:163517` — `[SUPERVISOR 2026-06-13T15:55:00Z] OK: updater log age=11min`
+- [proven] `2026-06-13T15:55:00Z` `logs/cron.supervisor.log:163518` — `[SUPERVISOR 2026-06-13T15:55:00Z] OK: shadow log age=9min`
+- [proven] `2026-06-13T15:55:00Z` `logs/cron.supervisor.log:163519` — `[SUPERVISOR 2026-06-13T15:55:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-13T15:55:00Z` `logs/cron.supervisor.log:163520` — `[SUPERVISOR 2026-06-13T15:55:00Z] OK: EURUSD M15 cache age=11min`
+- [proven] `2026-06-13T15:55:00Z` `logs/cron.supervisor.log:163521` — `[SUPERVISOR 2026-06-13T15:55:00Z] OK: GBPUSD M15 cache age=11min`
+- [proven] `2026-06-13T15:55:00Z` `logs/cron.supervisor.log:163522` — `[SUPERVISOR 2026-06-13T15:55:00Z] OK: EURUSD H1 cache age=11min`
+- [proven] `2026-06-13T15:55:00Z` `logs/cron.supervisor.log:163523` — `[SUPERVISOR 2026-06-13T15:55:00Z] OK: GBPUSD H1 cache age=11min`
+- [proven] `2026-06-13T15:55:01Z` `logs/cron.supervisor.log:163524` — `[SUPERVISOR 2026-06-13T15:55:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-13T15:55:01Z` `logs/cron.supervisor.log:163527` — `[SUPERVISOR 2026-06-13T15:55:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-13T16:00:00Z` `logs/cron.supervisor.log:163528` — `[SUPERVISOR 2026-06-13T16:00:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-13T16:00:00Z` `logs/cron.supervisor.log:163529` — `[SUPERVISOR 2026-06-13T16:00:00Z] OK: crond PID=32470`
+- [proven] `2026-06-13T16:00:01Z` `logs/cron.supervisor.log:163530` — `[SUPERVISOR 2026-06-13T16:00:01Z] OK: watcher log age=14min`
+- [proven] `2026-06-13T16:00:01Z` `logs/cron.supervisor.log:163531` — `[SUPERVISOR 2026-06-13T16:00:01Z] OK: updater log age=1min`
+- [proven] `2026-06-13T16:00:01Z` `logs/cron.supervisor.log:163532` — `[SUPERVISOR 2026-06-13T16:00:01Z] OK: shadow log age=14min`
+- [proven] `2026-06-13T16:00:01Z` `logs/cron.supervisor.log:163533` — `[SUPERVISOR 2026-06-13T16:00:01Z] OK: no watcher.lock present`
+- [proven] `2026-06-13T16:00:01Z` `logs/cron.supervisor.log:163534` — `[SUPERVISOR 2026-06-13T16:00:01Z] OK: EURUSD M15 cache age=1min`
+- [proven] `2026-06-13T16:00:01Z` `logs/cron.supervisor.log:163535` — `[SUPERVISOR 2026-06-13T16:00:01Z] OK: GBPUSD M15 cache age=1min`
+- [proven] `2026-06-13T16:00:01Z` `logs/cron.supervisor.log:163536` — `[SUPERVISOR 2026-06-13T16:00:01Z] OK: EURUSD H1 cache age=1min`
+- [proven] `2026-06-13T16:00:01Z` `logs/cron.supervisor.log:163537` — `[SUPERVISOR 2026-06-13T16:00:01Z] OK: GBPUSD H1 cache age=1min`
+- [proven] `2026-06-13T16:00:01Z` `logs/cron.supervisor.log:163538` — `[SUPERVISOR 2026-06-13T16:00:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-13T16:00:01Z` `logs/cron.supervisor.log:163541` — `[SUPERVISOR 2026-06-13T16:00:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+
+## Q5
+
+- [not proven] Candidate state: `UNKNOWN`
+- [proven] Interval: `2026-06-22T17:45:00Z` to `2026-07-08T11:45:00Z`
+- [proven] Duration: `378.0` hours
+- [not proven] Reason: insufficient independent corroboration
+- [proven] Independent sources before interval: `12`
+- [proven] Independent sources after interval: `10`
+- [proven] Keyword evidence inside interval: `69`
+
+### Last evidence before interval
+
+- [proven] `2026-06-22T17:40:01Z` `logs/cron.supervisor.log:199839` — `[SUPERVISOR 2026-06-22T17:40:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-22T17:00:00Z` `logs/cron.heartbeat.log:1764` — `[2026-06-22 17:00:00 UTC] ❌ tele.env missing`
+- [proven] `2026-06-22T17:16:01Z` `logs/cron.signals.log:24234` — `[DONE 2026-06-22T21:16:01+0400] manual --once scan complete`
+- [proven] `2026-06-22T17:00:33Z` `logs/alerts.csv:1561` — `2026-06-22T21:00:33+0400,EURUSD,M15,HOLD,0.00,40.00,0.00000,0.00000,0.00000,engine_A3,true,direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3,no_signal|phase=Open,,,,,,,,3,,LOW,NY_close,ranging`
+- [proven] `2026-06-22T17:15:13.506268Z` `logs/shadow_manager_heartbeat.txt:5242` — `2026-06-22T17:15:13.506268+00:00 | OK | 1 active | 8.8s`
+- [proven] `2026-06-22T17:04:00Z` `logs/cron.autostatus.log:1771` — `[2026-06-22 17:04:00 UTC] ❌ tele.env missing`
+- [proven] `2026-06-18T03:30:53Z` `logs/boot.log:13` — `2026-06-18T03:30:53Z BOOT_OK crond_pid=23322`
+- [proven] `2026-06-18T07:30:42Z` `logs/boot_proof.log:54` — `BOOT_PROOF 2026-06-18 07:30:42 +04`
+- [proven] `2026-05-27T11:15:32Z` `logs/pulse_cron.log:11` — `[2026-05-27T11:15:32Z] [DRY_RUN] SKIP already sent today (UTC 2026-05-27) — /data/data/com.termux/files/home/BotA/state/daily_pulse_sent_2026-05-27.ok exists`
+- [proven] `2026-06-22T17:43:55Z` `logs/error.log:1003758` — `2026-06-22 17:43:55 [indicators] Yahoo chart candles loaded: 499 rows`
+- [proven] `2026-06-22T17:10:52Z` `logs/cron.daily.log:1379` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-22T17:10:52Z server_hour=17 drift=-7251 detail=target_hour=20;clock_source=live;status=DRIFT_WARN`
+- [proven] `2026-06-22T16:55:01Z` `logs/cron.clock_drift.log:10879` — `Local UTC: 2026-06-22T16:55:01Z`
+
+### First evidence after interval
+
+- [proven] `2026-07-08T11:45:00Z` `logs/cron.supervisor.log:199840` — `[SUPERVISOR 2026-07-08T11:45:00Z] === SUPERVISOR START ===`
+- [proven] `2026-07-08T12:00:00Z` `logs/cron.heartbeat.log:1765` — `[2026-07-08 12:00:00 UTC] ❌ tele.env missing`
+- [proven] `2026-07-08T11:45:07Z` `logs/cron.signals.log:24236` — `[WATCHER 2026-07-08T13:45:07+0200] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [proven] `2026-07-08T11:45:26Z` `logs/alerts.csv:1562` — `2026-07-08T13:45:26+0200,EURUSD,M15,SELL,57.60,57.60,1.14033,1.14181,1.13737,engine_A3,true,score<65 | macro6=3,"ok|ema_bps=2.8|rsi=46.0|macd_hist=-0.000033|adx=33.4|ema_comp=2.8|rsi_comp=2.4|macd_comp=3.3|adx_comp=10.0|bb_comp=-3.0|bb=bb_squeeze|session_comp=2.0|session=session_london|vol_comp=0.0|vol=vol_normal|sr_comp=0.0|sr=sr_neutral|phase=Open|pullback_entry|d1_filter=SELL | sl_tp_rec=SL:1.14181,TP:1.13737,ATRx(2.0/4.0)",2.8,2.4,3.3,10.0,33.4,46.0,-0.000033,3,,LOW,London,trending`
+- [proven] `2026-07-08T11:45:03.800829Z` `logs/shadow_manager_heartbeat.txt:5243` — `2026-07-08T11:45:03.800829+00:00 | OK | 0 active signals`
+- [proven] `2026-07-08T12:04:01Z` `logs/cron.autostatus.log:1772` — `[2026-07-08 12:04:01 UTC] ❌ tele.env missing`
+- [proven] `2026-07-08T20:11:19Z` `logs/cron.runtime_health_push.log:1` — `=== BotA runtime health push start: 2026-07-08T20:11:19Z ===`
+- [proven] `2026-07-08T13:43:04Z` `logs/error.log:1005175` — `2026-07-08 13:43:04 [indicators] Yahoo chart candles loaded: 499 rows`
+- [proven] `2026-07-08T12:11:26Z` `logs/cron.daily.log:1526` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-07-08T12:11:26Z server_hour=12 drift=-7286 detail=target_hour=20;clock_source=live;status=DRIFT_WARN`
+- [proven] `2026-07-08T11:55:00Z` `logs/cron.clock_drift.log:10894` — `Generated UTC: 2026-07-08T11:55:00Z`
+
+### Nearby explicit runtime evidence
+
+- [proven] `2026-06-22T11:45:00Z` `logs/cron.supervisor.log:198822` — `[SUPERVISOR 2026-06-22T11:45:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-22T11:45:01Z` `logs/cron.supervisor.log:198823` — `[SUPERVISOR 2026-06-22T11:45:01Z] OK: crond PID=23322`
+- [proven] `2026-06-22T11:45:01Z` `logs/cron.supervisor.log:198824` — `[SUPERVISOR 2026-06-22T11:45:01Z] OK: watcher log age=15min`
+- [proven] `2026-06-22T11:45:01Z` `logs/cron.supervisor.log:198825` — `[SUPERVISOR 2026-06-22T11:45:01Z] OK: updater log age=0min`
+- [proven] `2026-06-22T11:45:01Z` `logs/cron.supervisor.log:198826` — `[SUPERVISOR 2026-06-22T11:45:01Z] OK: shadow log age=14min`
+- [proven] `2026-06-22T11:45:01Z` `logs/cron.supervisor.log:198827` — `[SUPERVISOR 2026-06-22T11:45:01Z] OK: no watcher.lock present`
+- [proven] `2026-06-22T11:45:02Z` `logs/cron.supervisor.log:198828` — `[SUPERVISOR 2026-06-22T11:45:02Z] FAIL: EURUSD M15 cache stale 91min`
+- [proven] `2026-06-22T11:45:02Z` `logs/cron.supervisor.log:198829` — `[SUPERVISOR 2026-06-22T11:45:02Z] FAIL: GBPUSD M15 cache stale 91min`
+- [proven] `2026-06-22T11:45:02Z` `logs/cron.supervisor.log:198830` — `[SUPERVISOR 2026-06-22T11:45:02Z] FAIL: EURUSD H1 cache stale 91min`
+- [proven] `2026-06-22T11:45:02Z` `logs/cron.supervisor.log:198831` — `[SUPERVISOR 2026-06-22T11:45:02Z] FAIL: GBPUSD H1 cache stale 91min`
+- [proven] `2026-06-22T11:45:02Z` `logs/cron.supervisor.log:198832` — `[SUPERVISOR 2026-06-22T11:45:02Z] DEGRADED: eurusd_m15_stale:91min|gbpusd_m15_stale:91min|eurusd_h1_stale:91min|gbpusd_h1_stale:91min`
+- [proven] `2026-06-22T11:45:02Z` `logs/cron.supervisor.log:198835` — `[SUPERVISOR 2026-06-22T11:45:02Z] === SUPERVISOR DONE: bot_mode=DEGRADED ===`
+- [proven] `2026-06-22T11:50:00Z` `logs/cron.supervisor.log:198836` — `[SUPERVISOR 2026-06-22T11:50:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-22T11:50:00Z` `logs/cron.supervisor.log:198837` — `[SUPERVISOR 2026-06-22T11:50:00Z] OK: crond PID=23322`
+- [proven] `2026-06-22T11:50:00Z` `logs/cron.supervisor.log:198838` — `[SUPERVISOR 2026-06-22T11:50:00Z] OK: watcher log age=4min`
+- [proven] `2026-06-22T11:50:00Z` `logs/cron.supervisor.log:198839` — `[SUPERVISOR 2026-06-22T11:50:00Z] OK: updater log age=2min`
+- [proven] `2026-06-22T11:50:00Z` `logs/cron.supervisor.log:198840` — `[SUPERVISOR 2026-06-22T11:50:00Z] OK: shadow log age=4min`
+- [proven] `2026-06-22T11:50:00Z` `logs/cron.supervisor.log:198841` — `[SUPERVISOR 2026-06-22T11:50:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-22T11:50:01Z` `logs/cron.supervisor.log:198842` — `[SUPERVISOR 2026-06-22T11:50:01Z] FAIL: EURUSD M15 cache stale 96min`
+- [proven] `2026-06-22T11:50:01Z` `logs/cron.supervisor.log:198843` — `[SUPERVISOR 2026-06-22T11:50:01Z] FAIL: GBPUSD M15 cache stale 96min`
+- [proven] `2026-06-22T11:50:01Z` `logs/cron.supervisor.log:198844` — `[SUPERVISOR 2026-06-22T11:50:01Z] FAIL: EURUSD H1 cache stale 96min`
+- [proven] `2026-06-22T11:50:01Z` `logs/cron.supervisor.log:198845` — `[SUPERVISOR 2026-06-22T11:50:01Z] FAIL: GBPUSD H1 cache stale 96min`
+- [proven] `2026-06-22T11:50:01Z` `logs/cron.supervisor.log:198846` — `[SUPERVISOR 2026-06-22T11:50:01Z] DEGRADED: eurusd_m15_stale:96min|gbpusd_m15_stale:96min|eurusd_h1_stale:96min|gbpusd_h1_stale:96min`
+- [proven] `2026-06-22T11:50:02Z` `logs/cron.supervisor.log:198849` — `[SUPERVISOR 2026-06-22T11:50:02Z] === SUPERVISOR DONE: bot_mode=DEGRADED ===`
+- [proven] `2026-06-22T11:55:00Z` `logs/cron.supervisor.log:198850` — `[SUPERVISOR 2026-06-22T11:55:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-22T11:55:00Z` `logs/cron.supervisor.log:198851` — `[SUPERVISOR 2026-06-22T11:55:00Z] OK: crond PID=23322`
+- [proven] `2026-06-22T11:55:00Z` `logs/cron.supervisor.log:198852` — `[SUPERVISOR 2026-06-22T11:55:00Z] OK: watcher log age=9min`
+- [proven] `2026-06-22T11:55:00Z` `logs/cron.supervisor.log:198853` — `[SUPERVISOR 2026-06-22T11:55:00Z] OK: updater log age=7min`
+- [proven] `2026-06-22T11:55:00Z` `logs/cron.supervisor.log:198854` — `[SUPERVISOR 2026-06-22T11:55:00Z] OK: shadow log age=9min`
+- [proven] `2026-06-22T11:55:00Z` `logs/cron.supervisor.log:198855` — `[SUPERVISOR 2026-06-22T11:55:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-22T11:55:01Z` `logs/cron.supervisor.log:198856` — `[SUPERVISOR 2026-06-22T11:55:01Z] FAIL: EURUSD M15 cache stale 101min`
+- [proven] `2026-06-22T11:55:01Z` `logs/cron.supervisor.log:198857` — `[SUPERVISOR 2026-06-22T11:55:01Z] FAIL: GBPUSD M15 cache stale 101min`
+- [proven] `2026-06-22T11:55:01Z` `logs/cron.supervisor.log:198858` — `[SUPERVISOR 2026-06-22T11:55:01Z] FAIL: EURUSD H1 cache stale 101min`
+- [proven] `2026-06-22T11:55:01Z` `logs/cron.supervisor.log:198859` — `[SUPERVISOR 2026-06-22T11:55:01Z] FAIL: GBPUSD H1 cache stale 101min`
+- [proven] `2026-06-22T11:55:01Z` `logs/cron.supervisor.log:198860` — `[SUPERVISOR 2026-06-22T11:55:01Z] DEGRADED: eurusd_m15_stale:101min|gbpusd_m15_stale:101min|eurusd_h1_stale:101min|gbpusd_h1_stale:101min`
+- [proven] `2026-06-22T11:55:01Z` `logs/cron.supervisor.log:198863` — `[SUPERVISOR 2026-06-22T11:55:01Z] === SUPERVISOR DONE: bot_mode=DEGRADED ===`
+- [proven] `2026-06-22T12:00:00Z` `logs/cron.supervisor.log:198864` — `[SUPERVISOR 2026-06-22T12:00:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-22T12:00:00Z` `logs/cron.supervisor.log:198865` — `[SUPERVISOR 2026-06-22T12:00:00Z] OK: crond PID=23322`
+- [proven] `2026-06-22T12:00:01Z` `logs/cron.supervisor.log:198866` — `[SUPERVISOR 2026-06-22T12:00:01Z] OK: watcher log age=14min`
+- [proven] `2026-06-22T12:00:01Z` `logs/cron.supervisor.log:198867` — `[SUPERVISOR 2026-06-22T12:00:01Z] OK: updater log age=0min`
+- [proven] `2026-06-22T12:00:01Z` `logs/cron.supervisor.log:198868` — `[SUPERVISOR 2026-06-22T12:00:01Z] OK: shadow log age=14min`
+- [proven] `2026-06-22T12:00:01Z` `logs/cron.supervisor.log:198869` — `[SUPERVISOR 2026-06-22T12:00:01Z] OK: no watcher.lock present`
+- [proven] `2026-06-22T12:00:01Z` `logs/cron.supervisor.log:198870` — `[SUPERVISOR 2026-06-22T12:00:01Z] FAIL: EURUSD M15 cache stale 106min`
+- [proven] `2026-06-22T12:00:01Z` `logs/cron.supervisor.log:198871` — `[SUPERVISOR 2026-06-22T12:00:01Z] FAIL: GBPUSD M15 cache stale 106min`
+- [proven] `2026-06-22T12:00:01Z` `logs/cron.supervisor.log:198872` — `[SUPERVISOR 2026-06-22T12:00:01Z] FAIL: EURUSD H1 cache stale 106min`
+- [proven] `2026-06-22T12:00:01Z` `logs/cron.supervisor.log:198873` — `[SUPERVISOR 2026-06-22T12:00:01Z] FAIL: GBPUSD H1 cache stale 106min`
+- [proven] `2026-06-22T12:00:01Z` `logs/cron.supervisor.log:198874` — `[SUPERVISOR 2026-06-22T12:00:01Z] DEGRADED: eurusd_m15_stale:106min|gbpusd_m15_stale:106min|eurusd_h1_stale:106min|gbpusd_h1_stale:106min`
+- [proven] `2026-06-22T12:00:02Z` `logs/cron.supervisor.log:198877` — `[SUPERVISOR 2026-06-22T12:00:02Z] === SUPERVISOR DONE: bot_mode=DEGRADED ===`
+- [proven] `2026-06-22T12:05:01Z` `logs/cron.supervisor.log:198878` — `[SUPERVISOR 2026-06-22T12:05:01Z] === SUPERVISOR START ===`
+- [proven] `2026-06-22T12:05:01Z` `logs/cron.supervisor.log:198879` — `[SUPERVISOR 2026-06-22T12:05:01Z] OK: crond PID=23322`
+- [proven] `2026-06-22T12:05:01Z` `logs/cron.supervisor.log:198880` — `[SUPERVISOR 2026-06-22T12:05:01Z] OK: watcher log age=5min`
+- [proven] `2026-06-22T12:05:01Z` `logs/cron.supervisor.log:198881` — `[SUPERVISOR 2026-06-22T12:05:01Z] OK: updater log age=2min`
+- [proven] `2026-06-22T12:05:01Z` `logs/cron.supervisor.log:198882` — `[SUPERVISOR 2026-06-22T12:05:01Z] OK: shadow log age=5min`
+- [proven] `2026-06-22T12:05:01Z` `logs/cron.supervisor.log:198883` — `[SUPERVISOR 2026-06-22T12:05:01Z] OK: no watcher.lock present`
+- [proven] `2026-06-22T12:05:01Z` `logs/cron.supervisor.log:198884` — `[SUPERVISOR 2026-06-22T12:05:01Z] FAIL: EURUSD M15 cache stale 111min`
+- [proven] `2026-06-22T12:05:01Z` `logs/cron.supervisor.log:198885` — `[SUPERVISOR 2026-06-22T12:05:01Z] FAIL: GBPUSD M15 cache stale 111min`
+- [proven] `2026-06-22T12:05:01Z` `logs/cron.supervisor.log:198886` — `[SUPERVISOR 2026-06-22T12:05:01Z] FAIL: EURUSD H1 cache stale 111min`
+- [proven] `2026-06-22T12:05:01Z` `logs/cron.supervisor.log:198887` — `[SUPERVISOR 2026-06-22T12:05:01Z] FAIL: GBPUSD H1 cache stale 111min`
+- [proven] `2026-06-22T12:05:01Z` `logs/cron.supervisor.log:198888` — `[SUPERVISOR 2026-06-22T12:05:01Z] DEGRADED: eurusd_m15_stale:111min|gbpusd_m15_stale:111min|eurusd_h1_stale:111min|gbpusd_h1_stale:111min`
+- [proven] `2026-06-22T12:05:02Z` `logs/cron.supervisor.log:198891` — `[SUPERVISOR 2026-06-22T12:05:02Z] === SUPERVISOR DONE: bot_mode=DEGRADED ===`
+- [proven] `2026-06-22T12:10:00Z` `logs/cron.supervisor.log:198892` — `[SUPERVISOR 2026-06-22T12:10:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-22T12:10:00Z` `logs/cron.supervisor.log:198893` — `[SUPERVISOR 2026-06-22T12:10:00Z] OK: crond PID=23322`
+- [proven] `2026-06-22T12:10:00Z` `logs/cron.supervisor.log:198894` — `[SUPERVISOR 2026-06-22T12:10:00Z] OK: watcher log age=9min`
+- [proven] `2026-06-22T12:10:00Z` `logs/cron.supervisor.log:198895` — `[SUPERVISOR 2026-06-22T12:10:00Z] OK: updater log age=7min`
+- [proven] `2026-06-22T12:10:00Z` `logs/cron.supervisor.log:198896` — `[SUPERVISOR 2026-06-22T12:10:00Z] OK: shadow log age=9min`
+- [proven] `2026-06-22T12:10:00Z` `logs/cron.supervisor.log:198897` — `[SUPERVISOR 2026-06-22T12:10:00Z] OK: no watcher.lock present`
+- [proven] `2026-06-22T12:10:01Z` `logs/cron.supervisor.log:198898` — `[SUPERVISOR 2026-06-22T12:10:01Z] FAIL: EURUSD M15 cache stale 116min`
+- [proven] `2026-06-22T12:10:01Z` `logs/cron.supervisor.log:198899` — `[SUPERVISOR 2026-06-22T12:10:01Z] FAIL: GBPUSD M15 cache stale 116min`
+- [proven] `2026-06-22T12:10:01Z` `logs/cron.supervisor.log:198900` — `[SUPERVISOR 2026-06-22T12:10:01Z] FAIL: EURUSD H1 cache stale 116min`
+- [proven] `2026-06-22T12:10:01Z` `logs/cron.supervisor.log:198901` — `[SUPERVISOR 2026-06-22T12:10:01Z] FAIL: GBPUSD H1 cache stale 116min`
+- [proven] `2026-06-22T12:10:01Z` `logs/cron.supervisor.log:198902` — `[SUPERVISOR 2026-06-22T12:10:01Z] DEGRADED: eurusd_m15_stale:116min|gbpusd_m15_stale:116min|eurusd_h1_stale:116min|gbpusd_h1_stale:116min`
+- [proven] `2026-06-22T12:10:01Z` `logs/cron.supervisor.log:198905` — `[SUPERVISOR 2026-06-22T12:10:01Z] === SUPERVISOR DONE: bot_mode=DEGRADED ===`
+- [proven] `2026-06-22T12:15:00Z` `logs/cron.supervisor.log:198906` — `[SUPERVISOR 2026-06-22T12:15:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-22T12:15:00Z` `logs/cron.supervisor.log:198907` — `[SUPERVISOR 2026-06-22T12:15:00Z] OK: crond PID=23322`
+- [proven] `2026-06-22T12:15:01Z` `logs/cron.supervisor.log:198908` — `[SUPERVISOR 2026-06-22T12:15:01Z] OK: watcher log age=15min`
+- [proven] `2026-06-22T12:15:01Z` `logs/cron.supervisor.log:198909` — `[SUPERVISOR 2026-06-22T12:15:01Z] OK: updater log age=1min`
+- [proven] `2026-06-22T12:15:01Z` `logs/cron.supervisor.log:198910` — `[SUPERVISOR 2026-06-22T12:15:01Z] OK: shadow log age=15min`
+- [proven] `2026-06-22T12:15:01Z` `logs/cron.supervisor.log:198911` — `[SUPERVISOR 2026-06-22T12:15:01Z] OK: no watcher.lock present`
+- [proven] `2026-06-22T12:15:01Z` `logs/cron.supervisor.log:198912` — `[SUPERVISOR 2026-06-22T12:15:01Z] OK: EURUSD M15 cache age=1min`
+- [proven] `2026-06-22T12:15:01Z` `logs/cron.supervisor.log:198913` — `[SUPERVISOR 2026-06-22T12:15:01Z] OK: GBPUSD M15 cache age=1min`
+- [proven] `2026-06-22T12:15:01Z` `logs/cron.supervisor.log:198914` — `[SUPERVISOR 2026-06-22T12:15:01Z] OK: EURUSD H1 cache age=1min`
+- [proven] `2026-06-22T12:15:01Z` `logs/cron.supervisor.log:198915` — `[SUPERVISOR 2026-06-22T12:15:01Z] OK: GBPUSD H1 cache age=1min`
+- [proven] `2026-06-22T12:15:01Z` `logs/cron.supervisor.log:198916` — `[SUPERVISOR 2026-06-22T12:15:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-22T12:15:01Z` `logs/cron.supervisor.log:198917` — `[SUPERVISOR 2026-06-22T12:15:01Z] ACTION: Telegram RECOVERY alert sent`
+- [proven] `2026-06-22T12:15:02Z` `logs/cron.supervisor.log:198920` — `[SUPERVISOR 2026-06-22T12:15:02Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-22T12:20:00Z` `logs/cron.supervisor.log:198921` — `[SUPERVISOR 2026-06-22T12:20:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-22T12:20:00Z` `logs/cron.supervisor.log:198922` — `[SUPERVISOR 2026-06-22T12:20:00Z] OK: crond PID=23322`
+- [proven] `2026-06-22T12:20:00Z` `logs/cron.supervisor.log:198923` — `[SUPERVISOR 2026-06-22T12:20:00Z] OK: watcher log age=4min`
+- [proven] `2026-06-22T12:20:00Z` `logs/cron.supervisor.log:198924` — `[SUPERVISOR 2026-06-22T12:20:00Z] OK: updater log age=6min`
+- [proven] `2026-06-22T12:20:00Z` `logs/cron.supervisor.log:198925` — `[SUPERVISOR 2026-06-22T12:20:00Z] OK: shadow log age=4min`
+- [proven] `2026-06-22T12:20:00Z` `logs/cron.supervisor.log:198926` — `[SUPERVISOR 2026-06-22T12:20:00Z] OK: watcher.lock age=281s`
+- [proven] `2026-06-22T12:20:00Z` `logs/cron.supervisor.log:198927` — `[SUPERVISOR 2026-06-22T12:20:00Z] OK: EURUSD M15 cache age=6min`
+- [proven] `2026-06-22T12:20:00Z` `logs/cron.supervisor.log:198928` — `[SUPERVISOR 2026-06-22T12:20:00Z] OK: GBPUSD M15 cache age=6min`
+- [proven] `2026-06-22T12:20:00Z` `logs/cron.supervisor.log:198929` — `[SUPERVISOR 2026-06-22T12:20:00Z] OK: EURUSD H1 cache age=6min`
+- [proven] `2026-06-22T12:20:01Z` `logs/cron.supervisor.log:198930` — `[SUPERVISOR 2026-06-22T12:20:01Z] OK: GBPUSD H1 cache age=6min`
+- [proven] `2026-06-22T12:20:01Z` `logs/cron.supervisor.log:198931` — `[SUPERVISOR 2026-06-22T12:20:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-22T12:20:01Z` `logs/cron.supervisor.log:198934` — `[SUPERVISOR 2026-06-22T12:20:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-22T12:25:00Z` `logs/cron.supervisor.log:198935` — `[SUPERVISOR 2026-06-22T12:25:00Z] === SUPERVISOR START ===`
+- [proven] `2026-06-22T12:25:00Z` `logs/cron.supervisor.log:198936` — `[SUPERVISOR 2026-06-22T12:25:00Z] OK: crond PID=23322`
+- [proven] `2026-06-22T12:25:00Z` `logs/cron.supervisor.log:198937` — `[SUPERVISOR 2026-06-22T12:25:00Z] OK: watcher log age=9min`
+- [proven] `2026-06-22T12:25:00Z` `logs/cron.supervisor.log:198938` — `[SUPERVISOR 2026-06-22T12:25:00Z] OK: updater log age=11min`
+- [proven] `2026-06-22T12:25:00Z` `logs/cron.supervisor.log:198939` — `[SUPERVISOR 2026-06-22T12:25:00Z] OK: shadow log age=9min`
+- [proven] `2026-06-22T12:25:00Z` `logs/cron.supervisor.log:198940` — `[SUPERVISOR 2026-06-22T12:25:00Z] OK: watcher.lock age=581s`
+- [proven] `2026-06-22T12:25:01Z` `logs/cron.supervisor.log:198941` — `[SUPERVISOR 2026-06-22T12:25:01Z] OK: EURUSD M15 cache age=11min`
+- [proven] `2026-06-22T12:25:01Z` `logs/cron.supervisor.log:198942` — `[SUPERVISOR 2026-06-22T12:25:01Z] OK: GBPUSD M15 cache age=11min`
+- [proven] `2026-06-22T12:25:01Z` `logs/cron.supervisor.log:198943` — `[SUPERVISOR 2026-06-22T12:25:01Z] OK: EURUSD H1 cache age=11min`
+- [proven] `2026-06-22T12:25:01Z` `logs/cron.supervisor.log:198944` — `[SUPERVISOR 2026-06-22T12:25:01Z] OK: GBPUSD H1 cache age=11min`
+- [proven] `2026-06-22T12:25:01Z` `logs/cron.supervisor.log:198945` — `[SUPERVISOR 2026-06-22T12:25:01Z] HEALTHY: all checks passed`
+- [proven] `2026-06-22T12:25:01Z` `logs/cron.supervisor.log:198948` — `[SUPERVISOR 2026-06-22T12:25:01Z] === SUPERVISOR DONE: bot_mode=HEALTHY ===`
+- [proven] `2026-06-22T12:30:01Z` `logs/cron.supervisor.log:198949` — `[SUPERVISOR 2026-06-22T12:30:01Z] === SUPERVISOR START ===`
+- [proven] `2026-06-22T12:30:01Z` `logs/cron.supervisor.log:198950` — `[SUPERVISOR 2026-06-22T12:30:01Z] OK: crond PID=23322`
+- [proven] `2026-06-22T12:30:01Z` `logs/cron.supervisor.log:198951` — `[SUPERVISOR 2026-06-22T12:30:01Z] OK: watcher log age=14min`
+- [proven] `2026-06-22T12:30:01Z` `logs/cron.supervisor.log:198952` — `[SUPERVISOR 2026-06-22T12:30:01Z] OK: updater log age=1min`
+- [proven] `2026-06-22T12:30:01Z` `logs/cron.supervisor.log:198953` — `[SUPERVISOR 2026-06-22T12:30:01Z] OK: shadow log age=14min`
+- [proven] `2026-06-22T12:30:01Z` `logs/cron.supervisor.log:198954` — `[SUPERVISOR 2026-06-22T12:30:01Z] OK: watcher.lock age=882s`
+- [proven] `2026-06-22T12:30:01Z` `logs/cron.supervisor.log:198955` — `[SUPERVISOR 2026-06-22T12:30:01Z] OK: EURUSD M15 cache age=1min`
+- [proven] `2026-06-22T12:30:02Z` `logs/cron.supervisor.log:198956` — `[SUPERVISOR 2026-06-22T12:30:02Z] OK: GBPUSD M15 cache age=1min`
+- [proven] `2026-06-22T12:30:02Z` `logs/cron.supervisor.log:198957` — `[SUPERVISOR 2026-06-22T12:30:02Z] OK: EURUSD H1 cache age=1min`
+- [proven] `2026-06-22T12:30:02Z` `logs/cron.supervisor.log:198958` — `[SUPERVISOR 2026-06-22T12:30:02Z] OK: GBPUSD H1 cache age=1min`
+- [proven] `2026-06-22T12:30:02Z` `logs/cron.supervisor.log:198959` — `[SUPERVISOR 2026-06-22T12:30:02Z] HEALTHY: all checks passed`
+
+## Relevant captured recovery and configuration artifacts
+
+- [proven] `logs/boot.log` — `584` bytes
+- [proven] `logs/boot_proof.log` — `3050` bytes
+- [proven] `logs/crond_recovery_verify_20260502_143038.txt` — `4018` bytes
+- [proven] `logs/crond_start.err` — `0` bytes
+- [proven] `logs/crond_start.out` — `0` bytes
+- [proven] `logs/crontab.backup.20260413_214321.txt` — `2343` bytes
+- [proven] `logs/crontab.backup.20260428_103135` — `2549` bytes
+- [proven] `logs/crontab.backup.before_bota_runtime_restore_safe_20260708_113737.txt` — `893` bytes
+- [proven] `logs/crontab.backup.before_bota_runtime_restore_safe_v2_20260708_114132.txt` — `893` bytes
+- [proven] `logs/crontab.backup.before_c1c_cleanup_20260708_114343.txt` — `4233` bytes
+- [proven] `logs/crontab.backup.before_canonical_install_20260708_132521.txt` — `3752` bytes
+- [proven] `logs/crontab.backup.before_canonical_install_20260708_212433.txt` — `3840` bytes
+- [proven] `logs/crontab.backup.before_closer_20260603_085158.txt` — `3545` bytes
+- [proven] `logs/crontab.backup.before_daily_proof_hourly_gate_20260705_110203.txt` — `699` bytes
+- [proven] `logs/crontab.backup.before_daily_proof_restore_20260705_105334.txt` — `463` bytes
+- [proven] `logs/exact_crond_process_verify_20260502_143602.txt` — `3983` bytes
+- [proven] `logs/post_crond_cycle_heartbeat_verify_20260502_150148.txt` — `11446` bytes
+- [proven] `logs/runtime_crond_updater_watcher_verify_20260507_160730.txt` — `5891` bytes
+
+## Decision boundary
+
+- [not proven] A runtime DOWN epoch requires explicit corroboration beyond silence alone.
+- [not proven] A runtime UP epoch requires sufficiently close positive runtime evidence.
+- [not proven] Candidate states in this report are not final runtime epochs.
