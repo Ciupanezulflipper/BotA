@@ -38,7 +38,12 @@ def acquire_oanda_range(
     max_candles_per_chunk: int = 5000,
     fetcher: Fetcher = fetch_oanda_chunk,
 ) -> dict:
-    """Acquire, persist, reconcile, and manifest one bounded OANDA range."""
+    """Acquire, persist, reconcile, and manifest one bounded OANDA range.
+
+    Provider bytes and redacted request/response metadata are written once before
+    HTTP-status or JSON/candle validation. A rejected response therefore remains
+    available as forensic evidence and cannot be silently overwritten.
+    """
     root = output_root.resolve()
     chunks = plan_chunks(
         start_utc=start_utc,
@@ -61,17 +66,23 @@ def acquire_oanda_range(
             base_url=base_url,
             timeout_seconds=timeout_seconds,
         )
-        raw_body = result["body"]
-        parsed = parse_oanda_mid_payload(raw_body)
-        parsed_chunks.append(parsed)
 
         chunk_id = f"chunk-{index:04d}"
+        raw_body = result["body"]
         raw = write_once(root, f"raw/{run_id}/{chunk_id}.json", raw_body)
         request_doc = json.dumps(asdict(result["request"]), sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
         response_doc = json.dumps(asdict(result["response"]), sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
         req = write_once(root, f"metadata/{run_id}/{chunk_id}.request.json", request_doc)
         resp = write_once(root, f"metadata/{run_id}/{chunk_id}.response.json", response_doc)
         artifact_paths.extend([root / raw.relative_path, root / req.relative_path, root / resp.relative_path])
+
+        status = int(result["response"].status)
+        if status < 200 or status >= 300:
+            preview = raw_body[:512].decode("utf-8", errors="replace")
+            raise RuntimeError(f"OANDA HTTP {status}: {preview}")
+
+        parsed = parse_oanda_mid_payload(raw_body)
+        parsed_chunks.append(parsed)
         chunk_records.append({
             "chunk": chunk_id,
             "start_utc": chunk.start_utc.isoformat().replace("+00:00", "Z"),
