@@ -69,7 +69,20 @@
 - [proven] `src/watcher_freshness.py` now models this gate without importing or invoking production code.
 - [proven] Synthetic tests cover exact ceiling, one-second-over, missing clock, missing timestamp, future timestamp, latest-start selection, monotonicity, and timezone awareness.
 - [proven] Detailed evidence is preserved in `evidence/PRODUCTION_WATCHER_FRESHNESS_PARITY_20260711.md`.
-- [not proven] Historical runtime availability is reconstructed until watcher/cron outage epochs are preserved and supplied to cycle classification.
+- [proven] Watcher-freshness parity passed Historical replay sidecar and Security Scan workflows at commit `4888275495e8f6444100c5a2bedef4f214c5ee24`.
+
+## 2026-07-11 — Runtime epoch and cycle operability contract
+
+- [proven] `src/runtime_epochs.py` defines explicit half-open `UP`, `DOWN`, and `UNKNOWN` runtime evidence intervals.
+- [proven] An uncovered cycle resolves to `UNKNOWN`; absence of evidence never defaults to watcher availability or outage.
+- [proven] Epoch overlap, invalid ranges, timezone-naive values, and empty evidence identifiers fail closed.
+- [proven] `src/cycle_operability.py` combines runtime state with the production-equivalent raw-cache freshness decision.
+- [proven] Only runtime `UP` plus freshness `FRESH` resolves to `OPERABLE`.
+- [proven] Runtime `DOWN` takes precedence over candle freshness, and runtime `UNKNOWN` remains not proven even when data is fresh.
+- [proven] Runtime and freshness evidence must refer to the exact same cycle instant.
+- [proven] Synthetic tests cover runtime boundaries, evidence gaps, overlap rejection, and the complete runtime/freshness operability matrix.
+- [proven] Detailed evidence is preserved in `evidence/RUNTIME_EPOCH_OPERABILITY_CONTRACT_20260711.md`.
+- [not proven] Exact historical watcher `UP` and `DOWN` epochs have not yet been reconstructed from preserved runtime logs.
 
 ## Remaining gates
 
