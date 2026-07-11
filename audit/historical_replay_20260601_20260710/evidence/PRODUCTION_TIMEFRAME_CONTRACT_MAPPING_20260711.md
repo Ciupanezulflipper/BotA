@@ -32,10 +32,12 @@
 - [proven] Both production D1 paths rely on OANDA's default alignment because neither specifies daily alignment parameters.
 - [proven] The bounded live D probe observed completed daily candle starts at `21:00:00Z` during July 2026.
 - [inferred] The observed `21:00:00Z` starts are compatible with the production requests because both the probe and production omit explicit alignment parameters and use the same OANDA practice endpoint family and midpoint price component.
-- [not proven] Production-equivalent D1 point-in-time availability is not yet implemented end to end in the sidecar.
-- [proven] The sidecar `point_in_time.py` requires an explicit `available_at` value for D1.
-- [proven] The sidecar `CanonicalCandle` currently has no `available_at` field.
-- [proven] This is a real parity gap: normalized D1 candles cannot yet satisfy the sidecar's own provider-aligned availability contract without an additional preserved field or deterministic provider-calendar derivation.
+- [proven] Sidecar `CanonicalCandle` now preserves an explicit optional `available_at` value.
+- [proven] Completed normalized D1 candles without a provider-supplied close timestamp receive explicit availability at provider-aligned start plus 24 hours.
+- [proven] Normalization rejects an intra-range D1 UTC alignment change instead of silently applying one period rule across a DST boundary.
+- [proven] An integration test connects normalized D1 candles to `visible_candles` and proves the candle remains hidden until the explicit provider-aligned close boundary.
+- [not proven] GitHub Actions validation of this D1 parity repair is pending.
+- [not proven] D1 ranges crossing a provider alignment/DST transition are supported; current logic fails closed on such a transition.
 
 ## M15, H1, and H4 contract
 
@@ -77,19 +79,22 @@
 - [proven] Timeframe scope matches production execution plus context timeframes.
 - [proven] Provider, midpoint component, complete-candle filtering, and native granularity mappings match.
 - [proven] Observed fixed-timeframe and daily timestamps are relevant to production because production relies on the same provider defaults.
+- [proven] The previously identified D1 canonical-availability structural gap has been repaired in sidecar source and tests, pending CI proof.
 
 ## Blocking mismatches and incomplete mappings
 
-1. [proven] D1 normalized candles lack the explicit availability field required by sidecar point-in-time filtering.
-2. [proven] Sidecar bounded `from`/`to` acquisition is not identical to production rolling `count=500` acquisition.
-3. [not proven] Full-window chunk boundary behavior is equivalent to production cache chronology.
-4. [not proven] Replay scoring/fusion ordering is equivalent to the production shell/Python pipeline.
-5. [not proven] Historical freshness and runtime-outage classification is equivalent to production watcher behavior.
-6. [not proven] Yahoo fallback behavior is represented in the replay; current primary forensic plan is OANDA-first with independent Dukascopy reconciliation, not Yahoo replay.
+1. [proven] Sidecar bounded `from`/`to` acquisition is not identical to production rolling `count=500` acquisition.
+2. [not proven] Full-window chunk boundary behavior is equivalent to production cache chronology.
+3. [not proven] Replay scoring/fusion ordering is equivalent to the production shell/Python pipeline.
+4. [not proven] Historical freshness and runtime-outage classification is equivalent to production watcher behavior.
+5. [not proven] Yahoo fallback behavior is represented in the replay; current primary forensic plan is OANDA-first with independent Dukascopy reconciliation, not Yahoo replay.
+6. [not proven] The D1 availability repair passes GitHub Actions.
 
 ## Gate decision
 
 - [proven] Provider/timeframe acquisition parity is partially established.
+- [proven] D1 canonical visibility is structurally connected to provider-aligned timestamps in source and tests.
+- [not proven] The D1 repair is CI-validated.
 - [proven] Production-decision parity is not established.
-- [proven] Full historical acquisition and final cycle conclusions remain blocked until the D1 availability gap and exact replay-to-production fusion mapping are resolved or explicitly bounded as non-equivalent.
+- [proven] Full historical acquisition and final cycle conclusions remain blocked until exact replay-to-production fusion and freshness mappings are resolved or explicitly bounded as non-equivalent.
 - [proven] The sidecar remains a verifier and must not be presented as a second production implementation.
