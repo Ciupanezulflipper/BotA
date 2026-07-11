@@ -1,0 +1,123 @@
+{
+  "artifact_count": 22,
+  "artifacts": [
+    {
+      "bytes": 889,
+      "path": "CANONICAL_RUNTIME_EVIDENCE.json",
+      "sha256": "fd7ce96111fc07612ee8383f7a4ec79ecde2772450c951bf91a3838a289ccf42"
+    },
+    {
+      "bytes": 1031,
+      "path": "CLOCK_HEARTBEAT_TARGETED_DIAGNOSTIC.md",
+      "sha256": "c1643bbfd3a6e24f29ffae65252ff3f565fd23aab947d7e84d121dd360b4d77d"
+    },
+    {
+      "bytes": 542,
+      "path": "LOCAL_VALIDATION_ENVIRONMENT.md",
+      "sha256": "dde5a393a08133f5add392817156f006fcdf88e009b2aa598fc8520611044c76"
+    },
+    {
+      "bytes": 989,
+      "path": "POST_RESTART_LIVE_DIAGNOSTIC.md",
+      "sha256": "81b05622f1a7014d9f482d658dcaec556b50448669ab864d7da20796a6c82648"
+    },
+    {
+      "bytes": 63623,
+      "path": "Q5_CRONTAB_RECOVERY_AUDIT.md",
+      "sha256": "e57d8a3bae745724f47219c0e1323fc42f2aa095865c62a7964149230e379f8a"
+    },
+    {
+      "bytes": 2251,
+      "path": "Q5_FORENSIC_FINDING.md",
+      "sha256": "129b75bb4024cea2c5d757e2d3f7824ae150bb0908d81445c315350464be15b3"
+    },
+    {
+      "bytes": 18343,
+      "path": "Q5_INSIDE_EVIDENCE_AUDIT.md",
+      "sha256": "f7dc70e3be934508db3e0d176770474059b38bcd305db844ece0d586716b6e41"
+    },
+    {
+      "bytes": 4892,
+      "path": "Q5_PIPELINE_BOUNDARY_AUDIT.md",
+      "sha256": "ba4ecc2aee3130bec89fe78081b843f336cc2db1feb45e8ee41dfc816fa08345"
+    },
+    {
+      "bytes": 65835,
+      "path": "RUNTIME_EVIDENCE_TRIAGE.md",
+      "sha256": "ec97b3d5177a18297ee635f466d597bc1f7e2f4140f3ec55d9ec49ad66d83d70"
+    },
+    {
+      "bytes": 10870,
+      "path": "RUNTIME_GAP_ANALYSIS.md",
+      "sha256": "622656085461420e632f20be17de396fcb453627cac07799a63612e287208e44"
+    },
+    {
+      "bytes": 108744,
+      "path": "RUNTIME_INTERVAL_ADJUDICATION.md",
+      "sha256": "3931a377830df4c9b0eab0d567aeb383698973aeadbe94e3b56a1d0926d0e30a"
+    },
+    {
+      "bytes": 13528,
+      "path": "UPDATER_RECOVERY_STRICT_AUDIT.md",
+      "sha256": "40817c9a3d5f082d1b0e47d281cb074ca0fd7d70e6312ab9b6dbc57b6782ab91"
+    },
+    {
+      "bytes": 851,
+      "path": "clock_heartbeat_targeted_diagnostic.json",
+      "sha256": "593a951841deb1b012e4524f92cd4a8b88ac184cb4ee8ccb264ee0f20da659e9"
+    },
+    {
+      "bytes": 17688,
+      "path": "manifest.json",
+      "sha256": "1d0794d32be200044756e327a56686a52d34d0c64b2dd3a50c7976357c40bdeb"
+    },
+    {
+      "bytes": 2219,
+      "path": "post_restart_live_diagnostic.json",
+      "sha256": "0bac419b9dce97e952b1490d5b3d1caaf5e5b0e5886e1bb2363a7f85696d1a30"
+    },
+    {
+      "bytes": 447567,
+      "path": "q5_crontab_recovery_audit.json",
+      "sha256": "e1926d41f548684cbe96c3b183c22549ba093abfc8be98ca08cc959e5c48698f"
+    },
+    {
+      "bytes": 27932,
+      "path": "q5_inside_evidence_audit.json",
+      "sha256": "9ccb291c9b26bae55bb1c631d73b00f19d9aa7d1ba302472eb3be84ac7080d35"
+    },
+    {
+      "bytes": 4599,
+      "path": "q5_pipeline_boundary_audit.json",
+      "sha256": "d6ed8de97c26baf02b0ed34b9e2594c43706ba8c4a7f3b854ed39d1f721e537f"
+    },
+    {
+      "bytes": 257059,
+      "path": "runtime_evidence_summary.json",
+      "sha256": "9ee69fc4886c0051f673c8fd6f29cfa0c72fadbc73f3fbb49f0f66e3b2d9df31"
+    },
+    {
+      "bytes": 62494,
+      "path": "runtime_gap_analysis.json",
+      "sha256": "95f7164a40bbc334fd32f4436a0281bdf6f0812820021fc3c84c3851f58dfa36"
+    },
+    {
+      "bytes": 2547685,
+      "path": "runtime_interval_adjudication.json",
+      "sha256": "6408d1c7f427d076174bb9f20e6e2c1f2ae26f61edd5e6bd2c0543470d15a7fc"
+    },
+    {
+      "bytes": 38545,
+      "path": "updater_recovery_strict_audit.json",
+      "sha256": "42fd228a9994374a4c374d9d4491abc864911e81f8cd59dfeeab6f871fdd57fb"
+    }
+  ],
+  "authoritative_test_gate": "GitHub Actions",
+  "capture_id": "termux-runtime-20260711T131407Z",
+  "local_pytest_available": false,
+  "preserved_at_utc": "2026-07-11T15:19:24.776380Z",
+  "production_modified": false,
+  "schema_version": 1,
+  "source": "Termux runtime and derived forensic evidence",
+  "strategy_modified": false
+}

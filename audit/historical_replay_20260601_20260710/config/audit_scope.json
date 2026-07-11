@@ -1,0 +1,35 @@
+{
+  "claim_status": "proven",
+  "interval": {
+    "semantics": "half_open",
+    "start_utc": "2026-06-01T00:00:00Z",
+    "end_utc": "2026-07-11T00:00:00Z"
+  },
+  "pairs": ["EURUSD", "GBPUSD"],
+  "execution_timeframe": "M15",
+  "context_timeframes": ["H1", "H4", "D1"],
+  "market_gate": {
+    "timezone": "UTC",
+    "days": [1, 2, 3, 4, 5],
+    "open_hour": 7,
+    "close_hour": 20
+  },
+  "provider_contract": {
+    "primary": "OANDA",
+    "price_component": "M",
+    "complete_candles_only": true,
+    "timeframes_fetched_directly": true
+  },
+  "thresholds": {
+    "filter_score_min": 65,
+    "telegram_min_score": 70,
+    "telegram_tier_yellow_min": 70,
+    "telegram_tier_green_min": 75,
+    "h1_veto_override_score": 75,
+    "telegram_cooldown_seconds": 1800,
+    "candle_max_age_seconds": 2700
+  },
+  "network_enabled_in_initial_increment": false,
+  "production_imports_allowed": false,
+  "production_writes_allowed": false
+}

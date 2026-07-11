@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "window_start_utc": "2026-06-01T00:00:00Z",
+  "window_end_utc": "2026-07-11T00:00:00Z",
+  "source_commit": "64f5e37b35748cab3becd7280204b23e407ba6ad",
+  "evidence_files": [
+    "Q5_FORENSIC_FINDING.md",
+    "Q5_CRONTAB_RECOVERY_AUDIT.md",
+    "q5_crontab_recovery_audit.json",
+    "Q5_PIPELINE_BOUNDARY_AUDIT.md",
+    "q5_pipeline_boundary_audit.json",
+    "UPDATER_RECOVERY_STRICT_AUDIT.md",
+    "updater_recovery_strict_audit.json",
+    "PRESERVATION_MANIFEST.json"
+  ],
+  "epochs": [
+    {
+      "start_utc": "2026-06-22T17:16:01Z",
+      "end_utc": "2026-07-08T11:45:07Z",
+      "state": "UNKNOWN",
+      "evidence_id": "termux-q5-watcher-gap-and-recovery-boundary"
+    },
+    {
+      "start_utc": "2026-07-08T11:45:07Z",
+      "end_utc": "2026-07-08T12:00:00Z",
+      "state": "UP",
+      "evidence_id": "termux-q5-first-restored-watcher-cycle"
+    }
+  ]
+}

@@ -94,3 +94,36 @@
 - [proven] Installed watcher SHA-256: `b8a3adf46582e3a69d5b22d12a4da070bc8be2ceff76a4aa99e9d6c96544a9ef`.
 - [proven] Strategy and production selection rules changed: NO.
 - [not proven] Whether any valid signal was missed during the historical June outage remains unresolved.
+
+## Resolved — 2026-07-11 Historical Replay Runtime Safeguards
+
+- [proven] Resolved: scheduler process detection false negative; `crond` PID `5027` and advancing scheduled logs proved scheduler execution.
+- [proven] Resolved: runtime-health delivery false positive; fresh authoritative logs showed HTTP `200` and `RESULT=PASS rc=0`.
+- [proven] Resolved: heartbeat environment-path root cause; `config/tele.env` was absent while `.env.runtime` contained the required Telegram variable names.
+- [proven] Resolved: audit-branch heartbeat implementation now sources `.env.runtime` and fails closed when unavailable.
+- [proven] Resolved: local operability validation now uses the actual `combine_runtime_and_freshness` API.
+- [proven] Resolved: GitHub Actions passed for audit commit `43b2ddf16d5aaed7be6d1d7366ecfb4c37b77957`.
+- [not proven] Unresolved: Android device clock correction.
+- [not proven] Unresolved: production heartbeat deployment.
+- [not proven] Unresolved: live Telegram heartbeat delivery after deployment.
+- [not proven] Unresolved: full historical data integrity and complete replay parity.
+
+## Resolved — 2026-07-11 External Audit Closure
+
+- [proven] Resolved: external-audit phase is formally closed.
+- [proven] Resolved: Audit 2 (Claude Fable 5) identified and documented the heartbeat deadman removal, missing Telegram response validation, environment-scope leak, and missing behavioral CI coverage as critical findings. These are accepted and entered into the correction backlog.
+- [proven] Resolved: Audits 1, 3, 4, and 5 did not have repository access; their contributions were limited to logic-level checks, retractions, or limitation disclosure.
+- [proven] Resolved: PR #6 is classified as mixed scope. Merge requires heartbeat correction backlog items 1–4 complete.
+- [proven] Resolved: UNKNOWN quiet-interval coverage is 770/1560 = 49.36% of nominal M15 cycles per pair. This is evidentiary silence, not proven downtime.
+- [proven] Resolved: a single 7,267-second device-clock correction is invalid; drift varied over the window.
+- [proven] Resolved: per-boundary true-UTC placement is not proven. Device-log timestamps must not be treated as verified UTC without per-date drift bounds.
+- [proven] Resolved: `state/STATE.json` deadman-installed claim is contradicted by the audit-head heartbeat. This contradiction is in the correction backlog (item 6).
+- [proven] Resolved: Q2 and Q3 are accepted as material missing intervals in the epoch summary. Adding them is correction backlog item 7.
+- [not proven] Unresolved: heartbeat deadman restoration (correction backlog item 1).
+- [not proven] Unresolved: Telegram `"ok":true` strict validation (correction backlog item 2).
+- [not proven] Unresolved: environment-scope narrowing (correction backlog item 3).
+- [not proven] Unresolved: deterministic offline heartbeat tests (correction backlog item 4).
+- [not proven] Unresolved: PR #6 scope split or explicit mixed-scope classification (correction backlog item 5).
+- [not proven] Unresolved: Q2/Q3 canonical epoch entries (correction backlog item 7).
+- [not proven] Unresolved: exact per-boundary true-UTC using per-date drift bounds (correction backlog item 8–9).
+- [not proven] Unresolved: CI re-run after correction backlog items 1–5 (correction backlog item 10).

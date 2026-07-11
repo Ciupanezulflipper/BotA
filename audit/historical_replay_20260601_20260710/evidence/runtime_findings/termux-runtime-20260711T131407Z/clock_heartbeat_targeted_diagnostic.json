@@ -1,0 +1,20 @@
+{
+  "android_auto_time": "cmd: Failure calling service settings: Failed transaction (2147483646)",
+  "android_auto_time_zone": "cmd: Failure calling service settings: Failed transaction (2147483646)",
+  "captured_at_epoch": 1783780737,
+  "clock_root_cause": "DEVICE_CLOCK_UNSAFE",
+  "clock_unsafe": true,
+  "env_runtime_chat_id_name_present": true,
+  "env_runtime_token_name_present": true,
+  "expected_env_chat_id_name_present": false,
+  "expected_env_token_name_present": false,
+  "expected_heartbeat_env_present": false,
+  "heartbeat_root_cause": "HEARTBEAT_USES_OBSOLETE_ENV_PATH",
+  "local_minus_server_seconds": -7267,
+  "runtime_health_delivery_repair_required": false,
+  "runtime_health_push_age_seconds": 235,
+  "runtime_health_recent_pass": true,
+  "schema_version": 1,
+  "strategy_change_allowed": false,
+  "valid_server_source_count": 3
+}

@@ -1,0 +1,89 @@
+name: Historical replay sidecar
+
+on:
+  push:
+    branches:
+      - audit/historical-replay-20260601-20260710
+  pull_request:
+    paths:
+      - "audit/historical_replay_20260601_20260710/**"
+      - ".github/workflows/historical-replay-sidecar.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TELEGRAM_BOT_TOKEN: ""
+      TELEGRAM_TOKEN: ""
+      TELEGRAM_CHAT_ID: ""
+      SUPABASE_SERVICE_KEY: ""
+      OANDA_API_TOKEN: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pytest
+      - name: Prohibit production imports in sidecar source
+        run: |
+          if grep -R -nE 'from tools|import tools|subprocess.*tools/' audit/historical_replay_20260601_20260710/src; then
+            echo "production import or execution reference found"
+            exit 1
+          fi
+      - name: Run synthetic tests
+        run: python -m pytest -q --junitxml=synthetic-tests.xml audit/historical_replay_20260601_20260710/tests
+      - name: Build no-network acquisition plan
+        run: |
+          python -m audit.historical_replay_20260601_20260710.src.acquisition_dry_run \
+            --start 2026-06-01T00:00:00Z \
+            --end 2026-07-11T00:00:00Z \
+            > acquisition-dry-run.json
+      - name: Validate no-network acquisition plan
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          plan = json.loads(Path("acquisition-dry-run.json").read_text(encoding="utf-8"))
+          if plan.get("mode") != "dry_run_no_network":
+              raise SystemExit("acquisition plan was not no-network mode")
+          if plan.get("instruments") != ["EUR_USD", "GBP_USD"]:
+              raise SystemExit("unexpected acquisition instrument scope")
+          if plan.get("granularities") != ["M15", "H1", "H4", "D"]:
+              raise SystemExit("unexpected acquisition timeframe scope")
+          if not plan.get("plan_sha256") or plan.get("request_count") != len(plan.get("requests", [])):
+              raise SystemExit("invalid acquisition plan integrity fields")
+          if any("count=" in row.get("path_and_query", "") for row in plan["requests"]):
+              raise SystemExit("count parameter found in explicit from/to acquisition plan")
+          print("ACQUISITION_DRY_RUN_STATUS=PASS")
+          PY
+      - name: Run machine-readable integrity proof
+        run: python -m audit.historical_replay_20260601_20260710.src.proof_runner > synthetic-proof-report.json
+      - name: Validate proof report status
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("synthetic-proof-report.json").read_text(encoding="utf-8"))
+          if report.get("status") != "PASS":
+              raise SystemExit("synthetic proof did not pass")
+          if not report.get("tamper_detection", {}).get("detected"):
+              raise SystemExit("tamper detection was not proven")
+          print("SYNTHETIC_PROOF_STATUS=PASS")
+          PY
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-replay-synthetic-validation
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            synthetic-tests.xml
+            synthetic-proof-report.json
+            acquisition-dry-run.json

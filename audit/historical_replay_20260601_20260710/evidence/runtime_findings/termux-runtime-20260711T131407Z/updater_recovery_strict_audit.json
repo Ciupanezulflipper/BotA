@@ -1,0 +1,1241 @@
+{
+  "allowed_candidate_file_count": 3,
+  "file_records": [
+    {
+      "path": "logs/cron.indicators.log",
+      "strict_failure_count": 0,
+      "strict_success_count": 0,
+      "untimed_execution_count": 7266
+    },
+    {
+      "path": "logs/runtime_crond_updater_watcher_verify_20260507_160730.txt",
+      "strict_failure_count": 0,
+      "strict_success_count": 0,
+      "untimed_execution_count": 0
+    },
+    {
+      "path": "logs/runtime_watcher_dryrun_after_updater.out",
+      "strict_failure_count": 0,
+      "strict_success_count": 0,
+      "untimed_execution_count": 0
+    }
+  ],
+  "first_strict_success": null,
+  "previous_candidate": {
+    "line": 199843,
+    "source": "logs/cron.supervisor.log",
+    "text": "[SUPERVISOR 2026-07-08T11:45:00Z] OK: updater log age=1min",
+    "time_utc": "2026-07-08T11:45:00Z"
+  },
+  "previous_candidate_status": "rejected_as_non_strict",
+  "schema_version": 1,
+  "search_end_utc": "2026-07-09T00:00:00Z",
+  "search_start_utc": "2026-07-08T11:30:00Z",
+  "strict_failure_count": 0,
+  "strict_failure_rows": [],
+  "strict_success_count": 0,
+  "strict_success_rows": [],
+  "untimed_execution_count": 7266,
+  "untimed_execution_rows": [
+    {
+      "line": 2,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 30,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 58,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 86,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 114,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 142,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 170,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 198,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 226,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 254,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 282,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 310,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 338,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 366,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 394,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 422,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 450,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 478,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 506,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 534,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 562,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 590,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 618,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 646,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 674,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 702,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 730,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 758,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 786,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 814,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 842,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 870,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 898,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 926,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 954,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 982,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1010,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1038,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1066,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1094,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1122,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1150,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1178,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1206,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1234,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1262,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1290,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1318,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1346,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1374,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1402,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1430,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1458,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1486,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1514,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1542,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1570,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1598,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1626,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1654,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1682,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1710,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1738,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1766,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1794,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1822,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1850,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1878,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1906,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1934,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1966,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 1994,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2022,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2050,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2078,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2106,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2134,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2162,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2190,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2218,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2246,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2274,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2302,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2330,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2358,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2386,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2414,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2442,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2470,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2498,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2526,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2554,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2582,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2610,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2638,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2666,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2694,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2722,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2750,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2778,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2806,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2834,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2862,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2890,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2918,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2946,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 2974,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3002,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3030,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3058,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3088,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3116,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3144,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3172,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3200,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3228,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3256,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3284,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3312,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3340,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3368,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3396,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3424,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3452,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3480,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3508,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3536,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3564,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3592,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3620,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3648,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3676,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3704,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3732,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3760,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3788,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3816,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3844,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3872,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3902,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3930,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3958,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 3986,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4014,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4042,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4070,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4098,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4126,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4154,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4182,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4210,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4238,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4266,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4296,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4324,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4352,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4380,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4408,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4436,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4464,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4492,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4520,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4548,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4576,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4604,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4632,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4660,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4688,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4716,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4744,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4772,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4800,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4828,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4856,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4884,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4912,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4940,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4968,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 4996,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5024,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5052,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5082,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5110,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5138,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5166,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5194,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5226,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5254,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5282,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5310,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5338,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5366,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5394,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5422,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5450,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5478,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5506,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5534,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5562,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    },
+    {
+      "line": 5590,
+      "source": "logs/cron.indicators.log",
+      "text": "[UPDATER] indicators_updater.sh start (Step 16N retry/backoff+pacing)",
+      "time_utc": null
+    }
+  ]
+}

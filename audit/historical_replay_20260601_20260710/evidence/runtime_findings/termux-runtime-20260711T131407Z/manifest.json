@@ -1,0 +1,494 @@
+{
+  "artifact_count": 96,
+  "artifacts": [
+    {
+      "bytes": 926,
+      "path": "files/config/strategy.env",
+      "sha256": "75a271509bd21862943adffbb5ed6b1a653c08101b24fd1207d7025f79219ed6"
+    },
+    {
+      "bytes": 1054,
+      "path": "files/logs/_post_d1_fix_watcher.err",
+      "sha256": "41bf4f93ea049b07153d11050762c90e80d877c51e4fc0860e01dcf12e03ba39"
+    },
+    {
+      "bytes": 132,
+      "path": "files/logs/_post_d1_fix_watcher.out",
+      "sha256": "48f72914c17c4494758bb75f69cb01e9157ae3f71746a0f4e5046376ebe4277b"
+    },
+    {
+      "bytes": 1054,
+      "path": "files/logs/_watcher_once.err",
+      "sha256": "dab4267ae4cda2e95bdfb5e667763920a3a8376451ec00fdcc3440bc78457b59"
+    },
+    {
+      "bytes": 132,
+      "path": "files/logs/_watcher_once.out",
+      "sha256": "48f72914c17c4494758bb75f69cb01e9157ae3f71746a0f4e5046376ebe4277b"
+    },
+    {
+      "bytes": 941,
+      "path": "files/logs/_watcher_post_stale_lock.err",
+      "sha256": "4bac5ac4a4ae5d9d85c8f50e2cce423b49afad33469d6a736b03b1997a9eb98a"
+    },
+    {
+      "bytes": 0,
+      "path": "files/logs/_watcher_post_stale_lock.out",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 642372,
+      "path": "files/logs/alerts.csv",
+      "sha256": "9fd5409072d6e652e0ecdde8f6d909ca46e7e4ba5cc89c8074f9f0612b549928"
+    },
+    {
+      "bytes": 584,
+      "path": "files/logs/boot.log",
+      "sha256": "32d0c8ed4258108351541dc9025a711ee8503d0ea14900fbcad1938e50d04216"
+    },
+    {
+      "bytes": 3050,
+      "path": "files/logs/boot_proof.log",
+      "sha256": "3d44925767468dca6df26f63c1493bc9fe7834af3218600252f58b6c9ed946be"
+    },
+    {
+      "bytes": 506,
+      "path": "files/logs/cron.accuracy.log",
+      "sha256": "217b2becb6f1207f9d89972d7512af4f367aee6830b00b4981e5314d4a36ea6e"
+    },
+    {
+      "bytes": 86715,
+      "path": "files/logs/cron.autostatus.log",
+      "sha256": "3d6a8a2e86f7f44ffb9eb552f30b6bac704938e59440d3e5ccd45bb147b472bc"
+    },
+    {
+      "bytes": 326378,
+      "path": "files/logs/cron.clock_drift.log",
+      "sha256": "7ff04f5116c33e5169245f396ce65cecb77f267f57eb4176537fdab80ef66de7"
+    },
+    {
+      "bytes": 1290879,
+      "path": "files/logs/cron.closer.log",
+      "sha256": "548cceb8b44ab819526505613cde2d9da2878b71f0b3ba9d755f00a07a1af63d"
+    },
+    {
+      "bytes": 184216,
+      "path": "files/logs/cron.daily.log",
+      "sha256": "c6871ad9935c165ebfae0fe2b44b0026456b57a27a4e93b6a3208bf21c371539"
+    },
+    {
+      "bytes": 86386,
+      "path": "files/logs/cron.heartbeat.log",
+      "sha256": "f48379d8992ab5eb3ea1a62b0aa6e8e01defc6f374640460ebc10f4d60617f61"
+    },
+    {
+      "bytes": 35845992,
+      "path": "files/logs/cron.indicators.log",
+      "sha256": "950058576644fc10b3138bdadc0b828ea64facda9f5f1fbc97c20b1dc1aee7b1"
+    },
+    {
+      "bytes": 11368,
+      "path": "files/logs/cron.pause.log",
+      "sha256": "69be52ec432857602a968d2ab93e787adbec274027e7369a07432d812639bb50"
+    },
+    {
+      "bytes": 157230,
+      "path": "files/logs/cron.rotate.log",
+      "sha256": "565c736a31d10e982968a86e0d7a841726ec0b6cfaeb87e9d711e046e38d3d4c"
+    },
+    {
+      "bytes": 1678701,
+      "path": "files/logs/cron.runtime_health_push.log",
+      "sha256": "1e3ede6b8a9a09e094098172e974373f685092bda66508a58e789236e63990cc"
+    },
+    {
+      "bytes": 0,
+      "path": "files/logs/cron.runtime_health_push.wrapper.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 4657798,
+      "path": "files/logs/cron.shadow.log",
+      "sha256": "3c1c3bb38c1e0068e3113bdfa07d3a4626bb792257be112269f32ee07f7b7c91"
+    },
+    {
+      "bytes": 3510015,
+      "path": "files/logs/cron.signals.log",
+      "sha256": "98ff52ac376ccc0a169b00a109080ad9d6f9cc8a453aa9206c142f32eea0a08d"
+    },
+    {
+      "bytes": 86064,
+      "path": "files/logs/cron.sltp.log",
+      "sha256": "7b9ebbe695fbba22ecdcd48ba7b6f2ddb0f2ec8f96292739a2939993748fce4e"
+    },
+    {
+      "bytes": 15369914,
+      "path": "files/logs/cron.supervisor.log",
+      "sha256": "589c0b95339f75185cc6c234a15fb32fbe4798edcad57d1c33962c9f8819f7e8"
+    },
+    {
+      "bytes": 39611,
+      "path": "files/logs/cron.trades.log",
+      "sha256": "90f6868bf0e18751e51e87cc037cac0534448232b8805b691b744de9f5d679b6"
+    },
+    {
+      "bytes": 704,
+      "path": "files/logs/cron_probe.log",
+      "sha256": "a929831939b83ab7dddf21fcaba648b84a2af9cf54270f4852d630faa25910f2"
+    },
+    {
+      "bytes": 4018,
+      "path": "files/logs/crond_recovery_verify_20260502_143038.txt",
+      "sha256": "c75b8f45e97f548fb441feab81e5e49a553925c5a3d5551dc24616bea8579887"
+    },
+    {
+      "bytes": 0,
+      "path": "files/logs/crond_start.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "files/logs/crond_start.out",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 2343,
+      "path": "files/logs/crontab.backup.20260413_214321.txt",
+      "sha256": "eeaa5715d7fa48c2d9a9b90aca43464ccd0f920564ddad329092036e1bc02177"
+    },
+    {
+      "bytes": 2549,
+      "path": "files/logs/crontab.backup.20260428_103135",
+      "sha256": "8191da6be519ac9211fdbd48abdf8b6b1de86f6277bfc0035297bf737797f3dd"
+    },
+    {
+      "bytes": 893,
+      "path": "files/logs/crontab.backup.before_bota_runtime_restore_safe_20260708_113737.txt",
+      "sha256": "3ef66610ac1a5dceb547bca123473f4cf50cf3b9ca2943efa667be681c3aad84"
+    },
+    {
+      "bytes": 893,
+      "path": "files/logs/crontab.backup.before_bota_runtime_restore_safe_v2_20260708_114132.txt",
+      "sha256": "3ef66610ac1a5dceb547bca123473f4cf50cf3b9ca2943efa667be681c3aad84"
+    },
+    {
+      "bytes": 4233,
+      "path": "files/logs/crontab.backup.before_c1c_cleanup_20260708_114343.txt",
+      "sha256": "ef8067bacc0f71bc3f18627d3aa28bda3c0d45aa9990692c47ad245f06120454"
+    },
+    {
+      "bytes": 3752,
+      "path": "files/logs/crontab.backup.before_canonical_install_20260708_132521.txt",
+      "sha256": "8f66bba7b2dccbe43ed456ea658bba3d32b98e72d31d1518759d0d959833783a"
+    },
+    {
+      "bytes": 3840,
+      "path": "files/logs/crontab.backup.before_canonical_install_20260708_212433.txt",
+      "sha256": "9bb0bf4c52ee2958e59ff474b25ea84fe75dc27895d86c26fe4d8540cf4c8d1c"
+    },
+    {
+      "bytes": 3545,
+      "path": "files/logs/crontab.backup.before_closer_20260603_085158.txt",
+      "sha256": "250af946a68639701fe0443e17220795c94138fdfd34fd23cb4f3876721a78be"
+    },
+    {
+      "bytes": 699,
+      "path": "files/logs/crontab.backup.before_daily_proof_hourly_gate_20260705_110203.txt",
+      "sha256": "e4e56ad2dda64129a12355b67265a85a3e946bb18d7ee63f8541ea6d104fcebd"
+    },
+    {
+      "bytes": 463,
+      "path": "files/logs/crontab.backup.before_daily_proof_restore_20260705_105334.txt",
+      "sha256": "b438190d1bfb2e274ddbc18e610eca2e3f7b4e1b5c911b982fd51660e865e389"
+    },
+    {
+      "bytes": 53990729,
+      "path": "files/logs/error.log",
+      "sha256": "d81a79785312ca2a5d802ebeddee01c8f65dc8f6652e6b7baf618bd9ac2d3efc"
+    },
+    {
+      "bytes": 3983,
+      "path": "files/logs/exact_crond_process_verify_20260502_143602.txt",
+      "sha256": "106748afecb83eaba382caedb3d6cab27cbac6558c47871f94e3d97e319c73a1"
+    },
+    {
+      "bytes": 19488,
+      "path": "files/logs/live_market_open_cache_watcher_verify_20260505_233800.txt",
+      "sha256": "c122a915f9c1f61c2d4edb81296495fe8218f0256ac183dee005defc65d97c38"
+    },
+    {
+      "bytes": 1186,
+      "path": "files/logs/manual.watcher.once.log",
+      "sha256": "853ae9cc8e2a680fcc84d706d830b57b5892c383165379e26bc1ca3176b60a5b"
+    },
+    {
+      "bytes": 11446,
+      "path": "files/logs/post_crond_cycle_heartbeat_verify_20260502_150148.txt",
+      "sha256": "7edb826b6deb2b48ebd570e6507fe40c1da873bb9c536190fe7a17d3943535eb"
+    },
+    {
+      "bytes": 798,
+      "path": "files/logs/post_restart_watcher_patch_dryrun.out",
+      "sha256": "57bcbc52f60d37a302cf1e9517a302b78e6163585bdbd72116ad98402b02db9a"
+    },
+    {
+      "bytes": 3304,
+      "path": "files/logs/post_restart_watcher_patch_verify_20260506_075912.txt",
+      "sha256": "7eeca4cc607a932441b5b45f58f9d9ac929ede0b89ca8717b77f56d3e8cc0121"
+    },
+    {
+      "bytes": 1309,
+      "path": "files/logs/pulse_cron.log",
+      "sha256": "dfc684cda4c5017f7164a6a8a5a1143f88848276cb7ee9dcdfeeeace480abf1d"
+    },
+    {
+      "bytes": 5891,
+      "path": "files/logs/runtime_crond_updater_watcher_verify_20260507_160730.txt",
+      "sha256": "af1e2a3504464416a4081d612f24ba1277708faf86cb505e2b0426f36394734b"
+    },
+    {
+      "bytes": 1026,
+      "path": "files/logs/runtime_watcher_dryrun_after_updater.out",
+      "sha256": "200ab272be9848ef4d983aba0fe076bdc4b6398f8e50c840e7da557f583be0ca"
+    },
+    {
+      "bytes": 105533,
+      "path": "files/logs/shadow_adx_scoring.jsonl",
+      "sha256": "4f5970d406899f6184f8cada6b5fcc7e3d02a28bb87cabbb3c5f36bdd4af97a3"
+    },
+    {
+      "bytes": 413471,
+      "path": "files/logs/shadow_manager_heartbeat.txt",
+      "sha256": "c3d616c52f7fc25450147493701e48ecb0031c01d1b23115e2ef8223ef726142"
+    },
+    {
+      "bytes": 54644,
+      "path": "files/logs/shipmode_cron_verify_20260430_161209.txt",
+      "sha256": "7bb95cac865f8b8108a2e4ed981e6334536109ff285842ac17e33c2531c37a10"
+    },
+    {
+      "bytes": 4308,
+      "path": "files/logs/shipmode_crontab_install_verify_20260501_001526.txt",
+      "sha256": "321156060f1117f2e7d3eb30b311c3f77739d5e49ee602ca52ee892d4d65b2ea"
+    },
+    {
+      "bytes": 5077,
+      "path": "files/logs/shipmode_crontab_install_verify_localtmp_20260501_001725.txt",
+      "sha256": "d527818aa3d7afd12a1ff79ca7e31a1e1043a1ab732bce478690d4008ad3ddb7"
+    },
+    {
+      "bytes": 33098,
+      "path": "files/logs/signal_watcher_full_file_audit_20260506_064425.txt",
+      "sha256": "02f4d6597e5d1474578efdebaee240dcbdc55ab2af731efa815381016e52ab28"
+    },
+    {
+      "bytes": 34190,
+      "path": "files/logs/signal_watcher_pro.before_observability_20260710_181421.sh",
+      "sha256": "8e255bd3df0e0ae33cab30261d57bd1c0be0d68695c21bcaf16432a17b6ecdf8"
+    },
+    {
+      "bytes": 34190,
+      "path": "files/logs/signal_watcher_pro.before_observability_deploy_20260710_184130.sh",
+      "sha256": "8e255bd3df0e0ae33cab30261d57bd1c0be0d68695c21bcaf16432a17b6ecdf8"
+    },
+    {
+      "bytes": 2,
+      "path": "files/logs/state/network_fail_count.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 3247,
+      "path": "files/logs/tmp/bota_crontab.canonical.before_runtime_health_push_20260708_232433.txt",
+      "sha256": "26cf2948f87ca81d3f3f4aa2bf9207b25344952940b516a4868c5d21c64c01c0"
+    },
+    {
+      "bytes": 3840,
+      "path": "files/logs/tmp/crontab.before_runtime_health_push_20260708_232433.txt",
+      "sha256": "9bb0bf4c52ee2958e59ff474b25ea84fe75dc27895d86c26fe4d8540cf4c8d1c"
+    },
+    {
+      "bytes": 3840,
+      "path": "files/logs/tmp/live_crontab_phase5_7d.txt",
+      "sha256": "9bb0bf4c52ee2958e59ff474b25ea84fe75dc27895d86c26fe4d8540cf4c8d1c"
+    },
+    {
+      "bytes": 1255,
+      "path": "files/logs/tmp/phase4c_final_cron_env.out",
+      "sha256": "1e1a3afc0dcb711c48759655a64fa47e5a5f755e5e8a44fbf5fb715386210731"
+    },
+    {
+      "bytes": 676,
+      "path": "files/logs/tmp/run_signal_closer_live_c7f_retry_smoke_20260603_145548.log",
+      "sha256": "5cb2a5fc11171c538ad3a2453ada99d99b45c9f0a64b6a56c82068fd6a533021"
+    },
+    {
+      "bytes": 560,
+      "path": "files/logs/tmp/run_signal_closer_live_candle_first_smoke_20260603_141133.log",
+      "sha256": "e7777839025d375bcee6fcd21c3822a1c59168006a048e221d7df1cc8c6aac6e"
+    },
+    {
+      "bytes": 560,
+      "path": "files/logs/tmp/run_signal_closer_live_oanda_cache_smoke_20260603_142652.log",
+      "sha256": "9bd5ed0aff75bd0c4948c67fc293600f6e7a64fa9c4188fe42742596495dd455"
+    },
+    {
+      "bytes": 560,
+      "path": "files/logs/tmp/run_signal_closer_live_retry_20260603_134458.log",
+      "sha256": "ecaee639fe0553b65c5b6d04e7392b5a536f6b0a8c318da9c14cc8b49ae57422"
+    },
+    {
+      "bytes": 560,
+      "path": "files/logs/tmp/run_signal_closer_live_smoke_20260603_083654.log",
+      "sha256": "e6a384c9d168106c7d3a6d50726a943de23994cc8bd966eab673bca432b7eaec"
+    },
+    {
+      "bytes": 66,
+      "path": "files/logs/tmp/signal_closer_c7f_pre_wrapper_dryrun_20260603_145151.log",
+      "sha256": "70db44f18dd6ba90b0c8071abbb3daeb1e291ec71992a1cf1c7b1689503b8866"
+    },
+    {
+      "bytes": 618,
+      "path": "files/logs/tmp/signal_closer_c7f_retry_env_dryrun_20260603_145548.log",
+      "sha256": "90725265b7f6fff9d0e6fc8263c4e1e5994101cc8c5f9ba8514b115fac9d0167"
+    },
+    {
+      "bytes": 502,
+      "path": "files/logs/tmp/signal_closer_candle_first_dryrun_20260603_140417.log",
+      "sha256": "036c86904522996418a8e9fbde8a0c3ff6fd4c9adacc81a10917e884c76e8319"
+    },
+    {
+      "bytes": 583,
+      "path": "files/logs/tmp/signal_closer_cron_equiv_dryrun_20260603_083519.log",
+      "sha256": "bd5c0baf0b1a3fc0fd9992c91da179dbddc15e63622a3f0668e8e89e7e180f14"
+    },
+    {
+      "bytes": 1042,
+      "path": "files/logs/tmp/signal_closer_dryrun_20260603_081546.log",
+      "sha256": "b44a302e77802c101817db133118484e7bd08b01df4726c1dfeeaca162e3e9da"
+    },
+    {
+      "bytes": 502,
+      "path": "files/logs/tmp/signal_closer_oanda_cache_dryrun_20260603_142652.log",
+      "sha256": "798ab002ff99ec118a1f7bb4706144ad29e7d66b7a083288dc86f86758ac029e"
+    },
+    {
+      "bytes": 1005,
+      "path": "files/logs/tmp/signal_closer_true_outcome_dryrun_20260603_081855.log",
+      "sha256": "8eb3ea176dd2e2bed54aa5a6593ae37c580bfddd6d1261d86678f82c7d823bb1"
+    },
+    {
+      "bytes": 618,
+      "path": "files/logs/tmp/signal_closer_trusted_clock_hard_age_dryrun_20260603_144408.log",
+      "sha256": "6c921d198972dc6bd187b7bd9158346bf571937a54baeb6a0f0b69f576044677"
+    },
+    {
+      "bytes": 3700,
+      "path": "files/logs/tmp_cron_with_closer_20260603_085158.txt",
+      "sha256": "0e03f2ebfd6725b6893a524e661b26f8f3bc4cb23e3bde0e88c4a8a994c72064"
+    },
+    {
+      "bytes": 5851,
+      "path": "files/logs/watcher_patch_target_sections_20260506_081623.txt",
+      "sha256": "c937f2d9c52c8ce9a863d56b7fd56bacea5e64ea88537dbcb4d1e2c8cba8c44c"
+    },
+    {
+      "bytes": 9685,
+      "path": "files/tools/data_fetch_candles.sh",
+      "sha256": "85672da56631f9a33a4200a69db049e52a99713b36f5e6076950ab5f28f1d621"
+    },
+    {
+      "bytes": 2755,
+      "path": "files/tools/heartbeat.sh",
+      "sha256": "2f31839368f533fe1dc2a61764fe0ce2695ed8491c71120f482f6a375f7789b3"
+    },
+    {
+      "bytes": 9495,
+      "path": "files/tools/indicators_updater.sh",
+      "sha256": "e2561c8e7d3e5dee98d684bc1b23250f92956c5db0b6887c43b6df2328b67789"
+    },
+    {
+      "bytes": 15764,
+      "path": "files/tools/m15_h1_fusion.sh",
+      "sha256": "e5d2aae769308de3bc2d45ebf1743fbd897d8960ca5ba2744b3f1c4960fac948"
+    },
+    {
+      "bytes": 2068,
+      "path": "files/tools/run_signal_closer_live.sh",
+      "sha256": "576d7c9adbf0e5a40b2c40b7d4f818930094e53b8c160763889ae535ce203577"
+    },
+    {
+      "bytes": 35253,
+      "path": "files/tools/signal_watcher_pro.sh",
+      "sha256": "376f2f06d7b7453168bb0f8e85f99719ef164fbfc9501c66f23fd7140849841d"
+    },
+    {
+      "bytes": 3622,
+      "path": "metadata/copied_files.list",
+      "sha256": "eded518516d7eb1cf5a7d8d856b682306b1c599f2e154da70a4a75394772a913"
+    },
+    {
+      "bytes": 86,
+      "path": "metadata/crond.txt",
+      "sha256": "c84985873d4ca617ac9e2b2d2539e450e60092951979a2c2bac5748236239db0"
+    },
+    {
+      "bytes": 4125,
+      "path": "metadata/crontab.txt",
+      "sha256": "9bac75c8be162317a9ef8457d9786e4a9e929bbb73922bfbc2781ad8d9ccbf1a"
+    },
+    {
+      "bytes": 108,
+      "path": "metadata/date_utc.txt",
+      "sha256": "fca348918c9ec45d1a8c60f9261f1b71064b55d99c953783ce05d839efd00386"
+    },
+    {
+      "bytes": 188,
+      "path": "metadata/git_audit_head.txt",
+      "sha256": "c41f73b94c9cd5fa9e0f917bbf6622e0fb2a92bace97f406f8f6670303e6414c"
+    },
+    {
+      "bytes": 390,
+      "path": "metadata/git_audit_status.txt",
+      "sha256": "2700d99c41a4011414f1c5848787dd1526c05449d341907756d8290a36034e47"
+    },
+    {
+      "bytes": 160,
+      "path": "metadata/git_production_head.txt",
+      "sha256": "f5836650a00705e386f60185bd6b885869ebbab38d493c928cd46a30f7b64e75"
+    },
+    {
+      "bytes": 1600,
+      "path": "metadata/git_production_status.txt",
+      "sha256": "91eda398d9ce86a37f391c3f659c68f5e9fa55429e6eabc3863bd1cdd547dd83"
+    },
+    {
+      "bytes": 1906,
+      "path": "metadata/processes.txt",
+      "sha256": "9c9956bea4094146d132b3e7034adb574b53d3cfaa2beddd8656ac481f3e581d"
+    },
+    {
+      "bytes": 7673,
+      "path": "metadata/termux_info.txt",
+      "sha256": "5969369e0b4d97d7ced4787d5270a95bceade698c498d993222efd56232f9ae9"
+    },
+    {
+      "bytes": 102,
+      "path": "metadata/timezone.txt",
+      "sha256": "b35b52af8d4f0d62766e74ecfda1392e07e2ae265c9de630416c27a1866c3406"
+    },
+    {
+      "bytes": 127,
+      "path": "metadata/uptime.txt",
+      "sha256": "e3999ece5bd4c1b6238b3b90378d4db4cfcc94d0391dbf861a17be1c1342d1e1"
+    }
+  ],
+  "audit_root": "/data/data/com.termux/files/home/bota-worktrees/historical-replay",
+  "capture_id": "termux-runtime-20260711T131407Z",
+  "captured_at_utc": "2026-07-11T13:14:23.386154Z",
+  "network_requests_executed": false,
+  "production_files_modified": false,
+  "production_root": "/data/data/com.termux/files/home/BotA",
+  "redaction_applied": true,
+  "schema_version": 1,
+  "secret_files_copied": false
+}

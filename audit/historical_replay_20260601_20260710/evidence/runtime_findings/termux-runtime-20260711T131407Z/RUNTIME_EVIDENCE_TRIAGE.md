@@ -1,0 +1,353 @@
+# Termux Runtime Evidence Triage
+
+- [proven] Capture: `termux-runtime-20260711T131407Z`
+- [proven] Manifest schema valid: `True`
+- [proven] Artifact hashes verified: `True`
+- [proven] Manifest artifact count: `96`
+- [proven] Verified artifact count: `96`
+- [proven] Production head: `fa289ad3f7b6ff430f13609950e5af341aee2e9d`
+- [proven] Audit head at capture: `48f351ba4aa62e08bb8802130f627c8c563f9c45`
+- [proven] BotA-related crontab evidence present: `True`
+- [proven] Running crond evidence present at capture: `True`
+
+## Captured logs
+
+- [proven] `logs/cron.signals.log` — first: `2026-06-01T07:15:10Z`, last: `2026-07-10T19:45:25Z`, candidate events: `80`
+- [proven] `logs/cron.heartbeat.log` — first: `2026-06-01T00:00:00Z`, last: `2026-07-10T23:00:00Z`, candidate events: `0`
+- [proven] `logs/cron.closer.log` — first: `2026-06-03T13:00:01Z`, last: `2026-07-10T23:46:15Z`, candidate events: `80`
+- [proven] `logs/error.log` — first: `2026-06-01T00:58:07Z`, last: `2026-07-10T23:58:32Z`, candidate events: `0`
+- [proven] `logs/alerts.csv` — first: `2026-06-01T08:45:22Z`, last: `2026-07-10T19:45:25Z`, candidate events: `80`
+- [proven] `logs/shadow_adx_scoring.jsonl` — first: `2026-06-01T08:45:34Z`, last: `2026-07-10T16:15:18Z`, candidate events: `0`
+- [proven] `logs/state/network_fail_count.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/_post_d1_fix_watcher.err` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/_post_d1_fix_watcher.out` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/_watcher_once.err` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/_watcher_once.out` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/_watcher_post_stale_lock.err` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/_watcher_post_stale_lock.out` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/boot.log` — first: `2026-06-02T03:23:13Z`, last: `2026-06-18T03:30:53Z`, candidate events: `5`
+- [proven] `logs/boot_proof.log` — first: `2026-06-02T07:23:00Z`, last: `2026-06-18T07:30:42Z`, candidate events: `0`
+- [proven] `logs/cron.accuracy.log` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/cron.autostatus.log` — first: `2026-06-01T00:04:00Z`, last: `2026-07-10T23:04:00Z`, candidate events: `0`
+- [proven] `logs/cron.clock_drift.log` — first: `2026-06-01T00:54:46Z`, last: `2026-07-10T23:56:21Z`, candidate events: `0`
+- [proven] `logs/cron.closer.log` — first: `2026-06-03T13:00:01Z`, last: `2026-07-10T23:46:15Z`, candidate events: `80`
+- [proven] `logs/cron.daily.log` — first: `2026-06-01T00:09:44Z`, last: `2026-07-10T23:11:17Z`, candidate events: `80`
+- [proven] `logs/cron.heartbeat.log` — first: `2026-06-01T00:00:00Z`, last: `2026-07-10T23:00:00Z`, candidate events: `0`
+- [proven] `logs/cron.indicators.log` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/cron.pause.log` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/cron.rotate.log` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/cron.runtime_health_push.log` — first: `2026-07-08T18:05:01Z`, last: `2026-07-10T23:56:13Z`, candidate events: `80`
+- [proven] `logs/cron.runtime_health_push.wrapper.log` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/cron.shadow.log` — first: `2026-06-01T00:00:03Z`, last: `2026-07-10T23:45:07Z`, candidate events: `80`
+- [proven] `logs/cron.signals.log` — first: `2026-06-01T07:15:10Z`, last: `2026-07-10T19:45:25Z`, candidate events: `80`
+- [proven] `logs/cron.sltp.log` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/cron.supervisor.log` — first: `2026-06-01T00:00:00Z`, last: `2026-07-10T23:55:00Z`, candidate events: `80`
+- [proven] `logs/cron.trades.log` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/cron_probe.log` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/crond_recovery_verify_20260502_143038.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/crond_start.err` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/crond_start.out` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/crontab.backup.20260413_214321.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/crontab.backup.20260428_103135` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/crontab.backup.before_bota_runtime_restore_safe_20260708_113737.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/crontab.backup.before_bota_runtime_restore_safe_v2_20260708_114132.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/crontab.backup.before_c1c_cleanup_20260708_114343.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/crontab.backup.before_canonical_install_20260708_132521.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/crontab.backup.before_canonical_install_20260708_212433.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/crontab.backup.before_closer_20260603_085158.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/crontab.backup.before_daily_proof_hourly_gate_20260705_110203.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/crontab.backup.before_daily_proof_restore_20260705_105334.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/exact_crond_process_verify_20260502_143602.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/live_market_open_cache_watcher_verify_20260505_233800.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/manual.watcher.once.log` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/post_crond_cycle_heartbeat_verify_20260502_150148.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/post_restart_watcher_patch_dryrun.out` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/post_restart_watcher_patch_verify_20260506_075912.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/pulse_cron.log` — first: `2026-07-05T10:50:37Z`, last: `2026-07-05T10:50:37Z`, candidate events: `1`
+- [proven] `logs/runtime_crond_updater_watcher_verify_20260507_160730.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/runtime_watcher_dryrun_after_updater.out` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/shadow_manager_heartbeat.txt` — first: `2026-06-01T00:00:24Z`, last: `2026-07-10T23:45:04Z`, candidate events: `80`
+- [proven] `logs/shipmode_cron_verify_20260430_161209.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/shipmode_crontab_install_verify_20260501_001526.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/shipmode_crontab_install_verify_localtmp_20260501_001725.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/signal_watcher_full_file_audit_20260506_064425.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/signal_watcher_pro.before_observability_20260710_181421.sh` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/signal_watcher_pro.before_observability_deploy_20260710_184130.sh` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/tmp/bota_crontab.canonical.before_runtime_health_push_20260708_232433.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/tmp/crontab.before_runtime_health_push_20260708_232433.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/tmp/live_crontab_phase5_7d.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/tmp/phase4c_final_cron_env.out` — first: `2026-07-08T15:30:01Z`, last: `2026-07-08T15:32:31Z`, candidate events: `0`
+- [proven] `logs/tmp/run_signal_closer_live_c7f_retry_smoke_20260603_145548.log` — first: `2026-06-03T14:55:54Z`, last: `2026-06-03T16:56:41Z`, candidate events: `2`
+- [proven] `logs/tmp/run_signal_closer_live_candle_first_smoke_20260603_141133.log` — first: `2026-06-03T18:11:33Z`, last: `2026-06-03T18:11:38Z`, candidate events: `2`
+- [proven] `logs/tmp/run_signal_closer_live_oanda_cache_smoke_20260603_142652.log` — first: `2026-06-03T18:26:54Z`, last: `2026-06-03T18:26:58Z`, candidate events: `2`
+- [proven] `logs/tmp/run_signal_closer_live_retry_20260603_134458.log` — first: `2026-06-03T17:44:58Z`, last: `2026-06-03T17:45:03Z`, candidate events: `2`
+- [proven] `logs/tmp/run_signal_closer_live_smoke_20260603_083654.log` — first: `2026-06-03T12:36:54Z`, last: `2026-06-03T12:36:58Z`, candidate events: `2`
+- [proven] `logs/tmp/signal_closer_c7f_pre_wrapper_dryrun_20260603_145151.log` — first: `2026-06-03T14:51:51Z`, last: `2026-06-03T14:51:51Z`, candidate events: `1`
+- [proven] `logs/tmp/signal_closer_c7f_retry_env_dryrun_20260603_145548.log` — first: `2026-06-03T14:55:50Z`, last: `2026-06-03T16:56:36Z`, candidate events: `2`
+- [proven] `logs/tmp/signal_closer_candle_first_dryrun_20260603_140417.log` — first: `2026-06-03T18:04:17Z`, last: `2026-06-03T18:04:19Z`, candidate events: `2`
+- [proven] `logs/tmp/signal_closer_cron_equiv_dryrun_20260603_083519.log` — first: `2026-06-03T12:35:19Z`, last: `2026-06-03T12:35:24Z`, candidate events: `2`
+- [proven] `logs/tmp/signal_closer_dryrun_20260603_081546.log` — first: `2026-06-03T12:15:46Z`, last: `2026-06-03T12:15:47Z`, candidate events: `2`
+- [proven] `logs/tmp/signal_closer_oanda_cache_dryrun_20260603_142652.log` — first: `2026-06-03T18:26:52Z`, last: `2026-06-03T18:26:54Z`, candidate events: `2`
+- [proven] `logs/tmp/signal_closer_true_outcome_dryrun_20260603_081855.log` — first: `2026-06-03T12:18:55Z`, last: `2026-06-03T12:18:59Z`, candidate events: `2`
+- [proven] `logs/tmp/signal_closer_trusted_clock_hard_age_dryrun_20260603_144408.log` — first: `2026-06-03T14:44:10Z`, last: `2026-06-03T16:44:57Z`, candidate events: `2`
+- [proven] `logs/tmp_cron_with_closer_20260603_085158.txt` — first: `None`, last: `None`, candidate events: `0`
+- [proven] `logs/watcher_patch_target_sections_20260506_081623.txt` — first: `None`, last: `None`, candidate events: `0`
+
+## Candidate runtime events
+
+- [suspected] `2026-06-01T00:00:00Z` `logs/cron.supervisor.log:131300` — `[SUPERVISOR 2026-06-01T00:00:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T00:00:00Z` `logs/cron.supervisor.log:131301` — `[SUPERVISOR 2026-06-01T00:00:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T00:00:00Z` `logs/cron.supervisor.log:131302` — `[SUPERVISOR 2026-06-01T00:00:00Z] OK: watcher log age=14min`
+- [suspected] `2026-06-01T00:00:00Z` `logs/cron.supervisor.log:131305` — `[SUPERVISOR 2026-06-01T00:00:00Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T00:00:03Z` `logs/cron.shadow.log:24231` — `2026-06-01 00:00:03,889 | ERROR | Schema compatibility: FAIL -- HTTPSConnectionPool(host='ozgkeslgjqbqfewojnmr.supabase.co', port=443): Max retries exceeded with url: /rest/v1/shadow_log?select=id%2Csignal_id%2Cpolicy%2Cpair%2Cdirection%2Centry_price%2Cstop_loss%2Ctake_profit%2Crisk_pips%2Csignal_created_at%2Chighest_mfe_pips%2Chighest_mfe_r%2Carm_triggered%2Carm_triggered_at%2Carm_candle_high%2Carm_candle_low%2Cshadow_state%2Cshadow_outcome%2Cshadow_pips%2Cshadow_closed_at%2Cactual_outcome%2Cac`
+- [suspected] `2026-06-01T00:05:00Z` `logs/cron.supervisor.log:131314` — `[SUPERVISOR 2026-06-01T00:05:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T00:05:00Z` `logs/cron.supervisor.log:131315` — `[SUPERVISOR 2026-06-01T00:05:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T00:05:00Z` `logs/cron.supervisor.log:131316` — `[SUPERVISOR 2026-06-01T00:05:00Z] OK: watcher log age=4min`
+- [suspected] `2026-06-01T00:05:01Z` `logs/cron.supervisor.log:131319` — `[SUPERVISOR 2026-06-01T00:05:01Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T00:09:44Z` `logs/cron.daily.log:638` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-01T00:09:44Z server_hour=0 drift=-3583 detail=target_hour=20;clock_source=live;status=DRIFT_WARN`
+- [suspected] `2026-06-01T00:10:00Z` `logs/cron.supervisor.log:131328` — `[SUPERVISOR 2026-06-01T00:10:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T00:10:01Z` `logs/cron.supervisor.log:131329` — `[SUPERVISOR 2026-06-01T00:10:01Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T00:10:01Z` `logs/cron.supervisor.log:131330` — `[SUPERVISOR 2026-06-01T00:10:01Z] OK: watcher log age=9min`
+- [suspected] `2026-06-01T00:10:01Z` `logs/cron.supervisor.log:131333` — `[SUPERVISOR 2026-06-01T00:10:01Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T00:15:00Z` `logs/cron.supervisor.log:131342` — `[SUPERVISOR 2026-06-01T00:15:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T00:15:00Z` `logs/cron.supervisor.log:131343` — `[SUPERVISOR 2026-06-01T00:15:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T00:15:00Z` `logs/cron.supervisor.log:131344` — `[SUPERVISOR 2026-06-01T00:15:00Z] OK: watcher log age=14min`
+- [suspected] `2026-06-01T00:15:00Z` `logs/cron.supervisor.log:131347` — `[SUPERVISOR 2026-06-01T00:15:00Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T00:15:02Z` `logs/cron.shadow.log:24235` — `2026-06-01 00:15:02,128 | ERROR | Schema compatibility: FAIL -- HTTPSConnectionPool(host='ozgkeslgjqbqfewojnmr.supabase.co', port=443): Max retries exceeded with url: /rest/v1/shadow_log?select=id%2Csignal_id%2Cpolicy%2Cpair%2Cdirection%2Centry_price%2Cstop_loss%2Ctake_profit%2Crisk_pips%2Csignal_created_at%2Chighest_mfe_pips%2Chighest_mfe_r%2Carm_triggered%2Carm_triggered_at%2Carm_candle_high%2Carm_candle_low%2Cshadow_state%2Cshadow_outcome%2Cshadow_pips%2Cshadow_closed_at%2Cactual_outcome%2Cac`
+- [suspected] `2026-06-01T00:20:00Z` `logs/cron.supervisor.log:131356` — `[SUPERVISOR 2026-06-01T00:20:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T00:20:00Z` `logs/cron.supervisor.log:131357` — `[SUPERVISOR 2026-06-01T00:20:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T00:20:01Z` `logs/cron.supervisor.log:131358` — `[SUPERVISOR 2026-06-01T00:20:01Z] OK: watcher log age=4min`
+- [suspected] `2026-06-01T00:20:01Z` `logs/cron.supervisor.log:131361` — `[SUPERVISOR 2026-06-01T00:20:01Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T00:25:01Z` `logs/cron.supervisor.log:131370` — `[SUPERVISOR 2026-06-01T00:25:01Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T00:25:01Z` `logs/cron.supervisor.log:131371` — `[SUPERVISOR 2026-06-01T00:25:01Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T00:25:01Z` `logs/cron.supervisor.log:131372` — `[SUPERVISOR 2026-06-01T00:25:01Z] OK: watcher log age=9min`
+- [suspected] `2026-06-01T00:25:01Z` `logs/cron.supervisor.log:131375` — `[SUPERVISOR 2026-06-01T00:25:01Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T00:30:00Z` `logs/cron.supervisor.log:131384` — `[SUPERVISOR 2026-06-01T00:30:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T00:30:00Z` `logs/cron.supervisor.log:131385` — `[SUPERVISOR 2026-06-01T00:30:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T00:30:00Z` `logs/cron.supervisor.log:131386` — `[SUPERVISOR 2026-06-01T00:30:00Z] OK: watcher log age=14min`
+- [suspected] `2026-06-01T00:30:00Z` `logs/cron.supervisor.log:131389` — `[SUPERVISOR 2026-06-01T00:30:00Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T00:30:01Z` `logs/cron.shadow.log:24239` — `2026-06-01 00:30:01,783 | ERROR | Schema compatibility: FAIL -- HTTPSConnectionPool(host='ozgkeslgjqbqfewojnmr.supabase.co', port=443): Max retries exceeded with url: /rest/v1/shadow_log?select=id%2Csignal_id%2Cpolicy%2Cpair%2Cdirection%2Centry_price%2Cstop_loss%2Ctake_profit%2Crisk_pips%2Csignal_created_at%2Chighest_mfe_pips%2Chighest_mfe_r%2Carm_triggered%2Carm_triggered_at%2Carm_candle_high%2Carm_candle_low%2Cshadow_state%2Cshadow_outcome%2Cshadow_pips%2Cshadow_closed_at%2Cactual_outcome%2Cac`
+- [suspected] `2026-06-01T00:35:00Z` `logs/cron.supervisor.log:131398` — `[SUPERVISOR 2026-06-01T00:35:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T00:35:00Z` `logs/cron.supervisor.log:131399` — `[SUPERVISOR 2026-06-01T00:35:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T00:35:01Z` `logs/cron.supervisor.log:131400` — `[SUPERVISOR 2026-06-01T00:35:01Z] OK: watcher log age=4min`
+- [suspected] `2026-06-01T00:35:01Z` `logs/cron.supervisor.log:131403` — `[SUPERVISOR 2026-06-01T00:35:01Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T00:40:00Z` `logs/cron.supervisor.log:131412` — `[SUPERVISOR 2026-06-01T00:40:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T00:40:00Z` `logs/cron.supervisor.log:131413` — `[SUPERVISOR 2026-06-01T00:40:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T00:40:00Z` `logs/cron.supervisor.log:131414` — `[SUPERVISOR 2026-06-01T00:40:00Z] OK: watcher log age=9min`
+- [suspected] `2026-06-01T00:40:00Z` `logs/cron.supervisor.log:131417` — `[SUPERVISOR 2026-06-01T00:40:00Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T00:45:00Z` `logs/cron.supervisor.log:131426` — `[SUPERVISOR 2026-06-01T00:45:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T00:45:00Z` `logs/cron.supervisor.log:131427` — `[SUPERVISOR 2026-06-01T00:45:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T00:45:00Z` `logs/cron.supervisor.log:131428` — `[SUPERVISOR 2026-06-01T00:45:00Z] OK: watcher log age=14min`
+- [suspected] `2026-06-01T00:45:00Z` `logs/cron.supervisor.log:131431` — `[SUPERVISOR 2026-06-01T00:45:00Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T00:45:01Z` `logs/cron.shadow.log:24243` — `2026-06-01 00:45:01,869 | ERROR | Schema compatibility: FAIL -- HTTPSConnectionPool(host='ozgkeslgjqbqfewojnmr.supabase.co', port=443): Max retries exceeded with url: /rest/v1/shadow_log?select=id%2Csignal_id%2Cpolicy%2Cpair%2Cdirection%2Centry_price%2Cstop_loss%2Ctake_profit%2Crisk_pips%2Csignal_created_at%2Chighest_mfe_pips%2Chighest_mfe_r%2Carm_triggered%2Carm_triggered_at%2Carm_candle_high%2Carm_candle_low%2Cshadow_state%2Cshadow_outcome%2Cshadow_pips%2Cshadow_closed_at%2Cactual_outcome%2Cac`
+- [suspected] `2026-06-01T00:50:00Z` `logs/cron.supervisor.log:131440` — `[SUPERVISOR 2026-06-01T00:50:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T00:50:00Z` `logs/cron.supervisor.log:131441` — `[SUPERVISOR 2026-06-01T00:50:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T00:50:01Z` `logs/cron.supervisor.log:131442` — `[SUPERVISOR 2026-06-01T00:50:01Z] OK: watcher log age=4min`
+- [suspected] `2026-06-01T00:50:01Z` `logs/cron.supervisor.log:131445` — `[SUPERVISOR 2026-06-01T00:50:01Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T00:55:01Z` `logs/cron.supervisor.log:131454` — `[SUPERVISOR 2026-06-01T00:55:01Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T00:55:01Z` `logs/cron.supervisor.log:131455` — `[SUPERVISOR 2026-06-01T00:55:01Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T00:55:01Z` `logs/cron.supervisor.log:131456` — `[SUPERVISOR 2026-06-01T00:55:01Z] OK: watcher log age=9min`
+- [suspected] `2026-06-01T00:55:01Z` `logs/cron.supervisor.log:131459` — `[SUPERVISOR 2026-06-01T00:55:01Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T01:00:00Z` `logs/cron.supervisor.log:131468` — `[SUPERVISOR 2026-06-01T01:00:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T01:00:01Z` `logs/cron.supervisor.log:131469` — `[SUPERVISOR 2026-06-01T01:00:01Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T01:00:01Z` `logs/cron.supervisor.log:131470` — `[SUPERVISOR 2026-06-01T01:00:01Z] OK: watcher log age=14min`
+- [suspected] `2026-06-01T01:00:01Z` `logs/cron.supervisor.log:131473` — `[SUPERVISOR 2026-06-01T01:00:01Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T01:00:05Z` `logs/cron.shadow.log:24249` — `2026-06-01 01:00:05,209 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T01:00:06Z` `logs/cron.shadow.log:24251` — `2026-06-01 01:00:06,999 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T01:00:08Z` `logs/shadow_manager_heartbeat.txt:3621` — `2026-06-01T01:00:08.196680+00:00 | ERROR | schema compatibility check failed -- see shadow_manager.log`
+- [suspected] `2026-06-01T01:00:11Z` `logs/cron.shadow.log:24252` — `2026-06-01 01:00:11,099 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T01:05:01Z` `logs/cron.supervisor.log:131482` — `[SUPERVISOR 2026-06-01T01:05:01Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T01:05:01Z` `logs/cron.supervisor.log:131483` — `[SUPERVISOR 2026-06-01T01:05:01Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T01:05:01Z` `logs/cron.supervisor.log:131484` — `[SUPERVISOR 2026-06-01T01:05:01Z] OK: watcher log age=4min`
+- [suspected] `2026-06-01T01:05:01Z` `logs/cron.supervisor.log:131487` — `[SUPERVISOR 2026-06-01T01:05:01Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T01:09:47Z` `logs/cron.daily.log:639` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-01T01:09:47Z server_hour=1 drift=-3586 detail=target_hour=20;clock_source=live;status=DRIFT_WARN`
+- [suspected] `2026-06-01T01:10:00Z` `logs/cron.supervisor.log:131496` — `[SUPERVISOR 2026-06-01T01:10:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T01:10:00Z` `logs/cron.supervisor.log:131497` — `[SUPERVISOR 2026-06-01T01:10:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T01:10:00Z` `logs/cron.supervisor.log:131498` — `[SUPERVISOR 2026-06-01T01:10:00Z] OK: watcher log age=9min`
+- [suspected] `2026-06-01T01:10:00Z` `logs/cron.supervisor.log:131501` — `[SUPERVISOR 2026-06-01T01:10:00Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T01:15:00Z` `logs/cron.supervisor.log:131510` — `[SUPERVISOR 2026-06-01T01:15:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T01:15:00Z` `logs/cron.supervisor.log:131511` — `[SUPERVISOR 2026-06-01T01:15:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T01:15:00Z` `logs/cron.supervisor.log:131512` — `[SUPERVISOR 2026-06-01T01:15:00Z] OK: watcher log age=14min`
+- [suspected] `2026-06-01T01:15:00Z` `logs/cron.supervisor.log:131515` — `[SUPERVISOR 2026-06-01T01:15:00Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T01:15:03Z` `logs/cron.shadow.log:24258` — `2026-06-01 01:15:03,775 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T01:15:05Z` `logs/cron.shadow.log:24260` — `2026-06-01 01:15:05,027 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T01:15:07Z` `logs/shadow_manager_heartbeat.txt:3622` — `2026-06-01T01:15:07.650184+00:00 | ERROR | schema compatibility check failed -- see shadow_manager.log`
+- [suspected] `2026-06-01T01:15:10Z` `logs/cron.shadow.log:24261` — `2026-06-01 01:15:10,423 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T01:20:00Z` `logs/cron.supervisor.log:131524` — `[SUPERVISOR 2026-06-01T01:20:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T01:20:00Z` `logs/cron.supervisor.log:131525` — `[SUPERVISOR 2026-06-01T01:20:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T01:20:01Z` `logs/cron.supervisor.log:131526` — `[SUPERVISOR 2026-06-01T01:20:01Z] OK: watcher log age=4min`
+- [suspected] `2026-06-01T01:20:01Z` `logs/cron.supervisor.log:131529` — `[SUPERVISOR 2026-06-01T01:20:01Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T01:25:00Z` `logs/cron.supervisor.log:131538` — `[SUPERVISOR 2026-06-01T01:25:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T01:25:00Z` `logs/cron.supervisor.log:131539` — `[SUPERVISOR 2026-06-01T01:25:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T01:25:00Z` `logs/cron.supervisor.log:131540` — `[SUPERVISOR 2026-06-01T01:25:00Z] OK: watcher log age=9min`
+- [suspected] `2026-06-01T01:25:00Z` `logs/cron.supervisor.log:131543` — `[SUPERVISOR 2026-06-01T01:25:00Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T01:30:00Z` `logs/cron.supervisor.log:131552` — `[SUPERVISOR 2026-06-01T01:30:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T01:30:00Z` `logs/cron.supervisor.log:131553` — `[SUPERVISOR 2026-06-01T01:30:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T01:30:01Z` `logs/cron.supervisor.log:131554` — `[SUPERVISOR 2026-06-01T01:30:01Z] OK: watcher log age=14min`
+- [suspected] `2026-06-01T01:30:01Z` `logs/cron.supervisor.log:131557` — `[SUPERVISOR 2026-06-01T01:30:01Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T01:30:06Z` `logs/cron.shadow.log:24267` — `2026-06-01 01:30:06,910 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T01:30:09Z` `logs/cron.shadow.log:24269` — `2026-06-01 01:30:09,005 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T01:30:15Z` `logs/cron.shadow.log:24270` — `2026-06-01 01:30:15,323 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T01:30:22Z` `logs/shadow_manager_heartbeat.txt:3627` — `2026-06-01T01:30:22.388094+00:00 | ERROR | schema compatibility check failed -- see shadow_manager.log`
+- [suspected] `2026-06-01T01:35:00Z` `logs/cron.supervisor.log:131566` — `[SUPERVISOR 2026-06-01T01:35:00Z] === SUPERVISOR START ===`
+- [suspected] `2026-06-01T01:35:00Z` `logs/cron.supervisor.log:131567` — `[SUPERVISOR 2026-06-01T01:35:00Z] OK: crond PID=22435`
+- [suspected] `2026-06-01T01:35:01Z` `logs/cron.supervisor.log:131568` — `[SUPERVISOR 2026-06-01T01:35:01Z] OK: watcher log age=4min`
+- [suspected] `2026-06-01T01:35:01Z` `logs/cron.supervisor.log:131571` — `[SUPERVISOR 2026-06-01T01:35:01Z] OK: no watcher.lock present`
+- [suspected] `2026-06-01T01:45:06Z` `logs/cron.shadow.log:24276` — `2026-06-01 01:45:06,651 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T01:45:07Z` `logs/shadow_manager_heartbeat.txt:3624` — `2026-06-01T01:45:07.576850+00:00 | ERROR | schema compatibility check failed -- see shadow_manager.log`
+- [suspected] `2026-06-01T01:45:08Z` `logs/cron.shadow.log:24278` — `2026-06-01 01:45:08,658 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T01:45:18Z` `logs/cron.shadow.log:24279` — `2026-06-01 01:45:18,777 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T01:45:23Z` `logs/shadow_manager_heartbeat.txt:3628` — `2026-06-01T01:45:23.066354+00:00 | ERROR | schema compatibility check failed -- see shadow_manager.log`
+- [suspected] `2026-06-01T02:00:07Z` `logs/shadow_manager_heartbeat.txt:3625` — `2026-06-01T02:00:07.899937+00:00 | ERROR | schema compatibility check failed -- see shadow_manager.log`
+- [suspected] `2026-06-01T02:00:08Z` `logs/cron.shadow.log:24283` — `2026-06-01 02:00:08,136 | ERROR | Schema compatibility: FAIL -- HTTPSConnectionPool(host='ozgkeslgjqbqfewojnmr.supabase.co', port=443): Max retries exceeded with url: /rest/v1/shadow_log?select=id%2Csignal_id%2Cpolicy%2Cpair%2Cdirection%2Centry_price%2Cstop_loss%2Ctake_profit%2Crisk_pips%2Csignal_created_at%2Chighest_mfe_pips%2Chighest_mfe_r%2Carm_triggered%2Carm_triggered_at%2Carm_candle_high%2Carm_candle_low%2Cshadow_state%2Cshadow_outcome%2Cshadow_pips%2Cshadow_closed_at%2Cactual_outcome%2Cac`
+- [suspected] `2026-06-01T02:10:11Z` `logs/cron.daily.log:640` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-01T02:10:11Z server_hour=2 drift=-3586 detail=target_hour=20;clock_source=last_good;status=FALLBACK_LAST_GOOD;live_status=SERVER_CLOCK_UNAVAILABLE;age_secs=3624;max_age_secs=28800;last_drift=-3586`
+- [suspected] `2026-06-01T02:15:08Z` `logs/shadow_manager_heartbeat.txt:3626` — `2026-06-01T02:15:08.614706+00:00 | ERROR | schema compatibility check failed -- see shadow_manager.log`
+- [suspected] `2026-06-01T02:15:24Z` `logs/cron.shadow.log:24287` — `2026-06-01 02:15:24,092 | ERROR | Schema compatibility: FAIL -- ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))`
+- [suspected] `2026-06-01T02:30:07Z` `logs/cron.shadow.log:24293` — `2026-06-01 02:30:07,909 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T02:30:09Z` `logs/cron.shadow.log:24295` — `2026-06-01 02:30:09,952 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T02:30:15Z` `logs/cron.shadow.log:24296` — `2026-06-01 02:30:15,921 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T02:45:04Z` `logs/cron.shadow.log:24302` — `2026-06-01 02:45:04,767 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T02:45:07Z` `logs/cron.shadow.log:24304` — `2026-06-01 02:45:07,114 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T02:45:12Z` `logs/cron.shadow.log:24305` — `2026-06-01 02:45:12,844 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T03:00:05Z` `logs/cron.shadow.log:24311` — `2026-06-01 03:00:05,875 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T03:00:08Z` `logs/cron.shadow.log:24313` — `2026-06-01 03:00:08,032 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T03:00:16Z` `logs/cron.shadow.log:24314` — `2026-06-01 03:00:16,682 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T03:09:46Z` `logs/cron.daily.log:641` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-01T03:09:46Z server_hour=3 drift=-3585 detail=target_hour=20;clock_source=live;status=DRIFT_WARN`
+- [suspected] `2026-06-01T03:15:05Z` `logs/cron.shadow.log:24320` — `2026-06-01 03:15:05,969 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T03:15:08Z` `logs/cron.shadow.log:24322` — `2026-06-01 03:15:08,592 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T03:15:16Z` `logs/cron.shadow.log:24323` — `2026-06-01 03:15:16,687 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T03:30:06Z` `logs/cron.shadow.log:24329` — `2026-06-01 03:30:06,476 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T03:30:10Z` `logs/cron.shadow.log:24331` — `2026-06-01 03:30:10,228 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T03:30:17Z` `logs/cron.shadow.log:24332` — `2026-06-01 03:30:17,334 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T03:45:05Z` `logs/cron.shadow.log:24338` — `2026-06-01 03:45:05,043 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T03:45:07Z` `logs/cron.shadow.log:24340` — `2026-06-01 03:45:07,467 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T03:45:12Z` `logs/cron.shadow.log:24341` — `2026-06-01 03:45:12,749 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T04:00:06Z` `logs/cron.shadow.log:24347` — `2026-06-01 04:00:06,458 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T04:00:09Z` `logs/cron.shadow.log:24349` — `2026-06-01 04:00:09,786 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T04:00:18Z` `logs/cron.shadow.log:24350` — `2026-06-01 04:00:18,905 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T04:09:59Z` `logs/cron.daily.log:642` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-01T04:09:59Z server_hour=4 drift=-7198 detail=target_hour=20;clock_source=live;status=DRIFT_WARN`
+- [suspected] `2026-06-01T04:15:05Z` `logs/cron.shadow.log:24356` — `2026-06-01 04:15:05,042 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T04:15:07Z` `logs/cron.shadow.log:24358` — `2026-06-01 04:15:07,663 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T04:15:15Z` `logs/cron.shadow.log:24359` — `2026-06-01 04:15:15,115 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T04:30:04Z` `logs/cron.shadow.log:24365` — `2026-06-01 04:30:04,339 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T04:30:06Z` `logs/cron.shadow.log:24367` — `2026-06-01 04:30:06,105 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T04:30:12Z` `logs/cron.shadow.log:24368` — `2026-06-01 04:30:12,102 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T04:45:04Z` `logs/cron.shadow.log:24374` — `2026-06-01 04:45:04,558 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T04:45:06Z` `logs/cron.shadow.log:24376` — `2026-06-01 04:45:06,594 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T04:45:14Z` `logs/cron.shadow.log:24377` — `2026-06-01 04:45:14,094 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T05:00:08Z` `logs/cron.shadow.log:24381` — `2026-06-01 05:00:08,191 | ERROR | Schema compatibility: FAIL -- HTTPSConnectionPool(host='ozgkeslgjqbqfewojnmr.supabase.co', port=443): Max retries exceeded with url: /rest/v1/shadow_log?select=id%2Csignal_id%2Cpolicy%2Cpair%2Cdirection%2Centry_price%2Cstop_loss%2Ctake_profit%2Crisk_pips%2Csignal_created_at%2Chighest_mfe_pips%2Chighest_mfe_r%2Carm_triggered%2Carm_triggered_at%2Carm_candle_high%2Carm_candle_low%2Cshadow_state%2Cshadow_outcome%2Cshadow_pips%2Cshadow_closed_at%2Cactual_outcome%2Cac`
+- [suspected] `2026-06-01T05:10:00Z` `logs/cron.daily.log:643` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-01T05:10:00Z server_hour=5 drift=-7200 detail=target_hour=20;clock_source=live;status=DRIFT_WARN`
+- [suspected] `2026-06-01T05:15:07Z` `logs/cron.shadow.log:24385` — `2026-06-01 05:15:07,645 | ERROR | Schema compatibility: FAIL -- HTTPSConnectionPool(host='ozgkeslgjqbqfewojnmr.supabase.co', port=443): Max retries exceeded with url: /rest/v1/shadow_log?select=id%2Csignal_id%2Cpolicy%2Cpair%2Cdirection%2Centry_price%2Cstop_loss%2Ctake_profit%2Crisk_pips%2Csignal_created_at%2Chighest_mfe_pips%2Chighest_mfe_r%2Carm_triggered%2Carm_triggered_at%2Carm_candle_high%2Carm_candle_low%2Cshadow_state%2Cshadow_outcome%2Cshadow_pips%2Cshadow_closed_at%2Cactual_outcome%2Cac`
+- [suspected] `2026-06-01T05:30:05Z` `logs/cron.shadow.log:24391` — `2026-06-01 05:30:05,187 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T05:30:07Z` `logs/cron.shadow.log:24393` — `2026-06-01 05:30:07,358 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T05:30:12Z` `logs/cron.shadow.log:24394` — `2026-06-01 05:30:12,977 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T05:30:22Z` `logs/cron.shadow.log:24410` — `2026-06-01 05:30:22,380 | ERROR | Schema compatibility: FAIL -- HTTPSConnectionPool(host='ozgkeslgjqbqfewojnmr.supabase.co', port=443): Read timed out. (read timeout=20)`
+- [suspected] `2026-06-01T05:45:07Z` `logs/cron.shadow.log:24398` — `2026-06-01 05:45:07,572 | ERROR | Schema compatibility: FAIL -- HTTPSConnectionPool(host='ozgkeslgjqbqfewojnmr.supabase.co', port=443): Max retries exceeded with url: /rest/v1/shadow_log?select=id%2Csignal_id%2Cpolicy%2Cpair%2Cdirection%2Centry_price%2Cstop_loss%2Ctake_profit%2Crisk_pips%2Csignal_created_at%2Chighest_mfe_pips%2Chighest_mfe_r%2Carm_triggered%2Carm_triggered_at%2Carm_candle_high%2Carm_candle_low%2Cshadow_state%2Cshadow_outcome%2Cshadow_pips%2Cshadow_closed_at%2Cactual_outcome%2Cac`
+- [suspected] `2026-06-01T05:45:23Z` `logs/cron.shadow.log:24414` — `2026-06-01 05:45:23,059 | ERROR | Schema compatibility: FAIL -- HTTPSConnectionPool(host='ozgkeslgjqbqfewojnmr.supabase.co', port=443): Read timed out. (read timeout=20)`
+- [suspected] `2026-06-01T06:00:05Z` `logs/cron.shadow.log:24420` — `2026-06-01 06:00:05,623 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T06:00:07Z` `logs/cron.shadow.log:24402` — `2026-06-01 06:00:07,898 | ERROR | Schema compatibility: FAIL -- HTTPSConnectionPool(host='ozgkeslgjqbqfewojnmr.supabase.co', port=443): Max retries exceeded with url: /rest/v1/shadow_log?select=id%2Csignal_id%2Cpolicy%2Cpair%2Cdirection%2Centry_price%2Cstop_loss%2Ctake_profit%2Crisk_pips%2Csignal_created_at%2Chighest_mfe_pips%2Chighest_mfe_r%2Carm_triggered%2Carm_triggered_at%2Carm_candle_high%2Carm_candle_low%2Cshadow_state%2Cshadow_outcome%2Cshadow_pips%2Cshadow_closed_at%2Cactual_outcome%2Cac`
+- [suspected] `2026-06-01T06:00:07Z` `logs/cron.shadow.log:24422` — `2026-06-01 06:00:07,988 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T06:00:13Z` `logs/cron.shadow.log:24423` — `2026-06-01 06:00:13,947 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T06:15:08Z` `logs/cron.shadow.log:24406` — `2026-06-01 06:15:08,609 | ERROR | Schema compatibility: FAIL -- HTTPSConnectionPool(host='ozgkeslgjqbqfewojnmr.supabase.co', port=443): Max retries exceeded with url: /rest/v1/shadow_log?select=id%2Csignal_id%2Cpolicy%2Cpair%2Cdirection%2Centry_price%2Cstop_loss%2Ctake_profit%2Crisk_pips%2Csignal_created_at%2Chighest_mfe_pips%2Chighest_mfe_r%2Carm_triggered%2Carm_triggered_at%2Carm_candle_high%2Carm_candle_low%2Cshadow_state%2Cshadow_outcome%2Cshadow_pips%2Cshadow_closed_at%2Cactual_outcome%2Cac`
+- [suspected] `2026-06-01T06:15:08Z` `logs/cron.shadow.log:24429` — `2026-06-01 06:15:08,116 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T06:15:11Z` `logs/cron.shadow.log:24431` — `2026-06-01 06:15:11,542 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T06:15:19Z` `logs/cron.shadow.log:24432` — `2026-06-01 06:15:19,214 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T06:30:04Z` `logs/cron.shadow.log:24438` — `2026-06-01 06:30:04,543 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T06:30:09Z` `logs/cron.shadow.log:24440` — `2026-06-01 06:30:09,427 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T06:30:16Z` `logs/cron.shadow.log:24441` — `2026-06-01 06:30:16,839 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T06:45:04Z` `logs/cron.shadow.log:24447` — `2026-06-01 06:45:04,232 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T06:45:06Z` `logs/cron.shadow.log:24449` — `2026-06-01 06:45:06,267 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T06:45:11Z` `logs/cron.shadow.log:24450` — `2026-06-01 06:45:11,839 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T07:00:03Z` `logs/shadow_manager_heartbeat.txt:3637` — `2026-06-01T07:00:03.382307+00:00 | ERROR | schema compatibility check failed -- see shadow_manager.log`
+- [suspected] `2026-06-01T07:00:07Z` `logs/cron.shadow.log:24456` — `2026-06-01 07:00:07,644 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T07:00:23Z` `logs/cron.shadow.log:24458` — `2026-06-01 07:00:23,877 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T07:00:47Z` `logs/cron.shadow.log:24459` — `2026-06-01 07:00:47,205 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T07:15:09Z` `logs/cron.shadow.log:24465` — `2026-06-01 07:15:09,299 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T07:15:10Z` `logs/cron.signals.log:20089` — `[WATCHER 2026-06-01T11:15:10+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T07:15:10Z` `logs/cron.signals.log:20089` — `[WATCHER 2026-06-01T11:15:10+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T07:15:15Z` `logs/cron.shadow.log:24467` — `2026-06-01 07:15:15,348 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T07:15:24Z` `logs/cron.shadow.log:24468` — `2026-06-01 07:15:24,041 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T07:15:28Z` `logs/cron.signals.log:20092` — `[DEDUP 2026-06-01T11:15:28+0400] EURUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T07:15:28Z` `logs/cron.signals.log:20092` — `[DEDUP 2026-06-01T11:15:28+0400] EURUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T07:15:48Z` `logs/cron.signals.log:20094` — `[DEDUP 2026-06-01T11:15:48+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T07:15:48Z` `logs/cron.signals.log:20094` — `[DEDUP 2026-06-01T11:15:48+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T07:30:10Z` `logs/cron.shadow.log:24474` — `2026-06-01 07:30:10,166 | INFO | Shadow Manager v4.0 | OANDA_MODE=PRACTICE | BE_R=1.0 | MIRROR_THRESHOLD=2.0pips | RECONCILE_COOLDOWN=60min | MAX_AGE=96h`
+- [suspected] `2026-06-01T07:30:11Z` `logs/cron.signals.log:20096` — `[WATCHER 2026-06-01T11:30:11+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T07:30:11Z` `logs/cron.signals.log:20096` — `[WATCHER 2026-06-01T11:30:11+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T07:30:13Z` `logs/cron.shadow.log:24476` — `2026-06-01 07:30:13,471 | INFO | Terminal signals in lookback window: 0`
+- [suspected] `2026-06-01T07:30:31Z` `logs/cron.signals.log:20099` — `[DEDUP 2026-06-01T11:30:31+0400] EURUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T07:30:31Z` `logs/cron.signals.log:20099` — `[DEDUP 2026-06-01T11:30:31+0400] EURUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T07:30:33Z` `logs/cron.shadow.log:24477` — `2026-06-01 07:30:33,168 | INFO | Active production signals: 2`
+- [suspected] `2026-06-01T07:30:46Z` `logs/cron.signals.log:20101` — `[DEDUP 2026-06-01T11:30:46+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T07:30:46Z` `logs/cron.signals.log:20101` — `[DEDUP 2026-06-01T11:30:46+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T07:45:10Z` `logs/cron.signals.log:20103` — `[WATCHER 2026-06-01T11:45:10+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T07:45:10Z` `logs/cron.signals.log:20103` — `[WATCHER 2026-06-01T11:45:10+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T07:45:35Z` `logs/cron.signals.log:20106` — `[DEDUP 2026-06-01T11:45:35+0400] EURUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T07:45:35Z` `logs/cron.signals.log:20106` — `[DEDUP 2026-06-01T11:45:35+0400] EURUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T07:45:54Z` `logs/cron.signals.log:20108` — `[DEDUP 2026-06-01T11:45:54+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T07:45:54Z` `logs/cron.signals.log:20108` — `[DEDUP 2026-06-01T11:45:54+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T08:00:16Z` `logs/cron.signals.log:20110` — `[WATCHER 2026-06-01T12:00:16+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T08:00:16Z` `logs/cron.signals.log:20110` — `[WATCHER 2026-06-01T12:00:16+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T08:01:14Z` `logs/cron.signals.log:20113` — `[DEDUP 2026-06-01T12:01:14+0400] EURUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T08:01:14Z` `logs/cron.signals.log:20113` — `[DEDUP 2026-06-01T12:01:14+0400] EURUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T08:01:52Z` `logs/cron.signals.log:20115` — `[DEDUP 2026-06-01T12:01:52+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T08:01:52Z` `logs/cron.signals.log:20115` — `[DEDUP 2026-06-01T12:01:52+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T08:15:08Z` `logs/shadow_manager_heartbeat.txt:3642` — `2026-06-01T08:15:08.356603+00:00 | ERROR | schema compatibility check failed -- see shadow_manager.log`
+- [suspected] `2026-06-01T08:15:25Z` `logs/cron.signals.log:20117` — `[WATCHER 2026-06-01T12:15:25+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T08:15:25Z` `logs/cron.signals.log:20117` — `[WATCHER 2026-06-01T12:15:25+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T08:15:50Z` `logs/cron.signals.log:20118` — `[CLOCK 2026-06-01T12:15:50+0400] server_clock_unavailable -> SKIP_SCAN fail_closed`
+- [suspected] `2026-06-01T08:15:50Z` `logs/cron.signals.log:20118` — `[CLOCK 2026-06-01T12:15:50+0400] server_clock_unavailable -> SKIP_SCAN fail_closed`
+- [suspected] `2026-06-01T08:30:30Z` `logs/cron.signals.log:20120` — `[WATCHER 2026-06-01T12:30:30+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T08:30:30Z` `logs/cron.signals.log:20120` — `[WATCHER 2026-06-01T12:30:30+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T08:30:43Z` `logs/cron.signals.log:20121` — `[CLOCK 2026-06-01T12:30:43+0400] server_clock_unavailable -> SKIP_SCAN fail_closed`
+- [suspected] `2026-06-01T08:30:43Z` `logs/cron.signals.log:20121` — `[CLOCK 2026-06-01T12:30:43+0400] server_clock_unavailable -> SKIP_SCAN fail_closed`
+- [suspected] `2026-06-01T08:30:48Z` `logs/shadow_manager_heartbeat.txt:3643` — `2026-06-01T08:30:48.442830+00:00 | OK | 0 active signals`
+- [suspected] `2026-06-01T08:45:06Z` `logs/cron.signals.log:20123` — `[WATCHER 2026-06-01T12:45:06+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T08:45:06Z` `logs/cron.signals.log:20123` — `[WATCHER 2026-06-01T12:45:06+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T08:45:34Z` `logs/cron.signals.log:20128` — `[DEDUP 2026-06-01T12:45:34+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T08:45:34Z` `logs/cron.signals.log:20128` — `[DEDUP 2026-06-01T12:45:34+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T09:00:11Z` `logs/cron.signals.log:20130` — `[WATCHER 2026-06-01T13:00:11+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T09:00:11Z` `logs/cron.signals.log:20130` — `[WATCHER 2026-06-01T13:00:11+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T09:00:50Z` `logs/cron.signals.log:20135` — `[DEDUP 2026-06-01T13:00:50+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T09:00:50Z` `logs/cron.signals.log:20135` — `[DEDUP 2026-06-01T13:00:50+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T09:10:51Z` `logs/cron.daily.log:644` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-01T09:10:51Z server_hour=9 drift=-7250 detail=target_hour=20;clock_source=live;status=DRIFT_WARN`
+- [suspected] `2026-06-01T09:15:10Z` `logs/cron.signals.log:20137` — `[WATCHER 2026-06-01T13:15:10+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T09:15:10Z` `logs/cron.signals.log:20137` — `[WATCHER 2026-06-01T13:15:10+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T09:15:52Z` `logs/cron.signals.log:20142` — `[DEDUP 2026-06-01T13:15:52+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T09:15:52Z` `logs/cron.signals.log:20142` — `[DEDUP 2026-06-01T13:15:52+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T09:30:19Z` `logs/shadow_manager_heartbeat.txt:3647` — `2026-06-01T09:30:19.900469+00:00 | ERROR | schema compatibility check failed -- see shadow_manager.log`
+- [suspected] `2026-06-01T09:30:35Z` `logs/cron.signals.log:20144` — `[WATCHER 2026-06-01T13:30:35+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T09:30:35Z` `logs/cron.signals.log:20144` — `[WATCHER 2026-06-01T13:30:35+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T09:30:58Z` `logs/cron.signals.log:20146` — `[STALE 2026-06-01T13:30:58+0400] EURUSD M15 candle_stale age=2799s max=2700s last=2026-06-01T10:45:00Z src=chart_timestamp -> SKIP`
+- [suspected] `2026-06-01T09:30:58Z` `logs/cron.signals.log:20146` — `[STALE 2026-06-01T13:30:58+0400] EURUSD M15 candle_stale age=2799s max=2700s last=2026-06-01T10:45:00Z src=chart_timestamp -> SKIP`
+- [suspected] `2026-06-01T09:31:55Z` `logs/cron.signals.log:20148` — `[DEDUP 2026-06-01T13:31:55+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T09:31:55Z` `logs/cron.signals.log:20148` — `[DEDUP 2026-06-01T13:31:55+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T09:45:41Z` `logs/cron.signals.log:20150` — `[WATCHER 2026-06-01T13:45:41+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T09:45:41Z` `logs/cron.signals.log:20150` — `[WATCHER 2026-06-01T13:45:41+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T09:46:06Z` `logs/cron.signals.log:20151` — `[CLOCK 2026-06-01T13:46:06+0400] server_clock_unavailable -> SKIP_SCAN fail_closed`
+- [suspected] `2026-06-01T09:46:06Z` `logs/cron.signals.log:20151` — `[CLOCK 2026-06-01T13:46:06+0400] server_clock_unavailable -> SKIP_SCAN fail_closed`
+- [suspected] `2026-06-01T10:00:22Z` `logs/cron.signals.log:20153` — `[WATCHER 2026-06-01T14:00:22+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T10:00:22Z` `logs/cron.signals.log:20153` — `[WATCHER 2026-06-01T14:00:22+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T10:01:45Z` `logs/cron.signals.log:20158` — `[DEDUP 2026-06-01T14:01:45+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T10:01:45Z` `logs/cron.signals.log:20158` — `[DEDUP 2026-06-01T14:01:45+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T10:11:22Z` `logs/cron.daily.log:645` — `GATE_SKIP status=OUTSIDE_WINDOW server_utc=2026-06-01T10:11:22Z server_hour=10 drift=-7249 detail=target_hour=20;clock_source=last_good;status=FALLBACK_LAST_GOOD;live_status=SERVER_CLOCK_UNAVAILABLE;age_secs=931;max_age_secs=28800;last_drift=-7249`
+- [suspected] `2026-06-01T10:15:32Z` `logs/cron.signals.log:20160` — `[WATCHER 2026-06-01T14:15:32+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T10:15:32Z` `logs/cron.signals.log:20160` — `[WATCHER 2026-06-01T14:15:32+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T10:16:50Z` `logs/cron.signals.log:20165` — `[DEDUP 2026-06-01T14:16:50+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T10:16:50Z` `logs/cron.signals.log:20165` — `[DEDUP 2026-06-01T14:16:50+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T10:30:06Z` `logs/cron.signals.log:20167` — `[WATCHER 2026-06-01T14:30:06+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T10:30:06Z` `logs/cron.signals.log:20167` — `[WATCHER 2026-06-01T14:30:06+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T10:30:37Z` `logs/cron.signals.log:20172` — `[DEDUP 2026-06-01T14:30:37+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T10:30:37Z` `logs/cron.signals.log:20172` — `[DEDUP 2026-06-01T14:30:37+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T10:45:00Z` `logs/cron.signals.log:20146` — `[STALE 2026-06-01T13:30:58+0400] EURUSD M15 candle_stale age=2799s max=2700s last=2026-06-01T10:45:00Z src=chart_timestamp -> SKIP`
+- [suspected] `2026-06-01T10:45:00Z` `logs/cron.signals.log:20146` — `[STALE 2026-06-01T13:30:58+0400] EURUSD M15 candle_stale age=2799s max=2700s last=2026-06-01T10:45:00Z src=chart_timestamp -> SKIP`
+- [suspected] `2026-06-01T10:45:11Z` `logs/cron.signals.log:20174` — `[WATCHER 2026-06-01T14:45:11+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T10:45:11Z` `logs/cron.signals.log:20174` — `[WATCHER 2026-06-01T14:45:11+0400] SANITY: PAIRS="EURUSD GBPUSD" TIMEFRAMES="M15" ALERTS_CSV="/data/data/com.termux/files/home/BotA/logs/alerts.csv" DRY_RUN_MODE="0" TELEGRAM_ENABLED="1" TELEGRAM_MIN_SCORE="70" FILTER_SCORE_MIN="65" FILTER_SCORE_MIN_ALL="65" MAPPED_FILTER_SCORE_MIN_ALL="0" TELEGRAM_TIER_YELLOW_MIN="70" TELEGRAM_TIER_GREEN_MIN="75" TELEGRAM_TIER_YELLOW_MIN_INT="70" TELEGRAM_TIER_GREEN_MIN_INT="75" CANDLE_MAX_AGE_SECS="2700" INDICATOR_LAG_WARN_SECS="900"`
+- [suspected] `2026-06-01T10:45:44Z` `logs/cron.signals.log:20179` — `[DEDUP 2026-06-01T14:45:44+0400] GBPUSD M15 signal unchanged -> skip`
+- [suspected] `2026-06-01T10:45:44Z` `logs/cron.signals.log:20179` — `[DEDUP 2026-06-01T14:45:44+0400] GBPUSD M15 signal unchanged -> skip`
+
+## Current evidentiary boundary
+
+- [not proven] Candidate lines are not yet runtime epochs.
+- [not proven] A missing log interval does not by itself prove watcher downtime.
+- [not proven] Runtime UP or DOWN requires corroborating process, cron, heartbeat, boot, or watcher evidence.
