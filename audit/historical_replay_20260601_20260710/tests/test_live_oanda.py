@@ -77,29 +77,33 @@ def test_live_fetch_redacts_token_and_returns_raw_bytes(tmp_path: Path):
     assert result["body"] == b'{"candles":[]}'
 
 
-def test_live_fetch_fails_closed_on_http_error(tmp_path: Path):
+def test_live_fetch_returns_http_error_body_for_raw_first_persistence(tmp_path: Path):
     def fake_transport(url, headers, timeout_seconds):
         return TransportResponse(status=401, headers={}, body=b'{"errorMessage":"unauthorized"}')
 
-    with pytest.raises(RuntimeError, match="HTTP 401"):
-        fetch_oanda_chunk(
-            output_root=tmp_path,
-            request_path_and_query="/v3/instruments/EUR_USD/candles?from=a&to=b&granularity=M15&price=M",
-            token="bad-token",
-            enabled=True,
-            transport=fake_transport,
-        )
+    result = fetch_oanda_chunk(
+        output_root=tmp_path,
+        request_path_and_query="/v3/instruments/EUR_USD/candles?from=a&to=b&granularity=M15&price=M",
+        token="bad-token",
+        enabled=True,
+        transport=fake_transport,
+    )
+
+    assert result["response"].status == 401
+    assert result["body"] == b'{"errorMessage":"unauthorized"}'
 
 
-def test_live_fetch_rejects_non_json_payload(tmp_path: Path):
+def test_live_fetch_returns_malformed_body_for_raw_first_persistence(tmp_path: Path):
     def fake_transport(url, headers, timeout_seconds):
         return TransportResponse(status=200, headers={}, body=b"not-json")
 
-    with pytest.raises(ValueError, match="valid UTF-8 JSON"):
-        fetch_oanda_chunk(
-            output_root=tmp_path,
-            request_path_and_query="/v3/instruments/EUR_USD/candles?from=a&to=b&granularity=M15&price=M",
-            token="secret",
-            enabled=True,
-            transport=fake_transport,
-        )
+    result = fetch_oanda_chunk(
+        output_root=tmp_path,
+        request_path_and_query="/v3/instruments/EUR_USD/candles?from=a&to=b&granularity=M15&price=M",
+        token="secret",
+        enabled=True,
+        transport=fake_transport,
+    )
+
+    assert result["response"].status == 200
+    assert result["body"] == b"not-json"
