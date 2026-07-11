@@ -26,4 +26,22 @@
 - [proven] Production BotA remains at `/data/data/com.termux/files/home/BotA`.
 - [proven] The audit worktree remains at `/data/data/com.termux/files/home/bota-worktrees/historical-replay`.
 - [proven] The isolated worktree is a forensic safety boundary, not an independent implementation target.
-- [proven] Live OANDA M15, H4, and D observations must be reconciled with production BotA fetch and replay timing semantics before final conclusions.
+- [proven] Live OANDA M15, H1, H4, and D observations must be reconciled with production BotA fetch and replay timing semantics before final conclusions.
+
+## 2026-07-11 — Verified bounded OANDA probes
+
+- [proven] EUR_USD M15 bounded read-only probe completed and was verified offline.
+- [proven] EUR_USD H1 bounded read-only probe completed and was verified offline.
+- [proven] EUR_USD H4 bounded read-only probe completed and was verified offline.
+- [proven] EUR_USD D bounded read-only probe completed and was verified offline.
+- [proven] H1 run ID `oanda-probe-eurusd-h1-20260711-v1` returned HTTP 200, 45 raw candles, 45 derived candles, and zero incomplete candles.
+- [proven] H1 observed interval was `2026-07-09T00:00:00Z` through `2026-07-10T20:00:00Z`.
+- [proven] H1 artifact hashes and production-parity caveat are preserved in `evidence/LIVE_OANDA_H1_PROBE_VERIFIED_20260711.md`.
+
+## Remaining gates
+
+- [not proven] Exact semantic equivalence between sidecar M15/H1/H4/D1 visibility and production BotA cache/fusion consumption.
+- [not proven] Full-window acquisition for EURUSD and GBPUSD.
+- [not proven] Independent Dukascopy acquisition and provider reconciliation.
+- [not proven] Runtime outage boundaries and cycle-level final conclusions.
+- [not proven] Root closure files and `handoff_pack.sh` output verification.
