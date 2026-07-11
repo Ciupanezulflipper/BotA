@@ -27,6 +27,20 @@ def _payload(start_minute: int, count: int) -> bytes:
     return json.dumps({"candles": candles}).encode("utf-8")
 
 
+def _range_params(tmp_path, run_id, fetcher):
+    return dict(
+        output_root=tmp_path,
+        run_id=run_id,
+        instrument="EUR_USD",
+        granularity="M15",
+        start_utc=datetime(2026, 6, 1, 0, 0, tzinfo=UTC),
+        end_utc=datetime(2026, 6, 1, 1, 0, tzinfo=UTC),
+        token="explicit-token",
+        enabled=False,
+        fetcher=fetcher,
+    )
+
+
 def test_pipeline_persists_reconciles_and_verifies(tmp_path):
     calls = []
 
@@ -39,17 +53,7 @@ def test_pipeline_persists_reconciles_and_verifies(tmp_path):
             "body": body,
         }
 
-    result = acquire_oanda_range(
-        output_root=tmp_path,
-        run_id="range-001",
-        instrument="EUR_USD",
-        granularity="M15",
-        start_utc=datetime(2026, 6, 1, 0, 0, tzinfo=UTC),
-        end_utc=datetime(2026, 6, 1, 1, 0, tzinfo=UTC),
-        token="explicit-token",
-        enabled=False,
-        fetcher=fake_fetcher,
-    )
+    result = acquire_oanda_range(**_range_params(tmp_path, "range-001", fake_fetcher))
     assert result["chunk_count"] == 1
     assert result["reconciled_candle_count"] == 2
     assert calls[0]["enabled"] is False
@@ -115,3 +119,42 @@ def test_pipeline_fails_on_conflicting_boundary_duplicates(tmp_path):
             max_candles_per_chunk=3000,
             fetcher=fake_fetcher,
         )
+
+
+def test_http_error_is_persisted_before_fail_closed(tmp_path):
+    body = b'{"errorMessage":"unauthorized"}'
+
+    def fake_fetcher(**kwargs):
+        return {
+            "request": build_request_metadata(method="GET", url="https://example.test", headers={"Authorization": "Bearer secret"}),
+            "response": capture_response_metadata(401, {"Content-Type": "application/json", "RequestID": "req-401"}),
+            "body": body,
+        }
+
+    with pytest.raises(RuntimeError, match="HTTP 401"):
+        acquire_oanda_range(**_range_params(tmp_path, "http-error", fake_fetcher))
+
+    assert (tmp_path / "raw/http-error/chunk-0000.json").read_bytes() == body
+    assert json.loads((tmp_path / "metadata/http-error/chunk-0000.response.json").read_text())["status"] == 401
+    assert "secret" not in (tmp_path / "metadata/http-error/chunk-0000.request.json").read_text()
+    assert not (tmp_path / "derived/http-error/candles.json").exists()
+    assert not (tmp_path / "manifests/http-error.json").exists()
+
+
+def test_malformed_payload_is_persisted_before_parse_failure(tmp_path):
+    body = b"not-json"
+
+    def fake_fetcher(**kwargs):
+        return {
+            "request": build_request_metadata(method="GET", url="https://example.test", headers={}),
+            "response": capture_response_metadata(200, {"Content-Type": "text/plain", "RequestID": "req-malformed"}),
+            "body": body,
+        }
+
+    with pytest.raises((ValueError, json.JSONDecodeError)):
+        acquire_oanda_range(**_range_params(tmp_path, "malformed", fake_fetcher))
+
+    assert (tmp_path / "raw/malformed/chunk-0000.json").read_bytes() == body
+    assert json.loads((tmp_path / "metadata/malformed/chunk-0000.response.json").read_text())["status"] == 200
+    assert not (tmp_path / "derived/malformed/candles.json").exists()
+    assert not (tmp_path / "manifests/malformed.json").exists()
