@@ -1,0 +1,28 @@
+{
+  "files": [
+    {
+      "bytes": 17849,
+      "path": "OPERATIONAL_WEAKNESS_REGISTER.md",
+      "sha256": "fc9f13c3c7b34be024c46d2c461e65cf4dee612cb7b79f9b05d326cbff0d12a0"
+    },
+    {
+      "bytes": 4860,
+      "path": "OPERATIONAL_SAFEGUARD_PLAN.md",
+      "sha256": "c4747cb76c36950ed9cb1fd4687abf465c8f2923d8a03a44ae1301a866743b72"
+    },
+    {
+      "bytes": 3394,
+      "path": "BOTA_DIAGNOSTIC_DECISION_MATRIX.md",
+      "sha256": "b1b5adddbfb642672ca0ae573b43ffa4a88339bcea73c8b92cd1b16b777533de"
+    },
+    {
+      "bytes": 1736,
+      "path": "AUDIT_STOP_DEPTH.md",
+      "sha256": "dcd623d72860aa382e1a57c18a3a79f20ee4373701b29f6e2fe3f4dd44dcba80"
+    }
+  ],
+  "generated_at_utc": "2026-07-11T15:19:24.763788Z",
+  "schema_version": 1,
+  "scope": "historical replay operational governance",
+  "strategy_changes_authorized": false
+}

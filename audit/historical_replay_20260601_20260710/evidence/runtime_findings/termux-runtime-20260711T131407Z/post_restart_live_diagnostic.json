@@ -1,0 +1,72 @@
+{
+  "captured_at_utc": "2026-07-11T14:32:58Z",
+  "clock_degraded": true,
+  "clock_status": {},
+  "corrected_by_evidence": "clock_heartbeat_targeted_diagnostic.json",
+  "crontab_sha256": "8bf3202f160eb2408b55e993487fbb5c66ec26616091eb1e43e3aa820cbd69c2",
+  "diagnoses": [
+    "CLOCK_REPAIR_REQUIRED",
+    "HEARTBEAT_CONFIGURATION_REPAIR_REQUIRED"
+  ],
+  "env_runtime_present": true,
+  "heartbeat_tele_env_missing": true,
+  "heartbeat_uses_tele_env": true,
+  "log_freshness": {
+    "cron.closer.log": {
+      "age_seconds": 313,
+      "mtime_epoch": 1783780208,
+      "mtime_utc": "2026-07-11T14:30:08Z"
+    },
+    "cron.heartbeat.log": {
+      "age_seconds": 2121,
+      "mtime_epoch": 1783778400,
+      "mtime_utc": "2026-07-11T14:00:00Z"
+    },
+    "cron.indicators.log": {
+      "age_seconds": 414,
+      "mtime_epoch": 1783780107,
+      "mtime_utc": "2026-07-11T14:28:27Z"
+    },
+    "cron.runtime_health_push.log": {
+      "age_seconds": 19,
+      "mtime_epoch": 1783780502,
+      "mtime_utc": "2026-07-11T14:35:02Z"
+    },
+    "cron.runtime_health_push.wrapper.log": {
+      "age_seconds": 234621,
+      "mtime_epoch": 1783545900,
+      "mtime_utc": "2026-07-08T21:25:00Z"
+    },
+    "cron.shadow.log": {
+      "age_seconds": 315,
+      "mtime_epoch": 1783780206,
+      "mtime_utc": "2026-07-11T14:30:06Z"
+    },
+    "cron.signals.log": {
+      "age_seconds": 316,
+      "mtime_epoch": 1783780205,
+      "mtime_utc": "2026-07-11T14:30:05Z"
+    },
+    "cron.supervisor.log": {
+      "age_seconds": 21,
+      "mtime_epoch": 1783780500,
+      "mtime_utc": "2026-07-11T14:35:00Z"
+    }
+  },
+  "production_branch": "main",
+  "production_head": "fa289ad3f7b6ff430f13609950e5af341aee2e9d",
+  "runtime_health_authoritative_log": "logs/cron.runtime_health_push.log",
+  "runtime_health_delivery_repair_required": false,
+  "runtime_health_diagnosis_status": "SUPERSEDED_FALSE_POSITIVE",
+  "runtime_health_log_age_seconds": 19,
+  "runtime_health_stale": false,
+  "runtime_health_wrapper_age_seconds": 234621,
+  "scheduled_execution_proven": true,
+  "scheduler_process_count": 1,
+  "scheduler_processes": [
+    "pid=5027 cmd=crond "
+  ],
+  "schema_version": 1,
+  "strategy_change_allowed": false,
+  "tele_env_present": false
+}
