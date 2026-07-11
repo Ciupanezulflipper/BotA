@@ -45,9 +45,19 @@
 - [proven] Production and sidecar match on active pair scope, execution/context timeframe scope, OANDA midpoint component, complete-candle filtering, and native M15/H1/H4/D granularity use.
 - [proven] Production uses rolling `count=500` acquisition, while the sidecar probe/acquisition contract uses explicit `from`/`to` bounds.
 - [proven] Production relies on OANDA default D1 alignment, and the live D probe observed July 2026 daily starts at `21:00:00Z`.
-- [proven] A blocking D1 parity gap exists because sidecar point-in-time filtering requires explicit `available_at`, while `CanonicalCandle` does not currently preserve that field.
+- [proven] The prior D1 `available_at` structural gap was repaired in `CanonicalCandle` with fail-closed provider-alignment validation and point-in-time integration proof.
 - [not proven] Sidecar replay scoring, quality filtering, H1 veto, H4 override, macro ordering, watcher freshness, and runtime-outage classification are production-equivalent.
 - [proven] Detailed mapping and blockers are preserved in `evidence/PRODUCTION_TIMEFRAME_CONTRACT_MAPPING_20260711.md`.
+
+## 2026-07-11 — Raw-first acquisition hardening
+
+- [proven] OANDA transport now returns unvalidated response bytes and redacted metadata to orchestration.
+- [proven] Acquisition orchestration writes immutable raw bytes and request/response metadata before HTTP or payload validation.
+- [proven] Non-2xx and malformed responses remain fail-closed after evidence persistence.
+- [proven] Rejected responses do not produce derived candles or a completed-run manifest.
+- [proven] Synthetic tests cover 401 and malformed response persistence, secret redaction, and absence of false completion artifacts.
+- [proven] Detailed evidence is preserved in `evidence/RAW_FIRST_ACQUISITION_HARDENING_20260711.md`.
+- [not proven] Raw-first hardening is CI-validated at the latest head until GitHub Actions completes successfully.
 
 ## Remaining gates
 
