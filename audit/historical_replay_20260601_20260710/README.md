@@ -2,6 +2,15 @@
 
 [proven] This directory is an isolated forensic sidecar for the half-open interval `2026-06-01T00:00:00Z` through `2026-07-11T00:00:00Z`.
 
+## Governing production-parity rule
+
+- [proven] This sidecar is an isolated verifier for BotA production behavior; it is not a second BotA.
+- [proven] A sidecar increment is not complete merely because it works inside this directory.
+- [proven] Every increment must be mapped to the corresponding production BotA file, runtime behavior, data contract, provider behavior, timeframe alignment, or preserved operational evidence.
+- [proven] Any mismatch must be preserved explicitly and fail closed; silent adaptation is prohibited.
+- [proven] The binding acceptance gates are defined in `PRODUCTION_PARITY_POLICY.md`.
+- [not proven] Full production equivalence and merge readiness have not yet been established.
+
 ## Safety contract
 
 - [proven] No production BotA module may be imported or executed.
