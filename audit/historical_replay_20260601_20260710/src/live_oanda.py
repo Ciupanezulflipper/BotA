@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
@@ -57,9 +56,10 @@ def fetch_oanda_chunk(
 ) -> dict:
     """Fetch one OANDA chunk only when explicitly enabled.
 
-    This function does not read tokens from environment variables and does not
-    write provider bytes. The caller must persist the returned bytes through the
-    immutable artifact layer.
+    The transport layer deliberately does not validate HTTP status or parse the
+    response body. It returns request metadata, response metadata, and provider
+    bytes so the orchestration layer can persist immutable raw evidence before
+    any semantic validation fails.
     """
     if enabled is not True:
         raise PermissionError("live OANDA acquisition is disabled; pass enabled=True explicitly")
@@ -87,17 +87,6 @@ def fetch_oanda_chunk(
     request_meta = build_request_metadata(method="GET", url=url, headers=headers)
     response = (transport or _default_transport)(url, headers, timeout_seconds)
     response_meta = capture_response_metadata(response.status, response.headers)
-
-    if response.status < 200 or response.status >= 300:
-        preview = response.body[:512].decode("utf-8", errors="replace")
-        raise RuntimeError(f"OANDA HTTP {response.status}: {preview}")
-
-    try:
-        payload = json.loads(response.body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError("OANDA response is not valid UTF-8 JSON") from exc
-    if not isinstance(payload, dict) or not isinstance(payload.get("candles"), list):
-        raise ValueError("OANDA response missing candles list")
 
     return {
         "request": request_meta,
