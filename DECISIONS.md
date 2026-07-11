@@ -113,3 +113,16 @@
 - [proven] Decision: do not modify strategy behavior while runtime, clock, and evidence-integrity questions remain open.
 - [proven] Decision: do not perform further OANDA requests without explicit approval.
 - [inferred] Decision status: runtime repair and device-clock correction take precedence over strategy investigation.
+
+## Decision — 2026-07-11 External Audit Closure
+
+- [proven] Decision: `MERGE_PR_6=APPROVE_WITH_MAJOR_CONDITIONS`. PR #6 may be merged only after heartbeat deadman/recovery is restored, strict Telegram response validation is added, environment loading is scoped to credentials only, and deterministic offline tests pass.
+- [proven] Decision: `DEPLOY_CURRENT_HEARTBEAT=REJECT`. The audit-head heartbeat removed deadman/recovery logic, does not validate the Telegram API response, and is not behaviorally tested. It must not be deployed.
+- [proven] Decision: `RESUME_HISTORICAL_REPLAY_ENGINEERING=APPROVE_WITH_CONDITIONS`. May continue after correction backlog items 1–5 are complete and re-run CI passes.
+- [proven] Decision: `TRUST_REPLAY_CONCLUSIONS=REJECT`. Replay conclusions depend on uncorrected epoch boundaries, unresolved clock drift, and unproven true-UTC placement.
+- [proven] Decision: `RESUME_UNATTENDED_PRODUCTION_RELIANCE=REJECT`. Unattended reliance requires proven heartbeat, corrected device clock, and resolved monitoring path.
+- [proven] Decision: `CHANGE_STRATEGY=REJECT`. No evidence justifies strategy changes. Scope lock from 2026-04-21 remains in force.
+- [proven] Decision: `CLOSE_ORIGINAL_INVESTIGATION=REJECT`. Q2, Q3, clock drift, and epoch boundary uncertainties remain open.
+- [proven] Decision: `EXTERNAL_AUDIT_PHASE=CLOSED`. The external-audit phase is formally closed; the correction backlog is the operative work queue.
+- [proven] Decision: do not modify strategy, scoring, thresholds, H1 logic, pair scope, risk/reward logic, crontab, Telegram, OANDA, or Supabase until correction backlog items 1–5 are complete and re-run CI passes.
+- [proven] Decision: correction backlog priority order is fixed at items 1–10 as recorded in CONTINUITY.md Session Update 2026-07-11 External Audit Closure.

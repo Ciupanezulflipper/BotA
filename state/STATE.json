@@ -1,11 +1,11 @@
 {
   "_meta": {
-    "last_updated": "2026-07-11T19:58:46.414232Z",
+    "last_updated": "2026-07-11T20:30:00.000000Z",
     "project": "BotA",
     "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
     "runtime": "Termux Android arm64",
     "schema_version": "1.1",
-    "session_id": "2026-07-11 historical replay runtime safeguards and heartbeat repair",
+    "session_id": "2026-07-11 external audit closure",
     "supabase_project": "ozgkeslgjqbqfewojnmr",
     "updated_by": "GPT-5.6 Thinking"
   },
@@ -255,12 +255,12 @@
       "title": "4 files had large unaudited diffs - restored to HEAD, provenance unknown"
     },
     {
-      "constraint": "Do not implement before commercial validation is underway \u2014 schema change requires ProfitLab coordination",
+      "constraint": "Do not implement before commercial validation is underway — schema change requires ProfitLab coordination",
       "id": "signal-mutation-auditability",
       "priority": "next_engineering_session",
       "proposed_fix": "Add closed_source, closed_by, close_reason columns to signals table, or implement append-only mutation log",
       "status": "open",
-      "title": "No audit trail for signal status mutations \u2014 March 19 source permanently unresolvable",
+      "title": "No audit trail for signal status mutations — March 19 source permanently unresolvable",
       "why": "Without this, any future batch close event cannot be attributed to an actor or tool"
     }
   ],
@@ -380,7 +380,7 @@
       "avg_win_pips": 36.0,
       "baseline_status": "final",
       "clean_total": 14,
-      "computed_by": "Query 1B \u2014 MCP Supabase direct 2026-04-29",
+      "computed_by": "Query 1B — MCP Supabase direct 2026-04-29",
       "do_not_use_for_commercial_claims": true,
       "excluded_march13_count": 24,
       "excluded_march19_count": 4,
@@ -390,7 +390,7 @@
       "losers": 9,
       "method": "exclude_28_ids_march13_24_plus_march19_4",
       "net_pips": -41.9,
-      "note": "Net negative. March 19 batch was heavily inflating the provisional baseline (+198.1 pips \u2192 -41.9 pips after exclusion). 14 signals is statistically insufficient for any strategy conclusion.",
+      "note": "Net negative. March 19 batch was heavily inflating the provisional baseline (+198.1 pips → -41.9 pips after exclusion). 14 signals is statistically insufficient for any strategy conclusion.",
       "profit_factor": 0.81,
       "win_rate_pct": 35.7,
       "winners": 5
@@ -401,10 +401,10 @@
       "classification": "manual_or_semi_manual_batch_close",
       "count": 24,
       "ids_excluded": 24,
-      "root_cause": "live execution of signal_closer.py \u2014 proven via log sequence"
+      "root_cause": "live execution of signal_closer.py — proven via log sequence"
     },
     "march19_batch": {
-      "classification": "UNPROVEN \u2014 source unknown. signal_closer.py 19:16 run ruled out. Shadow manager ruled out. No audit metadata in DB to determine actor.",
+      "classification": "UNPROVEN — source unknown. signal_closer.py 19:16 run ruled out. Shadow manager ruled out. No audit metadata in DB to determine actor.",
       "closed_at_utc": "2026-03-19T19:15:13 to 19:15:15",
       "count": 4,
       "ids_confirmed": [
@@ -413,21 +413,21 @@
         "18914aa4-4251-47d3-a1a9-f50b927ec000",
         "f8255de7-b11a-4d61-b8a6-ddb49e9ea580"
       ],
-      "ids_confirmed_by": "Query 1A \u2014 MCP Supabase direct 2026-04-29. Exactly 4 rows returned matching closed_at window + result_pips=60.0. IDs match march19_ids_to_exclude.",
+      "ids_confirmed_by": "Query 1A — MCP Supabase direct 2026-04-29. Exactly 4 rows returned matching closed_at window + result_pips=60.0. IDs match march19_ids_to_exclude.",
       "pattern": "4 signals closed in 1.5 seconds, all at exactly +60.0 pips",
-      "signal_closer_log_finding": "signal_closer.py ran at 19:16 UTC, found 2 active signals, closed zero \u2014 does not explain the 19:15 batch",
+      "signal_closer_log_finding": "signal_closer.py ran at 19:16 UTC, found 2 active signals, closed zero — does not explain the 19:15 batch",
       "source_unresolvable": true,
       "source_unresolvable_note": "Would require Supabase pgaudit extension or ProfitLab server logs from 2026-03-19 19:15 UTC",
       "status": "confirmed_excluded"
     },
     "null_closed_at_signals": {
       "count": 2,
-      "note": "result_pips set but closed_at is NULL \u2014 data integrity issue, excluded from baseline"
+      "note": "result_pips set but closed_at is NULL — data integrity issue, excluded from baseline"
     },
     "provisional_baseline_after_excluding_march13": {
       "avg_loss_pips": -24.6,
       "avg_win_pips": 46.7,
-      "baseline_status": "SUPERSEDED \u2014 see clean_baseline_after_excluding_both_batches",
+      "baseline_status": "SUPERSEDED — see clean_baseline_after_excluding_both_batches",
       "caveat": "Included March 19 batch (4 signals at +60.0 pips each). Inflated by contamination. Superseded 2026-04-29.",
       "do_not_use_for_commercial_claims": true,
       "expectancy_pips": 11.0,
@@ -569,5 +569,121 @@
     "live_scope_approved": false,
     "technical_proof": "OANDA M15/H1/H4/D1 fetch/build OK after reboot proof.",
     "technical_ready": true
+  },
+  "external_audit_closure": {
+    "claim_status": "proven",
+    "closed_at": "2026-07-11",
+    "phase": "CLOSED",
+    "audit_head_before_closure": "c13eee6fc46ef00ee8fac7a35be5c044f951813d",
+    "audits": {
+      "audit_1": {
+        "repository_access": false,
+        "forensic_value": "logic-level checks only"
+      },
+      "audit_2_claude_fable_5": {
+        "repository_access": true,
+        "forensic_value": "substantial — accepted critical/high/medium findings"
+      },
+      "audit_3": {
+        "repository_access": false,
+        "forensic_value": "retractions or limitation disclosure only"
+      },
+      "audit_4": {
+        "repository_access": false,
+        "forensic_value": "retractions or limitation disclosure only"
+      },
+      "audit_5": {
+        "repository_access": false,
+        "forensic_value": "retractions or limitation disclosure only"
+      }
+    },
+    "decisions": {
+      "MERGE_PR_6": "APPROVE_WITH_MAJOR_CONDITIONS",
+      "DEPLOY_CURRENT_HEARTBEAT": "REJECT",
+      "RESUME_HISTORICAL_REPLAY_ENGINEERING": "APPROVE_WITH_CONDITIONS",
+      "TRUST_REPLAY_CONCLUSIONS": "REJECT",
+      "RESUME_UNATTENDED_PRODUCTION_RELIANCE": "REJECT",
+      "CHANGE_STRATEGY": "REJECT",
+      "CLOSE_ORIGINAL_INVESTIGATION": "REJECT",
+      "EXTERNAL_AUDIT_PHASE": "CLOSED"
+    },
+    "critical_findings_accepted": [
+      "audit-head heartbeat removed deadman and recovery-alert logic",
+      "heartbeat reports success on Telegram HTTP/API failure — no --fail, no ok:true check",
+      "heartbeat not behaviorally tested by CI",
+      "current heartbeat must not be deployed"
+    ],
+    "high_findings_accepted": [
+      "PR #6 is mixed scope — modifies production-path runtime utility",
+      "device-log timestamps represented as exact UTC despite unsafe device clock",
+      "exact true-UTC placement of historical boundaries not proven",
+      "heartbeat monitoring path was ineffective — production referenced obsolete config/tele.env",
+      "STATE.json claims deadman installed but audit-head heartbeat removed it"
+    ],
+    "medium_findings_accepted": [
+      "Q2 and Q3 are material UNKNOWN intervals missing from canonical epoch summary",
+      "UNKNOWN quiet-interval coverage 770/1560 = 49.36% of nominal M15 cycles per pair — evidentiary silence, not proven downtime",
+      "sole canonical UP epoch contains no nominal market-gated M15 cycle instant under half-open semantics",
+      "clock drift varied over window; single 7267-second correction invalid",
+      "audit-head heartbeat exports complete .env.runtime environment"
+    ],
+    "suspected_findings": [
+      "curl diagnostics could expose token-bearing URL fragments under some failure modes — occurrence not proven"
+    ],
+    "rejected_claims": [
+      "zero financial loss proven",
+      "no security breach proven",
+      "no missed signals proven",
+      "continuous UP June 1 to June 22 proven",
+      "continuous UP July 8 to July 11 proven",
+      "full restoration proven",
+      "universal look-ahead contamination proven",
+      "heartbeat change minimal",
+      "CI proved heartbeat behavior",
+      "current heartbeat safe for deployment",
+      "strategy changes justified"
+    ],
+    "correction_backlog": [
+      {
+        "item": 1,
+        "action": "Restore deadman and recovery-alert behavior to heartbeat"
+      },
+      {
+        "item": 2,
+        "action": "Add strict Telegram ok:true response validation"
+      },
+      {
+        "item": 3,
+        "action": "Scope environment loading to Telegram credentials only"
+      },
+      {
+        "item": 4,
+        "action": "Add deterministic offline heartbeat tests"
+      },
+      {
+        "item": 5,
+        "action": "Split PR #6 or explicitly classify as mixed scope"
+      },
+      {
+        "item": 6,
+        "action": "Correct STATE.json and documentation deadman contradiction"
+      },
+      {
+        "item": 7,
+        "action": "Add Q2 and Q3 to canonical runtime coverage"
+      },
+      {
+        "item": 8,
+        "action": "Relabel device-log time versus true UTC throughout evidence"
+      },
+      {
+        "item": 9,
+        "action": "Preserve unresolved clock-sample and snapshot-timebase uncertainties"
+      },
+      {
+        "item": 10,
+        "action": "Re-run exact-commit CI and closure verification after backlog items 1-5 land"
+      }
+    ]
   }
 }

@@ -1621,3 +1621,81 @@ Changed only `tools/product_message_v1.py` — `format_market_pulse`:
 - [proven] Raw runtime captures and `live_runs/` remain untracked and were not committed.
 - [inferred] Next approval boundary: correct Android automatic time, verify drift below 300 seconds, then perform controlled heartbeat deployment and Telegram verification.
 - [not proven] Production is fully healthy while `local_clock_drift` remains open.
+
+## Session Update — 2026-07-11 External Audit Closure
+
+- [proven] The external-audit phase is closed as of 2026-07-11.
+- [proven] Audit 2 (Claude Fable 5) was the only repository-backed external audit with substantial forensic value.
+- [proven] Audits 1, 3, 4, and 5 lacked repository access and contributed only logic-level checks, retractions, or limitation disclosure.
+- [proven] The historical-replay investigation is sound with required corrections documented below.
+
+### Accepted critical findings
+
+- [proven] The audit-head `tools/heartbeat.sh` removed the prior deadman and recovery-alert logic.
+- [proven] The audit-head heartbeat can report delivery success when Telegram returns HTTP/API failure because it checks curl exit status only, discards the response body, lacks `--fail`, and lacks Telegram `"ok":true` validation.
+- [proven] The heartbeat is not behaviorally tested by CI.
+- [proven] The current heartbeat must not be deployed.
+
+### Accepted high findings
+
+- [proven] PR #6 is mixed scope because it modifies a production-path runtime utility.
+- [proven] Device-log timestamps were sometimes represented as exact UTC despite the unsafe device clock.
+- [proven] Exact true-UTC placement of historical boundaries is not proven.
+- [proven] The heartbeat monitoring path was ineffective during the relevant window because the production version referenced obsolete `config/tele.env`.
+- [proven] `state/STATE.json` claims the deadman safeguard is installed even though the audit-head heartbeat removed it.
+
+### Accepted medium findings
+
+- [proven] Q2 and Q3 are material UNKNOWN intervals missing from the canonical epoch summary.
+- [proven] UNKNOWN quiet-interval coverage is 770/1560 = 49.36% of nominal market-gated M15 cycles per pair.
+- [proven] This ratio measures evidentiary silence, not proven downtime or missed signals.
+- [proven] The sole canonical UP epoch contains no nominal market-gated M15 cycle instant under current half-open semantics.
+- [proven] Clock drift varied over the window; a single 7,267-second correction is invalid.
+- [proven] Per-date drift bounds may be possible, but exact per-boundary true UTC is not.
+- [proven] The audit-head heartbeat exports the complete `.env.runtime` environment.
+- [suspected] Curl diagnostics could expose token-bearing URL fragments under some failure modes; occurrence is not proven.
+
+### Rejected claims (proven not to hold)
+
+- [proven] Zero financial loss is not proven.
+- [proven] No security breach is not proven.
+- [proven] No missed signals is not proven.
+- [proven] Continuous UP June 1 – June 22 is not proven.
+- [proven] Continuous UP July 8 – July 11 is not proven.
+- [proven] Full restoration is not proven.
+- [proven] Universal look-ahead contamination is not proven.
+- [proven] Heartbeat change is not minimal.
+- [proven] CI did not prove heartbeat behavior.
+- [proven] Current heartbeat is not safe for deployment.
+- [proven] Strategy changes are not justified by current evidence.
+
+### Final external-audit decisions
+
+- [proven] `MERGE_PR_6=APPROVE_WITH_MAJOR_CONDITIONS`
+- [proven] `DEPLOY_CURRENT_HEARTBEAT=REJECT`
+- [proven] `RESUME_HISTORICAL_REPLAY_ENGINEERING=APPROVE_WITH_CONDITIONS`
+- [proven] `TRUST_REPLAY_CONCLUSIONS=REJECT`
+- [proven] `RESUME_UNATTENDED_PRODUCTION_RELIANCE=REJECT`
+- [proven] `CHANGE_STRATEGY=REJECT`
+- [proven] `CLOSE_ORIGINAL_INVESTIGATION=REJECT`
+- [proven] `EXTERNAL_AUDIT_PHASE=CLOSED`
+
+### Correction backlog (ordered)
+
+- [proven] 1. Restore deadman and recovery-alert behavior to heartbeat.
+- [proven] 2. Add strict Telegram `"ok":true` response validation.
+- [proven] 3. Scope environment loading to Telegram credentials only.
+- [proven] 4. Add deterministic offline heartbeat tests.
+- [proven] 5. Split PR #6 or explicitly classify it as mixed scope.
+- [proven] 6. Correct `STATE.json` and documentation contradictions (deadman claim).
+- [proven] 7. Add Q2 and Q3 to canonical runtime coverage.
+- [proven] 8. Relabel device-log time versus true UTC throughout evidence.
+- [proven] 9. Preserve unresolved clock-sample and snapshot-timebase uncertainties.
+- [proven] 10. Re-run exact-commit CI and closure verification after backlog items 1–5 land.
+
+### Scope guard
+
+- [proven] No strategy, scoring, threshold, pair-scope, H1, risk/reward, crontab, Telegram, OANDA, or Supabase change was made in this closure update.
+- [proven] `tools/heartbeat.sh` was not modified.
+- [proven] Production checkout was not modified.
+- [proven] `runtime_captures/` and `live_runs/` remain untracked.
