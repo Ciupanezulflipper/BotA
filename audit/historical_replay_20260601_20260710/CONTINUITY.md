@@ -46,7 +46,7 @@
 - [proven] Production uses rolling `count=500` acquisition, while the sidecar probe/acquisition contract uses explicit `from`/`to` bounds.
 - [proven] Production relies on OANDA default D1 alignment, and the live D probe observed July 2026 daily starts at `21:00:00Z`.
 - [proven] The prior D1 `available_at` structural gap was repaired in `CanonicalCandle` with fail-closed provider-alignment validation and point-in-time integration proof.
-- [not proven] Sidecar replay scoring, quality filtering, H1 veto, H4 override, macro ordering, watcher freshness, and runtime-outage classification are production-equivalent.
+- [not proven] Sidecar replay scoring, quality filtering, H1 veto, H4 override, macro ordering, and runtime-outage classification are production-equivalent.
 - [proven] Detailed mapping and blockers are preserved in `evidence/PRODUCTION_TIMEFRAME_CONTRACT_MAPPING_20260711.md`.
 
 ## 2026-07-11 — Raw-first acquisition hardening
@@ -57,11 +57,23 @@
 - [proven] Rejected responses do not produce derived candles or a completed-run manifest.
 - [proven] Synthetic tests cover 401 and malformed response persistence, secret redaction, and absence of false completion artifacts.
 - [proven] Detailed evidence is preserved in `evidence/RAW_FIRST_ACQUISITION_HARDENING_20260711.md`.
-- [not proven] Raw-first hardening is CI-validated at the latest head until GitHub Actions completes successfully.
+- [proven] Raw-first hardening passed Historical replay sidecar and Security Scan workflows at commit `056c3ad8e10b1c48d5cc87e1401e12fddea730a9`.
+
+## 2026-07-11 — Production watcher freshness parity
+
+- [proven] Production watcher freshness semantics were mapped from `tools/signal_watcher_pro.sh` at base commit `fa289ad3f7b6ff430f13609950e5af341aee2e9d`.
+- [proven] Raw-cache last candle timestamp is authoritative; indicator mtime is non-authoritative.
+- [proven] Trusted server time is mandatory and unavailable trusted time fails closed.
+- [proven] Missing, invalid, future, or non-monotonic candle timestamps fail closed.
+- [proven] The production stale boundary is strict: `age > CANDLE_MAX_AGE_SECS`; exact equality remains fresh.
+- [proven] `src/watcher_freshness.py` now models this gate without importing or invoking production code.
+- [proven] Synthetic tests cover exact ceiling, one-second-over, missing clock, missing timestamp, future timestamp, latest-start selection, monotonicity, and timezone awareness.
+- [proven] Detailed evidence is preserved in `evidence/PRODUCTION_WATCHER_FRESHNESS_PARITY_20260711.md`.
+- [not proven] Historical runtime availability is reconstructed until watcher/cron outage epochs are preserved and supplied to cycle classification.
 
 ## Remaining gates
 
-- [not proven] Exact semantic equivalence between sidecar M15/H1/H4/D1 visibility and production BotA cache/fusion consumption.
+- [not proven] Exact semantic equivalence between sidecar replay scoring/fusion and production BotA.
 - [not proven] Full-window acquisition for EURUSD and GBPUSD.
 - [not proven] Independent Dukascopy acquisition and provider reconciliation.
 - [not proven] Runtime outage boundaries and cycle-level final conclusions.
