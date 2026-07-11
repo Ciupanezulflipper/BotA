@@ -38,6 +38,17 @@
 - [proven] H1 observed interval was `2026-07-09T00:00:00Z` through `2026-07-10T20:00:00Z`.
 - [proven] H1 artifact hashes and production-parity caveat are preserved in `evidence/LIVE_OANDA_H1_PROBE_VERIFIED_20260711.md`.
 
+## 2026-07-11 — Static production timeframe mapping
+
+- [proven] Production contracts were inspected read-only at base commit `fa289ad3f7b6ff430f13609950e5af341aee2e9d`.
+- [proven] Mapped production files are `tools/data_fetch_candles.sh`, `tools/indicators_updater.sh`, `tools/m15_h1_fusion.sh`, and `tools/signal_watcher_pro.sh`.
+- [proven] Production and sidecar match on active pair scope, execution/context timeframe scope, OANDA midpoint component, complete-candle filtering, and native M15/H1/H4/D granularity use.
+- [proven] Production uses rolling `count=500` acquisition, while the sidecar probe/acquisition contract uses explicit `from`/`to` bounds.
+- [proven] Production relies on OANDA default D1 alignment, and the live D probe observed July 2026 daily starts at `21:00:00Z`.
+- [proven] A blocking D1 parity gap exists because sidecar point-in-time filtering requires explicit `available_at`, while `CanonicalCandle` does not currently preserve that field.
+- [not proven] Sidecar replay scoring, quality filtering, H1 veto, H4 override, macro ordering, watcher freshness, and runtime-outage classification are production-equivalent.
+- [proven] Detailed mapping and blockers are preserved in `evidence/PRODUCTION_TIMEFRAME_CONTRACT_MAPPING_20260711.md`.
+
 ## Remaining gates
 
 - [not proven] Exact semantic equivalence between sidecar M15/H1/H4/D1 visibility and production BotA cache/fusion consumption.
