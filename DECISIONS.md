@@ -102,3 +102,20 @@
 - [proven] Decision: do not reset historical delivery hashes or cooldown files.
 - [proven] Decision: do not modify strategy, H1 veto, ADX handling, thresholds, watched pairs/timeframe, RR rules, Telegram tiers, or cron cadence in this repair.
 - [inferred] Separate Supabase-specific delivery retry state may be evaluated later, but it is outside this approved observability repair.
+
+---
+
+## 2026-07-12 — Heartbeat delivery and deadman state correction
+
+<!-- BOTA_HEARTBEAT_OBSERVABILITY_CORRECTION_V32_2026_07_12 -->
+
+- [proven] Decision: credential loading must use scoped `_load_telegram_creds()` — no `source`, no `set -a`, no other variable assigned or exported from `.env.runtime`.
+- [proven] Decision: Telegram response validation must use a deterministic JSON parser confirming `ok is True` (boolean). String `"true"`, absent field, and boolean `false` are all rejected.
+- [proven] Decision: missing shadow file and empty timestamp field are distinct evidence faults, each with their own marker, and neither is classified as `HEALTHY`.
+- [proven] Decision: `deadman.flag` must only be created after confirmed Telegram delivery of the deadman alert.
+- [proven] Decision: `deadman.flag` must only be removed after confirmed Telegram delivery of the recovery notice.
+- [proven] Decision: delivery failure markers (`DEADMAN_DELIVERY_FAILED`, `RECOVERY_DELIVERY_FAILED`) are emitted and prior flag state is preserved unchanged.
+- [proven] Decision: every HEARTBEAT_RESULT and DEADMAN_RESULT marker is emitted via `result()` to both stdout and `cron.heartbeat.log`.
+- [proven] Decision: stale timestamp evidence faults (`INVALID_SHADOW_TIMESTAMP`, `FUTURE_SHADOW_TIMESTAMP`, `SHADOW_HEARTBEAT_MISSING`, `SHADOW_TIMESTAMP_MISSING`) do not mutate `deadman.flag`.
+- [proven] Decision: the corrected heartbeat must not be deployed until documentation-and-state closure, a separate deployment plan, and explicit approval are complete.
+- [proven] Decision: strategy, H1 veto, ADX gates, thresholds, pair scope, cron cadence, and Supabase/OANDA operations are out of scope for this correction.

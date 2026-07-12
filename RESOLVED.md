@@ -94,3 +94,25 @@
 - [proven] Installed watcher SHA-256: `b8a3adf46582e3a69d5b22d12a4da070bc8be2ceff76a4aa99e9d6c96544a9ef`.
 - [proven] Strategy and production selection rules changed: NO.
 - [not proven] Whether any valid signal was missed during the historical June outage remains unresolved.
+
+---
+
+## 2026-07-12 — Heartbeat delivery and deadman state correction (v3.2)
+
+<!-- BOTA_HEARTBEAT_OBSERVABILITY_CORRECTION_V32_2026_07_12 -->
+
+- Status: IMPLEMENTATION COMPLETE — deployment blocked pending plan and approval
+- [proven] Branch: `fix/heartbeat-observability-20260712`, base `fa289ad`
+- [proven] Implementation commit: `6cdfc7f97090b4bfae9ba0b015940205778d9ed6`
+- [proven] Root cause: heartbeat used `grep`-based JSON check, leaked env via unsanitised source, classified missing evidence as HEALTHY, and mutated `deadman.flag` before confirmed delivery.
+- [proven] Fix: scoped credential loader, `python3 json.load()` boolean validation, distinct missing-evidence markers, confirmed-delivery-only flag gating.
+- [proven] Fix: all HEARTBEAT_RESULT and DEADMAN_RESULT markers written via `result()` to both stdout and log.
+- [proven] Offline validation: 29 test cases, 108 assertions, 108 passed, 0 failed, 0 real network attempts.
+- [proven] Secret-safety scans passed.
+- [proven] CI Security Scan: completed/success on commit `6cdfc7f`.
+- [proven] `tools/heartbeat.sh` SHA-256: `8226a935c30be8a3484ed20bf3e79192d9fb020f6dc827e4e89af3c23a2fe202`
+- [proven] `tests/test_heartbeat.sh` SHA-256: `cad581f326ef5b4fbf7c1f26065cb43de3abc70cf9b4a573d7ff5bc4647e81c1`
+- [proven] Production checkout unchanged. Historical-replay worktree unchanged. No live Telegram test run.
+- [proven] Strategy, H1 veto, ADX gates, thresholds, pair scope, cron cadence, OANDA, Supabase: unchanged.
+- [not proven] Live Telegram delivery behaviour of the corrected heartbeat — no production deployment has occurred.
+- Deployment gate: requires separate plan, explicit approval, post-deployment verification.

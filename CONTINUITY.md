@@ -1601,3 +1601,78 @@ Changed only `tools/product_message_v1.py` — `format_market_pulse`:
 - [proven] This was an observability and delivery-state correction only.
 - [proven] No strategy-frequency change was approved.
 - [proven] Do not loosen H1 veto, ADX gates, score thresholds, or watcher scope based only on signal-drought frustration.
+
+---
+
+## 2026-07-12 — Heartbeat Observability Correction (v3.2)
+
+<!-- BOTA_HEARTBEAT_OBSERVABILITY_CORRECTION_V32_2026_07_12 -->
+
+### Branch and commit
+
+- [proven] Correction branch: `fix/heartbeat-observability-20260712`
+- [proven] Branch base: production commit `fa289ad3f7b6ff430f13609950e5af341aee2e9d` (main)
+- [proven] Implementation commit: `6cdfc7f97090b4bfae9ba0b015940205778d9ed6`
+- [proven] Commit message: `fix: harden heartbeat delivery and deadman state`
+- [proven] Commit scope: exactly `tools/heartbeat.sh` and `tests/test_heartbeat.sh`
+
+### Defects corrected
+
+- [proven] Previous heartbeat loaded credentials with `set -a` / unsanitised source, risking env leak.
+- [proven] Previous heartbeat used `grep -qF '"ok":true'` for Telegram response validation — not a deterministic JSON parser; susceptible to substring false positives.
+- [proven] Missing shadow file and empty timestamp field were both classified as `DEADMAN_RESULT=HEALTHY` — masking evidence loss.
+- [proven] Deadman flag was written before confirmed Telegram delivery — silencing subsequent real alerts after an undelivered alert.
+- [proven] Recovery flag removal was not gated on confirmed recovery delivery.
+- [proven] Not all HEARTBEAT_RESULT and DEADMAN_RESULT markers were written to both stdout and the log.
+
+### Correction contract (v3.2)
+
+- [proven] Loads only `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` from `.env.runtime` via scoped `_load_telegram_creds()` — no `source`, no `set -a`, no other variable assigned or exported.
+- [proven] Preserves production heartbeat message contract exactly.
+- [proven] Validates Telegram response with `python3 json.load()` — confirms `ok` is the boolean `True`, not a string or any other value.
+- [proven] Distinguishes: `FAIL_TRANSPORT`, `FAIL_HTTP`, `FAIL_TELEGRAM_API`.
+- [proven] Never logs token, chat ID, API URL, response body, or unrelated environment values.
+- [proven] `SHADOW_HEARTBEAT_MISSING` when shadow file is absent — not `HEALTHY`.
+- [proven] `SHADOW_TIMESTAMP_MISSING` when timestamp field is empty — not `HEALTHY`.
+- [proven] `INVALID_SHADOW_TIMESTAMP` when timestamp cannot be parsed.
+- [proven] `FUTURE_SHADOW_TIMESTAMP` when timestamp is ahead of now beyond `CLOCK_JITTER_TOLERANCE_SEC=300`.
+- [proven] Future timestamps within tolerance are classified `HEALTHY`.
+- [proven] `deadman.flag` created only after confirmed deadman Telegram delivery.
+- [proven] `deadman.flag` removed only after confirmed recovery Telegram delivery.
+- [proven] `DEADMAN_DELIVERY_FAILED` / `RECOVERY_DELIVERY_FAILED` on send failure — prior flag state preserved unchanged.
+- [proven] Stale timestamp evidence faults do not create or remove the deadman flag.
+- [proven] Every HEARTBEAT_RESULT and DEADMAN_RESULT marker emitted via `result()` to both stdout and `cron.heartbeat.log`.
+- [proven] `exit 1` only on primary heartbeat delivery failure; all other conditions exit 0.
+
+### Offline validation
+
+- [proven] 29 test cases, 108 assertions, 108 passed, 0 failed, 0 real network attempts.
+- [proven] Secret-safety scans passed: token, chat ID, API URL, response body absent from logs and stdout.
+- [proven] bash syntax validation passed.
+- [proven] `tools/heartbeat.sh` SHA-256: `8226a935c30be8a3484ed20bf3e79192d9fb020f6dc827e4e89af3c23a2fe202`
+- [proven] `tests/test_heartbeat.sh` SHA-256: `cad581f326ef5b4fbf7c1f26065cb43de3abc70cf9b4a573d7ff5bc4647e81c1`
+- [proven] CI: Security Scan completed/success on implementation commit `6cdfc7f`.
+
+### Deployment gate
+
+- [proven] The corrected heartbeat is NOT yet deployed to the production checkout.
+- [proven] Production checkout `fa289ad` (main) remains unchanged.
+- [proven] Historical-replay worktree remains unchanged.
+- [proven] No live Telegram test has been run.
+- [proven] Production readiness is blocked pending:
+  1. documentation-and-state closure commit;
+  2. a separately reviewed deployment plan;
+  3. explicit deployment approval;
+  4. post-deployment local verification;
+  5. a separately approved live Telegram validation if required.
+
+### Scope lock
+
+- [proven] Strategy unchanged.
+- [proven] H1 veto unchanged.
+- [proven] ADX gates unchanged.
+- [proven] Score thresholds unchanged.
+- [proven] Pair scope unchanged.
+- [proven] Cron cadence unchanged.
+- [proven] No OANDA, Supabase, or broker operations performed.
+- [proven] No force push performed.

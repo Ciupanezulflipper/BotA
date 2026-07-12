@@ -1,3 +1,106 @@
+# Heartbeat Observability Correction — Closure Verification Record
+
+**Marker:** BOTA_HEARTBEAT_OBSERVABILITY_CORRECTION_V32_2026_07_12
+**Generated:** 2026-07-12
+**Branch:** fix/heartbeat-observability-20260712
+**Implementation commit:** 6cdfc7f97090b4bfae9ba0b015940205778d9ed6
+
+## Closure Facts
+
+[proven] Branch base: fa289ad3f7b6ff430f13609950e5af341aee2e9d (main)
+[proven] Implementation commit: 6cdfc7f97090b4bfae9ba0b015940205778d9ed6
+[proven] Commit scope: tools/heartbeat.sh, tests/test_heartbeat.sh only
+[proven] tools/heartbeat.sh SHA-256: 8226a935c30be8a3484ed20bf3e79192d9fb020f6dc827e4e89af3c23a2fe202
+[proven] tests/test_heartbeat.sh SHA-256: cad581f326ef5b4fbf7c1f26065cb43de3abc70cf9b4a573d7ff5bc4647e81c1
+[proven] Offline validation: 29 test cases, 108 assertions, 108 passed, 0 failed
+[proven] Real network attempts: 0
+[proven] Secret-safety scans: passed
+[proven] Bash syntax validation: passed
+[proven] CI Security Scan on commit 6cdfc7f: completed/success (18s)
+[proven] Local HEAD == Remote HEAD: 6cdfc7f97090b4bfae9ba0b015940205778d9ed6
+[proven] Production checkout (main, fa289ad): unchanged
+[proven] Historical-replay worktree: unchanged
+[proven] No live Telegram test run
+[proven] Corrected heartbeat NOT yet deployed
+[proven] No documentation or state files entered the implementation commit
+[proven] Strategy, H1, ADX, thresholds, pairs, cron, OANDA, Supabase: unchanged
+[proven] No force push
+
+## Deployment Gate (all must be satisfied before deployment)
+
+1. Documentation-and-state closure commit (this increment)
+2. Separately reviewed deployment plan
+3. Explicit deployment approval
+4. Post-deployment local verification
+5. Separately approved live Telegram validation if required
+
+## Handoff Pack Output (production BotA root — read-only reference)
+
+=== BOTA HANDOFF PACK ===
+
+--- GIT ---
+main
+fa289ad
+?? audits/bota_live_status_20260519_013807.txt
+?? state/bota_shipmode_crontab.txt
+?? state/daily_pulse_sent_2026-05-27.ok
+?? state/daily_summary_sent_2026-05-19.ok
+?? state/daily_summary_sent_2026-05-22.ok
+?? state/daily_summary_sent_2026-05-23.ok
+?? state/daily_summary_sent_2026-05-24.ok
+?? state/daily_summary_sent_2026-05-25.ok
+?? state/daily_summary_sent_2026-05-26.ok
+?? state/daily_summary_sent_2026-05-27.ok
+?? state/daily_summary_sent_2026-05-29.ok
+?? state/daily_summary_sent_2026-05-30.ok
+?? state/daily_summary_sent_2026-06-01.ok
+?? state/daily_summary_sent_2026-06-02.ok
+?? state/daily_summary_sent_2026-06-09.ok
+?? state/daily_summary_sent_2026-06-10.ok
+?? state/daily_summary_sent_2026-06-11.ok
+?? state/daily_summary_sent_2026-06-12.ok
+?? state/daily_summary_sent_2026-06-13.ok
+?? state/daily_summary_sent_2026-06-14.ok
+?? state/daily_summary_sent_2026-06-15.ok
+?? state/daily_summary_sent_2026-06-16.ok
+?? state/daily_summary_sent_2026-06-17.ok
+?? state/daily_summary_sent_2026-06-19.ok
+?? state/daily_summary_sent_2026-06-20.ok
+?? state/daily_summary_sent_2026-06-21.ok
+?? state/daily_summary_sent_2026-07-06.ok
+?? state/daily_summary_sent_2026-07-07.ok
+?? state/daily_summary_sent_2026-07-08.ok
+?? state/daily_summary_sent_2026-07-09.ok
+?? state/daily_summary_sent_2026-07-10.ok
+?? state/daily_summary_sent_2026-07-11.ok
+?? state/oanda_curl_default.json
+?? state/oanda_curl_insecure.json
+?? state/pulse_enabled.flag
+?? state/yahoo_default.json
+?? state/yahoo_insecure.json
+
+--- HANDOFF STATUS ---
+HANDOFF_STATUS=WARN
+WARN=git_worktree_dirty
+WARN=state_json_older_than_cache_or_indicators
+
+--- RUNTIME HEALTH (state/runtime_health.json) ---
+bot_mode              = DEGRADED
+last_supervisor_run   = 2026-07-12T14:00:01.526492Z
+crond_pid             = 5027
+watcher_log_age_min   = 15
+updater_log_age_min   = 0
+shadow_log_age_min    = 15
+eurusd_m15_cache_age  = 151min
+gbpusd_m15_cache_age  = 0min
+eurusd_h1_cache_age   = 151min
+gbpusd_h1_cache_age   = 0min
+failure_reasons       = eurusd_m15_stale:151min|eurusd_h1_stale:151min|server_clock_unavailable
+last_healthy_utc      = 2026-07-09T15:30:00.846556Z
+last_degraded_utc     = 2026-07-12T14:00:01.526492Z
+last_degraded_reason  = eurusd_m15_stale:151min|eurusd_h1_stale:151min|server_clock_unavailable
+
+--- STATE SNAPSHOT (state/STATE.json) ---
 {
   "_meta": {
     "schema_version": "1.1",
@@ -5,13 +108,13 @@
     "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
     "supabase_project": "ozgkeslgjqbqfewojnmr",
     "runtime": "Termux Android arm64",
-    "last_updated": "2026-07-12T14:00:00Z",
+    "last_updated": "2026-05-27T11:17:02Z",
     "updated_by": "claude-sonnet-4-6",
-    "session_id": "2026-07-12 heartbeat-observability correction v3.2 closure"
+    "session_id": "2026-05-27 Step 6 daily pulse wrapper + first private live send + layout cleanup"
   },
   "git": {
-    "current_branch": "fix/heartbeat-observability-20260712",
-    "latest_commit_hash": "6cdfc7f",
+    "current_branch": "main",
+    "latest_commit_hash": "7040b22",
     "dirty_tracked_files_audit": {
       "tools/data_fetch_candles.sh": "INTENTIONAL - COMMITTED ad704fd/acb7e2e",
       "tools/market_open.sh": "INTENTIONAL - COMMITTED acb7e2e",
@@ -93,16 +196,7 @@
     "heartbeat": {
       "cron_schedule": "0 * * * *",
       "deadman_alert_installed": true,
-      "telegram_token_source": ".env.runtime",
-      "telegram_token_load_method": "scoped _load_telegram_creds — no source, no set -a",
-      "json_validation": "python3 json.load() — ok is True (boolean) required",
-      "missing_evidence_classification": "SHADOW_HEARTBEAT_MISSING or SHADOW_TIMESTAMP_MISSING — not HEALTHY",
-      "flag_gate": "confirmed delivery only — flag mutated only after TGSEND_PASS",
-      "correction_version": "v3.2",
-      "correction_commit": "6cdfc7f97090b4bfae9ba0b015940205778d9ed6",
-      "correction_branch": "fix/heartbeat-observability-20260712",
-      "correction_deployed": false,
-      "correction_deployment_gate": "requires separate plan and explicit approval",
+      "telegram_token_source": "config/tele.env",
       "last_deadman_alert_utc": null,
       "last_recovery_alert_utc": null
     },
@@ -461,54 +555,6 @@
     "migrated_at": "2026-04-26",
     "note": "BotA remote now uses SSH for normal git pull/push. Global credential.helper=store still exists, but BotA remote is SSH. PAT is no longer the primary git path for BotA."
   },
-  "heartbeat_correction_v32_2026_07_12": {
-    "marker": "BOTA_HEARTBEAT_OBSERVABILITY_CORRECTION_V32_2026_07_12",
-    "claim_status": "proven",
-    "status": "implementation_complete_deployment_blocked",
-    "branch": "fix/heartbeat-observability-20260712",
-    "base_commit": "fa289ad3f7b6ff430f13609950e5af341aee2e9d",
-    "implementation_commit": "6cdfc7f97090b4bfae9ba0b015940205778d9ed6",
-    "commit_message": "fix: harden heartbeat delivery and deadman state",
-    "commit_scope": ["tools/heartbeat.sh", "tests/test_heartbeat.sh"],
-    "heartbeat_sha256": "8226a935c30be8a3484ed20bf3e79192d9fb020f6dc827e4e89af3c23a2fe202",
-    "test_sha256": "cad581f326ef5b4fbf7c1f26065cb43de3abc70cf9b4a573d7ff5bc4647e81c1",
-    "defects_corrected": [
-      "unsanitised credential source (set -a env leak risk)",
-      "grep-based JSON ok check replaced by python3 json.load() boolean validation",
-      "missing shadow file classified as HEALTHY — now SHADOW_HEARTBEAT_MISSING",
-      "empty timestamp field classified as HEALTHY — now SHADOW_TIMESTAMP_MISSING",
-      "deadman.flag written before confirmed delivery",
-      "recovery flag removal not gated on confirmed delivery",
-      "some DEADMAN_RESULT markers not written to log"
-    ],
-    "offline_validation": {
-      "test_cases": 29,
-      "assertions": 108,
-      "passed": 108,
-      "failed": 0,
-      "real_network_attempts": 0,
-      "secret_safety_scan": "passed",
-      "bash_syntax": "passed"
-    },
-    "ci": {
-      "workflow": "Security Scan",
-      "status": "completed/success",
-      "duration_s": 18,
-      "commit": "6cdfc7f97090b4bfae9ba0b015940205778d9ed6"
-    },
-    "deployed": false,
-    "live_telegram_test_run": false,
-    "production_checkout_modified": false,
-    "historical_worktree_modified": false,
-    "deployment_gate": [
-      "documentation-and-state closure commit",
-      "separately reviewed deployment plan",
-      "explicit deployment approval",
-      "post-deployment local verification",
-      "separately approved live Telegram validation if required"
-    ],
-    "preserved_at_utc": "2026-07-12T14:00:00Z"
-  },
   "observability_v4_2026_07_10": {
     "claim_status": "proven",
     "status": "resolved_and_live_verified",
@@ -577,3 +623,184 @@
     "next_action": "Generate and verify handoff pack, then review exact git diff before commit and push."
   }
 }
+
+--- LOCKED DECISIONS (tail) ---
+  - SUPABASE_SERVICE_KEY
+  - TELEGRAM_BOT_TOKEN
+- Deferred:
+  - lower-priority/read-only provider keys
+- Do not change:
+  - do not weaken .gitleaks.toml just to get green CI
+
+## Product Market Pulse send gate — 2026-05-27
+- Status: LOCKED
+- Decisions:
+  1. `--send` mode requires `--chat-id` to be passed explicitly on the command line at all times.
+     Do not default to `TELEGRAM_CHAT_ID` env var for Step 5 or any early rollout phase.
+  2. Market Pulse must not publish to ProfitLab/Supabase `signals` table.
+     `supabase_published=false` is mandatory for all Market Pulse message types.
+  3. Daily Market Pulse must go to private test chat first.
+     Require 3 confirmed successful private daily sends before main channel or cron rollout.
+  4. Main BotA channel rollout requires a separate explicit approval step.
+     Do not widen send scope to the main channel without that approval.
+  5. Cron scheduling for Market Pulse requires a separate explicit approval step after private proof.
+     Do not add cron for any Market Pulse send without that approval.
+- Proof:
+  - Step 5 commit `274b0d3`, tag `step-5-private-send-confirmed-2026-05-27`
+  - Step 6 commit `6aa985e`, tag `step-6-wrapper-gates-2026-05-27`
+  - Step 6A layout commit `65d1137`
+  - First private wrapper send: `LIVE_SEND_EXIT_CODE=0`, `telegram_sent=True`, `supabase_published=False`
+
+---
+
+## 2026-07-10 — Watcher decision journaling and delivery dedup
+
+<!-- BOTA_OBSERVABILITY_V4_2026_07_10 -->
+
+- [proven] Decision: `logs/alerts.csv` is the completed-decision journal and must be written before rejection or delivery exits.
+- [proven] Decision: Telegram/Supabase delivery dedup must remain separate from decision journaling.
+- [proven] Decision: `last_hash_<PAIR>_<TF>.txt` represents successful real Telegram delivery, not merely candidate evaluation.
+- [proven] Decision: delivery-hash comparison is read-only before send; the hash is marked only after successful real Telegram delivery.
+- [proven] Decision: preserve the existing seven-field hash identity for this repair.
+- [proven] Decision: do not reset historical delivery hashes or cooldown files.
+- [proven] Decision: do not modify strategy, H1 veto, ADX handling, thresholds, watched pairs/timeframe, RR rules, Telegram tiers, or cron cadence in this repair.
+- [inferred] Separate Supabase-specific delivery retry state may be evaluated later, but it is outside this approved observability repair.
+
+--- RESOLVED (tail) ---
+
+### Step 5 private Telegram Market Pulse send
+- Status: RESOLVED
+- What was proven:
+  - `tools/product_message_v1.py --send --chat-id <TEST_CHAT_ID>` delivered message to private test chat.
+  - `telegram_sent=True` confirmed in log and stdout.
+  - `supabase_published=False` confirmed.
+  - Shadow mode continues working: `telegram_sent=False`, `supabase_published=False`.
+  - macro6=3 neutral/default no longer displayed as "macro filter active".
+  - Market Pulse contains no entry, SL, or TP.
+  - Market Pulse disclaimer present.
+- Commit: `274b0d3`
+- Tag: `step-5-private-send-confirmed-2026-05-27`
+- Branch: `main`, pushed to `origin/main`.
+- Production trading behavior changed: NO.
+- Strategy changed: NO.
+- H1 logic changed: NO.
+- Thresholds changed: NO.
+- Cron changed: NO.
+- Supabase publish for Market Pulse: NO (remains false).
+- ProfitLab executable signal behavior: UNCHANGED.
+
+---
+
+## 2026-07-10 — Watcher pre-journal dedup observability defect
+
+<!-- BOTA_OBSERVABILITY_V4_2026_07_10 -->
+
+- Status: RESOLVED
+- [proven] Root cause: content dedup executed before `alerts.csv` journaling and wrote hash state before confirmed Telegram delivery.
+- [proven] Fix: journal every completed parsed decision before rejection and Telegram delivery gates.
+- [proven] Fix: split delivery hash calculation, read-only comparison, and post-success marking.
+- [proven] Fix: update delivery hash only after successful real Telegram send.
+- [proven] Static validation: PASS.
+- [proven] Atomic deployment: PASS.
+- [proven] Natural cron-cycle validation: PASS.
+- [proven] Natural proof wrote two rejected HOLD rows while preserving both delivery hashes and both `last_sent` files.
+- [proven] Installed watcher SHA-256: `b8a3adf46582e3a69d5b22d12a4da070bc8be2ceff76a4aa99e9d6c96544a9ef`.
+- [proven] Strategy and production selection rules changed: NO.
+- [not proven] Whether any valid signal was missed during the historical June outage remains unresolved.
+
+--- CONTINUITY (tail) ---
+
+- [proven] `tools/signal_watcher_pro.sh` was replaced atomically with the validated Observability V4 implementation.
+- [proven] Installed watcher SHA-256 is `b8a3adf46582e3a69d5b22d12a4da070bc8be2ceff76a4aa99e9d6c96544a9ef`.
+- [proven] Every completed parsed decision is now appended to `logs/alerts.csv` before rejection, score, tier, cooldown, and delivery-dedup exits.
+- [proven] Delivery dedup is checked only after rejection, score, tier, and cooldown gates.
+- [proven] Delivery hash state is written only after a successful real Telegram send.
+- [proven] Existing hash identity remains `pair|tf|direction|score|entry|sl|tp`.
+- [proven] Existing `last_hash_*` and `last_sent_*` files were not reset during deployment.
+- [proven] Strategy, H1 logic, ADX rules, score thresholds, pairs, timeframe, risk rules, Telegram tiers, cooldown duration, cron cadence, and Supabase eligibility were unchanged.
+
+### Static proof
+
+- [proven] Candidate transformation passed.
+- [proven] `bash -n` passed.
+- [proven] Structural order validation passed.
+- [proven] Semantic static validation passed.
+- [proven] Atomic deployment passed without rollback.
+
+### Natural cron-cycle proof
+
+- [proven] A natural scheduled watcher cycle advanced `logs/alerts.csv` from 1590 to 1592 rows.
+- [proven] Exactly two new rows were written: EURUSD M15 HOLD and GBPUSD M15 HOLD.
+- [proven] Both rows had score `0.00`, confidence `40.00`, provider `engine_A3`, rejection status `true`, and reason `no_signal|phase=Open`.
+- [proven] EURUSD and GBPUSD delivery-hash contents and mtimes remained unchanged.
+- [proven] EURUSD and GBPUSD `last_sent` contents and mtimes remained unchanged.
+- [proven] No Telegram delivery occurred for the rejected HOLD rows.
+- [proven] `NATURAL_CYCLE_PROOF_PASS=YES`.
+
+### Current interpretation
+
+- [proven] BotA now preserves evidence distinguishing “no valid setup” from runtime or delivery failure.
+- [proven] The 2026-07-10 live snapshot had no alert-grade setup inside the active watcher universe.
+- [not proven] Historical market decisions omitted by the old pre-journal dedup cannot be reconstructed completely.
+- [inferred] Future signal-drought investigations can now use `alerts.csv` as the completed-decision journal.
+
+### Scope lock
+
+- [proven] This was an observability and delivery-state correction only.
+- [proven] No strategy-frequency change was approved.
+- [proven] Do not loosen H1 veto, ADX gates, score thresholds, or watcher scope based only on signal-drought frustration.
+
+--- CURRENT WATCHER SCOPE FROM STATE ---
+pairs= ['EURUSD', 'GBPUSD']
+timeframes= ['M15']
+
+--- error.log tail ---
+📡 API: 352/800 credits (44.0%) 🟢
+2026-07-12 15:59:57 [indicators] Yahoo chart candles loaded: 500 rows
+[FETCH] trying OANDA: instrument=USD_JPY gran=M15
+[FETCH] OANDA OK
+[FETCH] legacy cache NOT updated (tf=M15)
+[FETCH] OK provider=oanda wrote: /data/data/com.termux/files/home/BotA/cache/USDJPY_M15.json
+[FETCH] OK wrote: /data/data/com.termux/files/home/BotA/data/candles/USDJPY_M15.csv
+📡 API: 353/800 credits (44.1%) 🟢
+2026-07-12 15:59:59 [indicators] Yahoo chart candles loaded: 500 rows
+[FETCH] trying OANDA: instrument=USD_JPY gran=H1
+[FETCH] OANDA OK
+[FETCH] legacy cache updated: /data/data/com.termux/files/home/BotA/cache/USDJPY.json
+[FETCH] OK provider=oanda wrote: /data/data/com.termux/files/home/BotA/cache/USDJPY_H1.json
+[FETCH] OK wrote: /data/data/com.termux/files/home/BotA/data/candles/USDJPY_H1.csv
+📡 API: 354/800 credits (44.2%) 🟢
+2026-07-12 16:00:01 [indicators] Yahoo chart candles loaded: 500 rows
+[FETCH] trying OANDA: instrument=USD_JPY gran=H4
+[FETCH] OANDA OK
+[FETCH] legacy cache NOT updated (tf=H4)
+[FETCH] OK provider=oanda wrote: /data/data/com.termux/files/home/BotA/cache/USDJPY_H4.json
+[FETCH] OK wrote: /data/data/com.termux/files/home/BotA/data/candles/USDJPY_H4.csv
+📡 API: 355/800 credits (44.4%) 🟢
+2026-07-12 16:00:03 [indicators] Yahoo chart candles loaded: 500 rows
+[FETCH] trying OANDA: instrument=USD_JPY gran=D
+[FETCH] OANDA OK
+[FETCH] legacy cache NOT updated (tf=D1)
+[FETCH] OK provider=oanda wrote: /data/data/com.termux/files/home/BotA/cache/USDJPY_D1.json
+[FETCH] OK wrote: /data/data/com.termux/files/home/BotA/data/candles/USDJPY_D1.csv
+📡 API: 356/800 credits (44.5%) 🟢
+2026-07-12 16:00:05 [indicators] Yahoo chart candles loaded: 500 rows
+
+--- D1 cache mtimes ---
+-rw-------. 1 u0_a414 u0_a414 169 2026-07-12 16:00 cache/d1_trend_EURUSD.json
+-rw-------. 1 u0_a414 u0_a414 169 2026-07-12 16:00 cache/d1_trend_GBPUSD.json
+-rw-------. 1 u0_a414 u0_a414 168 2026-04-22 02:16 cache/d1_trend_USDJPY.json
+-rw-------. 1 u0_a414 u0_a414 167 2026-04-22 02:16 cache/d1_trend_XAUUSD.json
+
+--- indicator mtimes (latest 10) ---
+2026-07-12 16:00 cache/indicators_USDJPY_H4.json
+2026-07-12 16:00 cache/indicators_USDJPY_H1.json
+2026-07-12 16:00 cache/indicators_USDJPY_D1.json
+2026-07-12 15:59 cache/indicators_USDJPY_M15.json
+2026-07-12 15:59 cache/indicators_GBPUSD_M15.json
+2026-07-12 15:59 cache/indicators_GBPUSD_H4.json
+2026-07-12 15:59 cache/indicators_GBPUSD_H1.json
+2026-07-12 15:59 cache/indicators_GBPUSD_D1.json
+2026-07-12 13:28 cache/indicators_EURUSD_M15.json
+2026-07-12 13:28 cache/indicators_EURUSD_H4.json
+
