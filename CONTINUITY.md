@@ -1676,3 +1676,61 @@ Changed only `tools/product_message_v1.py` — `format_market_pulse`:
 - [proven] Cron cadence unchanged.
 - [proven] No OANDA, Supabase, or broker operations performed.
 - [proven] No force push performed.
+
+---
+
+## 2026-07-12 — Heartbeat Production Deployment and Live Validation
+
+<!-- BOTA_HEARTBEAT_PRODUCTION_DEPLOYMENT_LIVE_VALIDATION_2026_07_12 -->
+
+### Credential migration
+
+- [proven] Production `.env.runtime` received `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` copied from production `.env`.
+- [proven] Both values non-empty; migration verified pre and post with no values printed.
+- [proven] `.env.runtime` mode remains 600; unrelated content preserved byte-identical.
+- [proven] Migration backup: `/data/data/com.termux/files/home/BotA/.env.runtime.bak.mig.20260712_222524`
+- [proven] Temporary migration utility self-deleted after use; no credentials exposed in stdout/stderr.
+
+### Crontab remediation
+
+- [proven] Heartbeat cron redirect changed from `>> /data/data/com.termux/files/home/BotA/logs/cron.heartbeat.log 2>&1` to `>/dev/null 2>> /data/data/com.termux/files/home/BotA/logs/cron.heartbeat.log`.
+- [proven] Stdout discarded; stderr (and therefore log() direct writes) appended to cron.heartbeat.log — eliminates double-writing of HEARTBEAT_RESULT and DEADMAN_RESULT markers.
+- [proven] Exactly one cron line changed; schedule `0 * * * *` and script path preserved; all other cron lines byte-identical.
+- [proven] Crontab backup: `/data/data/com.termux/files/home/BotA/backups/crontab.bak.20260712_223713`
+
+### Heartbeat deployment
+
+- [proven] `tools/heartbeat.sh` v3.2 deployed atomically to production via mktemp + chmod 700 + mv.
+- [proven] Pre-deployment (old) SHA-256: `2f31839368f533fe1dc2a61764fe0ce2695ed8491c71120f482f6a375f7789b3`
+- [proven] Post-deployment SHA-256: `8226a935c30be8a3484ed20bf3e79192d9fb020f6dc827e4e89af3c23a2fe202`
+- [proven] Production heartbeat mode: 700.
+- [proven] Backup of replaced file: `/data/data/com.termux/files/home/BotA/backups/heartbeat.sh.before_v32_20260712_224441`
+- [proven] Offline deployment validation: 29 test cases, 108 assertions, 108 passed, 0 failed, 0 real network attempts, bash syntax passed.
+- [proven] Deployed artifact SHA-256 matches worktree-tested SHA-256.
+- [proven] `.env`, `.env.runtime`, crontab, and all other production files unchanged by the deployment.
+
+### Live validation
+
+- [proven] First automatic cron execution under v3.2 at approximately 2026-07-12 21:00:02 UTC:
+  - `HEARTBEAT_RESULT=PASS`
+  - `DEADMAN_RESULT=HEALTHY`
+- [proven] One approved manual live invocation at approximately 2026-07-12 21:08:08 UTC:
+  - `HEARTBEAT_RESULT=PASS`
+  - `DEADMAN_RESULT=HEALTHY`
+- [proven] Operator visually confirmed receipt of both Telegram heartbeat messages (21:00 UTC and 21:08 UTC).
+- [proven] No secret values (token, chat ID, API URL, response body) detected in stdout, stderr, or new log segment.
+- [proven] Deployed heartbeat hash unchanged after live invocation.
+- [proven] `.env.runtime` and crontab unchanged after live invocation.
+- [proven] No production files changed unexpectedly during live test; only `cron.heartbeat.log` received new entries.
+- [proven] No rollback required.
+
+### Open items carried forward
+
+- [proven] Local clock drift remains an open production reliability issue — not addressed in this increment.
+- [proven] Historical-replay investigation (June outage) remains open — not addressed in this increment.
+
+### Scope lock
+
+- [proven] Strategy, scoring, thresholds, pair scope, H1 veto, ADX gates: unchanged.
+- [proven] Watcher, updater, OANDA, Supabase, broker: unchanged.
+- [proven] No force push performed.

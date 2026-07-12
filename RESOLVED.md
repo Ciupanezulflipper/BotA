@@ -97,11 +97,12 @@
 
 ---
 
-## 2026-07-12 — Heartbeat delivery and deadman state correction (v3.2)
+## 2026-07-12 — Heartbeat delivery and deadman state correction (v3.2) + production deployment
 
 <!-- BOTA_HEARTBEAT_OBSERVABILITY_CORRECTION_V32_2026_07_12 -->
+<!-- BOTA_HEARTBEAT_PRODUCTION_DEPLOYMENT_LIVE_VALIDATION_2026_07_12 -->
 
-- Status: IMPLEMENTATION COMPLETE — deployment blocked pending plan and approval
+- Status: RESOLVED
 - [proven] Branch: `fix/heartbeat-observability-20260712`, base `fa289ad`
 - [proven] Implementation commit: `6cdfc7f97090b4bfae9ba0b015940205778d9ed6`
 - [proven] Root cause: heartbeat used `grep`-based JSON check, leaked env via unsanitised source, classified missing evidence as HEALTHY, and mutated `deadman.flag` before confirmed delivery.
@@ -112,7 +113,15 @@
 - [proven] CI Security Scan: completed/success on commit `6cdfc7f`.
 - [proven] `tools/heartbeat.sh` SHA-256: `8226a935c30be8a3484ed20bf3e79192d9fb020f6dc827e4e89af3c23a2fe202`
 - [proven] `tests/test_heartbeat.sh` SHA-256: `cad581f326ef5b4fbf7c1f26065cb43de3abc70cf9b4a573d7ff5bc4647e81c1`
-- [proven] Production checkout unchanged. Historical-replay worktree unchanged. No live Telegram test run.
 - [proven] Strategy, H1 veto, ADX gates, thresholds, pair scope, cron cadence, OANDA, Supabase: unchanged.
-- [not proven] Live Telegram delivery behaviour of the corrected heartbeat — no production deployment has occurred.
-- Deployment gate: requires separate plan, explicit approval, post-deployment verification.
+- [proven] Credential migration: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` migrated from `.env` to `.env.runtime` (mode 600, atomic, dedup-gated, backup at `backups/.env.runtime.bak.mig.20260712_222524`).
+- [proven] Crontab remediation: redirect changed from `>> log 2>&1` to `>/dev/null 2>> log`; Python exact-line transform; backup at `backups/crontab.bak.20260712_223713`; exactly one line changed.
+- [proven] Production heartbeat deployment: atomic `mv` after `mktemp`; pre-deploy SHA `2f31839...`; post-deploy SHA `8226a935...`; mode 700; backup at `backups/heartbeat.sh.before_v32_20260712_224441`.
+- [proven] Offline test suite re-run on production file: 29 cases, 108 assertions, 108 passed, 0 failed.
+- [proven] Live cron validation: `cron.heartbeat.log` entry at `2026-07-12 21:00:02 UTC` — `HEARTBEAT_RESULT=PASS`, `DEADMAN_RESULT=HEALTHY`.
+- [proven] Live manual validation: `cron.heartbeat.log` entry at `2026-07-12 21:08:08 UTC` — `HEARTBEAT_RESULT=PASS`, `DEADMAN_RESULT=HEALTHY`.
+- [proven] Secret leak check passed: no token or chat_id appeared in stdout, stderr, or new log content.
+- [proven] No unexpected production file changes beyond `.env.runtime`, crontab, `tools/heartbeat.sh`.
+- [proven] Operator visually confirmed receipt of both Telegram heartbeat messages: `2026-07-12 21:00:00 UTC` and `2026-07-12 21:08:07 UTC`.
+- [not proven] Whether any valid signal was missed during the historical June 2026 outage.
+- [not proven] Clock drift monitoring — not yet implemented.

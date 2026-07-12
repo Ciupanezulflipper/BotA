@@ -5,13 +5,13 @@
     "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
     "supabase_project": "ozgkeslgjqbqfewojnmr",
     "runtime": "Termux Android arm64",
-    "last_updated": "2026-07-12T14:00:00Z",
+    "last_updated": "2026-07-12T22:45:00Z",
     "updated_by": "claude-sonnet-4-6",
-    "session_id": "2026-07-12 heartbeat-observability correction v3.2 closure"
+    "session_id": "2026-07-12 heartbeat production deployment and live validation closure"
   },
   "git": {
     "current_branch": "fix/heartbeat-observability-20260712",
-    "latest_commit_hash": "6cdfc7f",
+    "latest_commit_hash": "22cd624",
     "dirty_tracked_files_audit": {
       "tools/data_fetch_candles.sh": "INTENTIONAL - COMMITTED ad704fd/acb7e2e",
       "tools/market_open.sh": "INTENTIONAL - COMMITTED acb7e2e",
@@ -101,8 +101,8 @@
       "correction_version": "v3.2",
       "correction_commit": "6cdfc7f97090b4bfae9ba0b015940205778d9ed6",
       "correction_branch": "fix/heartbeat-observability-20260712",
-      "correction_deployed": false,
-      "correction_deployment_gate": "requires separate plan and explicit approval",
+      "correction_deployed": true,
+      "correction_deployment_gate": "completed — deployed 2026-07-12, live validated 2026-07-12",
       "last_deadman_alert_utc": null,
       "last_recovery_alert_utc": null
     },
@@ -464,7 +464,7 @@
   "heartbeat_correction_v32_2026_07_12": {
     "marker": "BOTA_HEARTBEAT_OBSERVABILITY_CORRECTION_V32_2026_07_12",
     "claim_status": "proven",
-    "status": "implementation_complete_deployment_blocked",
+    "status": "deployed_and_live_validated",
     "branch": "fix/heartbeat-observability-20260712",
     "base_commit": "fa289ad3f7b6ff430f13609950e5af341aee2e9d",
     "implementation_commit": "6cdfc7f97090b4bfae9ba0b015940205778d9ed6",
@@ -496,18 +496,75 @@
       "duration_s": 18,
       "commit": "6cdfc7f97090b4bfae9ba0b015940205778d9ed6"
     },
-    "deployed": false,
-    "live_telegram_test_run": false,
-    "production_checkout_modified": false,
+    "deployed": true,
+    "live_telegram_test_run": true,
+    "production_checkout_modified": true,
     "historical_worktree_modified": false,
-    "deployment_gate": [
-      "documentation-and-state closure commit",
-      "separately reviewed deployment plan",
-      "explicit deployment approval",
-      "post-deployment local verification",
-      "separately approved live Telegram validation if required"
+    "deployment_gate": "completed",
+    "preserved_at_utc": "2026-07-12T14:00:00Z",
+    "deployment_completed_at_utc": "2026-07-12T22:24:41Z"
+  },
+  "heartbeat_production_deployment_live_validation_2026_07_12": {
+    "marker": "BOTA_HEARTBEAT_PRODUCTION_DEPLOYMENT_LIVE_VALIDATION_2026_07_12",
+    "claim_status": "proven",
+    "status": "resolved",
+    "phases_completed": [
+      "synthetic_migration_rehearsal_20_cases",
+      "production_credential_migration",
+      "production_crontab_remediation",
+      "production_heartbeat_deployment",
+      "live_telegram_validation",
+      "operator_confirmed",
+      "documentation_closure"
     ],
-    "preserved_at_utc": "2026-07-12T14:00:00Z"
+    "credential_migration": {
+      "source": "BotA/.env",
+      "destination": "BotA/.env.runtime",
+      "keys_migrated": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"],
+      "mode": "600",
+      "backup": "BotA/backups/.env.runtime.bak.mig.20260712_222524",
+      "dedup_enforced": true,
+      "no_value_exposed_in_logs": true
+    },
+    "crontab_remediation": {
+      "old_redirect": ">> cron.heartbeat.log 2>&1",
+      "new_redirect": ">/dev/null 2>> cron.heartbeat.log",
+      "reason": "old pattern double-wrote markers via result() log() direct write and stdout cron capture",
+      "backup": "BotA/backups/crontab.bak.20260712_223713",
+      "transformation_method": "python3 exact-line match — avoids sed & backreference bug",
+      "exactly_one_line_changed": true
+    },
+    "heartbeat_deployment": {
+      "source_worktree": "bota-worktrees/heartbeat-observability/tools/heartbeat.sh",
+      "destination": "BotA/tools/heartbeat.sh",
+      "source_sha256": "8226a935c30be8a3484ed20bf3e79192d9fb020f6dc827e4e89af3c23a2fe202",
+      "pre_deployment_sha256": "2f31839368f533fe1dc2a61764fe0ce2695ed8491c71120f482f6a375f7789b3",
+      "post_deployment_sha256": "8226a935c30be8a3484ed20bf3e79192d9fb020f6dc827e4e89af3c23a2fe202",
+      "mode": "700",
+      "backup": "BotA/backups/heartbeat.sh.before_v32_20260712_224441",
+      "atomic_deploy": true,
+      "offline_test_suite_run_post_deploy": true,
+      "offline_test_results": {"cases": 29, "assertions": 108, "passed": 108, "failed": 0}
+    },
+    "live_validation": {
+      "cron_fire_utc": "2026-07-12T21:00:02Z",
+      "cron_heartbeat_result": "PASS",
+      "cron_deadman_result": "HEALTHY",
+      "manual_test_utc": "2026-07-12T21:08:08Z",
+      "manual_heartbeat_result": "PASS",
+      "manual_deadman_result": "HEALTHY",
+      "secret_leak_check": "PASS — no token or chat_id in stdout, stderr, or log new content",
+      "no_unexpected_file_changes": true,
+      "operator_confirmed_telegram_receipt": true,
+      "operator_confirmed_messages": [
+        "2026-07-12 21:00:00 UTC heartbeat",
+        "2026-07-12 21:08:07 UTC heartbeat"
+      ]
+    },
+    "open_items": [
+      "clock drift monitoring not yet implemented",
+      "historical June 2026 outage investigation: whether any valid signal was missed remains unresolved"
+    ]
   },
   "observability_v4_2026_07_10": {
     "claim_status": "proven",

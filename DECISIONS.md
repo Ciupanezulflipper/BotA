@@ -119,3 +119,18 @@
 - [proven] Decision: stale timestamp evidence faults (`INVALID_SHADOW_TIMESTAMP`, `FUTURE_SHADOW_TIMESTAMP`, `SHADOW_HEARTBEAT_MISSING`, `SHADOW_TIMESTAMP_MISSING`) do not mutate `deadman.flag`.
 - [proven] Decision: the corrected heartbeat must not be deployed until documentation-and-state closure, a separate deployment plan, and explicit approval are complete.
 - [proven] Decision: strategy, H1 veto, ADX gates, thresholds, pair scope, cron cadence, and Supabase/OANDA operations are out of scope for this correction.
+
+---
+
+## 2026-07-12 — Heartbeat production deployment and live validation
+
+<!-- BOTA_HEARTBEAT_PRODUCTION_DEPLOYMENT_LIVE_VALIDATION_2026_07_12 -->
+
+- [proven] Decision: credential migration must use scoped regex parse loop (no subprocess) and atomic temp-file replace; dedup enforced before write.
+- [proven] Decision: crontab remediation must use Python exact-line match transform (not sed) to avoid `&` backreference expansion bug.
+- [proven] Decision: cron redirect must be `>/dev/null 2>> log` (not `2>&1`) so `result()` log-direct writes are not double-written via stdout cron capture.
+- [proven] Decision: heartbeat backup must be created before atomic deployment; post-deploy SHA-256 must be verified before live validation is approved.
+- [proven] Decision: offline test suite (29 cases, 108 assertions) must pass on production file before any live invocation.
+- [proven] Decision: live validation is one controlled invocation via `bash tools/heartbeat.sh`; operator must visually confirm Telegram receipt before closure.
+- [proven] Decision: no production files beyond `.env.runtime`, `crontab`, and `tools/heartbeat.sh` were modified in this deployment.
+- [proven] Decision: no strategy, H1 veto, ADX gates, thresholds, pair scope, Supabase, or OANDA changes in this deployment.
