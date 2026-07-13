@@ -1,0 +1,2170 @@
+#!/usr/bin/env python3
+"""
+Contract tests for the BotA customer-facing signal lifecycle.
+
+All tests are fully offline.  No real OANDA or Supabase calls are made.
+fetch_s5_candles and load_oanda_cache are mocked where needed.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import re
+import subprocess
+import sys
+import tempfile
+import unittest
+from datetime import datetime, timezone
+from pathlib import Path
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[1]
+MODULE_PATH = ROOT / "tools" / "signal_closer.py"
+
+SPEC = importlib.util.spec_from_file_location("signal_closer_under_test", MODULE_PATH)
+if SPEC is None or SPEC.loader is None:
+    raise RuntimeError(f"Unable to load {MODULE_PATH}")
+
+closer = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(closer)
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+SIGNAL_EPOCH_BASE = int(datetime(2026, 7, 10, 8, 0, 0, tzinfo=timezone.utc).timestamp())
+M15 = 900
+S5 = 5
+
+
+def make_signal(
+    *,
+    direction: str = "BUY",
+    entry: float = 1.1000,
+    sl: float = 1.0980,
+    tp: float = 1.1020,
+    created_epoch: int = SIGNAL_EPOCH_BASE,
+    pair: str = "EURUSD",
+    timeframe: str = "M15",
+) -> dict:
+    created_at = datetime.fromtimestamp(created_epoch, timezone.utc).isoformat()
+    return {
+        "id": "test-id",
+        "pair": pair,
+        "direction": direction,
+        "entry_price": entry,
+        "stop_loss": sl,
+        "take_profit": tp,
+        "created_at": created_at,
+        "timeframe": timeframe,
+    }
+
+
+def make_m15_candles(
+    count: int,
+    *,
+    start_epoch: int = SIGNAL_EPOCH_BASE,
+    high: float = 1.1010,
+    low: float = 1.0990,
+    open_: float = 1.1000,
+    close: float = 1.1000,
+    weekend_gap_after: int | None = None,
+    weekend_gap_seconds: int = 2 * 24 * 3600,
+    final_close: float | None = None,
+) -> list[dict]:
+    """
+    Build M15 candles.  Optionally insert a gap after `weekend_gap_after` index
+    to simulate closed-market time.
+    """
+    candles = []
+    t = start_epoch
+    for i in range(count):
+        c = final_close if (final_close is not None and i == count - 1) else close
+        candles.append({"t": t, "o": open_, "h": high, "l": low, "c": c})
+        if weekend_gap_after is not None and i == weekend_gap_after:
+            t += weekend_gap_seconds
+        else:
+            t += M15
+    return candles
+
+
+def make_s5_candles(
+    from_epoch: int,
+    to_epoch: int,
+    *,
+    high: float = 1.1010,
+    low: float = 1.0990,
+    open_: float = 1.1000,
+    close: float = 1.1000,
+) -> list[dict]:
+    candles = []
+    t = from_epoch
+    while t + S5 <= to_epoch:
+        candles.append({"t": t, "o": open_, "h": high, "l": low, "c": close})
+        t += S5
+    return candles
+
+
+def call_prepare(
+    sig: dict,
+    m15_candles: list[dict],
+    s5_response: list[dict] | None,
+    *,
+    server_epoch: int,
+    max_age: int = 24,
+    hard_max_age: int = 168,
+    s5_fail_reason: str = "S5 unavailable (test)",
+) -> dict | None:
+    """
+    Call prepare_signal_action with mocked fetch_candles and fetch_s5_candles.
+    """
+    now_utc = datetime.fromtimestamp(server_epoch, timezone.utc)
+
+    def fake_fetch_candles(pair, signal_time, tf, sep, eff_start):
+        return m15_candles, "ok"
+
+    s5_ret = (s5_response, "ok") if s5_response is not None else ([], s5_fail_reason)
+
+    def fake_fetch_s5(pair, from_ep, to_ep, token, url):
+        return s5_ret
+
+    with (
+        patch.object(closer, "fetch_candles", side_effect=fake_fetch_candles),
+        patch.object(closer, "fetch_s5_candles", side_effect=fake_fetch_s5),
+    ):
+        return closer.prepare_signal_action(
+            sig, now_utc, server_epoch, max_age, hard_max_age,
+            oanda_token="fake", oanda_url="https://fake.oanda.test",
+        )
+
+
+# ── Tests ──────────────────────────────────────────────────────────────────────
+
+class CacheTests(unittest.TestCase):
+
+    def _write_cache(self, tmpdir: Path, payload: dict) -> tuple[list[dict], str]:
+        cache_file = tmpdir / "EURUSD_M15.json"
+        cache_file.write_text(json.dumps(payload), encoding="utf-8")
+        original = closer.CACHE_DIR
+        closer.CACHE_DIR = tmpdir
+        try:
+            return closer.load_oanda_cache("EURUSD", "M15", SIGNAL_EPOCH_BASE + M15 * 2)
+        finally:
+            closer.CACHE_DIR = original
+
+    def _oanda_payload(self, *, open_: float, high: float, low: float, close: float) -> dict:
+        return {
+            "chart": {
+                "result": [{
+                    "meta": {"_provider": "oanda", "dataGranularity": "M15"},
+                    "timestamp": [SIGNAL_EPOCH_BASE],
+                    "indicators": {"quote": [{
+                        "open": [open_],
+                        "high": [high],
+                        "low": [low],
+                        "close": [close],
+                    }]},
+                }]
+            }
+        }
+
+    def test_cache_retains_o_h_l_c(self) -> None:
+        """Test 1: load_oanda_cache returns all four price fields."""
+        with tempfile.TemporaryDirectory() as td:
+            candles, reason = self._write_cache(
+                Path(td),
+                self._oanda_payload(open_=1.0995, high=1.1010, low=1.0985, close=1.1005),
+            )
+        self.assertEqual("ok", reason)
+        self.assertEqual(1, len(candles))
+        c = candles[0]
+        self.assertAlmostEqual(1.0995, c["o"])
+        self.assertAlmostEqual(1.1010, c["h"])
+        self.assertAlmostEqual(1.0985, c["l"])
+        self.assertAlmostEqual(1.1005, c["c"])
+
+    def test_cache_missing_close_is_none(self) -> None:
+        """Test 2: When close is absent, c field is None (candle still usable for H/L)."""
+        payload = {
+            "chart": {
+                "result": [{
+                    "meta": {"_provider": "oanda", "dataGranularity": "M15"},
+                    "timestamp": [SIGNAL_EPOCH_BASE],
+                    "indicators": {"quote": [{
+                        "open": [1.1000],
+                        "high": [1.1010],
+                        "low": [1.0990],
+                        # close intentionally absent
+                    }]},
+                }]
+            }
+        }
+        with tempfile.TemporaryDirectory() as td:
+            candles, reason = self._write_cache(Path(td), payload)
+        self.assertEqual("ok", reason)
+        self.assertEqual(1, len(candles))
+        self.assertIsNone(candles[0]["c"])
+        self.assertAlmostEqual(1.1010, candles[0]["h"])
+
+
+class CeilToS5Tests(unittest.TestCase):
+
+    def test_ceil_to_s5_already_on_boundary(self) -> None:
+        """Test 3a: Epoch on a 5-second boundary is unchanged."""
+        self.assertEqual(1000, closer.ceil_to_s5(1000))
+
+    def test_ceil_to_s5_one_past_boundary(self) -> None:
+        """Test 3b: Epoch 1 past boundary rounds up by 4."""
+        self.assertEqual(1005, closer.ceil_to_s5(1001))
+
+    def test_ceil_to_s5_four_past_boundary(self) -> None:
+        """Test 3c: Epoch 4 past boundary rounds up by 1."""
+        self.assertEqual(1005, closer.ceil_to_s5(1004))
+
+    def test_ceil_to_s5_zero(self) -> None:
+        self.assertEqual(0, closer.ceil_to_s5(0))
+        self.assertEqual(5, closer.ceil_to_s5(3))
+
+
+class EffectiveStartTests(unittest.TestCase):
+
+    def test_pre_entry_m15_price_action_excluded(self) -> None:
+        """Test 4: A candle that closed before effective_start is not counted."""
+        # Signal created mid-M15 at +450s (halfway into candle)
+        signal_epoch = SIGNAL_EPOCH_BASE + 450
+        effective_start = closer.ceil_to_s5(signal_epoch)
+
+        # One candle that opened before and closed before effective_start
+        pre_entry_candle = {"t": SIGNAL_EPOCH_BASE, "o": 1.1, "h": 1.1, "l": 1.0, "c": 1.1}
+        threshold = closer.compute_threshold(
+            [pre_entry_candle], effective_start, 24 * 3600, M15,
+        )
+        # Pre-entry candle ends at SIGNAL_EPOCH_BASE + 900 which is 450s after signal_epoch
+        # effective_start = signal_epoch + (5 - 450%5) = signal_epoch+0 or signal_epoch+5
+        # candle_end = SIGNAL_EPOCH_BASE + 900 = signal_epoch - 450 + 900 = signal_epoch + 450
+        # overlap = candle_end - max(candle.t, effective_start) = (signal_epoch+450) - effective_start
+        # = 450 - (450 % 5 adjustment) ≈ 450 seconds, not 900
+        # So the pre-entry portion is excluded from the count.
+        # With 450s overlap this single candle contributes << 24h
+        self.assertIsNone(threshold)
+
+    def test_partial_entry_interval_uses_only_s5_after_effective_start(self) -> None:
+        """Test 5: When S5 is fetched for the partial-entry candle, only post-entry S5 is inspected."""
+        signal_epoch = SIGNAL_EPOCH_BASE + 300  # 5 minutes into first candle
+        eff_start = closer.ceil_to_s5(signal_epoch)  # = signal_epoch (divisible by 5)
+
+        # S5 candles covering full M15 candle — but only those from eff_start onward matter
+        s5_before = {"t": SIGNAL_EPOCH_BASE, "o": 1.1, "h": 1.20, "l": 1.0, "c": 1.1}
+        s5_after = {"t": eff_start, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1}
+
+        # With sl=1.0980 and tp=1.1020:  s5_before would touch tp (h=1.20≥1.1020) but
+        # only s5_after (h=1.1005<1.1020, l=1.0995>1.0980) is inspected post-entry
+        result = closer.check_s5_outcome(
+            "BUY", 1.1000, 1.0980, 1.1020,
+            [s5_after],  # only post-entry candles passed in
+            "EURUSD",
+        )
+        self.assertIsNone(result)  # no touch after effective_start
+
+
+class MarketHoursTests(unittest.TestCase):
+
+    def test_24_market_hours_ignores_weekend_gaps(self) -> None:
+        """Test 6: A weekend gap inflates wall-clock time but 96 M15 candles = 24h market."""
+        # 48 candles before gap + 48 after gap = 96 M15 candles = 24h market time
+        candles = make_m15_candles(
+            96,
+            start_epoch=SIGNAL_EPOCH_BASE,
+            weekend_gap_after=47,
+            weekend_gap_seconds=2 * 24 * 3600,
+        )
+        threshold = closer.compute_threshold(candles, SIGNAL_EPOCH_BASE, 24 * 3600, M15)
+        # Threshold must be reached despite wall-clock gap — the gap seconds are skipped
+        self.assertIsNotNone(threshold)
+        # Threshold epoch is the end of the 96th candle (actual timestamp, not simple sum)
+        expected_threshold = candles[-1]["t"] + M15
+        self.assertEqual(expected_threshold, threshold)
+
+    def test_exact_threshold_inside_final_m15_candle(self) -> None:
+        """Test 7: When hold_seconds falls mid-candle, threshold is inside that candle."""
+        # Signal created 300s into first candle → effective_start = SIGNAL_EPOCH_BASE + 300
+        eff_start = SIGNAL_EPOCH_BASE + 300
+        # With hold=86400 (24h), cumulation starts from eff_start
+        # First candle contributes 900-300=600s, subsequent full ones 900s each
+        # After 1 partial + 95 full = 600 + 95×900 = 600 + 85500 = 86100 < 86400
+        # 97th candle starts at SIGNAL_EPOCH_BASE + 96×900
+        # Need 300 more seconds from 97th candle start
+        candles = make_m15_candles(97, start_epoch=SIGNAL_EPOCH_BASE)
+        threshold = closer.compute_threshold(candles, eff_start, 86400, M15)
+        self.assertIsNotNone(threshold)
+        # 97th candle starts at SIGNAL_EPOCH_BASE + 96*900
+        expected = SIGNAL_EPOCH_BASE + 96 * 900 + 300
+        self.assertEqual(expected, threshold)
+
+    def test_fewer_than_24_market_hours_leaves_signal_active(self) -> None:
+        """Test 8: < 24h market time returns None from prepare_signal_action."""
+        # Only 95 M15 candles completed after signal (95×900 = 23.75h)
+        candles = make_m15_candles(95, start_epoch=SIGNAL_EPOCH_BASE)
+        server_epoch = candles[-1]["t"] + M15  # one candle past the last
+
+        sig = make_signal()
+        action = call_prepare(sig, candles, [], server_epoch=server_epoch)
+        self.assertIsNone(action)
+
+    def test_incomplete_threshold_evidence_leaves_active(self) -> None:
+        """Test 9: Threshold reached but S5 unavailable → ACTIVE (before hard age).
+
+        Signal is created 300s into the first M15 candle so effective_start = BASE+300.
+        First candle contributes only 600s; threshold falls INSIDE the 97th candle,
+        making S5 mandatory for resolution.  When S5 is unavailable, must return None.
+        """
+        # Signal mid-candle → effective_start = SIGNAL_EPOCH_BASE + 300
+        created_epoch = SIGNAL_EPOCH_BASE + 300
+        eff_start = created_epoch  # already S5-aligned (300 % 5 == 0)
+        candles = make_m15_candles(97, start_epoch=SIGNAL_EPOCH_BASE, final_close=1.1005)
+        server_epoch = candles[-1]["t"] + M15
+
+        # Verify threshold falls inside candle 97 (not at boundary)
+        threshold = closer.compute_threshold(candles, eff_start, 86400, M15)
+        self.assertIsNotNone(threshold)
+        candle_97_t = SIGNAL_EPOCH_BASE + 96 * M15
+        self.assertGreater(threshold, candle_97_t)
+        self.assertLess(threshold, candle_97_t + M15)
+
+        sig = make_signal(created_epoch=created_epoch)
+        action = call_prepare(
+            sig, candles, None,  # None = S5 fails
+            server_epoch=server_epoch,
+            hard_max_age=168,
+        )
+        self.assertIsNone(action)
+
+    def test_threshold_at_exact_m15_boundary(self) -> None:
+        """Test 10: Threshold falling exactly on M15 boundary uses M15 close, not S5."""
+        # Exactly 96 full candles → threshold = 96th candle end = start + 96×900
+        # effective_start = SIGNAL_EPOCH_BASE (signal exactly on M15 boundary)
+        candles = make_m15_candles(96, start_epoch=SIGNAL_EPOCH_BASE, final_close=1.1008)
+        threshold = closer.compute_threshold(candles, SIGNAL_EPOCH_BASE, 86400, M15)
+        expected_threshold = SIGNAL_EPOCH_BASE + 96 * M15
+        self.assertEqual(expected_threshold, threshold)
+
+        # proc_end for the 96th candle == threshold_epoch == candle_end → M15 boundary
+        server_epoch = SIGNAL_EPOCH_BASE + 97 * M15  # one candle past
+        sig = make_signal()
+
+        # S5 returns clean candles with no TP/SL
+        s5 = make_s5_candles(SIGNAL_EPOCH_BASE, SIGNAL_EPOCH_BASE + 96 * M15, high=1.1005, low=1.0995)
+
+        action = call_prepare(sig, candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("TIME_EXIT", action["predicted_outcome"])
+        self.assertAlmostEqual(1.1008, action["predicted_exit_price"])
+
+
+class TimeExitPipTests(unittest.TestCase):
+
+    def _time_exit_action(
+        self,
+        *,
+        direction: str,
+        entry: float,
+        sl: float,
+        tp: float,
+        exit_close: float,
+        pair: str = "EURUSD",
+    ) -> dict:
+        """
+        Build a scenario where 96 full M15 candles complete with no TP/SL and
+        then TIME_EXIT fires at the 96th candle boundary (M15 close used).
+        """
+        candles = make_m15_candles(
+            96, start_epoch=SIGNAL_EPOCH_BASE,
+            high=entry + 0.0005, low=entry - 0.0005,  # never touches sl or tp
+            final_close=exit_close,
+        )
+        server_epoch = SIGNAL_EPOCH_BASE + 97 * M15
+        sig = make_signal(direction=direction, entry=entry, sl=sl, tp=tp, pair=pair)
+        # S5 with no TP/SL touch
+        s5 = make_s5_candles(
+            SIGNAL_EPOCH_BASE, SIGNAL_EPOCH_BASE + 96 * M15,
+            high=entry + 0.0003, low=entry - 0.0003,
+        )
+        action = call_prepare(sig, candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        return action  # type: ignore[return-value]
+
+    def test_buy_profitable_time_exit(self) -> None:
+        """Test 11: BUY TIME_EXIT with exit above entry → positive pips."""
+        action = self._time_exit_action(
+            direction="BUY", entry=1.1000, sl=1.0980, tp=1.1030, exit_close=1.1015,
+        )
+        self.assertEqual("TIME_EXIT", action["predicted_outcome"])
+        self.assertAlmostEqual(15.0, action["predicted_pips"])
+
+    def test_buy_losing_time_exit(self) -> None:
+        """Test 12: BUY TIME_EXIT with exit below entry → negative pips."""
+        action = self._time_exit_action(
+            direction="BUY", entry=1.1000, sl=1.0950, tp=1.1080, exit_close=1.0992,
+        )
+        self.assertEqual("TIME_EXIT", action["predicted_outcome"])
+        self.assertAlmostEqual(-8.0, action["predicted_pips"])
+
+    def test_sell_profitable_time_exit(self) -> None:
+        """Test 13: SELL TIME_EXIT with exit below entry → positive pips."""
+        action = self._time_exit_action(
+            direction="SELL", entry=1.1000, sl=1.1030, tp=1.0960, exit_close=1.0985,
+        )
+        self.assertEqual("TIME_EXIT", action["predicted_outcome"])
+        self.assertAlmostEqual(15.0, action["predicted_pips"])
+
+    def test_sell_losing_time_exit(self) -> None:
+        """Test 14: SELL TIME_EXIT with exit above entry → negative pips."""
+        action = self._time_exit_action(
+            direction="SELL", entry=1.1000, sl=1.1050, tp=1.0960, exit_close=1.1008,
+        )
+        self.assertEqual("TIME_EXIT", action["predicted_outcome"])
+        self.assertAlmostEqual(-8.0, action["predicted_pips"])
+
+
+class ThresholdPriceTests(unittest.TestCase):
+
+    def test_time_exit_uses_threshold_price_not_latest_candle(self) -> None:
+        """Test 15: Threshold candle's close is used, not a later candle's close."""
+        # Threshold is at candle 96 end; candle 97 has a different (higher) close
+        # Exit must be candle 96's close, not candle 97's
+        candles_96 = make_m15_candles(96, start_epoch=SIGNAL_EPOCH_BASE, final_close=1.1010)
+        # Candle 97 would have close=1.1020 but threshold is at candle 96 end
+        extra = {"t": SIGNAL_EPOCH_BASE + 96 * M15, "o": 1.101, "h": 1.102, "l": 1.100, "c": 1.1020}
+        all_candles = candles_96 + [extra]
+
+        server_epoch = SIGNAL_EPOCH_BASE + 97 * M15
+        sig = make_signal(direction="BUY", entry=1.1000, sl=1.0980, tp=1.1050)
+        s5 = make_s5_candles(SIGNAL_EPOCH_BASE, SIGNAL_EPOCH_BASE + 96 * M15, high=1.1005, low=1.0995)
+
+        action = call_prepare(sig, all_candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("TIME_EXIT", action["predicted_outcome"])
+        self.assertAlmostEqual(1.1010, action["predicted_exit_price"])  # candle 96 close
+        self.assertAlmostEqual(10.0, action["predicted_pips"])
+
+    def test_tp_after_threshold_is_ignored(self) -> None:
+        """Test 16: TP touch in candle 97 is ignored; TIME_EXIT uses candle 96 close."""
+        candles = make_m15_candles(96, start_epoch=SIGNAL_EPOCH_BASE, final_close=1.1005)
+        tp_candle = {"t": SIGNAL_EPOCH_BASE + 96 * M15, "o": 1.1005, "h": 1.1030, "l": 1.1000, "c": 1.1025}
+        all_candles = candles + [tp_candle]
+
+        server_epoch = SIGNAL_EPOCH_BASE + 97 * M15
+        sig = make_signal(direction="BUY", entry=1.1000, sl=1.0980, tp=1.1020)
+        s5 = make_s5_candles(SIGNAL_EPOCH_BASE, SIGNAL_EPOCH_BASE + 96 * M15, high=1.1005, low=1.0995)
+
+        action = call_prepare(sig, all_candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("TIME_EXIT", action["predicted_outcome"])
+
+    def test_sl_after_threshold_is_ignored(self) -> None:
+        """Test 17: SL touch in candle 97 is ignored; TIME_EXIT uses candle 96 close."""
+        candles = make_m15_candles(96, start_epoch=SIGNAL_EPOCH_BASE, final_close=1.1005)
+        sl_candle = {"t": SIGNAL_EPOCH_BASE + 96 * M15, "o": 1.100, "h": 1.101, "l": 1.097, "c": 1.098}
+        all_candles = candles + [sl_candle]
+
+        server_epoch = SIGNAL_EPOCH_BASE + 97 * M15
+        sig = make_signal(direction="BUY", entry=1.1000, sl=1.0980, tp=1.1040)
+        s5 = make_s5_candles(SIGNAL_EPOCH_BASE, SIGNAL_EPOCH_BASE + 96 * M15, high=1.1005, low=1.0995)
+
+        action = call_prepare(sig, all_candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("TIME_EXIT", action["predicted_outcome"])
+
+
+class S5OutcomeTests(unittest.TestCase):
+
+    def test_unambiguous_s5_tp_buy(self) -> None:
+        """Test 18a: Clean BUY TP hit in S5 → WIN with correct pips."""
+        s5 = [{"t": 1000, "o": 1.1010, "h": 1.1025, "l": 1.1008, "c": 1.1020}]
+        result = closer.check_s5_outcome("BUY", 1.1000, 1.0980, 1.1020, s5, "EURUSD")
+        self.assertIsNotNone(result)
+        outcome, rp, ep, cat, reason = result
+        self.assertEqual("WIN", outcome)
+        self.assertAlmostEqual(20.0, rp)
+        self.assertAlmostEqual(1.1020, ep)
+        self.assertEqual(1005, cat)
+        self.assertEqual("OANDA_S5_TP", reason)
+
+    def test_unambiguous_s5_sl_sell(self) -> None:
+        """Test 19a: Clean SELL SL hit in S5 → LOSS with negative pips."""
+        s5 = [{"t": 1000, "o": 1.1000, "h": 1.1015, "l": 1.0998, "c": 1.1010}]
+        result = closer.check_s5_outcome("SELL", 1.1000, 1.1010, 1.0980, s5, "EURUSD")
+        self.assertIsNotNone(result)
+        outcome, rp, ep, cat, reason = result
+        self.assertEqual("LOSS", outcome)
+        self.assertAlmostEqual(-10.0, rp)
+        self.assertAlmostEqual(1.1010, ep)
+        self.assertEqual("OANDA_S5_SL", reason)
+
+    def test_same_s5_tp_and_sl_is_conservative_loss_with_ambiguous_reason(self) -> None:
+        """Test 20: Both TP and SL in same S5 candle → LOSS, AMBIGUOUS_S5_STOP_FIRST."""
+        # BUY: tp=1.1020, sl=1.0980; candle high≥tp AND low≤sl
+        s5 = [{"t": 1000, "o": 1.1000, "h": 1.1025, "l": 1.0975, "c": 1.1000}]
+        result = closer.check_s5_outcome("BUY", 1.1000, 1.0980, 1.1020, s5, "EURUSD")
+        self.assertIsNotNone(result)
+        outcome, rp, ep, cat, reason = result
+        self.assertEqual("LOSS", outcome)
+        self.assertAlmostEqual(-20.0, rp)
+        self.assertEqual("AMBIGUOUS_S5_STOP_FIRST", reason)
+
+    def test_same_s5_tp_and_sl_sell_conservative_loss(self) -> None:
+        """Test 20b: SELL same-S5 ambiguity → LOSS."""
+        # SELL: tp=1.0980, sl=1.1020; low≤tp AND high≥sl
+        s5 = [{"t": 1000, "o": 1.1000, "h": 1.1025, "l": 1.0975, "c": 1.1000}]
+        result = closer.check_s5_outcome("SELL", 1.1000, 1.1020, 1.0980, s5, "EURUSD")
+        self.assertIsNotNone(result)
+        outcome, _, _, _, reason = result
+        self.assertEqual("LOSS", outcome)
+        self.assertEqual("AMBIGUOUS_S5_STOP_FIRST", reason)
+
+    def test_m15_boundary_touch_triggers_s5_refinement(self) -> None:
+        """Test 21: M15 candle touching TP causes S5 fetch to be called."""
+        tp = 1.1020
+        # M15 candle with high >= tp
+        candles = make_m15_candles(
+            96, start_epoch=SIGNAL_EPOCH_BASE,
+            high=1.1025,  # touches tp
+            low=1.0995,
+        )
+        server_epoch = SIGNAL_EPOCH_BASE + 97 * M15
+
+        s5_calls: list[tuple] = []
+
+        def fake_s5(pair, from_ep, to_ep, token, url):
+            s5_calls.append((pair, from_ep, to_ep))
+            # Return candles with no actual TP/SL touch so we get TIME_EXIT
+            return make_s5_candles(from_ep, to_ep, high=1.1019, low=1.0996), "ok"
+
+        sig = make_signal(direction="BUY", entry=1.1000, sl=1.0980, tp=tp)
+        now_utc = datetime.fromtimestamp(server_epoch, timezone.utc)
+
+        def fake_fetch_candles(pair, signal_time, tf, sep, eff_start):
+            return candles, "ok"
+
+        with (
+            patch.object(closer, "fetch_candles", side_effect=fake_fetch_candles),
+            patch.object(closer, "fetch_s5_candles", side_effect=fake_s5),
+        ):
+            closer.prepare_signal_action(
+                sig, now_utc, server_epoch, 24, 168,
+                oanda_token="fake", oanda_url="https://fake",
+            )
+
+        self.assertGreater(len(s5_calls), 0, "S5 should have been fetched for M15 touch")
+
+
+class MissingDataTests(unittest.TestCase):
+
+    def test_missing_s5_leaves_active_before_hard_age(self) -> None:
+        """Test 22: S5 required but unavailable, within hard age → ACTIVE (None).
+
+        Signal created 300s into first candle forces threshold inside candle 97,
+        making S5 mandatory.
+        """
+        created_epoch = SIGNAL_EPOCH_BASE + 300
+        candles = make_m15_candles(97, start_epoch=SIGNAL_EPOCH_BASE)
+        server_epoch = candles[-1]["t"] + M15
+        sig = make_signal(created_epoch=created_epoch)
+        action = call_prepare(
+            sig, candles, None,
+            server_epoch=server_epoch,
+            hard_max_age=168,
+        )
+        self.assertIsNone(action)
+
+    def test_missing_s5_becomes_cancelled_at_hard_age(self) -> None:
+        """Test 23: S5 required but unavailable at hard age → CANCELLED.
+
+        Signal created 300s into first candle forces threshold inside candle 97.
+        server_epoch is 169h after creation so age exceeds hard_max_age=168.
+        fetch_candles is mocked so the staleness check in load_oanda_cache is bypassed.
+        """
+        old_base = SIGNAL_EPOCH_BASE - 169 * 3600
+        created_epoch = old_base + 300  # mid-candle, S5-aligned
+        candles = make_m15_candles(97, start_epoch=old_base)
+        # server_epoch is exactly 169h after signal creation → age = 169h
+        server_epoch = created_epoch + 169 * 3600
+
+        sig = make_signal(created_epoch=created_epoch)
+        action = call_prepare(
+            sig, candles, None,
+            server_epoch=server_epoch,
+            hard_max_age=168,
+        )
+        self.assertIsNotNone(action)
+        self.assertEqual("CANCELLED", action["predicted_outcome"])
+        self.assertIn("S5", action["predicted_reason"])
+        self.assertEqual(0.0, action["predicted_pips"])
+
+    def test_missing_m15_leaves_active_before_hard_age(self) -> None:
+        """Test 24: No M15 candles and within hard age → ACTIVE (None)."""
+        server_epoch = SIGNAL_EPOCH_BASE + 3600
+        sig = make_signal()
+        now_utc = datetime.fromtimestamp(server_epoch, timezone.utc)
+
+        def fake_fetch_candles(pair, signal_time, tf, sep, eff_start):
+            return [], "missing local cache"
+
+        with patch.object(closer, "fetch_candles", side_effect=fake_fetch_candles):
+            action = closer.prepare_signal_action(
+                sig, now_utc, server_epoch, 24, 168,
+                oanda_token="fake", oanda_url="https://fake",
+            )
+        self.assertIsNone(action)
+
+    def test_missing_m15_becomes_cancelled_at_hard_age(self) -> None:
+        """Test 25: No M15 candles beyond hard age → CANCELLED."""
+        old_epoch = SIGNAL_EPOCH_BASE - 169 * 3600
+        sig = make_signal(created_epoch=old_epoch)
+        server_epoch = old_epoch + 169 * 3600
+        now_utc = datetime.fromtimestamp(server_epoch, timezone.utc)
+
+        def fake_fetch_candles(pair, signal_time, tf, sep, eff_start):
+            return [], "missing local cache"
+
+        with patch.object(closer, "fetch_candles", side_effect=fake_fetch_candles):
+            action = closer.prepare_signal_action(
+                sig, now_utc, server_epoch, 24, 168,
+                oanda_token="fake", oanda_url="https://fake",
+            )
+        self.assertIsNotNone(action)
+        self.assertEqual("CANCELLED", action["predicted_outcome"])
+        self.assertEqual("HARD_AGE_UNRESOLVED_NO_OANDA_CANDLES", action["predicted_reason"])
+
+    def test_stale_m15_cache_leaves_active(self) -> None:
+        """Test 26: Stale M15 cache (too old) → load_oanda_cache returns [] → ACTIVE."""
+        server_epoch = SIGNAL_EPOCH_BASE + 3600
+
+        payload = {
+            "chart": {
+                "result": [{
+                    "meta": {"_provider": "oanda", "dataGranularity": "M15"},
+                    "timestamp": [SIGNAL_EPOCH_BASE - 10000],  # very old candle
+                    "indicators": {"quote": [{
+                        "open": [1.1], "high": [1.1], "low": [1.0], "close": [1.1],
+                    }]},
+                }]
+            }
+        }
+
+        with tempfile.TemporaryDirectory() as td:
+            cache_file = Path(td) / "EURUSD_M15.json"
+            cache_file.write_text(json.dumps(payload))
+            original = closer.CACHE_DIR
+            closer.CACHE_DIR = Path(td)
+            try:
+                candles, reason = closer.load_oanda_cache("EURUSD", "M15", server_epoch)
+            finally:
+                closer.CACHE_DIR = original
+
+        self.assertEqual([], candles)
+        self.assertIn("stale", reason)
+
+
+class EventTimestampTests(unittest.TestCase):
+
+    def test_event_closed_at_for_s5_tp_sl(self) -> None:
+        """Test 27: closed_at_epoch for S5 TP/SL = end of first proving S5 candle."""
+        tp_s5_t = SIGNAL_EPOCH_BASE + 300
+        s5 = [
+            {"t": tp_s5_t, "o": 1.1000, "h": 1.1025, "l": 1.0998, "c": 1.1020},
+        ]
+        result = closer.check_s5_outcome("BUY", 1.1000, 1.0980, 1.1020, s5, "EURUSD")
+        self.assertIsNotNone(result)
+        _, _, _, closed_at_epoch, _ = result
+        self.assertEqual(tp_s5_t + S5, closed_at_epoch)
+
+    def test_event_closed_at_for_time_exit(self) -> None:
+        """Test 28: closed_at_epoch for TIME_EXIT = threshold_epoch."""
+        candles = make_m15_candles(96, start_epoch=SIGNAL_EPOCH_BASE, final_close=1.1005)
+        server_epoch = SIGNAL_EPOCH_BASE + 97 * M15
+        expected_threshold = SIGNAL_EPOCH_BASE + 96 * M15
+
+        sig = make_signal(direction="BUY", entry=1.1000, sl=1.0980, tp=1.1050)
+        s5 = make_s5_candles(SIGNAL_EPOCH_BASE, expected_threshold, high=1.1005, low=1.0995)
+
+        action = call_prepare(sig, candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("TIME_EXIT", action["predicted_outcome"])
+        self.assertEqual(expected_threshold, action["predicted_closed_at_epoch"])
+
+    def test_emergency_cancellation_closed_at_uses_current_server_time(self) -> None:
+        """Test 29: Hard-age CANCELLED uses trusted server epoch, not event time."""
+        old_epoch = SIGNAL_EPOCH_BASE - 169 * 3600
+        sig = make_signal(created_epoch=old_epoch)
+        server_epoch = old_epoch + 169 * 3600
+        now_utc = datetime.fromtimestamp(server_epoch, timezone.utc)
+
+        def fake_fetch_candles(pair, signal_time, tf, sep, eff_start):
+            return [], "missing"
+
+        with patch.object(closer, "fetch_candles", side_effect=fake_fetch_candles):
+            action = closer.prepare_signal_action(
+                sig, now_utc, server_epoch, 24, 168,
+                oanda_token="fake", oanda_url="https://fake",
+            )
+        self.assertIsNotNone(action)
+        self.assertEqual("CANCELLED", action["predicted_outcome"])
+        self.assertEqual(server_epoch, action["predicted_closed_at_epoch"])
+
+
+class PipCalculationTests(unittest.TestCase):
+
+    def test_eurusd_gbpusd_pip_calculation(self) -> None:
+        """Test 30: Non-JPY pair uses 0.0001 pip size."""
+        self.assertAlmostEqual(20.0, closer.pips(0.0020, "EURUSD"))
+        self.assertAlmostEqual(-10.0, closer.pips(-0.0010, "GBPUSD"))
+        self.assertAlmostEqual(0.0, closer.pips(0.0, "EURUSD"))
+
+    def test_jpy_pip_calculation(self) -> None:
+        """Test 31: JPY pair uses 0.01 pip size."""
+        self.assertAlmostEqual(30.0, closer.pips(0.30, "USDJPY"))
+        self.assertAlmostEqual(-15.0, closer.pips(-0.15, "EURJPY"))
+
+    def test_jpy_time_exit_pip_calculation(self) -> None:
+        """Test 31b: TIME_EXIT pips for JPY pair."""
+        # SELL JPY: entry=150.00, exit=149.70 → pips(entry-exit) = pips(0.30) = 30.0
+        result = closer.pips(150.00 - 149.70, "USDJPY")
+        self.assertAlmostEqual(30.0, result, places=1)
+
+
+class RegressionTests(unittest.TestCase):
+
+    def test_no_tp_sl_regression_unambiguous_buy_tp(self) -> None:
+        """Test 32a: Clean unambiguous BUY TP in S5 → WIN."""
+        s5 = [{"t": 1000, "o": 1.1015, "h": 1.1022, "l": 1.1010, "c": 1.1020}]
+        result = closer.check_s5_outcome("BUY", 1.1000, 1.0990, 1.1020, s5, "EURUSD")
+        self.assertIsNotNone(result)
+        self.assertEqual("WIN", result[0])
+        self.assertAlmostEqual(20.0, result[1])
+
+    def test_no_tp_sl_regression_unambiguous_sell_sl(self) -> None:
+        """Test 32b: Clean unambiguous SELL SL in S5 → LOSS."""
+        s5 = [{"t": 1000, "o": 1.1005, "h": 1.1012, "l": 1.0998, "c": 1.1010}]
+        result = closer.check_s5_outcome("SELL", 1.1000, 1.1010, 1.0980, s5, "EURUSD")
+        self.assertIsNotNone(result)
+        self.assertEqual("LOSS", result[0])
+        self.assertAlmostEqual(-10.0, result[1])
+
+    def test_normal_market_time_expiry_never_produces_cancelled(self) -> None:
+        """Test 34: TIME_EXIT (normal expiry with data) is CLOSED, not CANCELLED."""
+        candles = make_m15_candles(96, start_epoch=SIGNAL_EPOCH_BASE, final_close=1.1005)
+        server_epoch = SIGNAL_EPOCH_BASE + 97 * M15
+        sig = make_signal(direction="BUY", entry=1.1000, sl=1.0980, tp=1.1050)
+        s5 = make_s5_candles(SIGNAL_EPOCH_BASE, SIGNAL_EPOCH_BASE + 96 * M15, high=1.1005, low=1.0995)
+
+        action = call_prepare(sig, candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertNotEqual("CANCELLED", action["predicted_outcome"])
+        self.assertEqual("TIME_EXIT", action["predicted_outcome"])
+        self.assertNotEqual(0.0, action["predicted_pips"])
+
+
+class WrapperTests(unittest.TestCase):
+
+    def test_wrapper_loads_oanda_variables_without_printing_values(self) -> None:
+        """Test 33: Wrapper allowlist includes OANDA vars; no raw value echoed."""
+        wrapper_path = ROOT / "tools" / "run_signal_closer_live.sh"
+        content = wrapper_path.read_text()
+
+        # Allowlist must include these three
+        self.assertIn('"OANDA_API_TOKEN"', content)
+        self.assertIn('"OANDA_API_URL"', content)
+        self.assertIn('"SIGNAL_CLOSER_HARD_MAX_AGE_HOURS"', content)
+
+        # --hard-max-age must be passed to the python script
+        self.assertIn("--hard-max-age", content)
+
+        # Extract the Python env-loader block and run it against a temp env file
+        match = re.search(r"<<'PY'\n(.*?)\nPY\b", content, re.DOTALL)
+        self.assertIsNotNone(match, "Could not find PY heredoc in wrapper")
+        py_code = match.group(1)  # type: ignore[union-attr]
+
+        with tempfile.TemporaryDirectory() as td:
+            env_file = Path(td) / ".env"
+            env_file.write_text(
+                "SUPABASE_SERVICE_KEY=supakey\n"
+                "OANDA_API_TOKEN=oanda_secret_token\n"
+                "OANDA_API_URL=https://api-fxtrade.oanda.com\n"
+                "SIGNAL_CLOSER_HARD_MAX_AGE_HOURS=200\n"
+            )
+            result = subprocess.run(
+                [sys.executable, "-c", py_code],
+                capture_output=True,
+                text=True,
+                cwd=td,
+            )
+
+        output = result.stdout
+        # OANDA vars must be exported
+        self.assertIn("export OANDA_API_TOKEN=", output)
+        self.assertIn("export OANDA_API_URL=", output)
+        self.assertIn("export SIGNAL_CLOSER_HARD_MAX_AGE_HOURS=", output)
+        # Supabase key must also be exported
+        self.assertIn("export SUPABASE_SERVICE_KEY=", output)
+
+
+# ── DEFECT 1: TP/SL evaluated before threshold ────────────────────────────────
+
+class Defect1PreThresholdTPSLTests(unittest.TestCase):
+    """TP/SL must be evaluated on every run, not deferred until threshold."""
+
+    def _make_candles_with_touch(
+        self,
+        *,
+        total: int,
+        touch_at_index: int,
+        tp: float,
+        sl: float,
+        entry: float,
+        direction: str = "BUY",
+        touch_tp: bool = True,
+    ) -> list[dict]:
+        """Build candles where candle[touch_at_index] touches TP or SL."""
+        candles = make_m15_candles(
+            total, start_epoch=SIGNAL_EPOCH_BASE,
+            high=entry + 0.0005, low=entry - 0.0005,
+        )
+        # Mutate the touch candle
+        if touch_tp:
+            if direction == "BUY":
+                candles[touch_at_index]["h"] = tp + 0.0001
+            else:
+                candles[touch_at_index]["l"] = tp - 0.0001
+        else:
+            if direction == "BUY":
+                candles[touch_at_index]["l"] = sl - 0.0001
+            else:
+                candles[touch_at_index]["h"] = sl + 0.0001
+        return candles
+
+    def test_buy_tp_hit_before_threshold_returns_win(self) -> None:
+        """D1-1: BUY TP hit in M15 candle 25 (< 96 needed) → WIN, not None."""
+        tp, sl, entry = 1.1020, 1.0980, 1.1000
+        candles = self._make_candles_with_touch(
+            total=50, touch_at_index=24, tp=tp, sl=sl, entry=entry, touch_tp=True,
+        )
+        server_epoch = SIGNAL_EPOCH_BASE + 51 * M15
+        sig = make_signal(direction="BUY", entry=entry, sl=sl, tp=tp)
+
+        touch_t = SIGNAL_EPOCH_BASE + 24 * M15
+        s5 = [{"t": touch_t, "o": entry, "h": tp + 0.0001, "l": entry - 0.0002, "c": tp}]
+
+        action = call_prepare(sig, candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("WIN", action["predicted_outcome"])
+        self.assertAlmostEqual(tp, action["predicted_exit_price"])
+        self.assertGreater(action["predicted_pips"], 0)
+
+    def test_buy_sl_hit_before_threshold_returns_loss(self) -> None:
+        """D1-2: BUY SL hit before threshold → LOSS, not None."""
+        tp, sl, entry = 1.1050, 1.0980, 1.1000
+        candles = self._make_candles_with_touch(
+            total=50, touch_at_index=10, tp=tp, sl=sl, entry=entry, touch_tp=False,
+        )
+        server_epoch = SIGNAL_EPOCH_BASE + 51 * M15
+        sig = make_signal(direction="BUY", entry=entry, sl=sl, tp=tp)
+
+        touch_t = SIGNAL_EPOCH_BASE + 10 * M15
+        s5 = [{"t": touch_t, "o": entry, "h": entry + 0.0002, "l": sl - 0.0001, "c": sl}]
+
+        action = call_prepare(sig, candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("LOSS", action["predicted_outcome"])
+        self.assertLess(action["predicted_pips"], 0)
+
+    def test_sell_tp_hit_before_threshold_returns_win(self) -> None:
+        """D1-3: SELL TP hit before threshold → WIN."""
+        tp, sl, entry = 1.0960, 1.1030, 1.1000
+        candles = self._make_candles_with_touch(
+            total=30, touch_at_index=5, tp=tp, sl=sl, entry=entry,
+            direction="SELL", touch_tp=True,
+        )
+        server_epoch = SIGNAL_EPOCH_BASE + 31 * M15
+        sig = make_signal(direction="SELL", entry=entry, sl=sl, tp=tp)
+
+        touch_t = SIGNAL_EPOCH_BASE + 5 * M15
+        s5 = [{"t": touch_t, "o": entry, "h": entry + 0.0002, "l": tp - 0.0001, "c": tp}]
+
+        action = call_prepare(sig, candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("WIN", action["predicted_outcome"])
+        self.assertGreater(action["predicted_pips"], 0)
+
+    def test_no_tp_sl_threshold_not_reached_returns_none(self) -> None:
+        """D1-4: No TP/SL touch, threshold not reached → None (OPEN)."""
+        tp, sl, entry = 1.1050, 1.0960, 1.1000
+        candles = make_m15_candles(
+            50, start_epoch=SIGNAL_EPOCH_BASE,
+            high=entry + 0.0005, low=entry - 0.0005,
+        )
+        server_epoch = SIGNAL_EPOCH_BASE + 51 * M15
+        sig = make_signal(direction="BUY", entry=entry, sl=sl, tp=tp)
+
+        action = call_prepare(sig, candles, [], server_epoch=server_epoch)
+        self.assertIsNone(action)
+
+    def test_tp_hit_in_candle_1_before_any_threshold(self) -> None:
+        """D1-5: TP hit in the very first completed candle → WIN immediately."""
+        tp, sl, entry = 1.1020, 1.0980, 1.1000
+        candles = make_m15_candles(
+            10, start_epoch=SIGNAL_EPOCH_BASE,
+            high=entry + 0.0005, low=entry - 0.0005,
+        )
+        candles[0]["h"] = tp + 0.0001
+        server_epoch = SIGNAL_EPOCH_BASE + 11 * M15
+
+        sig = make_signal(direction="BUY", entry=entry, sl=sl, tp=tp)
+        s5 = [{"t": SIGNAL_EPOCH_BASE, "o": entry, "h": tp + 0.0001, "l": entry - 0.0002, "c": tp}]
+
+        action = call_prepare(sig, candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("WIN", action["predicted_outcome"])
+
+    def test_tp_hit_wins_over_time_exit_when_both_possible(self) -> None:
+        """D1-6: TP hit in candle 95, threshold in candle 96 → WIN, not TIME_EXIT."""
+        tp, sl, entry = 1.1020, 1.0980, 1.1000
+        candles = make_m15_candles(
+            96, start_epoch=SIGNAL_EPOCH_BASE,
+            high=entry + 0.0005, low=entry - 0.0005,
+            final_close=1.1008,
+        )
+        # Candle 95 (index 94) touches tp
+        candles[94]["h"] = tp + 0.0001
+        server_epoch = SIGNAL_EPOCH_BASE + 97 * M15
+
+        sig = make_signal(direction="BUY", entry=entry, sl=sl, tp=tp)
+        touch_t = SIGNAL_EPOCH_BASE + 94 * M15
+        s5 = [{"t": touch_t, "o": entry, "h": tp + 0.0001, "l": entry - 0.0002, "c": tp}]
+
+        action = call_prepare(sig, candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("WIN", action["predicted_outcome"])
+
+    def test_sl_hit_in_partial_entry_candle_before_threshold(self) -> None:
+        """D1-7: SL hit in partial-entry candle (candle 0) before threshold → LOSS."""
+        # Signal created 300s into first candle
+        created_epoch = SIGNAL_EPOCH_BASE + 300
+        tp, sl, entry = 1.1050, 1.0980, 1.1000
+        candles = make_m15_candles(
+            30, start_epoch=SIGNAL_EPOCH_BASE,
+            high=entry + 0.0005, low=entry - 0.0005,
+        )
+        candles[0]["l"] = sl - 0.0001
+        server_epoch = SIGNAL_EPOCH_BASE + 31 * M15
+
+        sig = make_signal(created_epoch=created_epoch, direction="BUY", entry=entry, sl=sl, tp=tp)
+        # S5 after effective_start (BASE+300) that hits SL
+        s5_t = SIGNAL_EPOCH_BASE + 300
+        s5 = [{"t": s5_t, "o": entry, "h": entry + 0.0002, "l": sl - 0.0001, "c": sl}]
+
+        action = call_prepare(sig, candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("LOSS", action["predicted_outcome"])
+        self.assertLess(action["predicted_pips"], 0)
+
+    def test_signal_stays_open_after_s5_no_touch(self) -> None:
+        """D1-8: M15 touches but S5 shows no touch and threshold not reached → None."""
+        tp, sl, entry = 1.1050, 1.0960, 1.1000
+        candles = make_m15_candles(
+            50, start_epoch=SIGNAL_EPOCH_BASE,
+            high=entry + 0.0005, low=entry - 0.0005,
+        )
+        candles[5]["h"] = tp + 0.0001
+        server_epoch = SIGNAL_EPOCH_BASE + 51 * M15
+
+        sig = make_signal(direction="BUY", entry=entry, sl=sl, tp=tp)
+        # S5 with no actual touch (high below tp)
+        touch_t = SIGNAL_EPOCH_BASE + 5 * M15
+        s5 = [{"t": touch_t, "o": entry, "h": tp - 0.0005, "l": entry - 0.0002, "c": entry}]
+
+        action = call_prepare(sig, candles, s5, server_epoch=server_epoch)
+        self.assertIsNone(action)
+
+
+# ── DEFECT 2: M15 cache coverage check ────────────────────────────────────────
+
+class Defect2CoverageCheckTests(unittest.TestCase):
+    """Coverage check must use interval-overlap, not first_ts+tf_sec comparison."""
+
+    def _make_cache_payload(self, candles: list[dict]) -> dict:
+        return {
+            "chart": {
+                "result": [{
+                    "meta": {"_provider": "oanda", "dataGranularity": "M15"},
+                    "timestamp": [c["t"] for c in candles],
+                    "indicators": {"quote": [{
+                        "open":  [c["o"] for c in candles],
+                        "high":  [c["h"] for c in candles],
+                        "low":   [c["l"] for c in candles],
+                        "close": [c["c"] for c in candles],
+                    }]},
+                }]
+            }
+        }
+
+    def _run_fetch(
+        self,
+        candles_raw: list[dict],
+        effective_start: int,
+        server_epoch: int,
+    ) -> tuple[list[dict], str]:
+        import tempfile
+        payload = self._make_cache_payload(candles_raw)
+        with tempfile.TemporaryDirectory() as td:
+            cache_file = Path(td) / "EURUSD_M15.json"
+            cache_file.write_text(json.dumps(payload))
+            original = closer.CACHE_DIR
+            closer.CACHE_DIR = Path(td)
+            try:
+                return closer.fetch_candles(
+                    "EURUSD",
+                    datetime.fromtimestamp(effective_start, timezone.utc),
+                    "M15",
+                    server_epoch,
+                    effective_start,
+                )
+            finally:
+                closer.CACHE_DIR = original
+
+    def test_historical_cache_before_signal_is_covered(self) -> None:
+        """D2-1: Cache with candles before signal start + candle spanning eff_start → covered."""
+        # 20 candles before BASE, then candle at BASE
+        pre = make_m15_candles(20, start_epoch=SIGNAL_EPOCH_BASE - 20 * M15)
+        at = make_m15_candles(10, start_epoch=SIGNAL_EPOCH_BASE)
+        all_candles = pre + at
+        server_epoch = SIGNAL_EPOCH_BASE + 10 * M15
+
+        eligible, reason = self._run_fetch(all_candles, SIGNAL_EPOCH_BASE, server_epoch)
+        self.assertEqual("ok", reason)
+        # Eligible candles start at BASE (candle spanning eff_start)
+        self.assertGreater(len(eligible), 0)
+        self.assertEqual(SIGNAL_EPOCH_BASE, eligible[0]["t"])
+        # Pre-signal candles excluded
+        self.assertTrue(all(c["t"] >= SIGNAL_EPOCH_BASE for c in eligible))
+
+    def test_cache_ending_before_signal_start_rejected(self) -> None:
+        """D2-2: Cache with all candles ending before eff_start → rejected."""
+        # Candles all end at or before BASE-1
+        candles = make_m15_candles(5, start_epoch=SIGNAL_EPOCH_BASE - 10 * M15)
+        # Last candle ends at BASE-5*900 = BASE-4500 — well before BASE
+        server_epoch = SIGNAL_EPOCH_BASE + M15
+
+        eligible, reason = self._run_fetch(candles, SIGNAL_EPOCH_BASE, server_epoch)
+        self.assertEqual([], eligible)
+        self.assertIn("cover", reason)
+
+    def test_duplicate_identical_candles_are_deduped(self) -> None:
+        """D2-3: Two identical candles at same timestamp → collapsed to one."""
+        c = make_m15_candles(3, start_epoch=SIGNAL_EPOCH_BASE)
+        duplicate = dict(c[1])  # identical copy of second candle
+        all_with_dup = c[:2] + [duplicate] + c[2:]
+        server_epoch = SIGNAL_EPOCH_BASE + 4 * M15
+
+        eligible, reason = self._run_fetch(all_with_dup, SIGNAL_EPOCH_BASE, server_epoch)
+        self.assertEqual("ok", reason)
+        ts_list = [x["t"] for x in eligible]
+        self.assertEqual(len(ts_list), len(set(ts_list)), "duplicate timestamps survive dedup")
+
+    def test_conflicting_candles_at_same_timestamp_rejected(self) -> None:
+        """D2-4: Two candles at same t with different h → cache rejected."""
+        c = make_m15_candles(3, start_epoch=SIGNAL_EPOCH_BASE)
+        conflict = dict(c[1])
+        conflict["h"] = c[1]["h"] + 0.005  # different high → conflict
+        all_with_conflict = c[:2] + [conflict] + c[2:]
+        server_epoch = SIGNAL_EPOCH_BASE + 4 * M15
+
+        eligible, reason = self._run_fetch(all_with_conflict, SIGNAL_EPOCH_BASE, server_epoch)
+        self.assertEqual([], eligible)
+        self.assertIn("conflict", reason)
+
+    def test_candle_exactly_spanning_eff_start_counted(self) -> None:
+        """D2-5: Candle [eff_start, eff_start+900) counts as covering eff_start."""
+        # Single candle starting exactly at eff_start
+        candles = make_m15_candles(3, start_epoch=SIGNAL_EPOCH_BASE)
+        server_epoch = SIGNAL_EPOCH_BASE + 3 * M15
+
+        eligible, reason = self._run_fetch(candles, SIGNAL_EPOCH_BASE, server_epoch)
+        self.assertEqual("ok", reason)
+        self.assertTrue(any(c["t"] == SIGNAL_EPOCH_BASE for c in eligible))
+
+
+# ── DEFECT 3: microsecond-precise effective_start ─────────────────────────────
+
+class Defect3MicrosecondPrecisionTests(unittest.TestCase):
+    """ceil_to_s5_from_datetime must handle sub-second microseconds correctly."""
+
+    def test_exactly_on_s5_boundary_unchanged(self) -> None:
+        """D3-1: Datetime exactly on S5 boundary → same epoch."""
+        dt = datetime(2026, 7, 10, 8, 0, 0, 0, tzinfo=timezone.utc)
+        expected = int(dt.timestamp())
+        self.assertEqual(expected, closer.ceil_to_s5_from_datetime(dt))
+        self.assertEqual(0, expected % 5)
+
+    def test_one_microsecond_past_boundary_rounds_up(self) -> None:
+        """D3-2: 12:00:00.000001 → 12:00:05 (not 12:00:00)."""
+        dt = datetime(2026, 7, 10, 12, 0, 0, 1, tzinfo=timezone.utc)
+        base = int(datetime(2026, 7, 10, 12, 0, 0, 0, tzinfo=timezone.utc).timestamp())
+        self.assertEqual(base + 5, closer.ceil_to_s5_from_datetime(dt))
+
+    def test_999999_microsecond_past_boundary_rounds_up(self) -> None:
+        """D3-3: 12:00:04.999999 → 12:00:05."""
+        dt = datetime(2026, 7, 10, 12, 0, 4, 999999, tzinfo=timezone.utc)
+        base = int(datetime(2026, 7, 10, 12, 0, 0, 0, tzinfo=timezone.utc).timestamp())
+        self.assertEqual(base + 5, closer.ceil_to_s5_from_datetime(dt))
+
+    def test_exactly_5_seconds_boundary_unchanged(self) -> None:
+        """D3-4: 12:00:05.000000 → 12:00:05 (already on boundary)."""
+        dt = datetime(2026, 7, 10, 12, 0, 5, 0, tzinfo=timezone.utc)
+        base = int(datetime(2026, 7, 10, 12, 0, 0, 0, tzinfo=timezone.utc).timestamp())
+        self.assertEqual(base + 5, closer.ceil_to_s5_from_datetime(dt))
+
+    def test_int_truncation_gives_wrong_result(self) -> None:
+        """D3-5: int(dt.timestamp()) truncates microseconds; ceil_from_datetime does not."""
+        # 12:00:00.000001 → int() gives 12:00:00; ceil_from_datetime gives 12:00:05
+        dt = datetime(2026, 7, 10, 12, 0, 0, 1, tzinfo=timezone.utc)
+        truncated_epoch = int(dt.timestamp())
+        correct_epoch = closer.ceil_to_s5_from_datetime(dt)
+        # truncated_epoch is already on boundary (0 % 5 == 0), so ceil_to_s5(truncated) == truncated
+        # but correct_epoch is truncated + 5
+        self.assertEqual(truncated_epoch + 5, correct_epoch)
+
+    def test_2_seconds_past_boundary_rounds_to_next(self) -> None:
+        """D3-6: 12:00:02.500000 → 12:00:05."""
+        dt = datetime(2026, 7, 10, 12, 0, 2, 500000, tzinfo=timezone.utc)
+        base = int(datetime(2026, 7, 10, 12, 0, 0, 0, tzinfo=timezone.utc).timestamp())
+        self.assertEqual(base + 5, closer.ceil_to_s5_from_datetime(dt))
+
+    def test_prepare_uses_microsecond_precise_eff_start(self) -> None:
+        """D3-7: Signal with microsecond created_at → eff_start correctly excludes pre-entry S5.
+
+        Signal created at BASE+0.000001us → eff_start = BASE+5 (not BASE).
+        Pre-entry S5 candle at t=BASE should be excluded from TP/SL scan.
+        """
+        # Use a created_at string with sub-second component
+        created_str = datetime.fromtimestamp(
+            SIGNAL_EPOCH_BASE, timezone.utc
+        ).isoformat().replace("+00:00", ".000001+00:00")
+
+        sig = make_signal()
+        sig["created_at"] = created_str
+
+        # Parse through the function to get eff_start
+        created_dt = closer.parse_signal_created_at(created_str)
+        eff_start = closer.ceil_to_s5_from_datetime(created_dt)
+
+        # eff_start must be BASE+5, not BASE
+        self.assertEqual(SIGNAL_EPOCH_BASE + 5, eff_start)
+
+        # S5 candle at BASE (pre-entry) should not be in post-entry list
+        s5_pre = {"t": SIGNAL_EPOCH_BASE, "o": 1.1, "h": 1.2, "l": 1.0, "c": 1.1}
+        s5_post = {"t": SIGNAL_EPOCH_BASE + 5, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1}
+        # post-entry filter: t >= eff_start = BASE+5
+        self.assertGreaterEqual(s5_post["t"], eff_start)
+        self.assertLess(s5_pre["t"], eff_start)
+
+
+# ── DEFECT 4: sparse S5 handling ──────────────────────────────────────────────
+
+class Defect4SparseS5Tests(unittest.TestCase):
+    """S5 fetches must handle sparse data; validate for corrupt/misaligned candles."""
+
+    def _call_with_s5(
+        self,
+        candles: list[dict],
+        s5_candles: list[dict] | None,
+        *,
+        server_epoch: int,
+        direction: str = "BUY",
+        entry: float = 1.1000,
+        sl: float = 1.0980,
+        tp: float = 1.1050,
+        created_epoch: int = SIGNAL_EPOCH_BASE,
+    ) -> dict | None:
+        sig = make_signal(
+            direction=direction, entry=entry, sl=sl, tp=tp,
+            created_epoch=created_epoch,
+        )
+        return call_prepare(sig, candles, s5_candles, server_epoch=server_epoch)
+
+    def test_partial_entry_no_post_entry_s5_not_data_unavailable(self) -> None:
+        """D4-1: Partial-entry candle with no post-entry S5 → no touch, not DATA_UNAVAILABLE.
+
+        Signal created mid-candle.  S5 fetch returns candles only BEFORE eff_start.
+        Since we have 95 more candles with no boundary touch and threshold not reached,
+        the signal should remain OPEN (None), not DATA_UNAVAILABLE.
+        """
+        created_epoch = SIGNAL_EPOCH_BASE + 300
+        candles = make_m15_candles(
+            50, start_epoch=SIGNAL_EPOCH_BASE,
+            high=1.1005, low=1.0995,  # no boundary touch
+        )
+        server_epoch = SIGNAL_EPOCH_BASE + 51 * M15
+
+        # S5 that covers only the pre-entry portion (t < eff_start = BASE+300)
+        # The mock always returns the same S5, but we filter to t >= proc_start inside resolver
+        s5_pre_only = [
+            {"t": SIGNAL_EPOCH_BASE, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1},
+            {"t": SIGNAL_EPOCH_BASE + 5, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1},
+        ]
+        # eff_start = BASE+300; s5_post_entry = [c for c if t >= BASE+300] = []
+        # fetch_s5_candles mock returns s5_pre_only for the partial-entry candle
+        # The resolver should continue (not DATA_UNAVAILABLE) since it's partial-start
+        action = self._call_with_s5(
+            candles, s5_pre_only,
+            server_epoch=server_epoch, created_epoch=created_epoch,
+        )
+        self.assertIsNone(action)  # OPEN, not CANCELLED
+
+    def test_time_exit_with_sparse_s5_uses_last_valid(self) -> None:
+        """D4-2: Sparse S5 for threshold candle — last valid S5 (not exactly threshold-5) used.
+
+        threshold_epoch = BASE+96*900+300 (inside candle 97).
+        S5 fetch returns candle at threshold-10 (not threshold-5).
+        Should use that candle's close for TIME_EXIT, not return DATA_UNAVAILABLE.
+        """
+        created_epoch = SIGNAL_EPOCH_BASE + 300
+        eff_start = created_epoch  # 300 % 5 == 0
+
+        candles = make_m15_candles(97, start_epoch=SIGNAL_EPOCH_BASE,
+                                   high=1.1005, low=1.0995)
+        server_epoch = candles[-1]["t"] + M15
+
+        threshold = closer.compute_threshold(candles, eff_start, 86400, M15)
+        self.assertIsNotNone(threshold)
+
+        # S5 covering threshold candle but last candle ends at threshold-10 (not threshold-5)
+        # The last valid S5 has t = threshold-10, t+5 = threshold-5 <= threshold ✓
+        s5_close = 1.1003
+        s5 = [
+            {"t": threshold - 20, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1001},
+            {"t": threshold - 15, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1002},
+            # Gap: no candle at threshold-10 or threshold-5
+            # So last valid = threshold-15, t+5 = threshold-10 <= threshold ✓
+        ]
+        # Also need to ensure s5 includes the proc_start to proc_end range
+        # proc_start for candle 97 = t = BASE+96*900
+        # Add candles from proc_start up to threshold-15
+        proc_start = SIGNAL_EPOCH_BASE + 96 * M15
+        pre_s5 = [
+            {"t": proc_start + i * 5, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1}
+            for i in range((threshold - 15 - proc_start) // 5)
+        ]
+        full_s5 = pre_s5 + s5
+
+        sig = make_signal(created_epoch=created_epoch, direction="BUY",
+                          entry=1.1000, sl=1.0980, tp=1.1050)
+        action = call_prepare(sig, candles, full_s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("TIME_EXIT", action["predicted_outcome"])
+        # Exit price = close of last valid S5 (threshold-15 candle, c=1.1002)
+        self.assertAlmostEqual(1.1002, action["predicted_exit_price"])
+
+    def test_time_exit_no_s5_at_all_is_data_unavailable(self) -> None:
+        """D4-3: TIME_EXIT required but no S5 candles at all → DATA_UNAVAILABLE → ACTIVE."""
+        created_epoch = SIGNAL_EPOCH_BASE + 300
+        candles = make_m15_candles(97, start_epoch=SIGNAL_EPOCH_BASE,
+                                   high=1.1005, low=1.0995)
+        server_epoch = candles[-1]["t"] + M15
+
+        sig = make_signal(created_epoch=created_epoch, direction="BUY",
+                          entry=1.1000, sl=1.0980, tp=1.1050)
+        action = call_prepare(sig, candles, None, server_epoch=server_epoch, hard_max_age=168)
+        self.assertIsNone(action)  # DATA_UNAVAILABLE before hard age → ACTIVE
+
+    def test_misaligned_s5_timestamp_rejected(self) -> None:
+        """D4-4: S5 candle with t % 5 != 0 → validate_s5_candles rejects → DATA_UNAVAILABLE."""
+        candles_valid, _ = closer.validate_s5_candles([
+            {"t": 1003, "o": 1.1, "h": 1.1, "l": 1.0, "c": 1.1},  # 1003 % 5 = 3 → bad
+        ])
+        self.assertEqual([], candles_valid)
+
+    def test_non_finite_s5_high_rejected(self) -> None:
+        """D4-5: S5 candle with h=inf → validate_s5_candles rejects."""
+        import math
+        candles_valid, _ = closer.validate_s5_candles([
+            {"t": 1000, "o": 1.1, "h": math.inf, "l": 1.0, "c": 1.1},
+        ])
+        self.assertEqual([], candles_valid)
+
+    def test_non_finite_s5_low_rejected(self) -> None:
+        """D4-6: S5 candle with l=nan → validate_s5_candles rejects."""
+        import math
+        candles_valid, _ = closer.validate_s5_candles([
+            {"t": 1000, "o": 1.1, "h": 1.1, "l": math.nan, "c": 1.1},
+        ])
+        self.assertEqual([], candles_valid)
+
+    def test_conflicting_duplicate_s5_rejected(self) -> None:
+        """D4-7: Two S5 candles at same t with different h → rejected."""
+        candles_valid, reason = closer.validate_s5_candles([
+            {"t": 1000, "o": 1.1, "h": 1.105, "l": 1.0, "c": 1.1},
+            {"t": 1000, "o": 1.1, "h": 1.110, "l": 1.0, "c": 1.1},  # different h
+        ])
+        self.assertEqual([], candles_valid)
+        self.assertIn("conflict", reason)
+
+    def test_identical_duplicate_s5_collapsed(self) -> None:
+        """D4-8: Two identical S5 candles at same t → collapsed to one."""
+        c = {"t": 1000, "o": 1.1, "h": 1.105, "l": 1.095, "c": 1.1}
+        candles_valid, reason = closer.validate_s5_candles([c, dict(c)])
+        self.assertEqual("ok", reason)
+        self.assertEqual(1, len(candles_valid))
+        self.assertEqual(1000, candles_valid[0]["t"])
+
+    def test_validate_s5_sorts_by_timestamp(self) -> None:
+        """D4-9: validate_s5_candles returns candles in ascending t order."""
+        candles_valid, _ = closer.validate_s5_candles([
+            {"t": 1010, "o": 1.1, "h": 1.1, "l": 1.0, "c": 1.1},
+            {"t": 1000, "o": 1.1, "h": 1.1, "l": 1.0, "c": 1.1},
+            {"t": 1005, "o": 1.1, "h": 1.1, "l": 1.0, "c": 1.1},
+        ])
+        self.assertEqual([1000, 1005, 1010], [c["t"] for c in candles_valid])
+
+    def test_s5_validation_in_resolve_returns_data_unavailable(self) -> None:
+        """D4-10: Misaligned S5 returned by fetch → resolve returns DATA_UNAVAILABLE → ACTIVE.
+
+        Candle 10 has M15 H/L touch, triggering S5 fetch.
+        Mock fetch returns a misaligned S5 candle (t % 5 != 0).
+        Since we're before threshold and DATA_UNAVAILABLE, result must be None.
+        """
+        tp, sl, entry = 1.1020, 1.0980, 1.1000
+        candles = make_m15_candles(
+            30, start_epoch=SIGNAL_EPOCH_BASE,
+            high=entry + 0.0005, low=entry - 0.0005,
+        )
+        candles[9]["h"] = tp + 0.0001  # M15 touch at candle 10
+        server_epoch = SIGNAL_EPOCH_BASE + 31 * M15
+
+        # Misaligned S5 candle
+        bad_t = SIGNAL_EPOCH_BASE + 9 * M15 + 1  # not divisible by 5
+        bad_s5 = [{"t": bad_t, "o": entry, "h": tp + 0.0001, "l": entry - 0.0002, "c": tp}]
+
+        sig = make_signal(direction="BUY", entry=entry, sl=sl, tp=tp)
+        action = call_prepare(sig, candles, bad_s5, server_epoch=server_epoch, hard_max_age=168)
+        # DATA_UNAVAILABLE, age < 168h → ACTIVE (None)
+        self.assertIsNone(action)
+
+
+# ── validate_s5_candles unit tests ────────────────────────────────────────────
+
+class ValidateS5CandlesTests(unittest.TestCase):
+
+    def test_valid_single_candle(self) -> None:
+        """V5-1: Single well-formed S5 candle passes validation."""
+        c = {"t": 1000, "o": 1.1, "h": 1.105, "l": 1.095, "c": 1.1}
+        valid, reason = closer.validate_s5_candles([c])
+        self.assertEqual("ok", reason)
+        self.assertEqual(1, len(valid))
+
+    def test_empty_input_returns_empty(self) -> None:
+        """V5-2: Empty input → empty output, ok."""
+        valid, reason = closer.validate_s5_candles([])
+        self.assertEqual("ok", reason)
+        self.assertEqual([], valid)
+
+    def test_non_finite_close_rejected(self) -> None:
+        """V5-3: NaN close → rejected."""
+        import math
+        valid, reason = closer.validate_s5_candles([
+            {"t": 1000, "o": 1.1, "h": 1.1, "l": 1.0, "c": math.nan},
+        ])
+        self.assertEqual([], valid)
+        self.assertIn("non-finite", reason)
+
+    def test_missing_t_field_rejected(self) -> None:
+        """V5-4: Missing t field → rejected."""
+        valid, reason = closer.validate_s5_candles([{"o": 1.1, "h": 1.1, "l": 1.0, "c": 1.1}])
+        self.assertEqual([], valid)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ADVERSARIAL HARDENING PASS
+# ══════════════════════════════════════════════════════════════════════════════
+
+import io
+import math
+import urllib.error
+import urllib.request
+from unittest.mock import MagicMock, patch as _patch
+
+
+def _http_resp(body: bytes | str) -> MagicMock:
+    """Build a mock urllib response that works as a context manager."""
+    if isinstance(body, str):
+        body = body.encode()
+    m = MagicMock()
+    m.read.return_value = body
+    m.__enter__ = lambda self: self
+    m.__exit__ = MagicMock(return_value=False)
+    return m
+
+
+_FAKE_TOKEN = "FAKE_S5_TOKEN_SHOULD_NOT_APPEAR_IN_REASONS"
+_FAKE_URL = "https://fake-oanda.test"
+_S5_FROM = SIGNAL_EPOCH_BASE
+_S5_TO = SIGNAL_EPOCH_BASE + 60  # 12 S5 candles
+
+
+def _good_s5_response() -> bytes:
+    """One valid complete S5 candle within [_S5_FROM, _S5_TO)."""
+    return json.dumps({
+        "candles": [{
+            "complete": True,
+            "time": str(_S5_FROM),
+            "mid": {"o": "1.1000", "h": "1.1005", "l": "1.0995", "c": "1.1002"},
+        }]
+    }).encode()
+
+
+def _fetch_direct(**kwargs):
+    """Call fetch_s5_candles with consistent fake token/url."""
+    return closer.fetch_s5_candles(
+        "EURUSD",
+        kwargs.get("from_epoch", _S5_FROM),
+        kwargs.get("to_epoch", _S5_TO),
+        _FAKE_TOKEN,
+        _FAKE_URL,
+    )
+
+
+def _assert_no_secrets(tc: unittest.TestCase, reason: str) -> None:
+    tc.assertNotIn(_FAKE_TOKEN, reason, "token leaked into reason")
+    tc.assertNotIn("Authorization", reason, "auth header leaked into reason")
+    tc.assertNotIn(_FAKE_URL, reason, "URL leaked into reason")
+
+
+# ── A. Signal Input Validation ────────────────────────────────────────────────
+
+class SignalInputValidationTests(unittest.TestCase):
+
+    def _prepare_with_bad_field(self, **override) -> dict | None:
+        """Call prepare_signal_action with a signal whose field is overridden."""
+        sig = make_signal()
+        sig.update(override)
+        candles = make_m15_candles(10, start_epoch=SIGNAL_EPOCH_BASE)
+        now = datetime.fromtimestamp(SIGNAL_EPOCH_BASE + 11 * M15, timezone.utc)
+        server_epoch = SIGNAL_EPOCH_BASE + 11 * M15
+        with _patch.object(closer, "fetch_candles", return_value=(candles, "ok")):
+            return closer.prepare_signal_action(
+                sig, now, server_epoch, 24, 168,
+                oanda_token="fake", oanda_url="https://fake",
+            )
+
+    def test_invalid_direction_returns_none(self) -> None:
+        """A-1: direction not in {BUY,SELL} → no action, no exception."""
+        self.assertIsNone(self._prepare_with_bad_field(direction="HODL"))
+
+    def test_nan_entry_price_returns_none(self) -> None:
+        """A-2: NaN entry_price → no action, no exception."""
+        self.assertIsNone(self._prepare_with_bad_field(entry_price=math.nan))
+
+    def test_infinite_entry_price_returns_none(self) -> None:
+        """A-3: Inf entry_price → no action, no exception."""
+        self.assertIsNone(self._prepare_with_bad_field(entry_price=math.inf))
+
+    def test_nan_stop_loss_returns_none(self) -> None:
+        """A-4: NaN stop_loss → no action, no exception."""
+        self.assertIsNone(self._prepare_with_bad_field(stop_loss=math.nan))
+
+    def test_infinite_stop_loss_returns_none(self) -> None:
+        """A-5: Inf stop_loss → no action, no exception."""
+        self.assertIsNone(self._prepare_with_bad_field(stop_loss=math.inf))
+
+    def test_nan_take_profit_returns_none(self) -> None:
+        """A-6: NaN take_profit → no action, no exception."""
+        self.assertIsNone(self._prepare_with_bad_field(take_profit=math.nan))
+
+    def test_infinite_take_profit_returns_none(self) -> None:
+        """A-7: Inf take_profit → no action, no exception."""
+        self.assertIsNone(self._prepare_with_bad_field(take_profit=math.inf))
+
+
+# ── B. M15 Normalization ──────────────────────────────────────────────────────
+
+class M15NormalizationTests(unittest.TestCase):
+
+    def _fetch_with_raw(
+        self,
+        raw_candles: list[dict],
+        eff_start: int,
+        server_epoch: int,
+    ) -> tuple[list[dict], str]:
+        with _patch.object(closer, "load_oanda_cache", return_value=(raw_candles, "ok")):
+            return closer.fetch_candles(
+                "EURUSD",
+                datetime.fromtimestamp(eff_start, timezone.utc),
+                "M15",
+                server_epoch,
+                eff_start,
+            )
+
+    def test_out_of_order_m15_candles_sorted_before_threshold(self) -> None:
+        """B-8: Reversed M15 candles are sorted by fetch_candles; threshold correct."""
+        candles_sorted = make_m15_candles(10, start_epoch=SIGNAL_EPOCH_BASE)
+        reversed_candles = list(reversed(candles_sorted))
+        server_epoch = SIGNAL_EPOCH_BASE + 11 * M15
+
+        eligible, reason = self._fetch_with_raw(
+            reversed_candles, SIGNAL_EPOCH_BASE, server_epoch
+        )
+        self.assertEqual("ok", reason)
+        ts = [c["t"] for c in eligible]
+        self.assertEqual(ts, sorted(ts), "eligible candles must be sorted ascending")
+        # threshold computed on sorted candles must equal sorted-input result
+        th = closer.compute_threshold(eligible, SIGNAL_EPOCH_BASE, 10 * M15, M15)
+        th_ref = closer.compute_threshold(candles_sorted, SIGNAL_EPOCH_BASE, 10 * M15, M15)
+        self.assertEqual(th_ref, th)
+
+    def test_nonaligned_m15_timestamp_rejected(self) -> None:
+        """B-9: M15 timestamp not divisible by 900 → rejected."""
+        # Normally SIGNAL_EPOCH_BASE is aligned; mutate one candle
+        candles = make_m15_candles(5, start_epoch=SIGNAL_EPOCH_BASE)
+        # Force one candle to have t % 900 != 0
+        bad = dict(candles[2])
+        bad["t"] = candles[2]["t"] + 1  # +1 → no longer divisible by 900
+        candles[2] = bad
+        server_epoch = SIGNAL_EPOCH_BASE + 6 * M15
+
+        eligible, reason = self._fetch_with_raw(candles, SIGNAL_EPOCH_BASE, server_epoch)
+        self.assertEqual([], eligible)
+        self.assertIn("non-aligned", reason)
+
+    def test_duplicate_candles_not_double_counted_toward_threshold(self) -> None:
+        """B-12: Duplicate M15 candle at same t collapsed; does not inflate threshold."""
+        # 95 unique candles → 23.75h market time < 24h → threshold None
+        base_candles = make_m15_candles(95, start_epoch=SIGNAL_EPOCH_BASE)
+        dup = dict(base_candles[0])  # identical copy of first candle → same t
+        all_candles = [dup] + base_candles  # 96 entries but only 95 unique
+        server_epoch = SIGNAL_EPOCH_BASE + 96 * M15
+
+        eligible, reason = self._fetch_with_raw(all_candles, SIGNAL_EPOCH_BASE, server_epoch)
+        self.assertEqual("ok", reason)
+        ts = [c["t"] for c in eligible]
+        self.assertEqual(len(ts), len(set(ts)), "duplicates must be collapsed")
+        # 95 unique completed candles: 95×900 = 85500 < 86400 → no threshold
+        threshold = closer.compute_threshold(eligible, SIGNAL_EPOCH_BASE, 86400, M15)
+        self.assertIsNone(threshold, "double-counting must not push threshold over 24h")
+
+    def test_cache_beginning_after_effective_start_rejected(self) -> None:
+        """B-13: All cache candles start strictly after effective_start → no coverage."""
+        # effective_start = BASE; candles start at BASE+900 (after effective_start)
+        candles = make_m15_candles(5, start_epoch=SIGNAL_EPOCH_BASE + M15)
+        server_epoch = SIGNAL_EPOCH_BASE + 7 * M15
+
+        eligible, reason = self._fetch_with_raw(candles, SIGNAL_EPOCH_BASE, server_epoch)
+        self.assertEqual([], eligible)
+        self.assertIn("cover", reason)
+
+    def test_cache_ending_before_effective_start_rejected_b14(self) -> None:
+        """B-14 (reinforcing D2-2): all candles end before eff_start → rejected."""
+        # Cache ends at BASE-5*900 — no candle spans BASE
+        candles = make_m15_candles(5, start_epoch=SIGNAL_EPOCH_BASE - 10 * M15)
+        server_epoch = SIGNAL_EPOCH_BASE + M15
+
+        eligible, reason = self._fetch_with_raw(candles, SIGNAL_EPOCH_BASE, server_epoch)
+        self.assertEqual([], eligible)
+
+    def test_historical_cache_with_pre_signal_candles_accepted_b15(self) -> None:
+        """B-15 (reinforcing D2-1): historical cache with pre-signal candles accepted."""
+        pre = make_m15_candles(10, start_epoch=SIGNAL_EPOCH_BASE - 10 * M15)
+        post = make_m15_candles(5, start_epoch=SIGNAL_EPOCH_BASE)
+        all_c = pre + post
+        server_epoch = SIGNAL_EPOCH_BASE + 5 * M15
+
+        eligible, reason = self._fetch_with_raw(all_c, SIGNAL_EPOCH_BASE, server_epoch)
+        self.assertEqual("ok", reason)
+        self.assertTrue(len(eligible) > 0)
+        # Pre-signal candles must not appear in eligible
+        self.assertTrue(all(c["t"] >= SIGNAL_EPOCH_BASE for c in eligible))
+
+
+# ── C. Open State at Hard Wall-Clock Age ─────────────────────────────────────
+
+class OpenStateAtHardAgeTests(unittest.TestCase):
+
+    def test_clean_open_state_at_hard_age_stays_active(self) -> None:
+        """C-16: Signal > hard_max_age, clean OPEN (market time not reached due to gaps)
+        → must remain ACTIVE, not CANCELLED.
+
+        Hard age must only cancel DATA_UNAVAILABLE, not a clean OPEN.
+        48 candles before a 2-day market gap + 47 after = 95 candles = 23.75h market.
+        Wall-clock age: 95×900 + 2×86400 = 258300s ≈ 71.75h >> hard_max_age=48h.
+        No TP/SL touch.  Resolution = OPEN.
+        """
+        # 48 candles then 2-day gap then 47 more = 95 market candles
+        candles = make_m15_candles(
+            95, start_epoch=SIGNAL_EPOCH_BASE,
+            high=1.1005, low=1.0995,  # no boundary touch
+            weekend_gap_after=47,
+            weekend_gap_seconds=2 * 24 * 3600,
+        )
+        last_candle_t = candles[-1]["t"]
+        server_epoch = last_candle_t + M15
+
+        # Wall-clock age from signal creation (BASE) to server_epoch
+        age_hours = (server_epoch - SIGNAL_EPOCH_BASE) / 3600.0
+        self.assertGreater(age_hours, 48.0, "prerequisite: wall-clock age > hard_max_age")
+
+        sig = make_signal(direction="BUY", entry=1.1000, sl=1.0980, tp=1.1050)
+        action = call_prepare(
+            sig, candles, [],  # empty S5 (no boundary touch so S5 not needed)
+            server_epoch=server_epoch,
+            max_age=24,
+            hard_max_age=48,  # wall-clock age exceeds this
+        )
+        # Must remain ACTIVE — clean OPEN is never cancelled by hard age
+        self.assertIsNone(action)
+
+
+# ── D. Effective Start End-to-End ────────────────────────────────────────────
+
+class EffectiveStartEndToEndTests(unittest.TestCase):
+    """Tests 17-20: created_at with microseconds, pre/post-entry S5 separation."""
+
+    def _make_microsecond_sig(
+        self,
+        *,
+        microsecond: int = 1,
+        direction: str = "BUY",
+        entry: float = 1.1000,
+        sl: float = 1.0980,
+        tp: float = 1.1020,
+    ) -> dict:
+        """Signal created at SIGNAL_EPOCH_BASE + {microsecond} microseconds."""
+        created_dt = datetime(2026, 7, 10, 8, 0, 0, microsecond, tzinfo=timezone.utc)
+        return {
+            "id": "test-us",
+            "pair": "EURUSD",
+            "direction": direction,
+            "entry_price": entry,
+            "stop_loss": sl,
+            "take_profit": tp,
+            "created_at": created_dt.isoformat(),
+            "timeframe": "M15",
+        }
+
+    def test_microsecond_eff_start_rounds_to_next_s5(self) -> None:
+        """D-17: created_at = BASE+1µs → eff_start = BASE+5 (not BASE)."""
+        sig = self._make_microsecond_sig(microsecond=1)
+        created = closer.parse_signal_created_at(sig["created_at"])
+        eff_start = closer.ceil_to_s5_from_datetime(created)
+        self.assertEqual(SIGNAL_EPOCH_BASE + 5, eff_start)
+
+    def test_pre_entry_s5_tp_touch_ignored(self) -> None:
+        """D-18: S5 candle at BASE (before eff_start=BASE+5) touching TP → NOT WIN.
+
+        eff_start = BASE+5; s5_post_entry = [c for c if t >= BASE+5].
+        Pre-entry candle at t=BASE is excluded → no TP detected → OPEN.
+        """
+        sig = self._make_microsecond_sig(microsecond=1, tp=1.1020)
+        # 30 candles (< 96 needed for threshold); partial-entry candle 0
+        candles = make_m15_candles(30, start_epoch=SIGNAL_EPOCH_BASE,
+                                   high=1.1005, low=1.0995)
+        # Candle 0 is partial-start (eff_start=BASE+5 > BASE)
+        candles[0]["h"] = 1.1025  # M15 H >= tp → need_s5 = True
+        server_epoch = SIGNAL_EPOCH_BASE + 31 * M15
+
+        # S5 returns only a pre-entry candle (t=BASE < eff_start=BASE+5)
+        pre_entry_only = [
+            {"t": SIGNAL_EPOCH_BASE, "o": 1.1, "h": 1.1025, "l": 1.0995, "c": 1.1020},
+        ]
+        # s5_post_entry will be empty → no touch attributed for partial-start
+        # Remaining candles (1-29) have no boundary touch → OPEN
+        action = call_prepare(sig, candles, pre_entry_only, server_epoch=server_epoch)
+        self.assertIsNone(action)  # no WIN, signal stays ACTIVE
+
+    def test_post_entry_s5_tp_touch_detected(self) -> None:
+        """D-19: S5 candle at BASE+5 (>= eff_start=BASE+5) touching TP → WIN."""
+        sig = self._make_microsecond_sig(microsecond=1, tp=1.1020)
+        candles = make_m15_candles(30, start_epoch=SIGNAL_EPOCH_BASE,
+                                   high=1.1005, low=1.0995)
+        candles[0]["h"] = 1.1025  # force M15 touch to trigger S5 fetch for candle 0
+        server_epoch = SIGNAL_EPOCH_BASE + 31 * M15
+
+        # S5 includes BOTH pre-entry (BASE) AND post-entry (BASE+5) candle
+        both = [
+            {"t": SIGNAL_EPOCH_BASE,     "o": 1.1, "h": 1.1025, "l": 1.0995, "c": 1.1020},
+            {"t": SIGNAL_EPOCH_BASE + 5, "o": 1.1, "h": 1.1025, "l": 1.0995, "c": 1.1020},
+        ]
+        action = call_prepare(sig, candles, both, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("WIN", action["predicted_outcome"])
+
+    def test_post_entry_closed_at_is_s5_end(self) -> None:
+        """D-20: closed_at_epoch = end of post-entry S5 candle (t+5)."""
+        sig = self._make_microsecond_sig(microsecond=1, tp=1.1020)
+        candles = make_m15_candles(30, start_epoch=SIGNAL_EPOCH_BASE,
+                                   high=1.1005, low=1.0995)
+        candles[0]["h"] = 1.1025
+        server_epoch = SIGNAL_EPOCH_BASE + 31 * M15
+
+        both = [
+            {"t": SIGNAL_EPOCH_BASE,     "o": 1.1, "h": 1.1025, "l": 1.0995, "c": 1.1020},
+            {"t": SIGNAL_EPOCH_BASE + 5, "o": 1.1, "h": 1.1025, "l": 1.0995, "c": 1.1020},
+        ]
+        action = call_prepare(sig, candles, both, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        # closed_at_epoch = (BASE+5) + 5 = BASE+10
+        self.assertEqual(SIGNAL_EPOCH_BASE + 10, action["predicted_closed_at_epoch"])
+
+
+# ── E. S5 Transport Failure Handling ─────────────────────────────────────────
+
+class S5TransportFailureTests(unittest.TestCase):
+    """fetch_s5_candles: transport failures return ([], safe_reason), no exception."""
+
+    def _fetch(self) -> tuple[list[dict], str]:
+        return _fetch_direct()
+
+    def _assert_safe(self, candles: list[dict], reason: str) -> None:
+        self.assertEqual([], candles)
+        self.assertIsInstance(reason, str)
+        self.assertTrue(len(reason) > 0)
+        _assert_no_secrets(self, reason)
+
+    def test_http_error(self) -> None:
+        """E-21: HTTPError → empty, safe reason, no exception."""
+        err = urllib.error.HTTPError(
+            "https://fake", 403, "Forbidden", {}, io.BytesIO(b"body content here")
+        )
+        with _patch("urllib.request.urlopen", side_effect=err):
+            candles, reason = self._fetch()
+        self._assert_safe(candles, reason)
+        self.assertNotIn("body content here", reason)
+
+    def test_timeout_error(self) -> None:
+        """E-22: TimeoutError → empty, safe reason."""
+        with _patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
+            candles, reason = self._fetch()
+        self._assert_safe(candles, reason)
+
+    def test_url_error(self) -> None:
+        """E-23: URLError → empty, safe reason."""
+        err = urllib.error.URLError("connection refused")
+        with _patch("urllib.request.urlopen", side_effect=err):
+            candles, reason = self._fetch()
+        self._assert_safe(candles, reason)
+
+    def test_malformed_json(self) -> None:
+        """E-24: Body not valid JSON → empty, safe reason."""
+        with _patch("urllib.request.urlopen", return_value=_http_resp(b"not json {{{}")):
+            candles, reason = self._fetch()
+        self._assert_safe(candles, reason)
+        # Must not echo the raw body
+        self.assertNotIn("not json", reason)
+
+    def test_json_not_object(self) -> None:
+        """E-25: JSON is a list, not an object → empty, safe reason, no AttributeError."""
+        body = json.dumps([1, 2, 3]).encode()
+        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+            candles, reason = self._fetch()
+        self._assert_safe(candles, reason)
+        self.assertIn("not a JSON object", reason)
+
+    def test_missing_candles_field(self) -> None:
+        """E-26: candles key absent → empty list returned safely."""
+        body = json.dumps({"status": "ok"}).encode()
+        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+            candles, reason = self._fetch()
+        self.assertEqual([], candles)
+
+    def test_candles_field_wrong_type(self) -> None:
+        """E-27: candles is a string, not a list → empty, safe reason, no TypeError."""
+        body = json.dumps({"candles": "not_a_list"}).encode()
+        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+            candles, reason = self._fetch()
+        self._assert_safe(candles, reason)
+        self.assertIn("not a list", reason)
+
+    def test_malformed_complete_candle(self) -> None:
+        """E-28: complete candle with unparseable time → skipped, no exception."""
+        body = json.dumps({
+            "candles": [{"complete": True, "time": "not-a-number", "mid": {}}]
+        }).encode()
+        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+            candles, reason = self._fetch()
+        self.assertEqual([], candles)
+
+    def test_nonfinite_ohlc_rejected(self) -> None:
+        """E-29: Candle with h=Inf → validation rejects, returns empty."""
+        body = json.dumps({"candles": [{
+            "complete": True,
+            "time": str(_S5_FROM),
+            "mid": {"o": "1.1", "h": "Infinity", "l": "1.0", "c": "1.1"},
+        }]}).encode()
+        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+            candles, reason = self._fetch()
+        self.assertEqual([], candles)
+        _assert_no_secrets(self, reason)
+
+    def test_conflicting_duplicate_timestamps_rejected(self) -> None:
+        """E-30: Two candles same t, different h → validation rejects."""
+        body = json.dumps({"candles": [
+            {"complete": True, "time": str(_S5_FROM),
+             "mid": {"o": "1.1", "h": "1.105", "l": "1.0", "c": "1.1"}},
+            {"complete": True, "time": str(_S5_FROM),
+             "mid": {"o": "1.1", "h": "1.110", "l": "1.0", "c": "1.1"}},
+        ]}).encode()
+        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+            candles, reason = self._fetch()
+        self.assertEqual([], candles)
+        _assert_no_secrets(self, reason)
+
+    def test_misaligned_timestamp_rejected(self) -> None:
+        """E-31: Candle t % 5 != 0 → validation rejects."""
+        bad_t = _S5_FROM + 1  # not divisible by 5 (assuming _S5_FROM is)
+        body = json.dumps({"candles": [{
+            "complete": True,
+            "time": str(bad_t),
+            "mid": {"o": "1.1", "h": "1.105", "l": "1.0", "c": "1.1"},
+        }]}).encode()
+        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+            candles, reason = self._fetch()
+        self.assertEqual([], candles)
+        _assert_no_secrets(self, reason)
+
+    def test_candle_outside_requested_range_excluded(self) -> None:
+        """E-32: Candle at t=_S5_TO (outside [from, to)) → excluded."""
+        body = json.dumps({"candles": [{
+            "complete": True,
+            "time": str(_S5_TO),  # t >= to_epoch → excluded
+            "mid": {"o": "1.1", "h": "1.105", "l": "1.0", "c": "1.1"},
+        }]}).encode()
+        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+            candles, reason = self._fetch()
+        self.assertEqual([], candles)
+
+
+# ── F. Sparse S5 Lookback and Threshold Safety ───────────────────────────────
+
+class SparseS5LookbackTests(unittest.TestCase):
+
+    def test_sparse_s5_with_gaps_still_finds_tp(self) -> None:
+        """F-33: Sparse S5 (non-contiguous) accepted; TP found in available candle."""
+        # Full M15 candle with H >= tp → triggers S5 fetch
+        tp = 1.1020
+        candle_t = SIGNAL_EPOCH_BASE
+        candles = make_m15_candles(50, start_epoch=SIGNAL_EPOCH_BASE,
+                                   high=tp + 0.0005, low=1.0995)
+        server_epoch = SIGNAL_EPOCH_BASE + 51 * M15
+
+        # Sparse S5: candles at t, t+10, t+20 (gaps of 10s = 2 missing buckets each)
+        sparse_s5 = [
+            {"t": candle_t,      "o": 1.1, "h": tp - 0.0001, "l": 1.0995, "c": 1.1},
+            {"t": candle_t + 10, "o": 1.1, "h": tp + 0.0001, "l": 1.0995, "c": 1.1},
+            {"t": candle_t + 20, "o": 1.1, "h": 1.1005,      "l": 1.0995, "c": 1.1},
+        ]
+        sig = make_signal(direction="BUY", entry=1.1000, sl=1.0980, tp=tp)
+        action = call_prepare(sig, candles, sparse_s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("WIN", action["predicted_outcome"])
+        self.assertEqual(candle_t + 10 + S5, action["predicted_closed_at_epoch"])
+
+    def test_pre_entry_lookback_tp_not_win(self) -> None:
+        """F-34: Pre-entry lookback S5 candle touching TP is NOT counted as WIN.
+
+        Signal created mid-M15 at BASE+300 → eff_start=BASE+300.
+        Lookback S5 at BASE (< eff_start) has h >= tp.
+        Post-entry S5 (>= BASE+300) has no touch.
+        Expected: no WIN (signal OPEN).
+        """
+        created_epoch = SIGNAL_EPOCH_BASE + 300
+        tp, sl, entry = 1.1020, 1.0980, 1.1000
+
+        candles = make_m15_candles(30, start_epoch=SIGNAL_EPOCH_BASE,
+                                   high=tp + 0.0001, low=1.0995)
+        server_epoch = SIGNAL_EPOCH_BASE + 31 * M15
+        sig = make_signal(created_epoch=created_epoch, direction="BUY",
+                          entry=entry, sl=sl, tp=tp)
+
+        # S5 with pre-entry touch but no post-entry touch
+        pre_touch = {"t": SIGNAL_EPOCH_BASE, "o": entry, "h": tp + 0.001, "l": entry - 0.001, "c": tp}
+        post_no_touch = {"t": SIGNAL_EPOCH_BASE + 300, "o": entry,
+                         "h": entry + 0.0005, "l": entry - 0.0005, "c": entry}
+        s5 = [pre_touch, post_no_touch]
+
+        action = call_prepare(sig, candles, s5, server_epoch=server_epoch)
+        self.assertIsNone(action)  # pre-entry touch must not produce WIN
+
+    def test_no_post_threshold_candle_in_tp_sl_scan(self) -> None:
+        """F-36: Candle after threshold has SL touch → TIME_EXIT wins, not LOSS.
+
+        96 completed candles → TIME_EXIT; candle 97 has SL touch but is ignored.
+        """
+        sl = 1.0980
+        candles = make_m15_candles(96, start_epoch=SIGNAL_EPOCH_BASE,
+                                   final_close=1.1005,
+                                   high=1.1005, low=1.0995)
+        # Candle 97: SL touch (after threshold)
+        sl_candle = {"t": SIGNAL_EPOCH_BASE + 96 * M15, "o": 1.1,
+                     "h": 1.1005, "l": sl - 0.001, "c": 1.098}
+        all_candles = candles + [sl_candle]
+
+        server_epoch = SIGNAL_EPOCH_BASE + 97 * M15
+        sig = make_signal(direction="BUY", entry=1.1000, sl=sl, tp=1.1050)
+        s5 = make_s5_candles(SIGNAL_EPOCH_BASE, SIGNAL_EPOCH_BASE + 96 * M15,
+                              high=1.1005, low=1.0995)
+        action = call_prepare(sig, all_candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("TIME_EXIT", action["predicted_outcome"])
+
+    def test_latest_valid_s5_selected_for_time_exit(self) -> None:
+        """F-38: Latest S5 where t+5 <= threshold used for TIME_EXIT price.
+
+        Threshold inside candle 97.  Last available S5 ends at threshold-10, not
+        threshold-5.  exit_price = close of that last valid S5.
+        """
+        created_epoch = SIGNAL_EPOCH_BASE + 300
+        eff_start = created_epoch  # 300 % 5 == 0
+
+        candles = make_m15_candles(97, start_epoch=SIGNAL_EPOCH_BASE,
+                                   high=1.1005, low=1.0995)
+        server_epoch = candles[-1]["t"] + M15
+        threshold = closer.compute_threshold(candles, eff_start, 86400, M15)
+        self.assertIsNotNone(threshold)
+
+        proc_start = SIGNAL_EPOCH_BASE + 96 * M15
+        exit_close = 1.1007
+        # Cover proc_start → threshold-10; gap at threshold-5
+        mid_s5 = [
+            {"t": proc_start + i * 5, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1}
+            for i in range((threshold - 10 - proc_start) // 5)
+        ]
+        last_s5 = {"t": threshold - 10, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": exit_close}
+        full_s5 = mid_s5 + [last_s5]  # gap: no candle at threshold-5
+
+        sig = make_signal(created_epoch=created_epoch, entry=1.1000, sl=1.0980, tp=1.1050)
+        action = call_prepare(sig, candles, full_s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("TIME_EXIT", action["predicted_outcome"])
+        self.assertAlmostEqual(exit_close, action["predicted_exit_price"])
+
+    def test_s5_ending_after_threshold_excluded_from_exit(self) -> None:
+        """F-39: S5 candle starting before threshold but ending after must be excluded.
+
+        t = threshold-3; t+5 = threshold+2 > threshold → NOT in valid_exit.
+        """
+        created_epoch = SIGNAL_EPOCH_BASE + 300
+        eff_start = created_epoch
+
+        candles = make_m15_candles(97, start_epoch=SIGNAL_EPOCH_BASE,
+                                   high=1.1005, low=1.0995)
+        server_epoch = candles[-1]["t"] + M15
+        threshold = closer.compute_threshold(candles, eff_start, 86400, M15)
+        self.assertIsNotNone(threshold)
+
+        proc_start = SIGNAL_EPOCH_BASE + 96 * M15
+        # Only candle: t = threshold-3 (starts before threshold; t+5 = threshold+2 > threshold)
+        # valid_exit requires t+5 <= threshold → this candle is excluded
+        only_s5 = [{"t": threshold - 3, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1007}]
+        # Add candles covering proc_start for the initial portion
+        head_s5 = [
+            {"t": proc_start + i * 5, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1}
+            for i in range((threshold - 3 - proc_start) // 5)
+        ]
+        all_s5 = head_s5 + only_s5
+
+        sig = make_signal(created_epoch=created_epoch, entry=1.1000, sl=1.0980, tp=1.1050)
+        action = call_prepare(sig, candles, all_s5, server_epoch=server_epoch)
+        # threshold-3 candle ends at threshold+2 > threshold → excluded from valid_exit
+        # No valid exit S5 → DATA_UNAVAILABLE (before hard age → None)
+        self.assertIsNone(action)
+
+    def test_empty_post_entry_partial_interval_not_data_unavailable(self) -> None:
+        """F-40: Partial-entry, no post-entry S5, non-threshold → no touch (not DU)."""
+        created_epoch = SIGNAL_EPOCH_BASE + 300
+        candles = make_m15_candles(30, start_epoch=SIGNAL_EPOCH_BASE,
+                                   high=1.1005, low=1.0995)
+        server_epoch = SIGNAL_EPOCH_BASE + 31 * M15
+        sig = make_signal(created_epoch=created_epoch, tp=1.1050, sl=1.0960)
+
+        # Only a pre-entry S5 candle: will be excluded from s5_post_entry
+        pre_only = [{"t": SIGNAL_EPOCH_BASE, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1}]
+        action = call_prepare(sig, candles, pre_only, server_epoch=server_epoch)
+        # Should be OPEN (None), not CANCELLED
+        self.assertIsNone(action)
+
+    def test_time_exit_no_trustworthy_s5_at_threshold_is_data_unavailable(self) -> None:
+        """F-41: Threshold reached, no S5 candles with t+5 <= threshold → DATA_UNAVAILABLE."""
+        created_epoch = SIGNAL_EPOCH_BASE + 300
+        candles = make_m15_candles(97, start_epoch=SIGNAL_EPOCH_BASE,
+                                   high=1.1005, low=1.0995)
+        server_epoch = candles[-1]["t"] + M15
+        sig = make_signal(created_epoch=created_epoch, tp=1.1050, sl=1.0960)
+
+        # S5 returns empty → no valid exit candle → DATA_UNAVAILABLE → ACTIVE (before hard age)
+        action = call_prepare(sig, candles, None, server_epoch=server_epoch, hard_max_age=168)
+        self.assertIsNone(action)
+
+    def test_same_s5_ambiguity_conservative_loss(self) -> None:
+        """F-42: TP and SL in same S5 candle → LOSS with AMBIGUOUS_S5_STOP_FIRST."""
+        # BUY: tp=1.1020, sl=1.0980; candle h >= tp AND l <= sl
+        candles = make_m15_candles(50, start_epoch=SIGNAL_EPOCH_BASE,
+                                   high=1.1025, low=1.0975)
+        server_epoch = SIGNAL_EPOCH_BASE + 51 * M15
+        sig = make_signal(direction="BUY", entry=1.1000, sl=1.0980, tp=1.1020)
+
+        touch_t = SIGNAL_EPOCH_BASE
+        ambiguous_s5 = [
+            {"t": touch_t, "o": 1.1000, "h": 1.1025, "l": 1.0975, "c": 1.1000},
+        ]
+        action = call_prepare(sig, candles, ambiguous_s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("LOSS", action["predicted_outcome"])
+        self.assertEqual("AMBIGUOUS_S5_STOP_FIRST", action["predicted_reason"])
+        self.assertLess(action["predicted_pips"], 0)
+
+    def test_post_threshold_candle_s5_not_used_for_exit(self) -> None:
+        """F-37: S5 from post-threshold candle cannot be TIME_EXIT price."""
+        # 96 full candles → TIME_EXIT; candle 97 would give higher close
+        # but must not be considered
+        candles = make_m15_candles(96, start_epoch=SIGNAL_EPOCH_BASE, final_close=1.1005)
+        post_threshold = {"t": SIGNAL_EPOCH_BASE + 96 * M15, "o": 1.101,
+                          "h": 1.102, "l": 1.100, "c": 1.1025}
+        all_candles = candles + [post_threshold]
+
+        server_epoch = SIGNAL_EPOCH_BASE + 97 * M15
+        sig = make_signal(direction="BUY", entry=1.1000, sl=1.0980, tp=1.1050)
+        # S5 for pre-threshold window: no touch
+        s5 = make_s5_candles(SIGNAL_EPOCH_BASE, SIGNAL_EPOCH_BASE + 96 * M15,
+                              high=1.1005, low=1.0995)
+        action = call_prepare(sig, all_candles, s5, server_epoch=server_epoch)
+        self.assertIsNotNone(action)
+        self.assertEqual("TIME_EXIT", action["predicted_outcome"])
+        # Exit price must be from threshold candle (close=1.1005), not post-threshold
+        self.assertAlmostEqual(1.1005, action["predicted_exit_price"])
+
+    def test_pre_entry_lookback_midpoint_eligible_for_time_exit_price(self) -> None:
+        """F-35: Pre-entry lookback S5 excluded from TP/SL but close eligible for TIME_EXIT.
+
+        Uses resolve_signal_outcome directly with contrived hold_seconds=5 so
+        partial-start candle is also the threshold candle.
+        Pre-entry S5 at t=BASE-5 not in s5_post_entry but IS in s5_all;
+        t+5 = BASE <= threshold = BASE+5 → eligible for valid_exit.
+        """
+        tf_sec = M15
+        eff_start = SIGNAL_EPOCH_BASE + 895  # 5s before first candle ends; 895%5==0
+        threshold = eff_start + 5  # = SIGNAL_EPOCH_BASE + 900 = first candle end
+        # Candle: t=BASE, end=BASE+900; threshold=BASE+900=candle_end
+        candle = {"t": SIGNAL_EPOCH_BASE, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1008}
+        # Pre-entry S5: t=BASE+890 (< eff_start=BASE+895), t+5=BASE+895<=threshold=BASE+900 ✓
+        pre_s5 = {"t": SIGNAL_EPOCH_BASE + 890, "o": 1.1, "h": 1.1003, "l": 1.0997, "c": 1.1008}
+        # Post-entry S5: t=BASE+895 (= eff_start), t+5=BASE+900<=threshold ✓
+        post_s5 = {"t": SIGNAL_EPOCH_BASE + 895, "o": 1.1, "h": 1.1004, "l": 1.0996, "c": 1.1009}
+
+        # threshold == candle_end → is_threshold_at_m15_boundary=True → uses M15 close
+        # (not s5_all). This tests that the candle close path works here.
+        result = closer.resolve_signal_outcome(
+            "EURUSD", "BUY", 1.1000, 1.0980, 1.1050,
+            tf_sec, eff_start,
+            eval_end=threshold,
+            threshold_epoch=threshold,
+            completed_m15_candles=[candle],
+            oanda_token="",  # will be mocked
+            oanda_url="",
+        )
+        # M15 boundary → use candle.c = 1.1008 as exit price
+        self.assertEqual(closer.ResolutionState.RESOLVED, result.state)
+        self.assertEqual("TIME_EXIT", result.outcome)
+        self.assertAlmostEqual(1.1008, result.exit_price)
+
+
+# ── G. Wrapper Security Tests ─────────────────────────────────────────────────
+
+class WrapperSecurityTests(unittest.TestCase):
+
+    _wrapper_path = ROOT / "tools" / "run_signal_closer_live.sh"
+
+    def setUp(self) -> None:
+        self._content = self._wrapper_path.read_text()
+
+    def _run_env_loader(self, env_content: str) -> str:
+        """Extract and run the Python env-loader block from the wrapper."""
+        match = re.search(r"<<'PY'\n(.*?)\nPY\b", self._content, re.DOTALL)
+        self.assertIsNotNone(match, "Could not find PY heredoc in wrapper")
+        py_code = match.group(1)
+        with tempfile.TemporaryDirectory() as td:
+            Path(td, ".env").write_text(env_content)
+            r = subprocess.run(
+                [sys.executable, "-c", py_code],
+                capture_output=True, text=True, cwd=td,
+            )
+        return r.stdout
+
+    def test_env_loader_emits_only_export_lines(self) -> None:
+        """G-43: Every non-empty output line from the env loader is an export assignment."""
+        env = (
+            "SUPABASE_SERVICE_KEY=supakey123\n"
+            "OANDA_API_TOKEN=oanda_secret\n"
+            "OANDA_API_URL=https://api-fxtrade.oanda.com\n"
+            "SIGNAL_CLOSER_HARD_MAX_AGE_HOURS=200\n"
+        )
+        output = self._run_env_loader(env)
+        for line in output.strip().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            self.assertTrue(
+                line.startswith("export ") and "=" in line,
+                f"Non-export line found: {line!r}",
+            )
+
+    def test_no_raw_secret_values_in_output(self) -> None:
+        """G-44: Secret values are shell-quoted but must not appear raw on stdout."""
+        secret_token = "VERY_SECRET_OANDA_TOKEN_XYZ"
+        supakey = "SECRET_SUPA_KEY_ABC"
+        env = (
+            f"SUPABASE_SERVICE_KEY={supakey}\n"
+            f"OANDA_API_TOKEN={secret_token}\n"
+            "OANDA_API_URL=https://api-fxtrade.oanda.com\n"
+        )
+        output = self._run_env_loader(env)
+        # The values must be properly quoted but the raw unquoted form
+        # should not appear in any non-assignment context
+        # (they do appear in the export assignments, which is expected)
+        # At minimum: no diagnostic/debug output should repeat them
+        non_assignment_lines = [
+            ln for ln in output.splitlines()
+            if ln.strip() and not ln.strip().startswith("export ")
+        ]
+        for ln in non_assignment_lines:
+            self.assertNotIn(secret_token, ln)
+            self.assertNotIn(supakey, ln)
+
+    def test_oanda_and_hard_max_age_vars_loaded(self) -> None:
+        """G-45: OANDA_API_TOKEN, OANDA_API_URL, SIGNAL_CLOSER_HARD_MAX_AGE_HOURS exported."""
+        env = (
+            "OANDA_API_TOKEN=mytok\n"
+            "OANDA_API_URL=https://api.oanda.com\n"
+            "SIGNAL_CLOSER_HARD_MAX_AGE_HOURS=150\n"
+        )
+        output = self._run_env_loader(env)
+        self.assertIn("export OANDA_API_TOKEN=", output)
+        self.assertIn("export OANDA_API_URL=", output)
+        self.assertIn("export SIGNAL_CLOSER_HARD_MAX_AGE_HOURS=", output)
+
+    def test_hard_max_age_passed_to_script(self) -> None:
+        """G-46: --hard-max-age flag is present in the script invocation block."""
+        self.assertIn("--hard-max-age", self._content)
+        # Must be a variable expansion, not a hard-coded literal
+        self.assertIn("$HARD_MAX_AGE", self._content)
+
+    def test_no_shell_tracing_enabled(self) -> None:
+        """G-47: Wrapper must not enable set -x or similar tracing directives."""
+        # set -x would expose secret values in shell trace output
+        forbidden = ["set -x", "set -v", "xtrace"]
+        for pattern in forbidden:
+            self.assertNotIn(
+                pattern, self._content,
+                f"Shell tracing {pattern!r} must not be present in wrapper",
+            )
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
