@@ -90,6 +90,51 @@
 
 ---
 
+<!-- BOTA_SIGNAL_LIFECYCLE_V31_2026_07_14 -->
+
+## 2026-07-14 — Signal Lifecycle Contract (LOCKED)
+
+**Scope:** `tools/signal_closer.py`, `tools/run_signal_closer_live.sh`, `tests/test_signal_closer_lifecycle.py`
+**Implementation commit:** `be8c6ef` on branch `fix/signal-lifecycle-market-hours-20260713`
+**Status: LOCKED**
+
+### Lifecycle evaluation contract
+
+- Always evaluate TP and SL on every closer run, regardless of whether the market-time threshold has been reached.
+- Measure normal maximum hold using completed market candles, not elapsed wall-clock hours.
+- Current normal threshold: 24 market hours = 96 completed M15 candles (900s each). Weekend gaps are excluded. Do NOT revert to wall-clock normal expiry.
+- Compute effective entry boundary as `ceil_to_s5_from_datetime(created_at)` using microsecond-accurate arithmetic. Do NOT use `int(created.timestamp())`.
+- Exclude all price action before `effective_start_epoch` from TP/SL evaluation.
+- Use OANDA S5 candles to refine a boundary touch to 5-second resolution when M15 H/L indicates a touch.
+- When the same S5 candle touches both TP and SL, resolve conservatively as LOSS with reason `AMBIGUOUS_S5_STOP_FIRST`. Do NOT restore the old TP-first same-candle rule.
+- Sparse S5 data is valid evidence when structurally trustworthy. Do NOT require exact threshold-minus-5s coverage.
+- When `is_threshold_at_m15_boundary=True` and M15 H/L shows no touch, the M15 close is authoritative even for partial-start candles. S5 is not required in this case.
+- Never use post-threshold candles for TP, SL, or TIME_EXIT pricing. Do NOT scan post-threshold data.
+- Normal expiry with trusted evidence → `CLOSED` outcome `TIME_EXIT`. `closed_at` = `threshold_epoch`.
+- `CANCELLED` is reserved for `DATA_UNAVAILABLE` cases that reach `hard_max_age` (currently 168h). Do NOT cancel a clean `OPEN` state merely because wall-clock hard age was exceeded.
+- TP/SL `closed_at` = end of the first proving S5 candle (candle `t + 5`).
+- Emergency unresolved cancellation uses trusted server time from HTTPS Date headers, never local Android time.
+
+### Schema constraint
+
+- Current live DB schema stores `status`, `result_pips`, `closed_at`.
+- Exit price and close reason are logged in `logs/cron.closer.log` only.
+- Do not add `exit_price`, `close_reason`, or other new columns without a separately approved schema migration that is coordinated with ProfitLab.
+
+### Rollout constraint
+
+- Do NOT deploy the lifecycle change without: draft PR, CI pass, read-only dry-run validation on live BotA, and explicit production approval.
+- Do NOT merge or push directly to `main`.
+- Do NOT mark this as deployed until first real-signal proof is recorded.
+
+### Telegram closure notifications
+
+- Telegram closure notifications are NOT implemented in this change.
+- The subscriber workflow (ACTIVE → CLOSED → subscriber notified) remains incomplete.
+- Do NOT claim subscriber closure notification is working until it is separately implemented and proven.
+
+---
+
 ## 2026-07-10 — Watcher decision journaling and delivery dedup
 
 <!-- BOTA_OBSERVABILITY_V4_2026_07_10 -->

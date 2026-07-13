@@ -1,5 +1,98 @@
 # BotA Continuity Log (Running)
 
+<!-- BOTA_SIGNAL_LIFECYCLE_V31_2026_07_14 -->
+
+## Session Update — 2026-07-14 (Signal Lifecycle v3.1 — Local Implementation and Adversarial Proof)
+
+### Original lifecycle failures
+
+The `tools/signal_closer.py` closer carried seven confirmed defects before this repair:
+
+1. Signal expiry used wall-clock elapsed hours. Weekend gaps and closed-market periods incorrectly counted toward the holding period, causing premature or inaccurate expiry.
+2. TP/SL evaluation was deferred until the market-time threshold. Signals that hit TP or SL before the threshold were incorrectly left ACTIVE until expiry, then cancelled instead of closed as WIN or LOSS.
+3. Same-M15-candle ambiguity applied a TP-first rule. When TP and SL were both touched in the same M15 candle, the closer reported WIN. This is optimistic: the SL may have been the actual first touch.
+4. M15 cache coverage logic could reject a valid historical cache. A cache that began before `effective_start` but contained a candle spanning `effective_start` was rejected, causing DATA_UNAVAILABLE on perfectly good data.
+5. `created_at` microseconds were truncated via `int(created.timestamp())` before S5 boundary calculation. This shifted the effective entry boundary to the wrong second, making pre-entry price data appear eligible.
+6. Exact threshold-minus-five-second S5 data was required. Real OANDA S5 data is sparse; the closer would return DATA_UNAVAILABLE when the last S5 candle before threshold was a few seconds earlier than expected.
+7. A partial-entry signal at an exact M15 boundary threshold incorrectly required S5 data and returned DATA_UNAVAILABLE even when the whole-candle M15 H/L proved no boundary touch. This was found and fixed during the 45-test adversarial hardening expansion.
+
+### Corrected lifecycle contract (now locked)
+
+- Evaluate TP and SL on every closer run, not only after the threshold is reached.
+- Measure the normal maximum hold using completed market candles, not elapsed wall-clock hours.
+- Current normal threshold: 24 market hours / 96 completed M15 candles (900s each, weekend gaps excluded).
+- Exclude price action before the effective entry boundary (`ceil_to_s5_from_datetime(created_at)`).
+- Use microsecond-accurate rounding to the next S5 boundary for effective entry.
+- Use OANDA S5 evidence to refine an M15 boundary touch to the 5-second level.
+- Same-S5 TP+SL ambiguity resolves conservatively as LOSS with reason `AMBIGUOUS_S5_STOP_FIRST`.
+- Sparse S5 candles are valid evidence when structurally trustworthy (aligned, finite, non-conflicting).
+- Never use post-threshold price action for TP, SL, or TIME_EXIT pricing.
+- Normal expiry with trusted evidence → `CLOSED` with outcome `TIME_EXIT`.
+- `CANCELLED` is reserved for unresolved `DATA_UNAVAILABLE` cases that reach the hard-age escape.
+- A clean `OPEN` state must not be cancelled merely because wall-clock hard age was exceeded.
+- TP/SL `closed_at` uses the end of the first proving S5 candle (t + 5).
+- TIME_EXIT `closed_at` uses the market-time threshold epoch.
+- Emergency unresolved cancellation uses the trusted current server time from HTTPS Date headers.
+- Existing DB schema stores `status`, `result_pips`, and `closed_at`. Exit price and close reason are available only in closer logs until a separately approved schema change.
+- Telegram closure notifications are NOT implemented. The complete subscriber workflow (signal created → closed → subscriber notified) remains unfinished.
+
+### Implementation and test proof
+
+**Commit:** `be8c6efc8eab43c3e9b99c995787a825d3c3b8f5`
+**Parent:** `fa289ad3f7b6ff430f13609950e5af341aee2e9d`
+**Branch:** `fix/signal-lifecycle-market-hours-20260713`
+
+**Changed files:**
+- `tools/signal_closer.py` — v3.1 rewrite + 4 Phase 1 defect fixes + adversarial hardening
+- `tools/run_signal_closer_live.sh` — OANDA vars added to allowlist; `--hard-max-age` flag wired
+- `tests/test_signal_closer_lifecycle.py` — 119 tests total (40 original → 74 Phase 1 → 119 final)
+
+**Phase 1 validation:**
+- 74 tests, 0 failures, PYTHONHASHSEED 0 / 1 / 17 / 99991 all PASS
+
+**Phase 2 adversarial expansion (45 new tests, Sections A–G):**
+- Section A (7): signal input validation — direction, NaN/Inf price, SL, TP
+- Section B (6): M15 normalization — sorting, non-aligned timestamps, deduplication, coverage
+- Section C (1): clean OPEN state not cancelled by hard wall-clock age
+- Section D (4): effective-start end-to-end — microsecond rounding, pre/post-entry S5, closed_at
+- Section E (12): S5 transport failure handling — HTTPError, TimeoutError, URLError, malformed JSON, wrong types, non-finite OHLC, conflicting/misaligned timestamps, out-of-range candles; all with security assertions
+- Section F (10): sparse S5 lookback and threshold safety — sparse buckets, pre-entry exclusion, post-threshold exclusion, valid_exit filter, DATA_UNAVAILABLE on no midpoint, AMBIGUOUS_S5_STOP_FIRST
+- Section G (5): wrapper security — env-loader output shape, no raw secrets, OANDA vars, --hard-max-age flag, no set -x
+
+**Additional genuine defect found by adversarial expansion (Defect 7):**
+Test F-35 proved that `resolve_signal_outcome` unconditionally set `need_s5=True` whenever `is_partial_start=True`, bypassing the M15-close fast path even when `is_threshold_at_m15_boundary=True` and the whole-candle H/L showed no boundary touch. Since the aggregate M15 OHLC subsumes any sub-period H/L, no S5 is needed in this case. Fixed by adding an early TIME_EXIT path that fires only when `need_s5=True AND is_threshold_at_m15_boundary=True AND not m15_touches_any_boundary(...)`.
+
+**Final validation (post-adversarial):**
+- 119 tests, 0 failures
+- `python3 -m py_compile tools/signal_closer.py` — PASS
+- `bash -n tools/run_signal_closer_live.sh` — PASS
+- `git diff --check` — PASS
+- PYTHONHASHSEED 0 / 1 / 17 / 99991 — all EXIT=0
+
+### Current status
+
+- Implementation: LOCALLY VERIFIED
+- Branch pushed: NO
+- Production changed: NO
+- Supabase touched: NO
+- OANDA requested: NO
+- Cron changed: NO
+
+### Remaining gates
+
+1. Canonical documentation review (current step)
+2. Separate documentation commit
+3. Push `fix/signal-lifecycle-market-hours-20260713` to origin as isolated branch
+4. Open draft PR for review
+5. CI and source review
+6. Historical / read-only dry-run validation on the live BotA worktree
+7. Separately approved production rollout
+8. First real-signal proof (signal created ACTIVE → closer resolves → CLOSED with correct outcome)
+
+**Explicitly noted:** Telegram closure notifications are still not implemented. A subscriber who receives a BotA entry alert will not receive a closure notification when the signal resolves. The complete subscriber workflow remains unfinished and is NOT part of this lifecycle change.
+
+---
+
 ## Session Update — 2026-06-03 (C1–C7G Signal Closer Lifecycle Repair)
 
 ### Fixed (confirmed)
