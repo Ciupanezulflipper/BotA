@@ -142,7 +142,8 @@ def call_prepare(
 
 class CacheTests(unittest.TestCase):
 
-    def _write_cache(self, tmpdir: Path, payload: dict) -> tuple[list[dict], str]:
+    @staticmethod
+    def _write_cache(tmpdir: Path, payload: dict) -> tuple[list[dict], str]:
         cache_file = tmpdir / "EURUSD_M15.json"
         cache_file.write_text(json.dumps(payload), encoding="utf-8")
         original = closer.CACHE_DIR
@@ -152,7 +153,8 @@ class CacheTests(unittest.TestCase):
         finally:
             closer.CACHE_DIR = original
 
-    def _oanda_payload(self, *, open_: float, high: float, low: float, close: float) -> dict:
+    @staticmethod
+    def _oanda_payload(*, open_: float, high: float, low: float, close: float) -> dict:
         return {
             "chart": {
                 "result": [{
@@ -249,22 +251,50 @@ class EffectiveStartTests(unittest.TestCase):
         self.assertIsNone(threshold)
 
     def test_partial_entry_interval_uses_only_s5_after_effective_start(self) -> None:
-        """Test 5: When S5 is fetched for the partial-entry candle, only post-entry S5 is inspected."""
-        signal_epoch = SIGNAL_EPOCH_BASE + 300  # 5 minutes into first candle
-        eff_start = closer.ceil_to_s5(signal_epoch)  # = signal_epoch (divisible by 5)
+        """Test 5: Lifecycle path filters pre-entry S5 from TP/SL scan.
 
-        # S5 candles covering full M15 candle — but only those from eff_start onward matter
-        s5_before = {"t": SIGNAL_EPOCH_BASE, "o": 1.1, "h": 1.20, "l": 1.0, "c": 1.1}
-        s5_after = {"t": eff_start, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1}
+        Signal created mid-M15 at eff_start=BASE+300. fetch_s5_candles returns
+        a pre-entry S5 (t=BASE+295 < eff_start) with h >= tp, and a post-entry
+        S5 (t=BASE+300 == eff_start) that does not touch TP or SL.
 
-        # With sl=1.0980 and tp=1.1020:  s5_before would touch tp (h=1.20≥1.1020) but
-        # only s5_after (h=1.1005<1.1020, l=1.0995>1.0980) is inspected post-entry
-        result = closer.check_s5_outcome(
-            "BUY", 1.1000, 1.0980, 1.1020,
-            [s5_after],  # only post-entry candles passed in
-            "EURUSD",
-        )
-        self.assertIsNone(result)  # no touch after effective_start
+        The pre-entry S5 is excluded from s5_post_entry so its TP touch is
+        ignored. The outcome is OPEN (no WIN/LOSS from the pre-entry touch).
+        """
+        eff_start = SIGNAL_EPOCH_BASE + 300   # 300 % 5 == 0; 5 minutes into candle
+        tp, sl, entry = 1.1020, 1.0980, 1.1000
+
+        # M15 candle: h < tp, l > sl (no whole-candle boundary touch)
+        candle = {
+            "t": SIGNAL_EPOCH_BASE,
+            "o": entry, "h": 1.1005, "l": 1.0995, "c": entry,
+        }
+        # Pre-entry: t=BASE+295 < eff_start → excluded from s5_post_entry (TP/SL scan)
+        # h=1.1025 > tp=1.1020 → would produce WIN if incorrectly included
+        pre_entry_s5 = {
+            "t": SIGNAL_EPOCH_BASE + 295,   # 295 % 5 == 0; < eff_start
+            "o": entry, "h": 1.1025, "l": 1.0995, "c": entry,
+        }
+        # Post-entry: t=BASE+300 == eff_start → in s5_post_entry; no TP/SL touch
+        post_entry_s5 = {
+            "t": SIGNAL_EPOCH_BASE + 300,   # 300 % 5 == 0; == eff_start
+            "o": entry, "h": 1.1005, "l": 1.0995, "c": entry,
+        }
+        eval_end = SIGNAL_EPOCH_BASE + M15  # latest completed M15 end; no threshold yet
+        with _patch.object(
+            closer, "fetch_s5_candles",
+            return_value=([pre_entry_s5, post_entry_s5], "ok"),
+        ):
+            result = closer.resolve_signal_outcome(
+                "EURUSD", "BUY", entry, sl, tp,
+                M15, eff_start,
+                eval_end=eval_end,
+                threshold_epoch=None,   # threshold not yet reached
+                completed_m15_candles=[candle],
+                oanda_token="fake",
+                oanda_url="https://fake.oanda.test",
+            )
+        # Pre-entry TP touch must not produce WIN: signal stays OPEN
+        self.assertEqual(closer.ResolutionState.OPEN, result.state)
 
 
 class MarketHoursTests(unittest.TestCase):
@@ -499,6 +529,7 @@ class S5OutcomeTests(unittest.TestCase):
         self.assertEqual("LOSS", outcome)
         self.assertAlmostEqual(-10.0, rp)
         self.assertAlmostEqual(1.1010, ep)
+        self.assertEqual(1005, cat)   # closed_at_epoch = t + S5 = 1000 + 5
         self.assertEqual("OANDA_S5_SL", reason)
 
     def test_same_s5_tp_and_sl_is_conservative_loss_with_ambiguous_reason(self) -> None:
@@ -510,6 +541,8 @@ class S5OutcomeTests(unittest.TestCase):
         outcome, rp, ep, cat, reason = result
         self.assertEqual("LOSS", outcome)
         self.assertAlmostEqual(-20.0, rp)
+        self.assertAlmostEqual(1.0980, ep)  # conservative exit at SL price
+        self.assertEqual(1005, cat)         # closed_at_epoch = t + S5 = 1000 + 5
         self.assertEqual("AMBIGUOUS_S5_STOP_FIRST", reason)
 
     def test_same_s5_tp_and_sl_sell_conservative_loss(self) -> None:
@@ -1239,7 +1272,6 @@ class Defect4SparseS5Tests(unittest.TestCase):
 
         # S5 covering threshold candle but last candle ends at threshold-10 (not threshold-5)
         # The last valid S5 has t = threshold-10, t+5 = threshold-5 <= threshold ✓
-        s5_close = 1.1003
         s5 = [
             {"t": threshold - 20, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1001},
             {"t": threshold - 15, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1002},
@@ -1377,9 +1409,10 @@ class ValidateS5CandlesTests(unittest.TestCase):
         self.assertIn("non-finite", reason)
 
     def test_missing_t_field_rejected(self) -> None:
-        """V5-4: Missing t field → rejected."""
+        """V5-4: Missing t field → rejected with reason mentioning t field."""
         valid, reason = closer.validate_s5_candles([{"o": 1.1, "h": 1.1, "l": 1.0, "c": 1.1}])
         self.assertEqual([], valid)
+        self.assertIn("t field", reason)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1567,6 +1600,7 @@ class M15NormalizationTests(unittest.TestCase):
 
         eligible, reason = self._fetch_with_raw(candles, SIGNAL_EPOCH_BASE, server_epoch)
         self.assertEqual([], eligible)
+        self.assertIn("cover", reason)
 
     def test_historical_cache_with_pre_signal_candles_accepted_b15(self) -> None:
         """B-15 (reinforcing D2-1): historical cache with pre-signal candles accepted."""
@@ -1766,11 +1800,12 @@ class S5TransportFailureTests(unittest.TestCase):
         self.assertIn("not a JSON object", reason)
 
     def test_missing_candles_field(self) -> None:
-        """E-26: candles key absent → empty list returned safely."""
+        """E-26: candles key absent → empty list; reason mentions no complete candles."""
         body = json.dumps({"status": "ok"}).encode()
         with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
             candles, reason = self._fetch()
         self.assertEqual([], candles)
+        self.assertIn("no complete", reason)
 
     def test_candles_field_wrong_type(self) -> None:
         """E-27: candles is a string, not a list → empty, safe reason, no TypeError."""
@@ -1781,13 +1816,14 @@ class S5TransportFailureTests(unittest.TestCase):
         self.assertIn("not a list", reason)
 
     def test_malformed_complete_candle(self) -> None:
-        """E-28: complete candle with unparseable time → skipped, no exception."""
+        """E-28: complete candle with unparseable time → skipped; no complete candles remain."""
         body = json.dumps({
             "candles": [{"complete": True, "time": "not-a-number", "mid": {}}]
         }).encode()
         with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
             candles, reason = self._fetch()
         self.assertEqual([], candles)
+        self.assertIn("no complete", reason)
 
     def test_nonfinite_ohlc_rejected(self) -> None:
         """E-29: Candle with h=Inf → validation rejects, returns empty."""
@@ -1828,7 +1864,7 @@ class S5TransportFailureTests(unittest.TestCase):
         _assert_no_secrets(self, reason)
 
     def test_candle_outside_requested_range_excluded(self) -> None:
-        """E-32: Candle at t=_S5_TO (outside [from, to)) → excluded."""
+        """E-32: Candle at t=_S5_TO (outside [from, to)) → excluded; no candles remain."""
         body = json.dumps({"candles": [{
             "complete": True,
             "time": str(_S5_TO),  # t >= to_epoch → excluded
@@ -1837,6 +1873,7 @@ class S5TransportFailureTests(unittest.TestCase):
         with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
             candles, reason = self._fetch()
         self.assertEqual([], candles)
+        self.assertIn("no complete", reason)
 
 
 # ── F. Sparse S5 Lookback and Threshold Safety ───────────────────────────────
@@ -2038,39 +2075,55 @@ class SparseS5LookbackTests(unittest.TestCase):
         # Exit price must be from threshold candle (close=1.1005), not post-threshold
         self.assertAlmostEqual(1.1005, action["predicted_exit_price"])
 
-    def test_pre_entry_lookback_midpoint_eligible_for_time_exit_price(self) -> None:
-        """F-35: Pre-entry lookback S5 excluded from TP/SL but close eligible for TIME_EXIT.
+    def test_pre_entry_s5_eligible_for_time_exit_price(self) -> None:
+        """F-35: Pre-entry S5 excluded from TP/SL but eligible for mid-candle TIME_EXIT price.
 
-        Uses resolve_signal_outcome directly with contrived hold_seconds=5 so
-        partial-start candle is also the threshold candle.
-        Pre-entry S5 at t=BASE-5 not in s5_post_entry but IS in s5_all;
-        t+5 = BASE <= threshold = BASE+5 → eligible for valid_exit.
+        threshold=BASE+302 is mid-candle (not at M15 boundary BASE+900).
+        fetch_s5_candles returns:
+          pre_entry_s5: t=BASE+295 < eff_start=BASE+300 → excluded from s5_post_entry
+                        h=1.1025 > tp=1.1020 → would WIN if incorrectly included
+                        t+5=BASE+300 <= threshold=BASE+302 → eligible for valid_exit
+          post_entry_s5: t=BASE+300 == eff_start → in s5_post_entry; no touch
+                         t+5=BASE+305 > threshold → NOT eligible for valid_exit
+
+        Expected: TIME_EXIT (no false WIN), exit_price = pre_entry_s5.c (last valid_exit S5).
         """
         tf_sec = M15
-        eff_start = SIGNAL_EPOCH_BASE + 895  # 5s before first candle ends; 895%5==0
-        threshold = eff_start + 5  # = SIGNAL_EPOCH_BASE + 900 = first candle end
-        # Candle: t=BASE, end=BASE+900; threshold=BASE+900=candle_end
-        candle = {"t": SIGNAL_EPOCH_BASE, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1008}
-        # Pre-entry S5: t=BASE+890 (< eff_start=BASE+895), t+5=BASE+895<=threshold=BASE+900 ✓
-        pre_s5 = {"t": SIGNAL_EPOCH_BASE + 890, "o": 1.1, "h": 1.1003, "l": 1.0997, "c": 1.1008}
-        # Post-entry S5: t=BASE+895 (= eff_start), t+5=BASE+900<=threshold ✓
-        post_s5 = {"t": SIGNAL_EPOCH_BASE + 895, "o": 1.1, "h": 1.1004, "l": 1.0996, "c": 1.1009}
+        eff_start = SIGNAL_EPOCH_BASE + 300   # 300 % 5 == 0
+        threshold = SIGNAL_EPOCH_BASE + 302   # mid-candle; candle_end = BASE+900
 
-        # threshold == candle_end → is_threshold_at_m15_boundary=True → uses M15 close
-        # (not s5_all). This tests that the candle close path works here.
-        result = closer.resolve_signal_outcome(
-            "EURUSD", "BUY", 1.1000, 1.0980, 1.1050,
-            tf_sec, eff_start,
-            eval_end=threshold,
-            threshold_epoch=threshold,
-            completed_m15_candles=[candle],
-            oanda_token="",  # will be mocked
-            oanda_url="",
-        )
-        # M15 boundary → use candle.c = 1.1008 as exit price
+        candle = {"t": SIGNAL_EPOCH_BASE, "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1008}
+        # Pre-entry: t < eff_start → excluded from s5_post_entry; t+5 <= threshold → in valid_exit
+        pre_entry_s5 = {
+            "t": SIGNAL_EPOCH_BASE + 295,   # 295 % 5 == 0; < eff_start
+            "o": 1.1, "h": 1.1025, "l": 1.0995, "c": 1.1006,  # h > tp → would WIN if included
+        }
+        # Post-entry: t >= eff_start → in s5_post_entry; no touch; t+5 > threshold → not valid_exit
+        post_entry_s5 = {
+            "t": SIGNAL_EPOCH_BASE + 300,   # 300 % 5 == 0; == eff_start
+            "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1007,
+        }
+
+        with _patch.object(
+            closer, "fetch_s5_candles",
+            return_value=([pre_entry_s5, post_entry_s5], "ok"),
+        ):
+            result = closer.resolve_signal_outcome(
+                "EURUSD", "BUY", 1.1000, 1.0980, 1.1020,
+                tf_sec, eff_start,
+                eval_end=threshold,
+                threshold_epoch=threshold,
+                completed_m15_candles=[candle],
+                oanda_token="fake",
+                oanda_url="https://fake.oanda.test",
+            )
+
+        # Pre-entry TP touch must not produce WIN; outcome is TIME_EXIT
         self.assertEqual(closer.ResolutionState.RESOLVED, result.state)
         self.assertEqual("TIME_EXIT", result.outcome)
-        self.assertAlmostEqual(1.1008, result.exit_price)
+        # Exit price = close of last S5 with t+5 <= threshold = pre_entry_s5.c
+        self.assertAlmostEqual(1.1006, result.exit_price)
+        self.assertEqual(threshold, result.closed_at_epoch)
 
 
 # ── G. Wrapper Security Tests ─────────────────────────────────────────────────
@@ -2365,11 +2418,6 @@ class ApplySignalActionsTests(unittest.TestCase):
         """J-8: dry_run=True → close_signal returns True without Supabase; closed incremented."""
         action = self._make_action("WIN")
         supabase_calls: list = []
-        original_close = closer.close_signal
-
-        def tracking_close(*args, **kwargs):
-            result = original_close(*args, **kwargs)
-            return result
 
         with _patch.object(closer, "supabase_request", side_effect=lambda *a, **k: supabase_calls.append(a)):
             counts = closer.apply_signal_actions([action], True, self._SERVER_EPOCH)
@@ -2498,34 +2546,40 @@ class CloseSignalResponseContractTests(unittest.TestCase):
         self.assertFalse(self._has_closed_log(logs))
 
     def test_k4_wrong_returned_id_returns_false(self) -> None:
-        """K-4: One row but id doesn't match signal_id → False."""
+        """K-4: One row but id doesn't match signal_id → False, no CLOSED log."""
         result, logs = self._call_close([{"id": "completely-wrong-id"}])
         self.assertFalse(result)
+        self.assertFalse(self._has_closed_log(logs))
 
     def test_k5_missing_id_field_returns_false(self) -> None:
-        """K-5: One row with no 'id' key (row.get('id') returns None) → False."""
+        """K-5: One row with no 'id' key (row.get('id') returns None) → False, no CLOSED log."""
         result, logs = self._call_close([{"status": "CLOSED", "result_pips": 10.0}])
         self.assertFalse(result)
+        self.assertFalse(self._has_closed_log(logs))
 
     def test_k6_dict_response_not_list_returns_false(self) -> None:
-        """K-6: Response is a plain dict, not a list → False."""
+        """K-6: Response is a plain dict, not a list → False, no CLOSED log."""
         result, logs = self._call_close({"id": self._SIG_ID})
         self.assertFalse(result)
+        self.assertFalse(self._has_closed_log(logs))
 
     def test_k7_list_containing_non_dict_element_returns_false(self) -> None:
-        """K-7: List whose sole element is not a dict → False."""
+        """K-7: List whose sole element is not a dict → False, no CLOSED log."""
         result, logs = self._call_close(["not-a-dict"])
         self.assertFalse(result)
+        self.assertFalse(self._has_closed_log(logs))
 
     def test_k8_none_response_returns_false(self) -> None:
-        """K-8: None response (JSON null body) → False."""
+        """K-8: None response (JSON null body) → False, no CLOSED log."""
         result, logs = self._call_close(None)
         self.assertFalse(result)
+        self.assertFalse(self._has_closed_log(logs))
 
     def test_k9_supabase_exception_returns_false_no_escape(self) -> None:
-        """K-9: supabase_request raises → False; exception must not propagate."""
+        """K-9: supabase_request raises → False; exception must not propagate; no CLOSED log."""
         result, logs = self._call_close(exc=OSError("connection refused"))
         self.assertFalse(result)
+        self.assertFalse(self._has_closed_log(logs))
 
     # ── K-10: dry-run contract ─────────────────────────────────────────────────
 
