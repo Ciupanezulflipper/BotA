@@ -34,6 +34,7 @@ import json
 import math
 import os
 import pathlib
+import shutil
 import statistics
 import subprocess
 import sys
@@ -157,13 +158,19 @@ def oanda_instrument(pair: str) -> str:
 # ── Trusted server clock ──────────────────────────────────────────────────────
 
 def compute_server_clock_epoch() -> int:
+    # DS-PY finding 1: resolve curl to an absolute path before subprocess.run.
+    # Absence of curl fails closed (returns 0) without raising.
+    _curl = shutil.which("curl")
+    if not _curl:
+        return 0
+
     epochs: list[int] = []
     for url in CLOCK_ENDPOINTS:
         if len(epochs) >= 2:
             break
         try:
             proc = subprocess.run(
-                ["curl", "-sI", "--max-time", "6", url],
+                [_curl, "-sI", "--max-time", "6", url],
                 text=True, capture_output=True, timeout=10, check=False,
             )
             date_line = next(
@@ -217,6 +224,75 @@ def get_active_signals() -> list[dict]:
     return result if isinstance(result, list) else []
 
 
+# ── Local M15 cache helpers ────────────────────────────────────────────────────
+
+def _validate_oanda_meta(
+    meta: dict, tf: str, path: pathlib.Path
+) -> tuple[bool, str]:
+    """Validate OANDA cache metadata: provider identity and granularity."""
+    provider = str(meta.get("_provider") or meta.get("provider") or "").lower()
+    if provider != "oanda":
+        return False, f"non-OANDA cache provider={provider or 'UNKNOWN'} path={path}"
+    granularity = str(meta.get("dataGranularity") or "").upper()
+    if not granularity_matches(granularity, tf):
+        return False, (
+            f"cache granularity mismatch expected={tf} "
+            f"actual={granularity} path={path}"
+        )
+    return True, "ok"
+
+
+def _build_oanda_candles(block: dict) -> list[dict]:
+    """Build a sorted list of {t,o,h,l,c} candles from a cache result block."""
+    timestamps = block.get("timestamp", [])
+    quote = block.get("indicators", {}).get("quote", [{}])[0]
+    highs = quote.get("high", [])
+    lows = quote.get("low", [])
+    opens = quote.get("open", [])
+    closes = quote.get("close", [])
+
+    candles: list[dict] = []
+    for i, ts in enumerate(timestamps):
+        try:
+            high = highs[i] if i < len(highs) else None
+            low = lows[i] if i < len(lows) else None
+            open_ = opens[i] if i < len(opens) else None
+            close = closes[i] if i < len(closes) else None
+            # t, h, l must be non-None for a usable candle
+            if ts is None or high is None or low is None:
+                continue
+            candles.append({
+                "t": int(ts),
+                "o": float(open_) if open_ is not None else None,
+                "h": float(high),
+                "l": float(low),
+                "c": float(close) if close is not None else None,
+            })
+        except Exception:
+            continue
+
+    candles.sort(key=lambda c: c["t"])
+    return candles
+
+
+def _check_oanda_freshness(
+    candles: list[dict], server_epoch: int, path: pathlib.Path
+) -> tuple[bool, str]:
+    """Validate that the newest candle is neither future nor stale."""
+    newest_age = int(server_epoch - float(candles[-1]["t"]))
+    if newest_age < -FUTURE_CANDLE_TOLERANCE_SECONDS:
+        return False, (
+            f"local OANDA cache future candle age_sec={newest_age} "
+            f"tolerance={FUTURE_CANDLE_TOLERANCE_SECONDS} path={path}"
+        )
+    if newest_age > MAX_LOCAL_CANDLE_AGE_SECONDS:
+        return False, (
+            f"local OANDA cache stale age_sec={newest_age} "
+            f"limit={MAX_LOCAL_CANDLE_AGE_SECONDS} path={path}"
+        )
+    return True, "ok"
+
+
 # ── Local M15 cache ────────────────────────────────────────────────────────────
 
 def load_oanda_cache(pair: str, tf: str, server_epoch: int) -> tuple[list[dict], str]:
@@ -244,62 +320,18 @@ def load_oanda_cache(pair: str, tf: str, server_epoch: int) -> tuple[list[dict],
 
         block = result[0]
         meta = block.get("meta", {})
-        provider = str(meta.get("_provider") or meta.get("provider") or "").lower()
-        granularity = str(meta.get("dataGranularity") or "").upper()
 
-        if provider != "oanda":
-            return [], f"non-OANDA cache provider={provider or 'UNKNOWN'} path={path}"
+        meta_ok, meta_reason = _validate_oanda_meta(meta, tf, path)
+        if not meta_ok:
+            return [], meta_reason
 
-        if not granularity_matches(granularity, tf):
-            return [], f"cache granularity mismatch expected={tf} actual={granularity} path={path}"
-
-        timestamps = block.get("timestamp", [])
-        quote = block.get("indicators", {}).get("quote", [{}])[0]
-        highs = quote.get("high", [])
-        lows = quote.get("low", [])
-        opens = quote.get("open", [])
-        closes = quote.get("close", [])
-
-        candles: list[dict] = []
-        for i, ts in enumerate(timestamps):
-            try:
-                high = highs[i] if i < len(highs) else None
-                low = lows[i] if i < len(lows) else None
-                open_ = opens[i] if i < len(opens) else None
-                close = closes[i] if i < len(closes) else None
-
-                # t, h, l must be non-None for a usable candle
-                if ts is None or high is None or low is None:
-                    continue
-
-                candles.append({
-                    "t": int(ts),
-                    "o": float(open_) if open_ is not None else None,
-                    "h": float(high),
-                    "l": float(low),
-                    "c": float(close) if close is not None else None,
-                })
-            except Exception:
-                continue
-
-        candles.sort(key=lambda c: c["t"])
-
+        candles = _build_oanda_candles(block)
         if not candles:
             return [], f"no valid OANDA candles in {path}"
 
-        newest_age = int(server_epoch - float(candles[-1]["t"]))
-
-        if newest_age < -FUTURE_CANDLE_TOLERANCE_SECONDS:
-            return [], (
-                f"local OANDA cache future candle age_sec={newest_age} "
-                f"tolerance={FUTURE_CANDLE_TOLERANCE_SECONDS} path={path}"
-            )
-
-        if newest_age > MAX_LOCAL_CANDLE_AGE_SECONDS:
-            return [], (
-                f"local OANDA cache stale age_sec={newest_age} "
-                f"limit={MAX_LOCAL_CANDLE_AGE_SECONDS} path={path}"
-            )
+        fresh_ok, fresh_reason = _check_oanda_freshness(candles, server_epoch, path)
+        if not fresh_ok:
+            return [], fresh_reason
 
         return candles, "ok"
 
@@ -309,7 +341,6 @@ def load_oanda_cache(pair: str, tf: str, server_epoch: int) -> tuple[list[dict],
 
 def fetch_candles(
     pair: str,
-    signal_time: datetime,
     tf: str,
     server_epoch: int,
     effective_start_epoch: int,
@@ -546,11 +577,10 @@ class ResolutionResult:
         self.reason = reason
 
 
-# ── Outcome resolution ─────────────────────────────────────────────────────────
+# ── Outcome resolution helpers ─────────────────────────────────────────────────
 
 def m15_touches_any_boundary(
     direction: str,
-    entry: float,  # noqa: ARG001 — kept for symmetry; not used in touch detection
     sl: float,
     tp: float,
     candle: dict,
@@ -612,6 +642,89 @@ def check_s5_outcome(
     return None
 
 
+def _make_m15_time_exit(
+    direction: str,
+    entry: float,
+    pair: str,
+    candle: dict,
+    threshold_int: int,
+) -> ResolutionResult:
+    """Build a TIME_EXIT ResolutionResult from the M15 candle close price."""
+    close_val = candle.get("c")
+    if close_val is None:
+        log(
+            f"M15 close unavailable for threshold boundary "
+            f"{pair} t={candle.get('t')} — DATA_UNAVAILABLE"
+        )
+        return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
+    exit_price = float(close_val)
+    result_pips_val = pips(
+        (exit_price - entry) if direction == "BUY" else (entry - exit_price), pair
+    )
+    log(
+        f"TIME_EXIT {pair} {direction} entry={entry} "
+        f"exit={exit_price} pips={result_pips_val:+.1f} "
+        f"threshold={threshold_int} (M15 boundary, no touch)"
+    )
+    return ResolutionResult(
+        state=ResolutionState.RESOLVED,
+        outcome="TIME_EXIT",
+        result_pips=result_pips_val,
+        exit_price=exit_price,
+        closed_at_epoch=threshold_int,
+        reason="MAX_MARKET_SECONDS_TIME_EXIT",
+    )
+
+
+def _select_s5_exit_price(
+    candle: dict,
+    is_threshold_at_m15_boundary: bool,
+    s5_all: list[dict],
+    threshold_int: int,
+    pair: str,
+    s5_from: int,
+    s5_to: int,
+) -> tuple[float | None, ResolutionResult | None]:
+    """
+    Select the TIME_EXIT price for a threshold candle.
+
+    Returns (exit_price, None) on success or (None, error_result) on failure.
+
+    For M15-boundary thresholds: use the M15 candle close.
+    For mid-candle thresholds: use the latest S5 close where t+5 <= threshold_int.
+    """
+    if is_threshold_at_m15_boundary:
+        close_val = candle.get("c")
+        if close_val is None:
+            log(
+                f"M15 close unavailable for threshold boundary "
+                f"{pair} t={candle.get('t')} — DATA_UNAVAILABLE"
+            )
+            return None, ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
+        return float(close_val), None
+
+    # DEFECT 4 fix: use latest S5 where t+5 <= threshold_int
+    valid_exit = [c for c in s5_all if int(c["t"]) + S5_SECONDS <= threshold_int]
+    if not valid_exit:
+        log(
+            f"S5 coverage insufficient for threshold exit {pair}: "
+            f"no S5 candle ending at or before {threshold_int} "
+            f"in [{s5_from}, {s5_to}) — DATA_UNAVAILABLE"
+        )
+        return None, ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
+    last_s5 = valid_exit[-1]
+    close_val = last_s5.get("c")
+    if close_val is None:
+        log(
+            f"S5 close None for threshold exit {pair} "
+            f"t={last_s5['t']} — DATA_UNAVAILABLE"
+        )
+        return None, ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
+    return float(close_val), None
+
+
+# ── Outcome resolution ─────────────────────────────────────────────────────────
+
 def resolve_signal_outcome(
     pair: str,
     direction: str,
@@ -662,65 +775,21 @@ def resolve_signal_outcome(
         # TP/SL touch, S5 precision is not needed even for a partial-start
         # candle: the full-candle OHLC subsumes any sub-period H/L.
         if need_s5 and is_threshold_at_m15_boundary and not m15_touches_any_boundary(
-            direction, entry, sl, tp, candle
+            direction, sl, tp, candle
         ):
-            close_val = candle.get("c")
-            if close_val is None:
-                log(
-                    f"M15 close unavailable for threshold boundary "
-                    f"{pair} t={t} — DATA_UNAVAILABLE"
-                )
+            # DS-PY finding 4: narrow threshold_epoch to int before use.
+            if threshold_epoch is None:  # defensive guard; logically unreachable
                 return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
-            exit_price = float(close_val)
-            result_pips_val = pips(
-                (exit_price - entry) if direction == "BUY"
-                else (entry - exit_price),
-                pair,
-            )
-            log(
-                f"TIME_EXIT {pair} {direction} entry={entry} "
-                f"exit={exit_price} pips={result_pips_val:+.1f} "
-                f"threshold={threshold_epoch} (M15 boundary, no touch)"
-            )
-            return ResolutionResult(
-                state=ResolutionState.RESOLVED,
-                outcome="TIME_EXIT",
-                result_pips=result_pips_val,
-                exit_price=exit_price,
-                closed_at_epoch=threshold_epoch,
-                reason="MAX_MARKET_SECONDS_TIME_EXIT",
-            )
+            return _make_m15_time_exit(direction, entry, pair, candle, threshold_epoch)
 
         if not need_s5:
-            if not m15_touches_any_boundary(direction, entry, sl, tp, candle):
+            if not m15_touches_any_boundary(direction, sl, tp, candle):
                 if is_threshold_candle:
                     # Threshold exactly at M15 boundary; no touch → use M15 close
-                    close_val = candle.get("c")
-                    if close_val is None:
-                        log(
-                            f"M15 close unavailable for threshold boundary "
-                            f"{pair} t={t} — DATA_UNAVAILABLE"
-                        )
+                    # DS-PY finding 4: narrow before use
+                    if threshold_epoch is None:  # defensive guard; logically unreachable
                         return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
-                    exit_price = float(close_val)
-                    result_pips_val = pips(
-                        (exit_price - entry) if direction == "BUY"
-                        else (entry - exit_price),
-                        pair,
-                    )
-                    log(
-                        f"TIME_EXIT {pair} {direction} entry={entry} "
-                        f"exit={exit_price} pips={result_pips_val:+.1f} "
-                        f"threshold={threshold_epoch} (M15 boundary, no touch)"
-                    )
-                    return ResolutionResult(
-                        state=ResolutionState.RESOLVED,
-                        outcome="TIME_EXIT",
-                        result_pips=result_pips_val,
-                        exit_price=exit_price,
-                        closed_at_epoch=threshold_epoch,
-                        reason="MAX_MARKET_SECONDS_TIME_EXIT",
-                    )
+                    return _make_m15_time_exit(direction, entry, pair, candle, threshold_epoch)
                 continue  # no touch, not threshold — scan next candle
             need_s5 = True  # M15 H/L touched a boundary → need S5 precision
 
@@ -789,39 +858,21 @@ def resolve_signal_outcome(
 
             # No TP/SL in S5 — handle threshold TIME_EXIT if applicable
             if is_threshold_candle:
-                if is_threshold_at_m15_boundary:
-                    close_val = candle.get("c")
-                    if close_val is None:
-                        log(
-                            f"M15 close unavailable for threshold boundary "
-                            f"{pair} t={t} — DATA_UNAVAILABLE"
-                        )
-                        return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
-                    exit_price = float(close_val)
-                else:
-                    # DEFECT 4 fix: use latest S5 where t+5 <= threshold_epoch
-                    # rather than requiring exactly t == threshold_epoch - 5.
-                    valid_exit = [
-                        c for c in s5_all
-                        if int(c["t"]) + S5_SECONDS <= threshold_epoch
-                    ]
-                    if not valid_exit:
-                        log(
-                            f"S5 coverage insufficient for threshold exit {pair}: "
-                            f"no S5 candle ending at or before {threshold_epoch} "
-                            f"in [{s5_from}, {s5_to}) — DATA_UNAVAILABLE"
-                        )
-                        return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
-                    last_s5 = valid_exit[-1]
-                    close_val = last_s5.get("c")
-                    if close_val is None:
-                        log(
-                            f"S5 close None for threshold exit {pair} "
-                            f"t={last_s5['t']} — DATA_UNAVAILABLE"
-                        )
-                        return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
-                    exit_price = float(close_val)
+                # DS-PY finding 4: narrow threshold_epoch to int before comparison.
+                # is_threshold_candle=True guarantees threshold_epoch is not None;
+                # the guard below handles the logically unreachable None case.
+                if threshold_epoch is None:  # defensive guard; logically unreachable
+                    return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
+                threshold_int: int = threshold_epoch
 
+                exit_price, err = _select_s5_exit_price(
+                    candle, is_threshold_at_m15_boundary,
+                    s5_all, threshold_int, pair, s5_from, s5_to,
+                )
+                if err is not None:
+                    return err
+
+                assert exit_price is not None  # _select_s5_exit_price ensures this
                 result_pips_val = pips(
                     (exit_price - entry) if direction == "BUY"
                     else (entry - exit_price),
@@ -830,14 +881,14 @@ def resolve_signal_outcome(
                 log(
                     f"TIME_EXIT {pair} {direction} entry={entry} "
                     f"exit={exit_price} pips={result_pips_val:+.1f} "
-                    f"threshold={threshold_epoch}"
+                    f"threshold={threshold_int}"
                 )
                 return ResolutionResult(
                     state=ResolutionState.RESOLVED,
                     outcome="TIME_EXIT",
                     result_pips=result_pips_val,
                     exit_price=exit_price,
-                    closed_at_epoch=threshold_epoch,
+                    closed_at_epoch=threshold_int,
                     reason="MAX_MARKET_SECONDS_TIME_EXIT",
                 )
 
@@ -918,7 +969,7 @@ def prepare_signal_action(
     sig["age_hours"] = age_hours
 
     candles, candle_reason = fetch_candles(
-        pair, created, tf, now_epoch, effective_start_epoch,
+        pair, tf, now_epoch, effective_start_epoch,
     )
 
     if not candles:
@@ -993,7 +1044,13 @@ def close_signal(
     result_pips: float,
     dry_run: bool,
     closed_at_epoch: int,
-) -> None:
+) -> bool:
+    """
+    Write a signal close/cancel to Supabase.
+
+    Returns True on success (or dry-run), False when the PATCH fails.
+    The exception is caught here and logged; it does not escape.
+    """
     closed_at_iso = iso_from_epoch(closed_at_epoch)
     body = {
         "status": status,
@@ -1003,13 +1060,15 @@ def close_signal(
 
     if dry_run:
         log(f"DRY-RUN: would update {signal_id} -> {status} {result_pips:+.1f} pips")
-        return
+        return True
 
     try:
         supabase_request("PATCH", f"signals?id=eq.{signal_id}", body)
         log(f"CLOSED {signal_id} -> {status} {result_pips:+.1f} pips")
+        return True
     except Exception as exc:
         log(f"ERROR closing {signal_id}: {exc}")
+        return False
 
 
 # ── Safety gates ───────────────────────────────────────────────────────────────
@@ -1080,9 +1139,73 @@ def print_preview(signals_to_act: list[dict], dry_run: bool) -> None:
         time.sleep(3)
 
 
+# ── Action execution ───────────────────────────────────────────────────────────
+
+def apply_signal_actions(
+    signals_to_act: list[dict],
+    dry_run: bool,
+    server_epoch: int,
+) -> dict:
+    """
+    Apply Supabase close/cancel writes for all resolved signals.
+
+    Returns a counter dict: closed, cancelled, write_failed, still_open_additional.
+
+    - Successful writes increment closed or cancelled.
+    - Failed writes increment write_failed and still_open_additional.
+    - All actions are attempted even after an earlier write fails.
+    - Dry-run writes always succeed (no network call; returns True).
+    """
+    closed = 0
+    cancelled = 0
+    write_failed = 0
+    still_open_additional = 0
+
+    for sig in signals_to_act:
+        sig_id = sig["id"]
+        pair = sig["pair"]
+        direction = sig["direction"]
+        entry = float(sig["entry_price"])
+        age_hours = float(sig.get("age_hours", 0.0))
+        outcome = sig["predicted_outcome"]
+        result_pips_val = float(sig["predicted_pips"])
+        reason = str(sig.get("predicted_reason", ""))
+        closed_at_epoch_val = int(sig.get("predicted_closed_at_epoch") or server_epoch)
+        exit_price = sig.get("predicted_exit_price")
+
+        log(
+            f"{outcome} {pair} {direction} entry={entry} "
+            f"exit={'none' if exit_price is None else f'{exit_price:.5f}'} "
+            f"age={age_hours:.1f}h reason={reason} pips={result_pips_val:+.1f}"
+        )
+
+        if outcome == "CANCELLED":
+            ok = close_signal(sig_id, "CANCELLED", 0.0, dry_run, closed_at_epoch_val)
+            if ok:
+                cancelled += 1
+            else:
+                write_failed += 1
+                still_open_additional += 1
+        elif outcome in ("WIN", "LOSS", "TIME_EXIT"):
+            ok = close_signal(sig_id, "CLOSED", result_pips_val, dry_run, closed_at_epoch_val)
+            if ok:
+                closed += 1
+            else:
+                write_failed += 1
+                still_open_additional += 1
+
+    return {
+        "closed": closed,
+        "cancelled": cancelled,
+        "write_failed": write_failed,
+        "still_open_additional": still_open_additional,
+    }
+
+
 # ── Entry point ────────────────────────────────────────────────────────────────
 
-def main() -> None:
+def _build_arg_parser() -> argparse.ArgumentParser:
+    """Construct and return the signal closer argument parser."""
     parser = argparse.ArgumentParser(
         description=(
             "BotA Signal Closer v3.1 — dry-run by default.\n"
@@ -1097,8 +1220,11 @@ def main() -> None:
     parser.add_argument("--pair", type=str, default=None)
     parser.add_argument("--max-age", type=int, default=None, dest="max_age")
     parser.add_argument("--hard-max-age", type=int, default=None, dest="hard_max_age")
+    return parser
 
-    args = parser.parse_args()
+
+def main() -> None:
+    args = _build_arg_parser().parse_args()
 
     max_age = args.max_age if args.max_age is not None else MAX_AGE_HOURS
     hard_max_age = args.hard_max_age if args.hard_max_age is not None else HARD_MAX_AGE_HOURS
@@ -1155,39 +1281,19 @@ def main() -> None:
     if not dry_run:
         bulk_gate(signals_to_act, args)
 
-    closed = 0
-    cancelled = 0
-    still_open = len(signals) - len(signals_to_act)
-
-    for sig in signals_to_act:
-        sig_id = sig["id"]
-        pair = sig["pair"]
-        direction = sig["direction"]
-        entry = float(sig["entry_price"])
-        age_hours = float(sig.get("age_hours", 0.0))
-        outcome = sig["predicted_outcome"]
-        result_pips_val = float(sig["predicted_pips"])
-        reason = str(sig.get("predicted_reason", ""))
-        closed_at_epoch_val = int(sig.get("predicted_closed_at_epoch") or server_epoch)
-        exit_price = sig.get("predicted_exit_price")
-
-        log(
-            f"{outcome} {pair} {direction} entry={entry} "
-            f"exit={'none' if exit_price is None else f'{exit_price:.5f}'} "
-            f"age={age_hours:.1f}h reason={reason} pips={result_pips_val:+.1f}"
-        )
-
-        if outcome == "CANCELLED":
-            close_signal(sig_id, "CANCELLED", 0.0, dry_run, closed_at_epoch_val)
-            cancelled += 1
-        elif outcome in ("WIN", "LOSS", "TIME_EXIT"):
-            close_signal(sig_id, "CLOSED", result_pips_val, dry_run, closed_at_epoch_val)
-            closed += 1
+    counts = apply_signal_actions(signals_to_act, dry_run, server_epoch)
+    closed = counts["closed"]
+    cancelled = counts["cancelled"]
+    write_failed = counts["write_failed"]
+    still_open = len(signals) - len(signals_to_act) + counts["still_open_additional"]
 
     log(
         f"Done — closed={closed} cancelled={cancelled} "
-        f"still_open={still_open} dry_run={dry_run}"
+        f"write_failed={write_failed} still_open={still_open} dry_run={dry_run}"
     )
+
+    if not dry_run and write_failed > 0:
+        sys.exit(2)
 
 
 if __name__ == "__main__":

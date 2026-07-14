@@ -120,7 +120,7 @@ def call_prepare(
     """
     now_utc = datetime.fromtimestamp(server_epoch, timezone.utc)
 
-    def fake_fetch_candles(pair, signal_time, tf, sep, eff_start):
+    def fake_fetch_candles(pair, tf, sep, eff_start):
         return m15_candles, "ok"
 
     s5_ret = (s5_response, "ok") if s5_response is not None else ([], s5_fail_reason)
@@ -543,7 +543,7 @@ class S5OutcomeTests(unittest.TestCase):
         sig = make_signal(direction="BUY", entry=1.1000, sl=1.0980, tp=tp)
         now_utc = datetime.fromtimestamp(server_epoch, timezone.utc)
 
-        def fake_fetch_candles(pair, signal_time, tf, sep, eff_start):
+        def fake_fetch_candles(pair, tf, sep, eff_start):
             return candles, "ok"
 
         with (
@@ -607,7 +607,7 @@ class MissingDataTests(unittest.TestCase):
         sig = make_signal()
         now_utc = datetime.fromtimestamp(server_epoch, timezone.utc)
 
-        def fake_fetch_candles(pair, signal_time, tf, sep, eff_start):
+        def fake_fetch_candles(pair, tf, sep, eff_start):
             return [], "missing local cache"
 
         with patch.object(closer, "fetch_candles", side_effect=fake_fetch_candles):
@@ -624,7 +624,7 @@ class MissingDataTests(unittest.TestCase):
         server_epoch = old_epoch + 169 * 3600
         now_utc = datetime.fromtimestamp(server_epoch, timezone.utc)
 
-        def fake_fetch_candles(pair, signal_time, tf, sep, eff_start):
+        def fake_fetch_candles(pair, tf, sep, eff_start):
             return [], "missing local cache"
 
         with patch.object(closer, "fetch_candles", side_effect=fake_fetch_candles):
@@ -700,7 +700,7 @@ class EventTimestampTests(unittest.TestCase):
         server_epoch = old_epoch + 169 * 3600
         now_utc = datetime.fromtimestamp(server_epoch, timezone.utc)
 
-        def fake_fetch_candles(pair, signal_time, tf, sep, eff_start):
+        def fake_fetch_candles(pair, tf, sep, eff_start):
             return [], "missing"
 
         with patch.object(closer, "fetch_candles", side_effect=fake_fetch_candles):
@@ -1024,7 +1024,6 @@ class Defect2CoverageCheckTests(unittest.TestCase):
             try:
                 return closer.fetch_candles(
                     "EURUSD",
-                    datetime.fromtimestamp(effective_start, timezone.utc),
                     "M15",
                     server_epoch,
                     effective_start,
@@ -1498,7 +1497,6 @@ class M15NormalizationTests(unittest.TestCase):
         with _patch.object(closer, "load_oanda_cache", return_value=(raw_candles, "ok")):
             return closer.fetch_candles(
                 "EURUSD",
-                datetime.fromtimestamp(eff_start, timezone.utc),
                 "M15",
                 server_epoch,
                 eff_start,
@@ -2164,6 +2162,251 @@ class WrapperSecurityTests(unittest.TestCase):
                 pattern, self._content,
                 f"Shell tracing {pattern!r} must not be present in wrapper",
             )
+
+
+# ── H. DeepSource Finding 1 — curl absolute path ──────────────────────────────
+
+class CurlAbsolutePathTests(unittest.TestCase):
+    """H-1 through H-3: compute_server_clock_epoch uses absolute curl path."""
+
+    def test_curl_absent_returns_zero_without_raising(self) -> None:
+        """H-1: When curl is not found on PATH, function returns 0 and does not raise."""
+        with _patch("shutil.which", return_value=None):
+            result = closer.compute_server_clock_epoch()
+        self.assertEqual(0, result)
+
+    def test_subprocess_receives_absolute_path(self) -> None:
+        """H-2: When curl exists, subprocess.run is called with an absolute path string."""
+        fake_curl = "/usr/bin/curl"
+        called_args: list[list] = []
+
+        def fake_run(args, **kwargs):
+            called_args.append(args)
+            proc = type("P", (), {"stdout": "", "returncode": 0})()
+            return proc
+
+        with (
+            _patch("shutil.which", return_value=fake_curl),
+            _patch("subprocess.run", side_effect=fake_run),
+        ):
+            closer.compute_server_clock_epoch()
+
+        self.assertGreater(len(called_args), 0, "subprocess.run should have been called")
+        first_cmd = called_args[0]
+        self.assertIsInstance(first_cmd, list)
+        self.assertEqual(fake_curl, first_cmd[0], "First element must be the absolute curl path")
+        self.assertNotEqual("curl", first_cmd[0], "Must not be bare 'curl'")
+
+    def test_no_unqualified_executable_launched(self) -> None:
+        """H-3: Under no circumstance is bare 'curl' passed as a subprocess command."""
+        fake_curl = "/opt/homebrew/bin/curl"
+        captured: list[list] = []
+
+        def fake_run(args, **kwargs):
+            captured.append(args)
+            proc = type("P", (), {"stdout": "Date: Mon, 14 Jul 2026 10:00:00 GMT\r\n", "returncode": 0})()
+            return proc
+
+        with (
+            _patch("shutil.which", return_value=fake_curl),
+            _patch("subprocess.run", side_effect=fake_run),
+        ):
+            closer.compute_server_clock_epoch()
+
+        for cmd in captured:
+            if isinstance(cmd, list) and cmd:
+                self.assertNotEqual("curl", cmd[0], f"Bare 'curl' found in subprocess call: {cmd}")
+
+
+# ── I. Finding 4 — threshold_epoch None defensive guard ───────────────────────
+
+class ThresholdNoneGuardTests(unittest.TestCase):
+    """I-1: resolve_signal_outcome returns DATA_UNAVAILABLE when threshold_epoch is None."""
+
+    def test_none_threshold_returns_open_without_raising(self) -> None:
+        """I-1: threshold_epoch=None with no TP/SL touch → OPEN, does not raise.
+
+        The defensive None guards inside threshold branches are logically unreachable
+        (threshold_epoch is None implies no threshold candle, so those branches are
+        not entered).  This test confirms the function handles None gracefully end-to-end.
+        """
+        candles = make_m15_candles(10, start_epoch=SIGNAL_EPOCH_BASE, high=1.1010, low=1.0995)
+        eff_start = SIGNAL_EPOCH_BASE
+        server_epoch = SIGNAL_EPOCH_BASE + 10 * M15
+        eval_end = server_epoch
+
+        with _patch.object(closer, "fetch_s5_candles", return_value=([], "no s5")):
+            result = closer.resolve_signal_outcome(
+                pair="EURUSD",
+                direction="BUY",
+                entry=1.1000,
+                sl=1.0980,
+                tp=1.1020,
+                tf_sec=M15,
+                effective_start_epoch=eff_start,
+                eval_end=eval_end,
+                threshold_epoch=None,
+                completed_m15_candles=candles,
+                oanda_token="fake",
+                oanda_url="https://fake.oanda.test",
+            )
+        self.assertEqual(closer.ResolutionState.OPEN, result.state)
+
+
+# ── J. Objective B — apply_signal_actions write failure tracking ───────────────
+
+class ApplySignalActionsTests(unittest.TestCase):
+    """J-1 through J-10: apply_signal_actions write failure contract."""
+
+    _SERVER_EPOCH = SIGNAL_EPOCH_BASE + 200 * M15
+
+    def _make_action(self, outcome: str, sig_id: str = "sig-1") -> dict:
+        return {
+            "id": sig_id,
+            "pair": "EURUSD",
+            "direction": "BUY",
+            "entry_price": 1.1000,
+            "age_hours": 5.0,
+            "predicted_outcome": outcome,
+            "predicted_pips": 10.0 if outcome in ("WIN", "TIME_EXIT") else -10.0,
+            "predicted_reason": "test",
+            "predicted_closed_at_epoch": self._SERVER_EPOCH,
+            "predicted_exit_price": 1.1010,
+        }
+
+    def test_successful_closed_patch_increments_closed(self) -> None:
+        """J-1: close_signal returning True increments closed counter."""
+        action = self._make_action("WIN")
+        with _patch.object(closer, "close_signal", return_value=True):
+            counts = closer.apply_signal_actions([action], False, self._SERVER_EPOCH)
+        self.assertEqual(1, counts["closed"])
+        self.assertEqual(0, counts["write_failed"])
+
+    def test_failed_closed_patch_returns_false(self) -> None:
+        """J-2: close_signal returning False → write_failed=1, closed=0."""
+        action = self._make_action("WIN")
+        with _patch.object(closer, "close_signal", return_value=False):
+            counts = closer.apply_signal_actions([action], False, self._SERVER_EPOCH)
+        self.assertEqual(0, counts["closed"])
+        self.assertEqual(1, counts["write_failed"])
+
+    def test_failed_patch_does_not_increment_closed(self) -> None:
+        """J-3: A failed WIN write must not be counted as closed."""
+        action = self._make_action("WIN")
+        with _patch.object(closer, "close_signal", return_value=False):
+            counts = closer.apply_signal_actions([action], False, self._SERVER_EPOCH)
+        self.assertNotEqual(1, counts["closed"])
+
+    def test_failed_cancelled_patch_does_not_increment_cancelled(self) -> None:
+        """J-4: A failed CANCELLED write must not be counted as cancelled."""
+        action = self._make_action("CANCELLED")
+        with _patch.object(closer, "close_signal", return_value=False):
+            counts = closer.apply_signal_actions([action], False, self._SERVER_EPOCH)
+        self.assertEqual(0, counts["cancelled"])
+        self.assertEqual(1, counts["write_failed"])
+
+    def test_failed_writes_increment_write_failed(self) -> None:
+        """J-5: Two failed writes → write_failed=2."""
+        actions = [self._make_action("WIN", "s1"), self._make_action("LOSS", "s2")]
+        with _patch.object(closer, "close_signal", return_value=False):
+            counts = closer.apply_signal_actions(actions, False, self._SERVER_EPOCH)
+        self.assertEqual(2, counts["write_failed"])
+
+    def test_failed_writes_increment_still_open_additional(self) -> None:
+        """J-6: Failed writes increase still_open_additional by the failure count."""
+        actions = [self._make_action("WIN", "s1"), self._make_action("WIN", "s2")]
+        with _patch.object(closer, "close_signal", return_value=False):
+            counts = closer.apply_signal_actions(actions, False, self._SERVER_EPOCH)
+        self.assertEqual(2, counts["still_open_additional"])
+
+    def test_later_action_attempted_after_earlier_failure(self) -> None:
+        """J-7: A failed write on the first signal does not skip subsequent signals."""
+        actions = [self._make_action("WIN", "s1"), self._make_action("WIN", "s2")]
+        call_count = {"n": 0}
+
+        def side_effect(*args, **kwargs):
+            call_count["n"] += 1
+            return False
+
+        with _patch.object(closer, "close_signal", side_effect=side_effect):
+            closer.apply_signal_actions(actions, False, self._SERVER_EPOCH)
+
+        self.assertEqual(2, call_count["n"], "close_signal should be called for every action")
+
+    def test_dry_run_never_calls_supabase_and_counts_as_success(self) -> None:
+        """J-8: dry_run=True → close_signal returns True without Supabase; closed incremented."""
+        action = self._make_action("WIN")
+        supabase_calls: list = []
+        original_close = closer.close_signal
+
+        def tracking_close(*args, **kwargs):
+            result = original_close(*args, **kwargs)
+            return result
+
+        with _patch.object(closer, "supabase_request", side_effect=lambda *a, **k: supabase_calls.append(a)):
+            counts = closer.apply_signal_actions([action], True, self._SERVER_EPOCH)
+
+        self.assertEqual(0, len(supabase_calls), "supabase_request must not be called in dry-run")
+        self.assertEqual(1, counts["closed"])
+        self.assertEqual(0, counts["write_failed"])
+
+    def test_write_failed_nonzero_produces_nonzero_exit_in_live_mode(self) -> None:
+        """J-9: main exits with code 2 when any live write fails."""
+        import io
+        from unittest.mock import MagicMock
+
+        fake_signal = {
+            "id": "live-sig-1",
+            "pair": "EURUSD",
+            "direction": "BUY",
+            "entry_price": 1.1000,
+            "stop_loss": 1.0980,
+            "take_profit": 1.1020,
+            "created_at": datetime.fromtimestamp(SIGNAL_EPOCH_BASE, timezone.utc).isoformat(),
+            "timeframe": "M15",
+            "status": "ACTIVE",
+        }
+        candles = make_m15_candles(96, start_epoch=SIGNAL_EPOCH_BASE)
+        server_epoch = SIGNAL_EPOCH_BASE + 200 * M15
+
+        with (
+            _patch.object(closer, "compute_server_clock_epoch", return_value=server_epoch),
+            _patch.object(closer, "get_active_signals", return_value=[fake_signal]),
+            _patch.object(closer, "fetch_candles", return_value=(candles, "ok")),
+            _patch.object(closer, "fetch_s5_candles", return_value=([], "no s5")),
+            _patch.object(closer, "SUPABASE_KEY", "fake-key"),
+            _patch.object(closer, "close_signal", return_value=False),
+            _patch.object(closer, "print_preview", return_value=None),
+            _patch.object(closer, "bulk_gate", return_value=None),
+        ):
+            import sys as _sys
+            old_argv = _sys.argv
+            _sys.argv = ["signal_closer.py", "--live", "--confirm", "CLOSE_SIGNALS", "--max-batch", "5"]
+            try:
+                with self.assertRaises(SystemExit) as cm:
+                    closer.main()
+                self.assertEqual(2, cm.exception.code)
+            finally:
+                _sys.argv = old_argv
+
+    def test_no_false_closed_log_on_failure(self) -> None:
+        """J-10: When close_signal returns False, the CLOSED success log must not be emitted."""
+        action = self._make_action("WIN")
+        log_lines: list[str] = []
+        original_log = closer.log
+
+        def capture_log(msg: str) -> None:
+            log_lines.append(msg)
+            original_log(msg)
+
+        with (
+            _patch.object(closer, "close_signal", return_value=False),
+            _patch.object(closer, "log", side_effect=capture_log),
+        ):
+            closer.apply_signal_actions([action], False, self._SERVER_EPOCH)
+
+        closed_logs = [ln for ln in log_lines if ln.startswith("CLOSED ")]
+        self.assertEqual(0, len(closed_logs), f"No CLOSED success log expected on failure; got: {closed_logs}")
 
 
 if __name__ == "__main__":
