@@ -34,11 +34,11 @@ import json
 import math
 import os
 import pathlib
-import shutil
+import http.client
 import statistics
-import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from enum import Enum, auto
@@ -157,29 +157,35 @@ def oanda_instrument(pair: str) -> str:
 
 # ── Trusted server clock ──────────────────────────────────────────────────────
 
-def compute_server_clock_epoch() -> int:
-    # DS-PY finding 1: resolve curl to an absolute path before subprocess.run.
-    # Absence of curl fails closed (returns 0) without raising.
-    _curl = shutil.which("curl")
-    if not _curl:
-        return 0
+def _https_date_header(url: str) -> str:
+    """Return the Date response header from a HEAD request, or an empty string."""
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        return ""
+    target = parsed.path or "/"
+    if parsed.query:
+        target = f"{target}?{parsed.query}"
+    conn = http.client.HTTPSConnection(parsed.hostname, timeout=10)
+    try:
+        conn.request("HEAD", target, headers={"User-Agent": "BotA-clock/1.0"})
+        resp = conn.getresponse()
+        return resp.getheader("Date", "")
+    except Exception:
+        return ""
+    finally:
+        conn.close()
 
+
+def compute_server_clock_epoch() -> int:
     epochs: list[int] = []
     for url in CLOCK_ENDPOINTS:
         if len(epochs) >= 2:
             break
         try:
-            proc = subprocess.run(
-                [_curl, "-sI", "--max-time", "6", url],
-                text=True, capture_output=True, timeout=10, check=False,
-            )
-            date_line = next(
-                (l for l in proc.stdout.splitlines() if l.lower().startswith("date:")),
-                "",
-            )
-            if not date_line:
+            date_value = _https_date_header(url)
+            if not date_value:
                 continue
-            dt = email.utils.parsedate_to_datetime(date_line.split(":", 1)[1].strip())
+            dt = email.utils.parsedate_to_datetime(date_value.strip())
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
             epochs.append(int(dt.timestamp()))

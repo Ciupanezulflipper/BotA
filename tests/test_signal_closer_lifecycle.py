@@ -2164,58 +2164,86 @@ class WrapperSecurityTests(unittest.TestCase):
             )
 
 
-# ── H. DeepSource Finding 1 — curl absolute path ──────────────────────────────
+# ── H. DeepSource DS-PY — HTTPS HEAD clock probe ─────────────────────────────
 
-class CurlAbsolutePathTests(unittest.TestCase):
-    """H-1 through H-3: compute_server_clock_epoch uses absolute curl path."""
+class HttpsClockProbeTests(unittest.TestCase):
+    """H-1 through H-6: compute_server_clock_epoch uses HTTPS HEAD, no subprocess."""
 
-    def test_curl_absent_returns_zero_without_raising(self) -> None:
-        """H-1: When curl is not found on PATH, function returns 0 and does not raise."""
-        with _patch("shutil.which", return_value=None):
+    _DATE_A = "Mon, 14 Jul 2026 10:00:00 GMT"
+    _DATE_B = "Mon, 14 Jul 2026 10:00:30 GMT"  # 30 s apart — within 60 s
+
+    def _make_conn(self, date_value: str | None):
+        """Return a mock HTTPSConnection whose getresponse yields the given Date."""
+        from unittest.mock import MagicMock
+        resp = MagicMock()
+        resp.getheader.side_effect = lambda h, default="": date_value if h == "Date" and date_value is not None else default
+        conn = MagicMock()
+        conn.getresponse.return_value = resp
+        return conn
+
+    def test_two_valid_dates_within_60s_returns_median(self) -> None:
+        """H-1: Two valid Date headers ≤60 s apart → integer median."""
+        import email.utils, statistics as _stats
+        from datetime import timezone as _tz
+        ep_a = int(email.utils.parsedate_to_datetime(self._DATE_A).timestamp())
+        ep_b = int(email.utils.parsedate_to_datetime(self._DATE_B).timestamp())
+        expected = int(_stats.median([ep_a, ep_b]))
+
+        conns = [self._make_conn(self._DATE_A), self._make_conn(self._DATE_B)]
+        with _patch("http.client.HTTPSConnection", side_effect=conns):
+            result = closer.compute_server_clock_epoch()
+        self.assertEqual(expected, result)
+
+    def test_one_valid_date_returns_fallback(self) -> None:
+        """H-2: Only one valid Date header → that epoch is returned."""
+        import email.utils
+        ep = int(email.utils.parsedate_to_datetime(self._DATE_A).timestamp())
+        conns = [self._make_conn(self._DATE_A)] + [self._make_conn(None)] * 10
+        with _patch("http.client.HTTPSConnection", side_effect=conns):
+            result = closer.compute_server_clock_epoch()
+        self.assertEqual(ep, result)
+
+    def test_missing_date_headers_fail_closed(self) -> None:
+        """H-3: No endpoint returns a Date header → returns 0."""
+        conns = [self._make_conn(None)] * 10
+        with _patch("http.client.HTTPSConnection", side_effect=conns):
             result = closer.compute_server_clock_epoch()
         self.assertEqual(0, result)
 
-    def test_subprocess_receives_absolute_path(self) -> None:
-        """H-2: When curl exists, subprocess.run is called with an absolute path string."""
-        fake_curl = "/usr/bin/curl"
-        called_args: list[list] = []
+    def test_non_https_endpoint_skipped(self) -> None:
+        """H-4: Non-HTTPS or hostless URLs are rejected without connecting."""
+        original = closer.CLOCK_ENDPOINTS
+        try:
+            closer.CLOCK_ENDPOINTS = ["http://example.com", "ftp://example.com"]
+            with _patch("http.client.HTTPSConnection") as mock_conn:
+                result = closer.compute_server_clock_epoch()
+            mock_conn.assert_not_called()
+        finally:
+            closer.CLOCK_ENDPOINTS = original
+        self.assertEqual(0, result)
 
-        def fake_run(args, **kwargs):
-            called_args.append(args)
-            proc = type("P", (), {"stdout": "", "returncode": 0})()
-            return proc
+    def test_connection_exception_fails_closed(self) -> None:
+        """H-5: OSError during connection → function returns 0 without raising."""
+        from unittest.mock import MagicMock
+        conn = MagicMock()
+        conn.request.side_effect = OSError("network unreachable")
+        with _patch("http.client.HTTPSConnection", return_value=conn):
+            result = closer.compute_server_clock_epoch()
+        self.assertEqual(0, result)
 
+    def test_no_subprocess_invoked_by_clock_probe(self) -> None:
+        """H-6: compute_server_clock_epoch never invokes any subprocess."""
+        conn = self._make_conn(self._DATE_A)
         with (
-            _patch("shutil.which", return_value=fake_curl),
-            _patch("subprocess.run", side_effect=fake_run),
+            _patch("http.client.HTTPSConnection", return_value=conn),
+            _patch("subprocess.run") as mock_run,
+            _patch("subprocess.Popen") as mock_popen,
+            _patch("os.system") as mock_system,
         ):
             closer.compute_server_clock_epoch()
-
-        self.assertGreater(len(called_args), 0, "subprocess.run should have been called")
-        first_cmd = called_args[0]
-        self.assertIsInstance(first_cmd, list)
-        self.assertEqual(fake_curl, first_cmd[0], "First element must be the absolute curl path")
-        self.assertNotEqual("curl", first_cmd[0], "Must not be bare 'curl'")
-
-    def test_no_unqualified_executable_launched(self) -> None:
-        """H-3: Under no circumstance is bare 'curl' passed as a subprocess command."""
-        fake_curl = "/opt/homebrew/bin/curl"
-        captured: list[list] = []
-
-        def fake_run(args, **kwargs):
-            captured.append(args)
-            proc = type("P", (), {"stdout": "Date: Mon, 14 Jul 2026 10:00:00 GMT\r\n", "returncode": 0})()
-            return proc
-
-        with (
-            _patch("shutil.which", return_value=fake_curl),
-            _patch("subprocess.run", side_effect=fake_run),
-        ):
-            closer.compute_server_clock_epoch()
-
-        for cmd in captured:
-            if isinstance(cmd, list) and cmd:
-                self.assertNotEqual("curl", cmd[0], f"Bare 'curl' found in subprocess call: {cmd}")
+        mock_run.assert_not_called()
+        mock_popen.assert_not_called()
+        mock_system.assert_not_called()
 
 
 # ── I. Finding 4 — threshold_epoch None defensive guard ───────────────────────
