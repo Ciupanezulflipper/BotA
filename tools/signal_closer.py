@@ -880,14 +880,13 @@ def _resolve_single_candle(
             return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
         return _make_m15_time_exit(direction, entry, pair, candle, threshold_epoch)
 
-    if not need_s5:
-        if not m15_touches_any_boundary(direction, sl, tp, candle):
-            if is_threshold_candle:
-                if threshold_epoch is None:  # defensive guard; logically unreachable
-                    return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
-                return _make_m15_time_exit(direction, entry, pair, candle, threshold_epoch)
-            return None  # no touch, not threshold → scan next candle
-        # M15 H/L touched a boundary → need S5 precision (fall through)
+    if not need_s5 and not m15_touches_any_boundary(direction, sl, tp, candle):
+        if is_threshold_candle:
+            if threshold_epoch is None:  # defensive guard; logically unreachable
+                return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
+            return _make_m15_time_exit(direction, entry, pair, candle, threshold_epoch)
+        return None  # no touch, not threshold → scan next candle
+    # M15 H/L touched a boundary → need S5 precision (fall through)
 
     return _resolve_with_s5(
         candle, pair, direction, entry, sl, tp,
