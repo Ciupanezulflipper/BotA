@@ -2409,5 +2409,231 @@ class ApplySignalActionsTests(unittest.TestCase):
         self.assertEqual(0, len(closed_logs), f"No CLOSED success log expected on failure; got: {closed_logs}")
 
 
+# ── K. close_signal response-contract tests ────────────────────────────────────
+
+class CloseSignalResponseContractTests(unittest.TestCase):
+    """K-1 through K-15: Direct close_signal and integration tests.
+
+    K-1..K-10 call the real close_signal function with only supabase_request mocked.
+    K-11..K-15 verify apply_signal_actions counters and main() exit codes through
+    the real close_signal (supabase_request mocked, not close_signal).
+    """
+
+    _SIG_ID = "contract-test-sig-k001"
+    _SERVER_EPOCH = SIGNAL_EPOCH_BASE + 200 * M15
+
+    def _call_close(
+        self,
+        resp=None,
+        *,
+        exc: Exception | None = None,
+        dry_run: bool = False,
+    ) -> tuple[bool, list[str]]:
+        """Helper: call real close_signal with supabase_request mocked. Returns (result, log_lines)."""
+        log_lines: list[str] = []
+
+        def fake_supa(*args, **kwargs):
+            if exc is not None:
+                raise exc
+            return resp
+
+        with (
+            _patch.object(closer, "supabase_request", side_effect=fake_supa),
+            _patch.object(closer, "log", side_effect=lambda msg: log_lines.append(msg)),
+        ):
+            result = closer.close_signal(
+                self._SIG_ID, "CLOSED", 10.0, dry_run, self._SERVER_EPOCH
+            )
+        return result, log_lines
+
+    def _has_closed_log(self, log_lines: list[str]) -> bool:
+        return any(ln.startswith("CLOSED ") for ln in log_lines)
+
+    # ── K-1..K-9: direct response-contract tests ──────────────────────────────
+
+    def test_k1_exact_matching_row_returns_true_and_closed_log(self) -> None:
+        """K-1: Single row with matching id → True + CLOSED success log emitted."""
+        result, logs = self._call_close([{"id": self._SIG_ID, "status": "CLOSED"}])
+        self.assertTrue(result)
+        self.assertTrue(self._has_closed_log(logs), f"Expected CLOSED log; got: {logs}")
+
+    def test_k2_empty_list_returns_false_no_closed_log(self) -> None:
+        """K-2: Empty list (0 rows updated) → False, no CLOSED log."""
+        result, logs = self._call_close([])
+        self.assertFalse(result)
+        self.assertFalse(self._has_closed_log(logs))
+
+    def test_k3_multiple_rows_returns_false_no_closed_log(self) -> None:
+        """K-3: Two rows returned → False, no CLOSED log."""
+        result, logs = self._call_close([{"id": self._SIG_ID}, {"id": "other-sig"}])
+        self.assertFalse(result)
+        self.assertFalse(self._has_closed_log(logs))
+
+    def test_k4_wrong_returned_id_returns_false(self) -> None:
+        """K-4: One row but id doesn't match signal_id → False."""
+        result, logs = self._call_close([{"id": "completely-wrong-id"}])
+        self.assertFalse(result)
+
+    def test_k5_missing_id_field_returns_false(self) -> None:
+        """K-5: One row with no 'id' key (row.get('id') returns None) → False."""
+        result, logs = self._call_close([{"status": "CLOSED", "result_pips": 10.0}])
+        self.assertFalse(result)
+
+    def test_k6_dict_response_not_list_returns_false(self) -> None:
+        """K-6: Response is a plain dict, not a list → False."""
+        result, logs = self._call_close({"id": self._SIG_ID})
+        self.assertFalse(result)
+
+    def test_k7_list_containing_non_dict_element_returns_false(self) -> None:
+        """K-7: List whose sole element is not a dict → False."""
+        result, logs = self._call_close(["not-a-dict"])
+        self.assertFalse(result)
+
+    def test_k8_none_response_returns_false(self) -> None:
+        """K-8: None response (JSON null body) → False."""
+        result, logs = self._call_close(None)
+        self.assertFalse(result)
+
+    def test_k9_supabase_exception_returns_false_no_escape(self) -> None:
+        """K-9: supabase_request raises → False; exception must not propagate."""
+        result, logs = self._call_close(exc=OSError("connection refused"))
+        self.assertFalse(result)
+
+    # ── K-10: dry-run contract ─────────────────────────────────────────────────
+
+    def test_k10_dry_run_returns_true_no_supabase_call(self) -> None:
+        """K-10: dry_run=True → True immediately; supabase_request is never invoked."""
+        patch_calls: list = []
+
+        def fake_supa(*args, **kwargs):
+            patch_calls.append(args)
+            return [{"id": self._SIG_ID}]
+
+        with _patch.object(closer, "supabase_request", side_effect=fake_supa):
+            result = closer.close_signal(self._SIG_ID, "CLOSED", 5.0, True, self._SERVER_EPOCH)
+
+        self.assertTrue(result)
+        self.assertEqual(0, len(patch_calls), "supabase_request must not be called in dry-run")
+
+    # ── K-11..K-13: apply_signal_actions integration (real close_signal) ──────
+
+    def _make_k_action(self, outcome: str, sig_id: str | None = None) -> dict:
+        return {
+            "id": sig_id or self._SIG_ID,
+            "pair": "EURUSD",
+            "direction": "BUY",
+            "entry_price": 1.1000,
+            "age_hours": 5.0,
+            "predicted_outcome": outcome,
+            "predicted_pips": 10.0 if outcome in ("WIN", "TIME_EXIT") else 0.0,
+            "predicted_reason": "test",
+            "predicted_closed_at_epoch": self._SERVER_EPOCH,
+            "predicted_exit_price": 1.1010 if outcome != "CANCELLED" else None,
+        }
+
+    def test_k11_failed_patch_response_counted_as_write_failed_not_closed(self) -> None:
+        """K-11: apply_signal_actions; real close_signal; PATCH returns [] → write_failed=1, closed=0."""
+        action = self._make_k_action("WIN")
+        with _patch.object(closer, "supabase_request", return_value=[]):
+            counts = closer.apply_signal_actions([action], False, self._SERVER_EPOCH)
+        self.assertEqual(0, counts["closed"])
+        self.assertEqual(1, counts["write_failed"])
+        self.assertEqual(1, counts["still_open_additional"])
+
+    def test_k12_failed_cancelled_patch_counted_as_write_failed_not_cancelled(self) -> None:
+        """K-12: CANCELLED signal; real close_signal; PATCH returns [] → write_failed=1, cancelled=0."""
+        action = self._make_k_action("CANCELLED")
+        with _patch.object(closer, "supabase_request", return_value=[]):
+            counts = closer.apply_signal_actions([action], False, self._SERVER_EPOCH)
+        self.assertEqual(0, counts["cancelled"])
+        self.assertEqual(1, counts["write_failed"])
+
+    def test_k13_later_actions_attempted_after_earlier_failed_write(self) -> None:
+        """K-13: Failed PATCH on signal-a does not prevent signal-b from being attempted."""
+        actions = [
+            self._make_k_action("WIN", "sig-k13-a"),
+            self._make_k_action("WIN", "sig-k13-b"),
+        ]
+        patch_paths: list[str] = []
+
+        def fake_supa(method, path, body=None):
+            if method == "PATCH":
+                patch_paths.append(path)
+            return []  # both writes fail
+
+        with _patch.object(closer, "supabase_request", side_effect=fake_supa):
+            counts = closer.apply_signal_actions(actions, False, self._SERVER_EPOCH)
+
+        self.assertEqual(2, len(patch_paths), "Both PATCH requests must be attempted")
+        self.assertEqual(2, counts["write_failed"])
+        self.assertEqual(0, counts["closed"])
+
+    # ── K-14..K-15: main() integration ────────────────────────────────────────
+
+    def test_k14_live_main_exits_2_on_write_confirmation_failure(self) -> None:
+        """K-14: Live main exits 2 when PATCH response confirms 0 updated rows (real close_signal)."""
+        import sys as _sys
+
+        fake_signal = {
+            "id": "live-k14",
+            "pair": "EURUSD",
+            "direction": "BUY",
+            "entry_price": 1.1000,
+            "stop_loss": 1.0980,
+            "take_profit": 1.1020,
+            "created_at": datetime.fromtimestamp(SIGNAL_EPOCH_BASE, timezone.utc).isoformat(),
+            "timeframe": "M15",
+            "status": "ACTIVE",
+        }
+        candles = make_m15_candles(96, start_epoch=SIGNAL_EPOCH_BASE)
+
+        def fake_supa(method, path, body=None):
+            if method == "GET":
+                return [fake_signal]
+            return []  # PATCH → empty list → write confirmation fails
+
+        old_argv = _sys.argv
+        _sys.argv = [
+            "signal_closer.py", "--live", "--confirm", "CLOSE_SIGNALS", "--max-batch", "5",
+        ]
+        try:
+            with (
+                _patch.object(closer, "compute_server_clock_epoch", return_value=self._SERVER_EPOCH),
+                _patch.object(closer, "SUPABASE_KEY", "fake-key"),
+                _patch.object(closer, "supabase_request", side_effect=fake_supa),
+                _patch.object(closer, "fetch_candles", return_value=(candles, "ok")),
+                _patch.object(closer, "fetch_s5_candles", return_value=([], "no s5")),
+                _patch.object(closer, "print_preview", return_value=None),
+                _patch.object(closer, "bulk_gate", return_value=None),
+            ):
+                with self.assertRaises(SystemExit) as cm:
+                    closer.main()
+            self.assertEqual(2, cm.exception.code)
+        finally:
+            _sys.argv = old_argv
+
+    def test_k15_dry_run_main_never_exits_2(self) -> None:
+        """K-15: Dry-run main exits cleanly; sys.exit(2) is never raised."""
+        import sys as _sys
+
+        old_argv = _sys.argv
+        _sys.argv = ["signal_closer.py"]  # no --live → dry-run by default
+        try:
+            with (
+                _patch.object(closer, "compute_server_clock_epoch", return_value=self._SERVER_EPOCH),
+                _patch.object(closer, "SUPABASE_KEY", "fake-key"),
+                _patch.object(closer, "get_active_signals", return_value=[]),
+            ):
+                try:
+                    closer.main()
+                except SystemExit as exc:
+                    self.assertNotEqual(
+                        2, exc.code,
+                        f"main() must not exit 2 in dry-run mode; got exit({exc.code})",
+                    )
+        finally:
+            _sys.argv = old_argv
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

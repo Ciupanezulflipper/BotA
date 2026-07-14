@@ -723,6 +723,180 @@ def _select_s5_exit_price(
     return float(close_val), None
 
 
+# ── Candle-level resolution helpers ────────────────────────────────────────────
+
+def _resolve_with_s5(
+    candle: dict,
+    pair: str,
+    direction: str,
+    entry: float,
+    sl: float,
+    tp: float,
+    proc_start: int,
+    proc_end: int,
+    is_partial_start: bool,
+    is_threshold_candle: bool,
+    is_threshold_at_m15_boundary: bool,
+    tf_sec: int,
+    threshold_epoch: int | None,
+    oanda_token: str,
+    oanda_url: str,
+) -> ResolutionResult | None:
+    """
+    Fetch S5 data for one candle window, scan for TP/SL, handle threshold TIME_EXIT.
+
+    Returns ResolutionResult when outcome is determined (including DATA_UNAVAILABLE).
+    Returns None to signal "continue scanning the next M15 candle."
+    """
+    # DEFECT 4 fix: extend request back one M15 for partial-start candles.
+    s5_from = max(0, proc_start - tf_sec) if is_partial_start else proc_start
+    s5_to = proc_end
+
+    s5_raw, s5_reason = fetch_s5_candles(pair, s5_from, s5_to, oanda_token, oanda_url)
+
+    if s5_raw:
+        s5_validated, val_reason = validate_s5_candles(s5_raw)
+        if not s5_validated:
+            log(
+                f"S5 validation failed for {pair} [{s5_from}, {s5_to}): "
+                f"{val_reason} — DATA_UNAVAILABLE"
+            )
+            return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
+        s5_all = s5_validated
+    else:
+        s5_all = []
+
+    s5_post_entry = [c for c in s5_all if int(c["t"]) >= proc_start]
+
+    if not s5_post_entry:
+        if is_partial_start and not is_threshold_candle:
+            # DEFECT 4 fix: sparse S5 for partial-entry → no touch attributed.
+            log(
+                f"S5 sparse for partial-entry {pair} "
+                f"[{proc_start}, {proc_end}): no post-entry S5 — "
+                f"no touch attributed, continuing"
+            )
+            return None
+        log(
+            f"S5 unavailable for {pair} [{s5_from}, {s5_to}): "
+            f"{s5_reason} — DATA_UNAVAILABLE"
+        )
+        return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
+
+    result = check_s5_outcome(direction, entry, sl, tp, s5_post_entry, pair)
+    if result is not None:
+        outcome, rp, ep, cat, reason = result
+        log(
+            f"{outcome} {pair} {direction} entry={entry} "
+            f"exit={ep} pips={rp:+.1f} reason={reason} "
+            f"closed_at_epoch={cat}"
+        )
+        return ResolutionResult(
+            state=ResolutionState.RESOLVED,
+            outcome=outcome,
+            result_pips=rp,
+            exit_price=ep,
+            closed_at_epoch=cat,
+            reason=reason,
+        )
+
+    if not is_threshold_candle:
+        return None
+
+    # Threshold candle with no TP/SL hit → TIME_EXIT pricing.
+    # is_threshold_candle=True guarantees threshold_epoch is not None;
+    # the guard below is defensive for the logically unreachable None case.
+    if threshold_epoch is None:
+        return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
+    threshold_int: int = threshold_epoch
+
+    exit_price, err = _select_s5_exit_price(
+        candle, is_threshold_at_m15_boundary,
+        s5_all, threshold_int, pair, s5_from, s5_to,
+    )
+    if err is not None:
+        return err
+
+    assert exit_price is not None
+    result_pips_val = pips(
+        (exit_price - entry) if direction == "BUY" else (entry - exit_price),
+        pair,
+    )
+    log(
+        f"TIME_EXIT {pair} {direction} entry={entry} "
+        f"exit={exit_price} pips={result_pips_val:+.1f} "
+        f"threshold={threshold_int}"
+    )
+    return ResolutionResult(
+        state=ResolutionState.RESOLVED,
+        outcome="TIME_EXIT",
+        result_pips=result_pips_val,
+        exit_price=exit_price,
+        closed_at_epoch=threshold_int,
+        reason="MAX_MARKET_SECONDS_TIME_EXIT",
+    )
+
+
+def _resolve_single_candle(
+    candle: dict,
+    pair: str,
+    direction: str,
+    entry: float,
+    sl: float,
+    tp: float,
+    tf_sec: int,
+    effective_start_epoch: int,
+    eval_end: int,
+    threshold_epoch: int | None,
+    oanda_token: str,
+    oanda_url: str,
+) -> ResolutionResult | None:
+    """
+    Evaluate one M15 candle against the lifecycle contract.
+
+    Returns ResolutionResult when a conclusive outcome is determined.
+    Returns None to continue scanning the next candle.
+    """
+    t = int(candle["t"])
+    candle_end = t + tf_sec
+    proc_start = max(t, effective_start_epoch)
+    proc_end = min(candle_end, eval_end)
+
+    if proc_start >= proc_end:
+        return None
+
+    is_partial_start = proc_start > t
+    is_threshold_candle = threshold_epoch is not None and proc_end == threshold_epoch
+    is_threshold_at_m15_boundary = is_threshold_candle and proc_end == candle_end
+    is_partial_end = is_threshold_candle and proc_end < candle_end
+    need_s5 = is_partial_start or is_partial_end
+
+    # When threshold == M15 boundary and whole-candle H/L shows no touch,
+    # the full-candle OHLC subsumes any sub-period H/L; S5 is unnecessary.
+    if need_s5 and is_threshold_at_m15_boundary and not m15_touches_any_boundary(
+        direction, sl, tp, candle
+    ):
+        if threshold_epoch is None:  # defensive guard; logically unreachable
+            return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
+        return _make_m15_time_exit(direction, entry, pair, candle, threshold_epoch)
+
+    if not need_s5:
+        if not m15_touches_any_boundary(direction, sl, tp, candle):
+            if is_threshold_candle:
+                if threshold_epoch is None:  # defensive guard; logically unreachable
+                    return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
+                return _make_m15_time_exit(direction, entry, pair, candle, threshold_epoch)
+            return None  # no touch, not threshold → scan next candle
+        # M15 H/L touched a boundary → need S5 precision (fall through)
+
+    return _resolve_with_s5(
+        candle, pair, direction, entry, sl, tp,
+        proc_start, proc_end, is_partial_start, is_threshold_candle,
+        is_threshold_at_m15_boundary, tf_sec, threshold_epoch,
+        oanda_token, oanda_url,
+    )
+
+
 # ── Outcome resolution ─────────────────────────────────────────────────────────
 
 def resolve_signal_outcome(
@@ -753,148 +927,15 @@ def resolve_signal_outcome(
     Returns ResolutionResult with state RESOLVED, OPEN, or DATA_UNAVAILABLE.
     """
     for candle in completed_m15_candles:
-        t = int(candle["t"])
-        candle_end = t + tf_sec
-
-        proc_start = max(t, effective_start_epoch)
-        proc_end = min(candle_end, eval_end)
-
-        if proc_start >= proc_end:
-            continue
-
-        is_partial_start = proc_start > t
-        is_threshold_candle = (
-            threshold_epoch is not None and proc_end == threshold_epoch
+        result = _resolve_single_candle(
+            candle, pair, direction, entry, sl, tp, tf_sec,
+            effective_start_epoch, eval_end, threshold_epoch,
+            oanda_token, oanda_url,
         )
-        is_threshold_at_m15_boundary = is_threshold_candle and (proc_end == candle_end)
-        is_partial_end = is_threshold_candle and (proc_end < candle_end)
+        if result is not None:
+            return result
 
-        need_s5 = is_partial_start or is_partial_end
-
-        # When threshold == M15 candle boundary and whole-candle H/L shows no
-        # TP/SL touch, S5 precision is not needed even for a partial-start
-        # candle: the full-candle OHLC subsumes any sub-period H/L.
-        if need_s5 and is_threshold_at_m15_boundary and not m15_touches_any_boundary(
-            direction, sl, tp, candle
-        ):
-            # DS-PY finding 4: narrow threshold_epoch to int before use.
-            if threshold_epoch is None:  # defensive guard; logically unreachable
-                return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
-            return _make_m15_time_exit(direction, entry, pair, candle, threshold_epoch)
-
-        if not need_s5:
-            if not m15_touches_any_boundary(direction, sl, tp, candle):
-                if is_threshold_candle:
-                    # Threshold exactly at M15 boundary; no touch → use M15 close
-                    # DS-PY finding 4: narrow before use
-                    if threshold_epoch is None:  # defensive guard; logically unreachable
-                        return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
-                    return _make_m15_time_exit(direction, entry, pair, candle, threshold_epoch)
-                continue  # no touch, not threshold — scan next candle
-            need_s5 = True  # M15 H/L touched a boundary → need S5 precision
-
-        if need_s5:
-            # DEFECT 4 fix: extend request back one M15 for partial-start candles
-            # to maximise chance of finding S5 data near the entry boundary.
-            s5_from = (
-                max(0, proc_start - tf_sec) if is_partial_start else proc_start
-            )
-            s5_to = proc_end
-
-            s5_raw, s5_reason = fetch_s5_candles(
-                pair, s5_from, s5_to, oanda_token, oanda_url,
-            )
-
-            # Validate S5: misaligned / non-finite / conflicting → DATA_UNAVAILABLE
-            if s5_raw:
-                s5_validated, val_reason = validate_s5_candles(s5_raw)
-                if not s5_validated:
-                    log(
-                        f"S5 validation failed for {pair} [{s5_from}, {s5_to}): "
-                        f"{val_reason} — DATA_UNAVAILABLE"
-                    )
-                    return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
-                s5_all = s5_validated
-            else:
-                s5_all = []
-
-            # For TP/SL scan, only consider candles from proc_start onward
-            s5_post_entry = [c for c in s5_all if int(c["t"]) >= proc_start]
-
-            if not s5_post_entry:
-                if is_partial_start and not is_threshold_candle:
-                    # DEFECT 4 fix: sparse S5 in partial-entry candle → no touch
-                    # attributed; do not treat as DATA_UNAVAILABLE
-                    log(
-                        f"S5 sparse for partial-entry {pair} "
-                        f"[{proc_start}, {proc_end}): no post-entry S5 — "
-                        f"no touch attributed, continuing"
-                    )
-                    continue
-                # No S5 at all when needed → DATA_UNAVAILABLE
-                log(
-                    f"S5 unavailable for {pair} [{s5_from}, {s5_to}): "
-                    f"{s5_reason} — DATA_UNAVAILABLE"
-                )
-                return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
-
-            # TP/SL scan on post-entry S5 candles
-            result = check_s5_outcome(direction, entry, sl, tp, s5_post_entry, pair)
-            if result is not None:
-                outcome, rp, ep, cat, reason = result
-                log(
-                    f"{outcome} {pair} {direction} entry={entry} "
-                    f"exit={ep} pips={rp:+.1f} reason={reason} "
-                    f"closed_at_epoch={cat}"
-                )
-                return ResolutionResult(
-                    state=ResolutionState.RESOLVED,
-                    outcome=outcome,
-                    result_pips=rp,
-                    exit_price=ep,
-                    closed_at_epoch=cat,
-                    reason=reason,
-                )
-
-            # No TP/SL in S5 — handle threshold TIME_EXIT if applicable
-            if is_threshold_candle:
-                # DS-PY finding 4: narrow threshold_epoch to int before comparison.
-                # is_threshold_candle=True guarantees threshold_epoch is not None;
-                # the guard below handles the logically unreachable None case.
-                if threshold_epoch is None:  # defensive guard; logically unreachable
-                    return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
-                threshold_int: int = threshold_epoch
-
-                exit_price, err = _select_s5_exit_price(
-                    candle, is_threshold_at_m15_boundary,
-                    s5_all, threshold_int, pair, s5_from, s5_to,
-                )
-                if err is not None:
-                    return err
-
-                assert exit_price is not None  # _select_s5_exit_price ensures this
-                result_pips_val = pips(
-                    (exit_price - entry) if direction == "BUY"
-                    else (entry - exit_price),
-                    pair,
-                )
-                log(
-                    f"TIME_EXIT {pair} {direction} entry={entry} "
-                    f"exit={exit_price} pips={result_pips_val:+.1f} "
-                    f"threshold={threshold_int}"
-                )
-                return ResolutionResult(
-                    state=ResolutionState.RESOLVED,
-                    outcome="TIME_EXIT",
-                    result_pips=result_pips_val,
-                    exit_price=exit_price,
-                    closed_at_epoch=threshold_int,
-                    reason="MAX_MARKET_SECONDS_TIME_EXIT",
-                )
-
-    # Exhausted all candles without resolution
     if threshold_epoch is not None:
-        # Threshold was reached but no candle returned a result — defensive guard
         return ResolutionResult(state=ResolutionState.DATA_UNAVAILABLE)
     return ResolutionResult(state=ResolutionState.OPEN)
 
@@ -1048,8 +1089,15 @@ def close_signal(
     """
     Write a signal close/cancel to Supabase.
 
-    Returns True on success (or dry-run), False when the PATCH fails.
-    The exception is caught here and logged; it does not escape.
+    Returns True only when all of the following hold:
+    - (dry_run) no Supabase call is made and True is returned immediately; OR
+    - supabase_request completed without exception,
+    - the response is a list of exactly one element,
+    - that element is a dict,
+    - and the dict's 'id' key matches signal_id exactly.
+
+    Any other response (exception, None, wrong shape, wrong id) → False.
+    The CLOSED success log is emitted only on a confirmed exact match.
     """
     closed_at_iso = iso_from_epoch(closed_at_epoch)
     body = {
@@ -1063,12 +1111,28 @@ def close_signal(
         return True
 
     try:
-        supabase_request("PATCH", f"signals?id=eq.{signal_id}", body)
-        log(f"CLOSED {signal_id} -> {status} {result_pips:+.1f} pips")
-        return True
+        resp = supabase_request("PATCH", f"signals?id=eq.{signal_id}", body)
     except Exception as exc:
-        log(f"ERROR closing {signal_id}: {exc}")
+        log(f"ERROR close_signal {signal_id}: {type(exc).__name__}")
         return False
+
+    if not isinstance(resp, list):
+        log(f"ERROR close_signal {signal_id}: expected list, got {type(resp).__name__}")
+        return False
+    if len(resp) != 1:
+        log(f"ERROR close_signal {signal_id}: expected 1 updated row, got {len(resp)}")
+        return False
+    row = resp[0]
+    if not isinstance(row, dict):
+        log(f"ERROR close_signal {signal_id}: row not a dict, got {type(row).__name__}")
+        return False
+    returned_id = row.get("id")
+    if returned_id != signal_id:
+        log(f"ERROR close_signal {signal_id}: id mismatch (got {returned_id!r})")
+        return False
+
+    log(f"CLOSED {signal_id} -> {status} {result_pips:+.1f} pips")
+    return True
 
 
 # ── Safety gates ───────────────────────────────────────────────────────────────
