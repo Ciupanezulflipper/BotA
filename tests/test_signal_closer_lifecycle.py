@@ -22,6 +22,11 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "tools" / "signal_closer.py"
 
+# tools/ must be on sys.path so signal_closer can import signal_resolution.
+_TOOLS_DIR = str(ROOT / "tools")
+if _TOOLS_DIR not in sys.path:
+    sys.path.insert(0, _TOOLS_DIR)
+
 SPEC = importlib.util.spec_from_file_location("signal_closer_under_test", MODULE_PATH)
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError(f"Unable to load {MODULE_PATH}")
@@ -130,7 +135,7 @@ def call_prepare(
 
     with (
         patch.object(closer, "fetch_candles", side_effect=fake_fetch_candles),
-        patch.object(closer, "fetch_s5_candles", side_effect=fake_fetch_s5),
+        patch("signal_resolution.fetch_s5_candles", side_effect=fake_fetch_s5),
     ):
         return closer.prepare_signal_action(
             sig, now_utc, server_epoch, max_age, hard_max_age,
@@ -280,8 +285,8 @@ class EffectiveStartTests(unittest.TestCase):
             "o": entry, "h": 1.1005, "l": 1.0995, "c": entry,
         }
         eval_end = SIGNAL_EPOCH_BASE + M15  # latest completed M15 end; no threshold yet
-        with _patch.object(
-            closer, "fetch_s5_candles",
+        with _patch(
+            "signal_resolution.fetch_s5_candles",
             return_value=([pre_entry_s5, post_entry_s5], "ok"),
         ):
             result = closer.resolve_signal_outcome(
@@ -421,7 +426,8 @@ class TimeExitPipTests(unittest.TestCase):
         )
         action = call_prepare(sig, candles, s5, server_epoch=server_epoch)
         self.assertIsNotNone(action)
-        return action  # type: ignore[return-value]
+        assert action is not None
+        return action
 
     def test_buy_profitable_time_exit(self) -> None:
         """Test 11: BUY TIME_EXIT with exit above entry → positive pips."""
@@ -581,7 +587,7 @@ class S5OutcomeTests(unittest.TestCase):
 
         with (
             patch.object(closer, "fetch_candles", side_effect=fake_fetch_candles),
-            patch.object(closer, "fetch_s5_candles", side_effect=fake_s5),
+            patch("signal_resolution.fetch_s5_candles", side_effect=fake_s5),
         ):
             closer.prepare_signal_action(
                 sig, now_utc, server_epoch, 24, 168,
@@ -816,7 +822,8 @@ class WrapperTests(unittest.TestCase):
         # Extract the Python env-loader block and run it against a temp env file
         match = re.search(r"<<'PY'\n(.*?)\nPY\b", content, re.DOTALL)
         self.assertIsNotNone(match, "Could not find PY heredoc in wrapper")
-        py_code = match.group(1)  # type: ignore[union-attr]
+        assert match is not None
+        py_code = match.group(1)
 
         with tempfile.TemporaryDirectory() as td:
             env_file = Path(td) / ".env"
@@ -1419,22 +1426,25 @@ class ValidateS5CandlesTests(unittest.TestCase):
 # ADVERSARIAL HARDENING PASS
 # ══════════════════════════════════════════════════════════════════════════════
 
-import io
 import math
-import urllib.error
-import urllib.request
 from unittest.mock import MagicMock, patch as _patch
 
 
-def _http_resp(body: bytes | str) -> MagicMock:
-    """Build a mock urllib response that works as a context manager."""
-    if isinstance(body, str):
-        body = body.encode()
-    m = MagicMock()
-    m.read.return_value = body
-    m.__enter__ = lambda self: self
-    m.__exit__ = MagicMock(return_value=False)
-    return m
+def _mock_https_conn(status: int = 200, body: bytes = b"") -> MagicMock:
+    """Build a mock HTTPSConnection that returns given status and body."""
+    resp = MagicMock()
+    resp.status = status
+    resp.read.return_value = body
+    conn = MagicMock()
+    conn.getresponse.return_value = resp
+    return conn
+
+
+def _mock_https_conn_error(exc: Exception) -> MagicMock:
+    """Build a mock HTTPSConnection that raises on request()."""
+    conn = MagicMock()
+    conn.request.side_effect = exc
+    return conn
 
 
 _FAKE_TOKEN = "FAKE_S5_TOKEN_SHOULD_NOT_APPEAR_IN_REASONS"
@@ -1761,40 +1771,40 @@ class S5TransportFailureTests(unittest.TestCase):
         _assert_no_secrets(self, reason)
 
     def test_http_error(self) -> None:
-        """E-21: HTTPError → empty, safe reason, no exception."""
-        err = urllib.error.HTTPError(
-            "https://fake", 403, "Forbidden", {}, io.BytesIO(b"body content here")
-        )
-        with _patch("urllib.request.urlopen", side_effect=err):
+        """E-21: Non-2xx HTTP response (403) → empty, safe reason, no exception."""
+        conn = _mock_https_conn(status=403, body=b"body content here")
+        with _patch("http.client.HTTPSConnection", return_value=conn):
             candles, reason = self._fetch()
         self._assert_safe(candles, reason)
         self.assertNotIn("body content here", reason)
 
     def test_timeout_error(self) -> None:
-        """E-22: TimeoutError → empty, safe reason."""
-        with _patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
+        """E-22: TimeoutError on request → empty, safe reason."""
+        conn = _mock_https_conn_error(TimeoutError("timed out"))
+        with _patch("http.client.HTTPSConnection", return_value=conn):
             candles, reason = self._fetch()
         self._assert_safe(candles, reason)
 
     def test_url_error(self) -> None:
-        """E-23: URLError → empty, safe reason."""
-        err = urllib.error.URLError("connection refused")
-        with _patch("urllib.request.urlopen", side_effect=err):
+        """E-23: OSError (connection refused) → empty, safe reason."""
+        conn = _mock_https_conn_error(OSError("connection refused"))
+        with _patch("http.client.HTTPSConnection", return_value=conn):
             candles, reason = self._fetch()
         self._assert_safe(candles, reason)
 
     def test_malformed_json(self) -> None:
         """E-24: Body not valid JSON → empty, safe reason."""
-        with _patch("urllib.request.urlopen", return_value=_http_resp(b"not json {{{}")):
+        conn = _mock_https_conn(body=b"not json {{{}")
+        with _patch("http.client.HTTPSConnection", return_value=conn):
             candles, reason = self._fetch()
         self._assert_safe(candles, reason)
-        # Must not echo the raw body
         self.assertNotIn("not json", reason)
 
     def test_json_not_object(self) -> None:
         """E-25: JSON is a list, not an object → empty, safe reason, no AttributeError."""
         body = json.dumps([1, 2, 3]).encode()
-        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+        conn = _mock_https_conn(body=body)
+        with _patch("http.client.HTTPSConnection", return_value=conn):
             candles, reason = self._fetch()
         self._assert_safe(candles, reason)
         self.assertIn("not a JSON object", reason)
@@ -1802,7 +1812,8 @@ class S5TransportFailureTests(unittest.TestCase):
     def test_missing_candles_field(self) -> None:
         """E-26: candles key absent → empty list; reason mentions no complete candles."""
         body = json.dumps({"status": "ok"}).encode()
-        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+        conn = _mock_https_conn(body=body)
+        with _patch("http.client.HTTPSConnection", return_value=conn):
             candles, reason = self._fetch()
         self.assertEqual([], candles)
         self.assertIn("no complete", reason)
@@ -1810,7 +1821,8 @@ class S5TransportFailureTests(unittest.TestCase):
     def test_candles_field_wrong_type(self) -> None:
         """E-27: candles is a string, not a list → empty, safe reason, no TypeError."""
         body = json.dumps({"candles": "not_a_list"}).encode()
-        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+        conn = _mock_https_conn(body=body)
+        with _patch("http.client.HTTPSConnection", return_value=conn):
             candles, reason = self._fetch()
         self._assert_safe(candles, reason)
         self.assertIn("not a list", reason)
@@ -1820,7 +1832,8 @@ class S5TransportFailureTests(unittest.TestCase):
         body = json.dumps({
             "candles": [{"complete": True, "time": "not-a-number", "mid": {}}]
         }).encode()
-        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+        conn = _mock_https_conn(body=body)
+        with _patch("http.client.HTTPSConnection", return_value=conn):
             candles, reason = self._fetch()
         self.assertEqual([], candles)
         self.assertIn("no complete", reason)
@@ -1832,7 +1845,8 @@ class S5TransportFailureTests(unittest.TestCase):
             "time": str(_S5_FROM),
             "mid": {"o": "1.1", "h": "Infinity", "l": "1.0", "c": "1.1"},
         }]}).encode()
-        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+        conn = _mock_https_conn(body=body)
+        with _patch("http.client.HTTPSConnection", return_value=conn):
             candles, reason = self._fetch()
         self.assertEqual([], candles)
         _assert_no_secrets(self, reason)
@@ -1845,7 +1859,8 @@ class S5TransportFailureTests(unittest.TestCase):
             {"complete": True, "time": str(_S5_FROM),
              "mid": {"o": "1.1", "h": "1.110", "l": "1.0", "c": "1.1"}},
         ]}).encode()
-        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+        conn = _mock_https_conn(body=body)
+        with _patch("http.client.HTTPSConnection", return_value=conn):
             candles, reason = self._fetch()
         self.assertEqual([], candles)
         _assert_no_secrets(self, reason)
@@ -1858,7 +1873,8 @@ class S5TransportFailureTests(unittest.TestCase):
             "time": str(bad_t),
             "mid": {"o": "1.1", "h": "1.105", "l": "1.0", "c": "1.1"},
         }]}).encode()
-        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+        conn = _mock_https_conn(body=body)
+        with _patch("http.client.HTTPSConnection", return_value=conn):
             candles, reason = self._fetch()
         self.assertEqual([], candles)
         _assert_no_secrets(self, reason)
@@ -1870,10 +1886,83 @@ class S5TransportFailureTests(unittest.TestCase):
             "time": str(_S5_TO),  # t >= to_epoch → excluded
             "mid": {"o": "1.1", "h": "1.105", "l": "1.0", "c": "1.1"},
         }]}).encode()
-        with _patch("urllib.request.urlopen", return_value=_http_resp(body)):
+        conn = _mock_https_conn(body=body)
+        with _patch("http.client.HTTPSConnection", return_value=conn):
             candles, reason = self._fetch()
         self.assertEqual([], candles)
         self.assertIn("no complete", reason)
+
+    def test_non_https_url_rejected_before_connection(self) -> None:
+        """E-N1: Non-HTTPS base URL rejected without any network connection."""
+        with _patch("http.client.HTTPSConnection") as mock_cls:
+            candles, reason = closer.fetch_s5_candles(
+                "EURUSD", _S5_FROM, _S5_TO, _FAKE_TOKEN, "http://fake-oanda.test"
+            )
+        mock_cls.assert_not_called()
+        self.assertEqual([], candles)
+        self.assertIsInstance(reason, str)
+        _assert_no_secrets(self, reason)
+
+    def test_embedded_credentials_rejected(self) -> None:
+        """E-N2: URL with embedded credentials rejected before connection."""
+        with _patch("http.client.HTTPSConnection") as mock_cls:
+            candles, reason = closer.fetch_s5_candles(
+                "EURUSD", _S5_FROM, _S5_TO, _FAKE_TOKEN,
+                "https://user:pass@fake-oanda.test"
+            )
+        mock_cls.assert_not_called()
+        self.assertEqual([], candles)
+        _assert_no_secrets(self, reason)
+
+    def test_https_hostname_and_port_used_for_connection(self) -> None:
+        """E-N3: Host and explicit port parsed from base URL are passed to HTTPSConnection."""
+        conn = _mock_https_conn(body=_good_s5_response())
+        with _patch("http.client.HTTPSConnection", return_value=conn) as mock_cls:
+            closer.fetch_s5_candles(
+                "EURUSD", _S5_FROM, _S5_TO, _FAKE_TOKEN, "https://fake-oanda.test:8443"
+            )
+        mock_cls.assert_called_once()
+        args = mock_cls.call_args[0]
+        self.assertEqual("fake-oanda.test", args[0])
+        self.assertEqual(8443, args[1])
+
+    def test_get_path_contains_oanda_candles_endpoint(self) -> None:
+        """E-N4: GET request path includes /v3/instruments/.../candles with query params."""
+        conn = _mock_https_conn(body=_good_s5_response())
+        with _patch("http.client.HTTPSConnection", return_value=conn):
+            closer.fetch_s5_candles("EURUSD", _S5_FROM, _S5_TO, _FAKE_TOKEN, _FAKE_URL)
+        req_args = conn.request.call_args[0]
+        self.assertEqual("GET", req_args[0])
+        self.assertIn("/v3/instruments/EUR_USD/candles", req_args[1])
+        self.assertIn("granularity=S5", req_args[1])
+
+    def test_authorization_and_datetime_headers_sent(self) -> None:
+        """E-N5: Authorization Bearer and Accept-Datetime-Format headers are sent."""
+        conn = _mock_https_conn(body=_good_s5_response())
+        with _patch("http.client.HTTPSConnection", return_value=conn):
+            closer.fetch_s5_candles("EURUSD", _S5_FROM, _S5_TO, _FAKE_TOKEN, _FAKE_URL)
+        req_kwargs = conn.request.call_args[1]
+        headers = req_kwargs.get("headers", {})
+        self.assertIn("Authorization", headers)
+        self.assertTrue(headers["Authorization"].startswith("Bearer "))
+        self.assertIn("Accept-Datetime-Format", headers)
+        self.assertNotIn(_FAKE_TOKEN, headers.get("Authorization", "").replace(f"Bearer {_FAKE_TOKEN}", ""))
+
+    def test_non_2xx_response_fails_closed(self) -> None:
+        """E-N6: HTTP 403 response → empty candles, safe reason, no exception."""
+        conn = _mock_https_conn(status=403, body=b"Forbidden")
+        with _patch("http.client.HTTPSConnection", return_value=conn):
+            candles, reason = self._fetch()
+        self.assertEqual([], candles)
+        _assert_no_secrets(self, reason)
+
+    def test_token_never_appears_in_reason(self) -> None:
+        """E-N7: Token must not appear in returned reason on any error."""
+        conn = _mock_https_conn_error(OSError("network error"))
+        with _patch("http.client.HTTPSConnection", return_value=conn):
+            candles, reason = self._fetch()
+        self.assertNotIn(_FAKE_TOKEN, reason)
+        self.assertNotIn("Authorization", reason)
 
 
 # ── F. Sparse S5 Lookback and Threshold Safety ───────────────────────────────
@@ -2104,8 +2193,8 @@ class SparseS5LookbackTests(unittest.TestCase):
             "o": 1.1, "h": 1.1005, "l": 1.0995, "c": 1.1007,
         }
 
-        with _patch.object(
-            closer, "fetch_s5_candles",
+        with _patch(
+            "signal_resolution.fetch_s5_candles",
             return_value=([pre_entry_s5, post_entry_s5], "ok"),
         ):
             result = closer.resolve_signal_outcome(
@@ -2316,7 +2405,7 @@ class ThresholdNoneGuardTests(unittest.TestCase):
         server_epoch = SIGNAL_EPOCH_BASE + 10 * M15
         eval_end = server_epoch
 
-        with _patch.object(closer, "fetch_s5_candles", return_value=([], "no s5")):
+        with _patch("signal_resolution.fetch_s5_candles", return_value=([], "no s5")):
             result = closer.resolve_signal_outcome(
                 pair="EURUSD",
                 direction="BUY",
@@ -2449,7 +2538,7 @@ class ApplySignalActionsTests(unittest.TestCase):
             _patch.object(closer, "compute_server_clock_epoch", return_value=server_epoch),
             _patch.object(closer, "get_active_signals", return_value=[fake_signal]),
             _patch.object(closer, "fetch_candles", return_value=(candles, "ok")),
-            _patch.object(closer, "fetch_s5_candles", return_value=([], "no s5")),
+            _patch("signal_resolution.fetch_s5_candles", return_value=([], "no s5")),
             _patch.object(closer, "SUPABASE_KEY", "fake-key"),
             _patch.object(closer, "close_signal", return_value=False),
             _patch.object(closer, "print_preview", return_value=None),
@@ -2684,7 +2773,7 @@ class CloseSignalResponseContractTests(unittest.TestCase):
                 _patch.object(closer, "SUPABASE_KEY", "fake-key"),
                 _patch.object(closer, "supabase_request", side_effect=fake_supa),
                 _patch.object(closer, "fetch_candles", return_value=(candles, "ok")),
-                _patch.object(closer, "fetch_s5_candles", return_value=([], "no s5")),
+                _patch("signal_resolution.fetch_s5_candles", return_value=([], "no s5")),
                 _patch.object(closer, "print_preview", return_value=None),
                 _patch.object(closer, "bulk_gate", return_value=None),
             ):
