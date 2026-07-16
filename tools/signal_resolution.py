@@ -33,6 +33,7 @@ S5_SECONDS = 5
 # ── Logging ────────────────────────────────────────────────────────────────────
 
 def log(msg: str) -> None:
+    """Print a timestamped log line and append it to LOG_FILE."""
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     line = f"[CLOSER {ts}] {msg}"
     print(line)
@@ -47,10 +48,12 @@ def log(msg: str) -> None:
 # ── Pip maths ─────────────────────────────────────────────────────────────────
 
 def pip_size(pair: str) -> float:
+    """Return 0.01 for JPY pairs, 0.0001 for all others."""
     return 0.01 if "JPY" in pair.upper() else 0.0001
 
 
 def pips(diff: float, pair: str) -> float:
+    """Convert a price difference to pips, rounded to one decimal place."""
     return round(diff / pip_size(pair), 1)
 
 
@@ -229,12 +232,16 @@ def fetch_s5_candles(
 # ── Resolution state ───────────────────────────────────────────────────────────
 
 class ResolutionState(Enum):
+    """Outcome category returned by the signal resolution engine."""
+
     RESOLVED = auto()
     OPEN = auto()
     DATA_UNAVAILABLE = auto()
 
 
 class ResolutionResult:
+    """Immutable result produced by resolve_signal_outcome."""
+
     __slots__ = ("state", "outcome", "result_pips", "exit_price", "closed_at_epoch", "reason")
 
     def __init__(
@@ -246,6 +253,7 @@ class ResolutionResult:
         closed_at_epoch: int | None = None,
         reason: str = "",
     ) -> None:
+        """Initialise all result fields."""
         self.state = state
         self.outcome = outcome
         self.result_pips = result_pips

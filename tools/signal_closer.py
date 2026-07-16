@@ -76,6 +76,7 @@ CLOCK_ENDPOINTS = [
 # ── Timeframe helpers ─────────────────────────────────────────────────────────
 
 def timeframe_seconds(tf: str) -> int:
+    """Return the number of seconds in the given timeframe string (e.g. 'M15' → 900)."""
     tf = str(tf or DEFAULT_TIMEFRAME).upper()
     mapping = {
         "M1": 60, "M5": 300, "M15": 900, "M30": 1800,
@@ -85,11 +86,13 @@ def timeframe_seconds(tf: str) -> int:
 
 
 def cache_tf_name(tf: str) -> str:
+    """Normalise timeframe to cache filename suffix ('D' → 'D1', others pass through)."""
     tf = str(tf or DEFAULT_TIMEFRAME).upper()
     return "D1" if tf == "D" else tf
 
 
 def granularity_matches(actual: str, expected_tf: str) -> bool:
+    """Return True when the cache granularity field matches the expected timeframe."""
     actual = str(actual or "").upper()
     expected_tf = cache_tf_name(expected_tf)
     if not actual:
@@ -144,6 +147,7 @@ def _https_date_header(url: str) -> str:
 
 
 def compute_server_clock_epoch() -> int:
+    """Fetch the current UTC epoch from HTTPS clock endpoints; return 0 on failure."""
     epochs: list[int] = []
     for url in CLOCK_ENDPOINTS:
         if len(epochs) >= 2:
@@ -169,12 +173,14 @@ def compute_server_clock_epoch() -> int:
 
 
 def iso_from_epoch(epoch: int) -> str:
+    """Convert a Unix epoch to an ISO-8601 UTC string with a Z suffix."""
     return datetime.fromtimestamp(epoch, timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 # ── Supabase ───────────────────────────────────────────────────────────────────
 
 def supabase_request(method: str, path: str, body: dict | None = None) -> dict | list:
+    """Send an authenticated REST request to Supabase and return parsed JSON."""
     parsed = urllib.parse.urlsplit(SUPABASE_URL)
     if parsed.scheme != "https" or not parsed.hostname:
         raise ValueError("SUPABASE_URL must be an https:// URL with a valid hostname")
@@ -202,6 +208,7 @@ def supabase_request(method: str, path: str, body: dict | None = None) -> dict |
 
 
 def get_active_signals() -> list[dict]:
+    """Fetch all ACTIVE signals from Supabase with the fields needed for resolution."""
     path = (
         "signals?status=eq.ACTIVE"
         "&select=id,pair,direction,entry_price,stop_loss,take_profit,created_at,timeframe"
@@ -427,6 +434,7 @@ def compute_threshold(
 # ── Signal action builder ──────────────────────────────────────────────────────
 
 def parse_signal_created_at(raw_value: object) -> datetime:
+    """Parse a Supabase created_at string into a timezone-aware UTC datetime."""
     text = str(raw_value).strip()
     if text.endswith("Z"):
         text = text[:-1] + "+00:00"
@@ -437,6 +445,7 @@ def parse_signal_created_at(raw_value: object) -> datetime:
 
 
 def mark_cancelled(sig: dict, reason: str, closed_at_epoch: int) -> dict:
+    """Set the CANCELLED outcome fields on a signal dict in-place and return it."""
     sig["predicted_outcome"] = "CANCELLED"
     sig["predicted_pips"] = 0.0
     sig["predicted_reason"] = reason
@@ -622,6 +631,7 @@ def close_signal(
 # ── Safety gates ───────────────────────────────────────────────────────────────
 
 def safety_gate(args: argparse.Namespace) -> bool:
+    """Validate --live guardrails; exits with code 1 if any requirement is unmet."""
     if not args.live:
         return True
     errors: list[str] = []
@@ -643,6 +653,7 @@ def safety_gate(args: argparse.Namespace) -> bool:
 
 
 def bulk_gate(signals_to_act: list[dict], args: argparse.Namespace) -> None:
+    """Block execution if signal count exceeds --max-batch or --allow-bulk is absent."""
     count = len(signals_to_act)
     if count > args.max_batch:
         print(
@@ -660,6 +671,7 @@ def bulk_gate(signals_to_act: list[dict], args: argparse.Namespace) -> None:
 
 
 def print_preview(signals_to_act: list[dict], dry_run: bool) -> None:
+    """Print a human-readable preview table of signals about to be acted on."""
     mode = "DRY-RUN" if dry_run else "*** LIVE ***"
     print(f"\n{'=' * 64}")
     print(f"  SIGNAL CLOSER PREVIEW — {mode}")
@@ -772,6 +784,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Entry point: parse CLI args, validate guards, fetch signals, apply actions."""
     args = _build_arg_parser().parse_args()
 
     max_age = args.max_age if args.max_age is not None else MAX_AGE_HOURS

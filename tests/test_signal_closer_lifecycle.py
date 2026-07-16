@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import math
 import re
 import subprocess
 import sys
@@ -17,7 +18,9 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+_patch = patch
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "tools" / "signal_closer.py"
@@ -64,6 +67,7 @@ def make_signal(
     pair: str = "EURUSD",
     timeframe: str = "M15",
 ) -> dict:
+    """Build a minimal signal dict for use in tests."""
     created_at = datetime.fromtimestamp(created_epoch, timezone.utc).isoformat()
     return {
         "id": "test-id",
@@ -114,6 +118,7 @@ def make_s5_candles(
     open_: float = 1.1000,
     close: float = 1.1000,
 ) -> list[dict]:
+    """Build consecutive S5 candles in [from_epoch, to_epoch) at 5-second intervals."""
     candles = []
     t = from_epoch
     while t + S5 <= to_epoch:
@@ -158,9 +163,11 @@ def call_prepare(
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
 class CacheTests(unittest.TestCase):
+    """Tests for load_oanda_cache behavior."""
 
     @staticmethod
     def _write_cache(tmpdir: Path, payload: dict) -> tuple[list[dict], str]:
+        """Write payload to a temp cache dir and call load_oanda_cache."""
         cache_file = tmpdir / "EURUSD_M15.json"
         cache_file.write_text(json.dumps(payload), encoding="utf-8")
         original = closer.CACHE_DIR
@@ -172,6 +179,7 @@ class CacheTests(unittest.TestCase):
 
     @staticmethod
     def _oanda_payload(*, open_: float, high: float, low: float, close: float) -> dict:
+        """Build a minimal OANDA-style M15 cache payload for a single candle."""
         return {
             "chart": {
                 "result": [{
@@ -227,6 +235,7 @@ class CacheTests(unittest.TestCase):
 
 
 class CeilToS5Tests(unittest.TestCase):
+    """Tests for ceil_to_s5 second-boundary rounding."""
 
     def test_ceil_to_s5_already_on_boundary(self) -> None:
         """Test 3a: Epoch on a 5-second boundary is unchanged."""
@@ -241,11 +250,13 @@ class CeilToS5Tests(unittest.TestCase):
         self.assertEqual(1005, closer.ceil_to_s5(1004))
 
     def test_ceil_to_s5_zero(self) -> None:
+        """Test 3c: Epoch=0 is already on boundary; ceil_to_s5 returns 0."""
         self.assertEqual(0, closer.ceil_to_s5(0))
         self.assertEqual(5, closer.ceil_to_s5(3))
 
 
 class EffectiveStartTests(unittest.TestCase):
+    """Tests for effective_start_epoch computation with sub-second precision."""
 
     def test_pre_entry_m15_price_action_excluded(self) -> None:
         """Test 4: A candle that closed before effective_start is not counted."""
@@ -315,6 +326,7 @@ class EffectiveStartTests(unittest.TestCase):
 
 
 class MarketHoursTests(unittest.TestCase):
+    """Tests for market-hours (threshold) computation and weekend gap handling."""
 
     def test_24_market_hours_ignores_weekend_gaps(self) -> None:
         """Test 6: A weekend gap inflates wall-clock time but 96 M15 candles = 24h market."""
@@ -409,6 +421,7 @@ class MarketHoursTests(unittest.TestCase):
 
 
 class TimeExitPipTests(unittest.TestCase):
+    """Tests for pip sign and magnitude on TIME_EXIT for BUY and SELL."""
 
     def _time_exit_action(
         self,
@@ -475,6 +488,7 @@ class TimeExitPipTests(unittest.TestCase):
 
 
 class ThresholdPriceTests(unittest.TestCase):
+    """Tests for threshold price selection at market-hour boundary."""
 
     def test_time_exit_uses_threshold_price_not_latest_candle(self) -> None:
         """Test 15: Threshold candle's close is used, not a later candle's close."""
@@ -525,6 +539,7 @@ class ThresholdPriceTests(unittest.TestCase):
 
 
 class S5OutcomeTests(unittest.TestCase):
+    """Tests for S5 fetch triggering and TP/SL detection via check_s5_outcome."""
 
     def test_unambiguous_s5_tp_buy(self) -> None:
         """Test 18a: Clean BUY TP hit in S5 → WIN with correct pips."""
@@ -610,6 +625,7 @@ class S5OutcomeTests(unittest.TestCase):
 
 
 class MissingDataTests(unittest.TestCase):
+    """Tests for DATA_UNAVAILABLE handling when S5 or M15 data is absent."""
 
     def test_missing_s5_leaves_active_before_hard_age(self) -> None:
         """Test 22: S5 required but unavailable, within hard age → ACTIVE (None).
@@ -718,6 +734,7 @@ class MissingDataTests(unittest.TestCase):
 
 
 class EventTimestampTests(unittest.TestCase):
+    """Tests for closed_at_epoch accuracy across all exit types."""
 
     def test_event_closed_at_for_s5_tp_sl(self) -> None:
         """Test 27: closed_at_epoch for S5 TP/SL = end of first proving S5 candle."""
@@ -765,6 +782,7 @@ class EventTimestampTests(unittest.TestCase):
 
 
 class PipCalculationTests(unittest.TestCase):
+    """Tests for pip() sign and magnitude for JPY and non-JPY pairs."""
 
     def test_eurusd_gbpusd_pip_calculation(self) -> None:
         """Test 30: Non-JPY pair uses 0.0001 pip size."""
@@ -785,6 +803,7 @@ class PipCalculationTests(unittest.TestCase):
 
 
 class RegressionTests(unittest.TestCase):
+    """Regression tests for previously fixed TP/SL evaluation bugs."""
 
     def test_no_tp_sl_regression_unambiguous_buy_tp(self) -> None:
         """Test 32a: Clean unambiguous BUY TP in S5 → WIN."""
@@ -817,6 +836,7 @@ class RegressionTests(unittest.TestCase):
 
 
 class WrapperTests(unittest.TestCase):
+    """Tests for the run_signal_closer_live.sh wrapper script properties."""
 
     def test_wrapper_loads_oanda_variables_without_printing_values(self) -> None:
         """Test 33: Wrapper allowlist includes OANDA vars; no raw value echoed."""
@@ -866,8 +886,8 @@ class WrapperTests(unittest.TestCase):
 class Defect1PreThresholdTPSLTests(unittest.TestCase):
     """TP/SL must be evaluated on every run, not deferred until threshold."""
 
+    @staticmethod
     def _make_candles_with_touch(
-        self,
         *,
         total: int,
         touch_at_index: int,
@@ -1044,7 +1064,9 @@ class Defect1PreThresholdTPSLTests(unittest.TestCase):
 class Defect2CoverageCheckTests(unittest.TestCase):
     """Coverage check must use interval-overlap, not first_ts+tf_sec comparison."""
 
-    def _make_cache_payload(self, candles: list[dict]) -> dict:
+    @staticmethod
+    def _make_cache_payload(candles: list[dict]) -> dict:
+        """Wrap candle list in the OANDA chart JSON structure expected by load_oanda_cache."""
         return {
             "chart": {
                 "result": [{
@@ -1066,7 +1088,7 @@ class Defect2CoverageCheckTests(unittest.TestCase):
         effective_start: int,
         server_epoch: int,
     ) -> tuple[list[dict], str]:
-        import tempfile
+        """Write raw candles to a temp cache and invoke fetch_candles."""
         payload = self._make_cache_payload(candles_raw)
         with tempfile.TemporaryDirectory() as td:
             cache_file = Path(td) / "EURUSD_M15.json"
@@ -1225,8 +1247,8 @@ class Defect3MicrosecondPrecisionTests(unittest.TestCase):
 class Defect4SparseS5Tests(unittest.TestCase):
     """S5 fetches must handle sparse data; validate for corrupt/misaligned candles."""
 
+    @staticmethod
     def _call_with_s5(
-        self,
         candles: list[dict],
         s5_candles: list[dict] | None,
         *,
@@ -1237,6 +1259,7 @@ class Defect4SparseS5Tests(unittest.TestCase):
         tp: float = 1.1050,
         created_epoch: int = SIGNAL_EPOCH_BASE,
     ) -> dict | None:
+        """Call prepare_signal_action with the given M15 and S5 candles."""
         sig = make_signal(
             direction=direction, entry=entry, sl=sl, tp=tp,
             created_epoch=created_epoch,
@@ -1336,7 +1359,6 @@ class Defect4SparseS5Tests(unittest.TestCase):
 
     def test_non_finite_s5_high_rejected(self) -> None:
         """D4-5: S5 candle with h=inf → validate_s5_candles rejects."""
-        import math
         candles_valid, _ = validate_s5_candles([
             {"t": 1000, "o": 1.1, "h": math.inf, "l": 1.0, "c": 1.1},
         ])
@@ -1344,7 +1366,6 @@ class Defect4SparseS5Tests(unittest.TestCase):
 
     def test_non_finite_s5_low_rejected(self) -> None:
         """D4-6: S5 candle with l=nan → validate_s5_candles rejects."""
-        import math
         candles_valid, _ = validate_s5_candles([
             {"t": 1000, "o": 1.1, "h": 1.1, "l": math.nan, "c": 1.1},
         ])
@@ -1404,6 +1425,7 @@ class Defect4SparseS5Tests(unittest.TestCase):
 # ── validate_s5_candles unit tests ────────────────────────────────────────────
 
 class ValidateS5CandlesTests(unittest.TestCase):
+    """Unit tests for validate_s5_candles validation logic."""
 
     def test_valid_single_candle(self) -> None:
         """V5-1: Single well-formed S5 candle passes validation."""
@@ -1420,7 +1442,6 @@ class ValidateS5CandlesTests(unittest.TestCase):
 
     def test_non_finite_close_rejected(self) -> None:
         """V5-3: NaN close → rejected."""
-        import math
         valid, reason = validate_s5_candles([
             {"t": 1000, "o": 1.1, "h": 1.1, "l": 1.0, "c": math.nan},
         ])
@@ -1438,8 +1459,6 @@ class ValidateS5CandlesTests(unittest.TestCase):
 # ADVERSARIAL HARDENING PASS
 # ══════════════════════════════════════════════════════════════════════════════
 
-import math
-from unittest.mock import MagicMock, patch as _patch
 
 
 def _mock_https_conn(status: int = 200, body: bytes = b"") -> MagicMock:
@@ -1488,6 +1507,7 @@ def _fetch_direct(**kwargs):
 
 
 def _assert_no_secrets(tc: unittest.TestCase, reason: str) -> None:
+    """Assert that token, auth header, and URL do not appear in the error reason."""
     tc.assertNotIn(_FAKE_TOKEN, reason, "token leaked into reason")
     tc.assertNotIn("Authorization", reason, "auth header leaked into reason")
     tc.assertNotIn(_FAKE_URL, reason, "URL leaked into reason")
@@ -1496,8 +1516,10 @@ def _assert_no_secrets(tc: unittest.TestCase, reason: str) -> None:
 # ── A. Signal Input Validation ────────────────────────────────────────────────
 
 class SignalInputValidationTests(unittest.TestCase):
+    """Tests for signal field validation — NaN/Inf/invalid direction rejection."""
 
-    def _prepare_with_bad_field(self, **override) -> dict | None:
+    @staticmethod
+    def _prepare_with_bad_field(**override) -> dict | None:
         """Call prepare_signal_action with a signal whose field is overridden."""
         sig = make_signal()
         sig.update(override)
@@ -1542,13 +1564,15 @@ class SignalInputValidationTests(unittest.TestCase):
 # ── B. M15 Normalization ──────────────────────────────────────────────────────
 
 class M15NormalizationTests(unittest.TestCase):
+    """Tests for M15 candle normalization (sorting, filtering) inside fetch_candles."""
 
+    @staticmethod
     def _fetch_with_raw(
-        self,
         raw_candles: list[dict],
         eff_start: int,
         server_epoch: int,
     ) -> tuple[list[dict], str]:
+        """Call fetch_candles with load_oanda_cache mocked to return raw_candles."""
         with _patch.object(closer, "load_oanda_cache", return_value=(raw_candles, "ok")):
             return closer.fetch_candles(
                 "EURUSD",
@@ -1641,6 +1665,7 @@ class M15NormalizationTests(unittest.TestCase):
 # ── C. Open State at Hard Wall-Clock Age ─────────────────────────────────────
 
 class OpenStateAtHardAgeTests(unittest.TestCase):
+    """Tests confirming clean-OPEN signals are never cancelled by hard-age alone."""
 
     def test_clean_open_state_at_hard_age_stays_active(self) -> None:
         """C-16: Signal > hard_max_age, clean OPEN (market time not reached due to gaps)
@@ -1681,8 +1706,8 @@ class OpenStateAtHardAgeTests(unittest.TestCase):
 class EffectiveStartEndToEndTests(unittest.TestCase):
     """Tests 17-20: created_at with microseconds, pre/post-entry S5 separation."""
 
+    @staticmethod
     def _make_microsecond_sig(
-        self,
         *,
         microsecond: int = 1,
         direction: str = "BUY",
@@ -1690,7 +1715,7 @@ class EffectiveStartEndToEndTests(unittest.TestCase):
         sl: float = 1.0980,
         tp: float = 1.1020,
     ) -> dict:
-        """Signal created at SIGNAL_EPOCH_BASE + {microsecond} microseconds."""
+        """Return a signal dict with created_at at SIGNAL_EPOCH_BASE + {microsecond} µs."""
         created_dt = datetime(2026, 7, 10, 8, 0, 0, microsecond, tzinfo=timezone.utc)
         return {
             "id": "test-us",
@@ -1774,9 +1799,11 @@ class S5TransportFailureTests(unittest.TestCase):
     """fetch_s5_candles: transport failures return ([], safe_reason), no exception."""
 
     def _fetch(self) -> tuple[list[dict], str]:
+        """Invoke fetch_s5_candles via the module-level _fetch_direct helper."""
         return _fetch_direct()
 
     def _assert_safe(self, candles: list[dict], reason: str) -> None:
+        """Assert result is ([], non-empty string) with no secrets leaked."""
         self.assertEqual([], candles)
         self.assertIsInstance(reason, str)
         self.assertTrue(len(reason) > 0)
@@ -1972,7 +1999,7 @@ class S5TransportFailureTests(unittest.TestCase):
         """E-N7: Token must not appear in returned reason on any error."""
         conn = _mock_https_conn_error(OSError("network error"))
         with _patch("http.client.HTTPSConnection", return_value=conn):
-            candles, reason = self._fetch()
+            _candles, reason = self._fetch()
         self.assertNotIn(_FAKE_TOKEN, reason)
         self.assertNotIn("Authorization", reason)
 
@@ -1980,6 +2007,7 @@ class S5TransportFailureTests(unittest.TestCase):
 # ── F. Sparse S5 Lookback and Threshold Safety ───────────────────────────────
 
 class SparseS5LookbackTests(unittest.TestCase):
+    """Tests for TP/SL detection in sparse (non-contiguous) S5 data."""
 
     def test_sparse_s5_with_gaps_still_finds_tp(self) -> None:
         """F-33: Sparse S5 (non-contiguous) accepted; TP found in available candle."""
@@ -2230,10 +2258,12 @@ class SparseS5LookbackTests(unittest.TestCase):
 # ── G. Wrapper Security Tests ─────────────────────────────────────────────────
 
 class WrapperSecurityTests(unittest.TestCase):
+    """Tests for run_signal_closer_live.sh security properties."""
 
     _wrapper_path = ROOT / "tools" / "run_signal_closer_live.sh"
 
     def setUp(self) -> None:
+        """Load the wrapper script content for each test."""
         self._content = self._wrapper_path.read_text()
 
     def _run_env_loader(self, env_content: str) -> str:
@@ -2443,6 +2473,7 @@ class ApplySignalActionsTests(unittest.TestCase):
     _SERVER_EPOCH = SIGNAL_EPOCH_BASE + 200 * M15
 
     def _make_action(self, outcome: str, sig_id: str = "sig-1") -> dict:
+        """Build a minimal resolved-action dict for Supabase write tests."""
         return {
             "id": sig_id,
             "pair": "EURUSD",
@@ -2624,6 +2655,7 @@ class CloseSignalResponseContractTests(unittest.TestCase):
         return result, log_lines
 
     def _has_closed_log(self, log_lines: list[str]) -> bool:
+        """Return True if any captured log line starts with 'CLOSED '."""
         return any(ln.startswith("CLOSED ") for ln in log_lines)
 
     # ── K-1..K-9: direct response-contract tests ──────────────────────────────
@@ -2701,6 +2733,7 @@ class CloseSignalResponseContractTests(unittest.TestCase):
     # ── K-11..K-13: apply_signal_actions integration (real close_signal) ──────
 
     def _make_k_action(self, outcome: str, sig_id: str | None = None) -> dict:
+        """Build a resolved-action dict for apply_signal_actions integration tests."""
         return {
             "id": sig_id or self._SIG_ID,
             "pair": "EURUSD",
