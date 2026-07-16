@@ -42,18 +42,22 @@ import urllib.parse
 from datetime import datetime, timezone
 from signal_resolution import (
     S5_SECONDS,
-    ResolutionResult,
     ResolutionState,
     check_s5_outcome,
     fetch_s5_candles,
     log,
-    m15_touches_any_boundary,
-    oanda_instrument,
-    pip_size,
     pips,
     resolve_signal_outcome,
     validate_s5_candles,
 )
+
+# Re-exported public symbols — accessed by tests via `closer.<name>`
+__all__ = [
+    "check_s5_outcome",
+    "fetch_s5_candles",
+    "pips",
+    "validate_s5_candles",
+]
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CACHE_DIR = ROOT / "cache"
