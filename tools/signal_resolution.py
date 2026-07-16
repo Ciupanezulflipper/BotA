@@ -96,46 +96,44 @@ def validate_s5_candles(candles: list[dict]) -> tuple[list[dict], str]:
     return sorted(seen.values(), key=lambda x: int(x["t"])), "ok"
 
 
-# ── OANDA S5 fetcher ───────────────────────────────────────────────────────────
+# ── OANDA S5 fetcher helpers ───────────────────────────────────────────────────
 
-def fetch_s5_candles(
-    pair: str,
+def _validate_s5_inputs(
+    token: str,
     from_epoch: int,
     to_epoch: int,
-    token: str,
     base_url: str,
-) -> tuple[list[dict], str]:
-    """
-    Fetch complete S5 midpoint candles from OANDA for [from_epoch, to_epoch).
-
-    Returns (sorted_candles, reason).  Each candle: {t, o, h, l, c}.
-    Token, authorization headers, and API URL are never logged.
-    Returns ([], reason) on any failure.
-    """
+) -> str | None:
+    """Return an error string if inputs are invalid, else None."""
     if not token:
-        return [], "OANDA_API_TOKEN not set"
+        return "OANDA_API_TOKEN not set"
     if from_epoch >= to_epoch:
-        return [], f"invalid S5 range from={from_epoch} >= to={to_epoch}"
-
+        return f"invalid S5 range from={from_epoch} >= to={to_epoch}"
     parsed = urllib.parse.urlsplit(base_url)
     if parsed.scheme != "https":
-        return [], "S5 fetch requires HTTPS base URL"
+        return "S5 fetch requires HTTPS base URL"
     if not parsed.hostname:
-        return [], "S5 fetch: missing hostname in base URL"
+        return "S5 fetch: missing hostname in base URL"
     if parsed.username or parsed.password:
-        return [], "S5 fetch: embedded credentials in base URL rejected"
+        return "S5 fetch: embedded credentials in base URL rejected"
+    return None
 
-    host = parsed.hostname
+
+def _build_s5_path(pair: str, from_iso: str, to_iso: str, base_url: str) -> tuple[str, int | None, str]:
+    """Return (host, port, request_path) for the OANDA S5 candles endpoint."""
+    parsed = urllib.parse.urlsplit(base_url)
+    host = parsed.hostname or ""
     port = parsed.port
     base_path = parsed.path.rstrip("/") if parsed.path else ""
-
     instrument = oanda_instrument(pair)
-    from_iso = datetime.fromtimestamp(from_epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    to_iso = datetime.fromtimestamp(to_epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
     params = f"granularity=S5&price=M&from={from_iso}&to={to_iso}&includeFirst=true"
-    path = f"{base_path}/v3/instruments/{instrument}/candles?{params}"
+    return host, port, f"{base_path}/v3/instruments/{instrument}/candles?{params}"
 
+
+def _execute_s5_http(
+    host: str, port: int | None, path: str, token: str
+) -> tuple[object, str | None]:
+    """Execute the HTTPS GET and decode JSON. Returns (data, None) or (None, error)."""
     conn = http.client.HTTPSConnection(host, port, timeout=20)
     try:
         conn.request("GET", path, headers={
@@ -144,22 +142,27 @@ def fetch_s5_candles(
         })
         resp = conn.getresponse()
         if resp.status < 200 or resp.status >= 300:
-            return [], f"S5 fetch HTTP {resp.status}"
-        data = json.loads(resp.read().decode("utf-8"))
+            return None, f"S5 fetch HTTP {resp.status}"
+        return json.loads(resp.read().decode("utf-8")), None
     except Exception as exc:
-        return [], f"S5 fetch {type(exc).__name__}: {str(exc)[:80]}"
+        return None, f"S5 fetch {type(exc).__name__}: {str(exc)[:80]}"
     finally:
         conn.close()
 
+
+def _parse_s5_response(data: object) -> tuple[list, str | None]:
+    """Validate response shape. Returns (candles_raw, None) or ([], error)."""
     if not isinstance(data, dict):
         return [], "S5 response is not a JSON object"
-
     candles_raw = data.get("candles", [])
     if not isinstance(candles_raw, list):
         return [], "S5 candles field is not a list"
+    return candles_raw, None
 
+
+def _convert_s5_candles(candles_raw: list, from_epoch: int, to_epoch: int) -> list[dict]:
+    """Filter complete in-range candles and build {t,o,h,l,c} dicts."""
     candles: list[dict] = []
-
     for raw in candles_raw:
         if not isinstance(raw, dict) or not raw.get("complete", False):
             continue
@@ -177,9 +180,43 @@ def fetch_s5_candles(
             })
         except Exception:
             continue
-
     candles.sort(key=lambda c: c["t"])
+    return candles
 
+
+# ── OANDA S5 fetcher ───────────────────────────────────────────────────────────
+
+def fetch_s5_candles(
+    pair: str,
+    from_epoch: int,
+    to_epoch: int,
+    token: str,
+    base_url: str,
+) -> tuple[list[dict], str]:
+    """
+    Fetch complete S5 midpoint candles from OANDA for [from_epoch, to_epoch).
+
+    Returns (sorted_candles, reason).  Each candle: {t, o, h, l, c}.
+    Token, authorization headers, and API URL are never logged.
+    Returns ([], reason) on any failure.
+    """
+    err = _validate_s5_inputs(token, from_epoch, to_epoch, base_url)
+    if err:
+        return [], err
+
+    from_iso = datetime.fromtimestamp(from_epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    to_iso = datetime.fromtimestamp(to_epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    host, port, path = _build_s5_path(pair, from_iso, to_iso, base_url)
+
+    data, req_err = _execute_s5_http(host, port, path, token)
+    if req_err:
+        return [], req_err
+
+    candles_raw, shape_err = _parse_s5_response(data)
+    if shape_err:
+        return [], shape_err
+
+    candles = _convert_s5_candles(candles_raw, from_epoch, to_epoch)
     if not candles:
         return [], f"no complete S5 candles for {pair} [{from_iso}, {to_iso})"
 

@@ -27,7 +27,17 @@ _TOOLS_DIR = str(ROOT / "tools")
 if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
 
-from signal_resolution import check_s5_outcome, fetch_s5_candles, pips, validate_s5_candles
+from signal_resolution import (
+    _build_s5_path,
+    _convert_s5_candles,
+    _execute_s5_http,
+    _parse_s5_response,
+    _validate_s5_inputs,
+    check_s5_outcome,
+    fetch_s5_candles,
+    pips,
+    validate_s5_candles,
+)
 
 SPEC = importlib.util.spec_from_file_location("signal_closer_under_test", MODULE_PATH)
 if SPEC is None or SPEC.loader is None:
@@ -2806,6 +2816,234 @@ class CloseSignalResponseContractTests(unittest.TestCase):
                     )
         finally:
             _sys.argv = old_argv
+
+
+# ── Characterization tests for fetch_s5_candles helpers ───────────────────────
+
+class FetchS5HelpersTests(unittest.TestCase):
+    """H-*: Unit tests for each extracted helper of fetch_s5_candles."""
+
+    _BASE = "https://api-fxtrade.oanda.com"
+    _TOKEN = "tok"
+    _FROM = 1_000_000_000
+    _TO = 1_000_001_000
+
+    # ── _validate_s5_inputs ────────────────────────────────────────────────────
+
+    def test_h01_missing_token(self) -> None:
+        """H-01: Empty token → OANDA_API_TOKEN not set."""
+        err = _validate_s5_inputs("", self._FROM, self._TO, self._BASE)
+        self.assertIsNotNone(err)
+        assert err is not None
+        self.assertIn("OANDA_API_TOKEN", err)
+
+    def test_h02_invalid_range_equal(self) -> None:
+        """H-02: from_epoch == to_epoch → invalid range."""
+        err = _validate_s5_inputs(self._TOKEN, 1000, 1000, self._BASE)
+        self.assertIsNotNone(err)
+        assert err is not None
+        self.assertIn("invalid S5 range", err)
+
+    def test_h03_invalid_range_reversed(self) -> None:
+        """H-03: from_epoch > to_epoch → invalid range."""
+        err = _validate_s5_inputs(self._TOKEN, 2000, 1000, self._BASE)
+        self.assertIsNotNone(err)
+        assert err is not None
+        self.assertIn("invalid S5 range", err)
+
+    def test_h04_non_https_url(self) -> None:
+        """H-04: http:// URL → requires HTTPS."""
+        err = _validate_s5_inputs(self._TOKEN, self._FROM, self._TO, "http://example.com")
+        self.assertIsNotNone(err)
+        assert err is not None
+        self.assertIn("HTTPS", err)
+
+    def test_h05_missing_hostname(self) -> None:
+        """H-05: URL with no hostname → missing hostname."""
+        err = _validate_s5_inputs(self._TOKEN, self._FROM, self._TO, "https:///path")
+        self.assertIsNotNone(err)
+        assert err is not None
+        self.assertIn("hostname", err)
+
+    def test_h06_embedded_credentials(self) -> None:
+        """H-06: URL with user:pass → credentials rejected."""
+        err = _validate_s5_inputs(
+            self._TOKEN, self._FROM, self._TO, "https://u:p@example.com"
+        )
+        self.assertIsNotNone(err)
+        assert err is not None
+        self.assertIn("credentials", err)
+
+    def test_h07_valid_inputs_return_none(self) -> None:
+        """H-07: All valid inputs → None (no error)."""
+        err = _validate_s5_inputs(self._TOKEN, self._FROM, self._TO, self._BASE)
+        self.assertIsNone(err)
+
+    # ── _build_s5_path ─────────────────────────────────────────────────────────
+
+    def test_h08_path_contains_instrument_and_params(self) -> None:
+        """H-08: Built path includes instrument, granularity, from/to, includeFirst."""
+        host, port, path = _build_s5_path("EURUSD", "2026-01-01T00:00:00Z", "2026-01-01T01:00:00Z", self._BASE)
+        self.assertEqual("api-fxtrade.oanda.com", host)
+        self.assertIsNone(port)
+        self.assertIn("/v3/instruments/EUR_USD/candles", path)
+        self.assertIn("granularity=S5", path)
+        self.assertIn("includeFirst=true", path)
+        self.assertIn("2026-01-01T00:00:00Z", path)
+
+    def test_h09_explicit_port_preserved(self) -> None:
+        """H-09: Explicit port in base_url is returned."""
+        _, port, _ = _build_s5_path("EURUSD", "t1", "t2", "https://example.com:8443")
+        self.assertEqual(8443, port)
+
+    # ── _execute_s5_http ───────────────────────────────────────────────────────
+
+    def test_h10_non_2xx_returns_error(self) -> None:
+        """H-10: HTTP 404 → returns None data and error string."""
+        resp = MagicMock()
+        resp.status = 404
+        conn = MagicMock()
+        conn.getresponse.return_value = resp
+        with _patch("http.client.HTTPSConnection", return_value=conn):
+            data, err = _execute_s5_http("host", None, "/path", self._TOKEN)
+        self.assertIsNone(data)
+        self.assertIsNotNone(err)
+        assert err is not None
+        self.assertIn("404", err)
+
+    def test_h11_malformed_json_returns_error(self) -> None:
+        """H-11: Non-JSON body → JSONDecodeError caught, error returned."""
+        resp = MagicMock()
+        resp.status = 200
+        resp.read.return_value = b"not-json{"
+        conn = MagicMock()
+        conn.getresponse.return_value = resp
+        with _patch("http.client.HTTPSConnection", return_value=conn):
+            data, err = _execute_s5_http("host", None, "/path", self._TOKEN)
+        self.assertIsNone(data)
+        self.assertIsNotNone(err)
+
+    def test_h12_connection_error_returns_error(self) -> None:
+        """H-12: Connection refused → exception caught, error returned."""
+        conn = MagicMock()
+        conn.request.side_effect = ConnectionRefusedError("refused")
+        with _patch("http.client.HTTPSConnection", return_value=conn):
+            data, err = _execute_s5_http("host", None, "/path", self._TOKEN)
+        self.assertIsNone(data)
+        self.assertIsNotNone(err)
+
+    def test_h13_successful_request_returns_data(self) -> None:
+        """H-13: 200 response with valid JSON → data returned, no error."""
+        payload = {"candles": []}
+        resp = MagicMock()
+        resp.status = 200
+        resp.read.return_value = json.dumps(payload).encode()
+        conn = MagicMock()
+        conn.getresponse.return_value = resp
+        with _patch("http.client.HTTPSConnection", return_value=conn):
+            data, err = _execute_s5_http("host", None, "/path", self._TOKEN)
+        self.assertEqual(payload, data)
+        self.assertIsNone(err)
+
+    def test_h14_token_not_leaked_in_error(self) -> None:
+        """H-14: Token does not appear in any returned error string."""
+        conn = MagicMock()
+        conn.request.side_effect = OSError("boom")
+        with _patch("http.client.HTTPSConnection", return_value=conn):
+            _, err = _execute_s5_http("host", None, "/path", self._TOKEN)
+        self.assertIsNotNone(err)
+        assert err is not None
+        self.assertNotIn(self._TOKEN, err)
+
+    # ── _parse_s5_response ─────────────────────────────────────────────────────
+
+    def test_h15_non_dict_response(self) -> None:
+        """H-15: List response → 'not a JSON object'."""
+        raw, err = _parse_s5_response([])
+        self.assertEqual([], raw)
+        self.assertIsNotNone(err)
+        assert err is not None
+        self.assertIn("not a JSON object", err)
+
+    def test_h16_non_list_candles_field(self) -> None:
+        """H-16: candles field is a string → 'not a list'."""
+        raw, err = _parse_s5_response({"candles": "oops"})
+        self.assertEqual([], raw)
+        self.assertIsNotNone(err)
+        assert err is not None
+        self.assertIn("not a list", err)
+
+    def test_h17_valid_shape_returns_candles(self) -> None:
+        """H-17: Dict with list candles → list returned, no error."""
+        items = [{"time": "1000", "complete": True, "mid": {"o": "1.1", "h": "1.2", "l": "1.0", "c": "1.1"}}]
+        raw, err = _parse_s5_response({"candles": items})
+        self.assertEqual(items, raw)
+        self.assertIsNone(err)
+
+    def test_h18_missing_candles_key_returns_empty_list(self) -> None:
+        """H-18: Dict without 'candles' key → empty list, no error."""
+        raw, err = _parse_s5_response({})
+        self.assertEqual([], raw)
+        self.assertIsNone(err)
+
+    # ── _convert_s5_candles ────────────────────────────────────────────────────
+
+    def test_h19_incomplete_candles_excluded(self) -> None:
+        """H-19: complete=False candles are filtered out."""
+        raw = [
+            {"time": "1000", "complete": False, "mid": {"o": "1.1", "h": "1.2", "l": "1.0", "c": "1.1"}},
+            {"time": "1005", "complete": True,  "mid": {"o": "1.1", "h": "1.2", "l": "1.0", "c": "1.1"}},
+        ]
+        result = _convert_s5_candles(raw, 1000, 2000)
+        self.assertEqual(1, len(result))
+        self.assertEqual(1005, result[0]["t"])
+
+    def test_h20_out_of_range_candles_excluded(self) -> None:
+        """H-20: Candles outside [from_epoch, to_epoch) are filtered."""
+        raw = [
+            {"time": "999",  "complete": True, "mid": {"o": "1.1", "h": "1.2", "l": "1.0", "c": "1.1"}},
+            {"time": "1000", "complete": True, "mid": {"o": "1.1", "h": "1.2", "l": "1.0", "c": "1.1"}},
+            {"time": "1999", "complete": True, "mid": {"o": "1.1", "h": "1.2", "l": "1.0", "c": "1.1"}},
+            {"time": "2000", "complete": True, "mid": {"o": "1.1", "h": "1.2", "l": "1.0", "c": "1.1"}},
+        ]
+        result = _convert_s5_candles(raw, 1000, 2000)
+        self.assertEqual(2, len(result))
+        self.assertEqual([1000, 1999], [c["t"] for c in result])
+
+    def test_h21_malformed_mid_skipped(self) -> None:
+        """H-21: Candle with missing mid key is skipped without raising."""
+        raw = [
+            {"time": "1000", "complete": True},  # no mid
+            {"time": "1005", "complete": True, "mid": {"o": "1.1", "h": "1.2", "l": "1.0", "c": "1.1"}},
+        ]
+        result = _convert_s5_candles(raw, 1000, 2000)
+        self.assertEqual(1, len(result))
+        self.assertEqual(1005, result[0]["t"])
+
+    def test_h22_non_dict_raw_entry_skipped(self) -> None:
+        """H-22: Non-dict entry in raw list is silently skipped."""
+        raw = ["bad", None, {"time": "1000", "complete": True, "mid": {"o": "1.1", "h": "1.2", "l": "1.0", "c": "1.1"}}]
+        result = _convert_s5_candles(raw, 1000, 2000)
+        self.assertEqual(1, len(result))
+
+    def test_h23_output_is_sorted_by_t(self) -> None:
+        """H-23: Output candles are sorted by t ascending."""
+        raw = [
+            {"time": "1010", "complete": True, "mid": {"o": "1.1", "h": "1.2", "l": "1.0", "c": "1.1"}},
+            {"time": "1000", "complete": True, "mid": {"o": "1.1", "h": "1.2", "l": "1.0", "c": "1.1"}},
+            {"time": "1005", "complete": True, "mid": {"o": "1.1", "h": "1.2", "l": "1.0", "c": "1.1"}},
+        ]
+        result = _convert_s5_candles(raw, 1000, 2000)
+        self.assertEqual([1000, 1005, 1010], [c["t"] for c in result])
+
+    def test_h24_empty_raw_returns_empty(self) -> None:
+        """H-24: Empty raw list → empty output."""
+        self.assertEqual([], _convert_s5_candles([], 1000, 2000))
+
+    def test_h25_no_completed_candles_returns_empty(self) -> None:
+        """H-25: All candles incomplete → empty output."""
+        raw = [{"time": "1000", "complete": False, "mid": {"o": "1", "h": "2", "l": "0", "c": "1"}}]
+        self.assertEqual([], _convert_s5_candles(raw, 1000, 2000))
 
 
 if __name__ == "__main__":
