@@ -1798,7 +1798,8 @@ class EffectiveStartEndToEndTests(unittest.TestCase):
 class S5TransportFailureTests(unittest.TestCase):
     """fetch_s5_candles: transport failures return ([], safe_reason), no exception."""
 
-    def _fetch(self) -> tuple[list[dict], str]:
+    @staticmethod
+    def _fetch() -> tuple[list[dict], str]:
         """Invoke fetch_s5_candles via the module-level _fetch_direct helper."""
         return _fetch_direct()
 
@@ -2356,9 +2357,9 @@ class HttpsClockProbeTests(unittest.TestCase):
     _DATE_A = "Mon, 14 Jul 2026 10:00:00 GMT"
     _DATE_B = "Mon, 14 Jul 2026 10:00:30 GMT"  # 30 s apart — within 60 s
 
-    def _make_conn(self, date_value: str | None):
+    @staticmethod
+    def _make_conn(date_value: str | None):
         """Return a mock HTTPSConnection whose getresponse yields the given Date."""
-        from unittest.mock import MagicMock
         resp = MagicMock()
         resp.getheader.side_effect = lambda h, default="": date_value if h == "Date" and date_value is not None else default
         conn = MagicMock()
@@ -2368,7 +2369,6 @@ class HttpsClockProbeTests(unittest.TestCase):
     def test_two_valid_dates_within_60s_returns_median(self) -> None:
         """H-1: Two valid Date headers ≤60 s apart → integer median."""
         import email.utils, statistics as _stats
-        from datetime import timezone as _tz
         ep_a = int(email.utils.parsedate_to_datetime(self._DATE_A).timestamp())
         ep_b = int(email.utils.parsedate_to_datetime(self._DATE_B).timestamp())
         expected = int(_stats.median([ep_a, ep_b]))
@@ -2408,7 +2408,6 @@ class HttpsClockProbeTests(unittest.TestCase):
 
     def test_connection_exception_fails_closed(self) -> None:
         """H-5: OSError during connection → function returns 0 without raising."""
-        from unittest.mock import MagicMock
         conn = MagicMock()
         conn.request.side_effect = OSError("network unreachable")
         with _patch("http.client.HTTPSConnection", return_value=conn):
@@ -2560,9 +2559,6 @@ class ApplySignalActionsTests(unittest.TestCase):
 
     def test_write_failed_nonzero_produces_nonzero_exit_in_live_mode(self) -> None:
         """J-9: main exits with code 2 when any live write fails."""
-        import io
-        from unittest.mock import MagicMock
-
         fake_signal = {
             "id": "live-sig-1",
             "pair": "EURUSD",
@@ -2587,15 +2583,14 @@ class ApplySignalActionsTests(unittest.TestCase):
             _patch.object(closer, "print_preview", return_value=None),
             _patch.object(closer, "bulk_gate", return_value=None),
         ):
-            import sys as _sys
-            old_argv = _sys.argv
-            _sys.argv = ["signal_closer.py", "--live", "--confirm", "CLOSE_SIGNALS", "--max-batch", "5"]
+            old_argv = sys.argv
+            sys.argv = ["signal_closer.py", "--live", "--confirm", "CLOSE_SIGNALS", "--max-batch", "5"]
             try:
                 with self.assertRaises(SystemExit) as cm:
                     closer.main()
                 self.assertEqual(2, cm.exception.code)
             finally:
-                _sys.argv = old_argv
+                sys.argv = old_argv
 
     def test_no_false_closed_log_on_failure(self) -> None:
         """J-10: When close_signal returns False, the CLOSED success log must not be emitted."""
@@ -2647,14 +2642,15 @@ class CloseSignalResponseContractTests(unittest.TestCase):
 
         with (
             _patch.object(closer, "supabase_request", side_effect=fake_supa),
-            _patch.object(closer, "log", side_effect=lambda msg: log_lines.append(msg)),
+            _patch.object(closer, "log", side_effect=log_lines.append),
         ):
             result = closer.close_signal(
                 self._SIG_ID, "CLOSED", 10.0, dry_run, self._SERVER_EPOCH
             )
         return result, log_lines
 
-    def _has_closed_log(self, log_lines: list[str]) -> bool:
+    @staticmethod
+    def _has_closed_log(log_lines: list[str]) -> bool:
         """Return True if any captured log line starts with 'CLOSED '."""
         return any(ln.startswith("CLOSED ") for ln in log_lines)
 
@@ -2788,8 +2784,6 @@ class CloseSignalResponseContractTests(unittest.TestCase):
 
     def test_k14_live_main_exits_2_on_write_confirmation_failure(self) -> None:
         """K-14: Live main exits 2 when PATCH response confirms 0 updated rows (real close_signal)."""
-        import sys as _sys
-
         fake_signal = {
             "id": "live-k14",
             "pair": "EURUSD",
@@ -2808,8 +2802,8 @@ class CloseSignalResponseContractTests(unittest.TestCase):
                 return [fake_signal]
             return []  # PATCH → empty list → write confirmation fails
 
-        old_argv = _sys.argv
-        _sys.argv = [
+        old_argv = sys.argv
+        sys.argv = [
             "signal_closer.py", "--live", "--confirm", "CLOSE_SIGNALS", "--max-batch", "5",
         ]
         try:
@@ -2821,19 +2815,17 @@ class CloseSignalResponseContractTests(unittest.TestCase):
                 _patch("signal_resolution.fetch_s5_candles", return_value=([], "no s5")),
                 _patch.object(closer, "print_preview", return_value=None),
                 _patch.object(closer, "bulk_gate", return_value=None),
+                self.assertRaises(SystemExit) as cm,
             ):
-                with self.assertRaises(SystemExit) as cm:
-                    closer.main()
+                closer.main()
             self.assertEqual(2, cm.exception.code)
         finally:
-            _sys.argv = old_argv
+            sys.argv = old_argv
 
     def test_k15_dry_run_main_never_exits_2(self) -> None:
         """K-15: Dry-run main exits cleanly; sys.exit(2) is never raised."""
-        import sys as _sys
-
-        old_argv = _sys.argv
-        _sys.argv = ["signal_closer.py"]  # no --live → dry-run by default
+        old_argv = sys.argv
+        sys.argv = ["signal_closer.py"]  # no --live → dry-run by default
         try:
             with (
                 _patch.object(closer, "compute_server_clock_epoch", return_value=self._SERVER_EPOCH),
@@ -2848,7 +2840,7 @@ class CloseSignalResponseContractTests(unittest.TestCase):
                         f"main() must not exit 2 in dry-run mode; got exit({exc.code})",
                     )
         finally:
-            _sys.argv = old_argv
+            sys.argv = old_argv
 
 
 # ── Characterization tests for fetch_s5_candles helpers ───────────────────────
