@@ -27,6 +27,8 @@ _TOOLS_DIR = str(ROOT / "tools")
 if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
 
+from signal_resolution import check_s5_outcome, fetch_s5_candles, pips, validate_s5_candles
+
 SPEC = importlib.util.spec_from_file_location("signal_closer_under_test", MODULE_PATH)
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError(f"Unable to load {MODULE_PATH}")
@@ -517,7 +519,7 @@ class S5OutcomeTests(unittest.TestCase):
     def test_unambiguous_s5_tp_buy(self) -> None:
         """Test 18a: Clean BUY TP hit in S5 → WIN with correct pips."""
         s5 = [{"t": 1000, "o": 1.1010, "h": 1.1025, "l": 1.1008, "c": 1.1020}]
-        result = closer.check_s5_outcome("BUY", 1.1000, 1.0980, 1.1020, s5, "EURUSD")
+        result = check_s5_outcome("BUY", 1.1000, 1.0980, 1.1020, s5, "EURUSD")
         self.assertIsNotNone(result)
         outcome, rp, ep, cat, reason = result
         self.assertEqual("WIN", outcome)
@@ -529,7 +531,7 @@ class S5OutcomeTests(unittest.TestCase):
     def test_unambiguous_s5_sl_sell(self) -> None:
         """Test 19a: Clean SELL SL hit in S5 → LOSS with negative pips."""
         s5 = [{"t": 1000, "o": 1.1000, "h": 1.1015, "l": 1.0998, "c": 1.1010}]
-        result = closer.check_s5_outcome("SELL", 1.1000, 1.1010, 1.0980, s5, "EURUSD")
+        result = check_s5_outcome("SELL", 1.1000, 1.1010, 1.0980, s5, "EURUSD")
         self.assertIsNotNone(result)
         outcome, rp, ep, cat, reason = result
         self.assertEqual("LOSS", outcome)
@@ -542,7 +544,7 @@ class S5OutcomeTests(unittest.TestCase):
         """Test 20: Both TP and SL in same S5 candle → LOSS, AMBIGUOUS_S5_STOP_FIRST."""
         # BUY: tp=1.1020, sl=1.0980; candle high≥tp AND low≤sl
         s5 = [{"t": 1000, "o": 1.1000, "h": 1.1025, "l": 1.0975, "c": 1.1000}]
-        result = closer.check_s5_outcome("BUY", 1.1000, 1.0980, 1.1020, s5, "EURUSD")
+        result = check_s5_outcome("BUY", 1.1000, 1.0980, 1.1020, s5, "EURUSD")
         self.assertIsNotNone(result)
         outcome, rp, ep, cat, reason = result
         self.assertEqual("LOSS", outcome)
@@ -555,7 +557,7 @@ class S5OutcomeTests(unittest.TestCase):
         """Test 20b: SELL same-S5 ambiguity → LOSS."""
         # SELL: tp=1.0980, sl=1.1020; low≤tp AND high≥sl
         s5 = [{"t": 1000, "o": 1.1000, "h": 1.1025, "l": 1.0975, "c": 1.1000}]
-        result = closer.check_s5_outcome("SELL", 1.1000, 1.1020, 1.0980, s5, "EURUSD")
+        result = check_s5_outcome("SELL", 1.1000, 1.1020, 1.0980, s5, "EURUSD")
         self.assertIsNotNone(result)
         outcome, _, _, _, reason = result
         self.assertEqual("LOSS", outcome)
@@ -713,7 +715,7 @@ class EventTimestampTests(unittest.TestCase):
         s5 = [
             {"t": tp_s5_t, "o": 1.1000, "h": 1.1025, "l": 1.0998, "c": 1.1020},
         ]
-        result = closer.check_s5_outcome("BUY", 1.1000, 1.0980, 1.1020, s5, "EURUSD")
+        result = check_s5_outcome("BUY", 1.1000, 1.0980, 1.1020, s5, "EURUSD")
         self.assertIsNotNone(result)
         _, _, _, closed_at_epoch, _ = result
         self.assertEqual(tp_s5_t + S5, closed_at_epoch)
@@ -756,19 +758,19 @@ class PipCalculationTests(unittest.TestCase):
 
     def test_eurusd_gbpusd_pip_calculation(self) -> None:
         """Test 30: Non-JPY pair uses 0.0001 pip size."""
-        self.assertAlmostEqual(20.0, closer.pips(0.0020, "EURUSD"))
-        self.assertAlmostEqual(-10.0, closer.pips(-0.0010, "GBPUSD"))
-        self.assertAlmostEqual(0.0, closer.pips(0.0, "EURUSD"))
+        self.assertAlmostEqual(20.0, pips(0.0020, "EURUSD"))
+        self.assertAlmostEqual(-10.0, pips(-0.0010, "GBPUSD"))
+        self.assertAlmostEqual(0.0, pips(0.0, "EURUSD"))
 
     def test_jpy_pip_calculation(self) -> None:
         """Test 31: JPY pair uses 0.01 pip size."""
-        self.assertAlmostEqual(30.0, closer.pips(0.30, "USDJPY"))
-        self.assertAlmostEqual(-15.0, closer.pips(-0.15, "EURJPY"))
+        self.assertAlmostEqual(30.0, pips(0.30, "USDJPY"))
+        self.assertAlmostEqual(-15.0, pips(-0.15, "EURJPY"))
 
     def test_jpy_time_exit_pip_calculation(self) -> None:
         """Test 31b: TIME_EXIT pips for JPY pair."""
         # SELL JPY: entry=150.00, exit=149.70 → pips(entry-exit) = pips(0.30) = 30.0
-        result = closer.pips(150.00 - 149.70, "USDJPY")
+        result = pips(150.00 - 149.70, "USDJPY")
         self.assertAlmostEqual(30.0, result, places=1)
 
 
@@ -777,7 +779,7 @@ class RegressionTests(unittest.TestCase):
     def test_no_tp_sl_regression_unambiguous_buy_tp(self) -> None:
         """Test 32a: Clean unambiguous BUY TP in S5 → WIN."""
         s5 = [{"t": 1000, "o": 1.1015, "h": 1.1022, "l": 1.1010, "c": 1.1020}]
-        result = closer.check_s5_outcome("BUY", 1.1000, 1.0990, 1.1020, s5, "EURUSD")
+        result = check_s5_outcome("BUY", 1.1000, 1.0990, 1.1020, s5, "EURUSD")
         self.assertIsNotNone(result)
         self.assertEqual("WIN", result[0])
         self.assertAlmostEqual(20.0, result[1])
@@ -785,7 +787,7 @@ class RegressionTests(unittest.TestCase):
     def test_no_tp_sl_regression_unambiguous_sell_sl(self) -> None:
         """Test 32b: Clean unambiguous SELL SL in S5 → LOSS."""
         s5 = [{"t": 1000, "o": 1.1005, "h": 1.1012, "l": 1.0998, "c": 1.1010}]
-        result = closer.check_s5_outcome("SELL", 1.1000, 1.1010, 1.0980, s5, "EURUSD")
+        result = check_s5_outcome("SELL", 1.1000, 1.1010, 1.0980, s5, "EURUSD")
         self.assertIsNotNone(result)
         self.assertEqual("LOSS", result[0])
         self.assertAlmostEqual(-10.0, result[1])
@@ -1317,7 +1319,7 @@ class Defect4SparseS5Tests(unittest.TestCase):
 
     def test_misaligned_s5_timestamp_rejected(self) -> None:
         """D4-4: S5 candle with t % 5 != 0 → validate_s5_candles rejects → DATA_UNAVAILABLE."""
-        candles_valid, _ = closer.validate_s5_candles([
+        candles_valid, _ = validate_s5_candles([
             {"t": 1003, "o": 1.1, "h": 1.1, "l": 1.0, "c": 1.1},  # 1003 % 5 = 3 → bad
         ])
         self.assertEqual([], candles_valid)
@@ -1325,7 +1327,7 @@ class Defect4SparseS5Tests(unittest.TestCase):
     def test_non_finite_s5_high_rejected(self) -> None:
         """D4-5: S5 candle with h=inf → validate_s5_candles rejects."""
         import math
-        candles_valid, _ = closer.validate_s5_candles([
+        candles_valid, _ = validate_s5_candles([
             {"t": 1000, "o": 1.1, "h": math.inf, "l": 1.0, "c": 1.1},
         ])
         self.assertEqual([], candles_valid)
@@ -1333,14 +1335,14 @@ class Defect4SparseS5Tests(unittest.TestCase):
     def test_non_finite_s5_low_rejected(self) -> None:
         """D4-6: S5 candle with l=nan → validate_s5_candles rejects."""
         import math
-        candles_valid, _ = closer.validate_s5_candles([
+        candles_valid, _ = validate_s5_candles([
             {"t": 1000, "o": 1.1, "h": 1.1, "l": math.nan, "c": 1.1},
         ])
         self.assertEqual([], candles_valid)
 
     def test_conflicting_duplicate_s5_rejected(self) -> None:
         """D4-7: Two S5 candles at same t with different h → rejected."""
-        candles_valid, reason = closer.validate_s5_candles([
+        candles_valid, reason = validate_s5_candles([
             {"t": 1000, "o": 1.1, "h": 1.105, "l": 1.0, "c": 1.1},
             {"t": 1000, "o": 1.1, "h": 1.110, "l": 1.0, "c": 1.1},  # different h
         ])
@@ -1350,14 +1352,14 @@ class Defect4SparseS5Tests(unittest.TestCase):
     def test_identical_duplicate_s5_collapsed(self) -> None:
         """D4-8: Two identical S5 candles at same t → collapsed to one."""
         c = {"t": 1000, "o": 1.1, "h": 1.105, "l": 1.095, "c": 1.1}
-        candles_valid, reason = closer.validate_s5_candles([c, dict(c)])
+        candles_valid, reason = validate_s5_candles([c, dict(c)])
         self.assertEqual("ok", reason)
         self.assertEqual(1, len(candles_valid))
         self.assertEqual(1000, candles_valid[0]["t"])
 
     def test_validate_s5_sorts_by_timestamp(self) -> None:
         """D4-9: validate_s5_candles returns candles in ascending t order."""
-        candles_valid, _ = closer.validate_s5_candles([
+        candles_valid, _ = validate_s5_candles([
             {"t": 1010, "o": 1.1, "h": 1.1, "l": 1.0, "c": 1.1},
             {"t": 1000, "o": 1.1, "h": 1.1, "l": 1.0, "c": 1.1},
             {"t": 1005, "o": 1.1, "h": 1.1, "l": 1.0, "c": 1.1},
@@ -1396,20 +1398,20 @@ class ValidateS5CandlesTests(unittest.TestCase):
     def test_valid_single_candle(self) -> None:
         """V5-1: Single well-formed S5 candle passes validation."""
         c = {"t": 1000, "o": 1.1, "h": 1.105, "l": 1.095, "c": 1.1}
-        valid, reason = closer.validate_s5_candles([c])
+        valid, reason = validate_s5_candles([c])
         self.assertEqual("ok", reason)
         self.assertEqual(1, len(valid))
 
     def test_empty_input_returns_empty(self) -> None:
         """V5-2: Empty input → empty output, ok."""
-        valid, reason = closer.validate_s5_candles([])
+        valid, reason = validate_s5_candles([])
         self.assertEqual("ok", reason)
         self.assertEqual([], valid)
 
     def test_non_finite_close_rejected(self) -> None:
         """V5-3: NaN close → rejected."""
         import math
-        valid, reason = closer.validate_s5_candles([
+        valid, reason = validate_s5_candles([
             {"t": 1000, "o": 1.1, "h": 1.1, "l": 1.0, "c": math.nan},
         ])
         self.assertEqual([], valid)
@@ -1417,7 +1419,7 @@ class ValidateS5CandlesTests(unittest.TestCase):
 
     def test_missing_t_field_rejected(self) -> None:
         """V5-4: Missing t field → rejected with reason mentioning t field."""
-        valid, reason = closer.validate_s5_candles([{"o": 1.1, "h": 1.1, "l": 1.0, "c": 1.1}])
+        valid, reason = validate_s5_candles([{"o": 1.1, "h": 1.1, "l": 1.0, "c": 1.1}])
         self.assertEqual([], valid)
         self.assertIn("t field", reason)
 
@@ -1466,7 +1468,7 @@ def _good_s5_response() -> bytes:
 
 def _fetch_direct(**kwargs):
     """Call fetch_s5_candles with consistent fake token/url."""
-    return closer.fetch_s5_candles(
+    return fetch_s5_candles(
         "EURUSD",
         kwargs.get("from_epoch", _S5_FROM),
         kwargs.get("to_epoch", _S5_TO),
@@ -1895,7 +1897,7 @@ class S5TransportFailureTests(unittest.TestCase):
     def test_non_https_url_rejected_before_connection(self) -> None:
         """E-N1: Non-HTTPS base URL rejected without any network connection."""
         with _patch("http.client.HTTPSConnection") as mock_cls:
-            candles, reason = closer.fetch_s5_candles(
+            candles, reason = fetch_s5_candles(
                 "EURUSD", _S5_FROM, _S5_TO, _FAKE_TOKEN, "http://fake-oanda.test"
             )
         mock_cls.assert_not_called()
@@ -1906,7 +1908,7 @@ class S5TransportFailureTests(unittest.TestCase):
     def test_embedded_credentials_rejected(self) -> None:
         """E-N2: URL with embedded credentials rejected before connection."""
         with _patch("http.client.HTTPSConnection") as mock_cls:
-            candles, reason = closer.fetch_s5_candles(
+            candles, reason = fetch_s5_candles(
                 "EURUSD", _S5_FROM, _S5_TO, _FAKE_TOKEN,
                 "https://user:pass@fake-oanda.test"
             )
@@ -1918,7 +1920,7 @@ class S5TransportFailureTests(unittest.TestCase):
         """E-N3: Host and explicit port parsed from base URL are passed to HTTPSConnection."""
         conn = _mock_https_conn(body=_good_s5_response())
         with _patch("http.client.HTTPSConnection", return_value=conn) as mock_cls:
-            closer.fetch_s5_candles(
+            fetch_s5_candles(
                 "EURUSD", _S5_FROM, _S5_TO, _FAKE_TOKEN, "https://fake-oanda.test:8443"
             )
         mock_cls.assert_called_once()
@@ -1930,7 +1932,7 @@ class S5TransportFailureTests(unittest.TestCase):
         """E-N4: GET request path includes /v3/instruments/.../candles with query params."""
         conn = _mock_https_conn(body=_good_s5_response())
         with _patch("http.client.HTTPSConnection", return_value=conn):
-            closer.fetch_s5_candles("EURUSD", _S5_FROM, _S5_TO, _FAKE_TOKEN, _FAKE_URL)
+            fetch_s5_candles("EURUSD", _S5_FROM, _S5_TO, _FAKE_TOKEN, _FAKE_URL)
         req_args = conn.request.call_args[0]
         self.assertEqual("GET", req_args[0])
         self.assertIn("/v3/instruments/EUR_USD/candles", req_args[1])
@@ -1940,7 +1942,7 @@ class S5TransportFailureTests(unittest.TestCase):
         """E-N5: Authorization Bearer and Accept-Datetime-Format headers are sent."""
         conn = _mock_https_conn(body=_good_s5_response())
         with _patch("http.client.HTTPSConnection", return_value=conn):
-            closer.fetch_s5_candles("EURUSD", _S5_FROM, _S5_TO, _FAKE_TOKEN, _FAKE_URL)
+            fetch_s5_candles("EURUSD", _S5_FROM, _S5_TO, _FAKE_TOKEN, _FAKE_URL)
         req_kwargs = conn.request.call_args[1]
         headers = req_kwargs.get("headers", {})
         self.assertIn("Authorization", headers)
