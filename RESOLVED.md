@@ -155,3 +155,71 @@ Do not label the rollout as resolved until all remaining gates are completed and
 - [proven] Installed watcher SHA-256: `b8a3adf46582e3a69d5b22d12a4da070bc8be2ceff76a4aa99e9d6c96544a9ef`.
 - [proven] Strategy and production selection rules changed: NO.
 - [not proven] Whether any valid signal was missed during the historical June outage remains unresolved.
+
+---
+
+<!-- BOTA_SIGNAL_LIFECYCLE_V31_DEEPSOURCE_2026_07_16 -->
+
+## 2026-07-16 — Signal Lifecycle v3.1 DeepSource Python Analysis (PARTIALLY RESOLVED)
+
+**PR:** #7 (`fix/signal-lifecycle-market-hours-20260713`)
+**Current head:** `cfe3e97b089f624c1e17cdf07a7ad2366aced499`
+**DeepSource run:** `e7b68c3a-0b65-412d-8bc8-085b77835fdb`
+**Status: BLOCKER REMAINS — awaiting repository-owner dashboard action**
+
+### What is resolved
+
+- DeepSource Major findings: 0
+- DeepSource: Secrets — PASS
+- DeepSource: Shell — PASS
+- Bandit (Security Scan) — PASS
+- Gitleaks — PASS
+- ShellCheck — PASS
+- SonarCloud — PASS
+- PYL-R0201 (unnecessary `self`) — 9 instances, all resolved
+- PYL-W0404 (reimport within function scope) — 12 instances, all resolved
+- PYL-W0612 (unused loop variable) — 1 instance, resolved
+- PY-W2000 (unused import) — 1 instance, resolved
+- PYL-W0108 (unnecessary lambda) — 1 instance, resolved
+- PTC-W0062 (nested `with` blocks) — 1 instance, resolved
+- Application code documentation: 47/47 PR-introduced callables documented (100%)
+
+### What remains unresolved (requires repository-owner dashboard action)
+
+- DeepSource Python — FAIL
+- Root cause: Documentation Coverage metric at ~24.3% vs 44.9% comparison value
+- The 44.9% value is a DeepSource dynamic baseline, not a configured threshold in `.deepsource.toml`
+- ~504 undocumented pre-existing callables outside PR #7 scope prevent closing the gap
+- Required action: change Documentation Coverage threshold in DeepSource dashboard to 18%
+- Dashboard URL: `https://app.deepsource.com/gh/Ciupanezulflipper/BotA/settings/`
+- Path: Repository Settings → Quality Gates → Python → Documentation Coverage
+
+### Test validation (on head `cfe3e97`)
+
+- Tests run: 183
+- Tests passed: 183
+- Failures: 0
+- Errors: 0
+- `PYTHONHASHSEED` 42, 137, 999, 2026 — all PASS
+- `python3 -m py_compile tools/signal_closer.py tools/signal_resolution.py` — PASS
+- `git diff --check` — PASS
+
+### Documentation coverage audit (AST)
+
+| File | Documented | Total | Coverage |
+|------|-----------|-------|----------|
+| `tools/signal_closer.py` | 26 | 26 | 100% |
+| `tools/signal_resolution.py` | 21 | 21 | 100% |
+| Repository-wide (application, excl. tests/archive) | 174 | 678 | 25.7% |
+
+### Commit chain on PR branch
+
+- `be8c6ef` — initial v3.1 rewrite
+- `ec1fcfb` — refactor: extract signal resolution engine
+- `1091c0a` — fix: remove unused re-exports and declare public signal_resolution API
+- `c408320` — fix: remove unused signal_resolution re-exports from signal_closer
+- `82952bd` — refactor: extract fetch_s5_candles helpers (cyclomatic complexity)
+- `eabdb75` — fix: resolve PYL-R0201/W0404/W0612 and add docstrings for coverage
+- `cfe3e97` — fix: resolve PYL-R0201/W0404/W2000/W0108/PTC-W0062 in test file
+
+Do not mark this issue RESOLVED until the DeepSource Python check passes on the exact PR head.

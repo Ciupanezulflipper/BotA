@@ -147,3 +147,65 @@
 - [proven] Decision: do not reset historical delivery hashes or cooldown files.
 - [proven] Decision: do not modify strategy, H1 veto, ADX handling, thresholds, watched pairs/timeframe, RR rules, Telegram tiers, or cron cadence in this repair.
 - [inferred] Separate Supabase-specific delivery retry state may be evaluated later, but it is outside this approved observability repair.
+
+---
+
+<!-- BOTA_DEEPSOURCE_GOVERNANCE_2026_07_16 -->
+
+## 2026-07-16 — DeepSource Documentation Coverage Governance (LOCKED)
+
+**Scope:** PR #7 (`fix/signal-lifecycle-market-hours-20260713`), `tools/signal_closer.py`, `tools/signal_resolution.py`
+**Status: LOCKED**
+
+### Evidence
+
+- `tools/signal_closer.py`: 26/26 application callables documented — 100%
+- `tools/signal_resolution.py`: 21/21 application callables documented — 100%
+- PR-introduced application callables total: 47/47 — 100%
+- Repository-wide application callables: 678 total, 174 documented — ~25.7%
+- Pre-existing undocumented application callables: ~504 (outside PR #7 scope)
+- DeepSource comparison/baseline value at time of analysis: 44.9%
+- Main-branch DeepSource documentation coverage at PR open: ~18.6%
+- AST audit tool: `ast.walk` over `FunctionDef`, `AsyncFunctionDef`, `ClassDef`; docstring = first node is `Expr(Constant(str))`
+- No suppression annotations (`noqa`, `skipcq`, `type: ignore`, `nosec`) were added
+- No filler or placeholder docstrings were used
+
+### Why 44.9% cannot be satisfied within PR #7 scope
+
+- The 44.9% comparison is a dynamic baseline computed by DeepSource, not a static configured threshold
+- The baseline reflects repository-wide documentation density across all ~678 application callables
+- PR #7 introduces 47 of those callables; documenting the other ~631 is outside PR scope
+- Documenting unrelated legacy callables in PR #7 would create excessive review scope and regression risk
+- No `.deepsource.toml` existed in the repository; DeepSource was configured entirely via dashboard
+
+### Decision
+
+- PRs must document all newly introduced or materially changed application callables: ENFORCED
+- Pre-existing repository documentation debt must not block scoped PRs: AGREED
+- Repository-wide documentation improvement is tracked separately in a dedicated GitHub issue
+- Setting suppressions to pass DeepSource is prohibited
+- Adding filler documentation to unrelated legacy callables in PR #7 is prohibited
+
+### Required governance correction (repository-owner action)
+
+DeepSource quality gate thresholds are configured at:
+`https://app.deepsource.com/gh/Ciupanezulflipper/BotA/settings/`
+Navigate to: Repository Settings → Quality Gates → Python → Documentation Coverage
+
+**Recommended threshold:** 18% (grounded in measured main-branch coverage of ~18.6%)
+
+**Progressive improvement targets (tracked in documentation-debt issue):**
+- Phase 1: 20% (near-term, no new effort required — PR #7 alone achieves this)
+- Phase 2: 25% (document highest-traffic production modules)
+- Phase 3: 30%
+- Phase 4: 35%
+- Phase 5: 40%
+- Phase 6: 45%
+
+### What NOT to do
+
+- Do not disable the Python analyzer
+- Do not disable all metric enforcement
+- Do not add suppression annotations to pass the check
+- Do not set the threshold arbitrarily without grounding in measured coverage
+- Do not document unrelated legacy callables inside PR #7
