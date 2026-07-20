@@ -112,18 +112,34 @@ The watcher source says the calendar guard is disabled, but its shell condition 
 Verified supporting evidence:
 
 - non-empty `RAPIDAPI_CALENDAR_KEY` in `.env`;
-- non-empty key in `.env.runtime`;
+- the runtime key was originally non-empty in `.env.runtime`;
 - recent EURUSD and GBPUSD RapidAPI fallback lines in `cron.signals.log`.
 
 This is separate from Twelve Data usage, reported at 600/800 credits.
 
-A reversible runtime-only key disable is staged at:
+### Immediate mitigation — VERIFIED PASS
 
-`audits/p4_rapidapi_runtime_disable_ae204a40`
+The runtime-only disable at `audits/p4_rapidapi_runtime_disable_ae204a40` executed with exact file-gated approval.
+
+Verified result:
+
+- approval consumed;
+- `RAPIDAPI_CALENDAR_KEY` remains declared once in `.env.runtime` but is empty;
+- `RAPIDAPI_RUNTIME_DISABLED=YES`;
+- atomic edit;
+- rollback backup present;
+- exit code `0`;
+- no service restart;
+- no external API call by the package;
+- `.env` source file unchanged.
+
+Future watcher cycles therefore cannot use the RapidAPI fallback unless the runtime key is restored. The durable watcher condition is still defective and needs a later reviewed source fix with caching and call-budget controls.
+
+Rollback:
+
+`audits/p4_rapidapi_runtime_disable_ae204a40/ROLLBACK_RAPIDAPI_CALENDAR_RUNTIME_V1.sh`
 
 Pinned hashes and full evidence are in `docs/RUNTIME_CHECKPOINT_2026-07-20.md`.
-
-Evidence boundary: the approval command was supplied by the user, but returned output has not yet proven approval-file creation or disable execution. Do not claim the key is disabled until explicit output proves it.
 
 ## Crontab and health truth
 
@@ -139,15 +155,12 @@ Telegram DEGRADED/DEADMAN/RECOVERY transitions are not authoritative by themselv
 
 ## Ordered next work
 
-1. Prove the RapidAPI-disable approval file exists.
-2. Execute the staged runtime-only RapidAPI disable.
-3. Verify the runtime key is empty without an API request.
-4. Reconcile the standard manager and seven orphaned supervisors.
-5. Continue bounded endurance verification.
-6. Fix calendar invocation and add cache/call-budget controls on a reviewed branch.
-7. Re-run canonical crontab verification.
-8. Repair health-transition truth and stale-reason suppression separately.
-9. Address Twelve Data budgeting separately.
+1. Reconcile the standard manager and seven orphaned supervisors.
+2. Continue bounded parentage/PID stability and endurance verification.
+3. Fix calendar invocation and add cache/call-budget controls on a reviewed branch.
+4. Re-run canonical crontab verification.
+5. Repair health-transition truth and stale-reason suppression separately.
+6. Address Twelve Data budgeting separately.
 
 ## Files to read next
 
