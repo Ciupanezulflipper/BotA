@@ -1,333 +1,200 @@
 # BotA Current Continuity State
 
-## 2026-07-09 — BotA Clock-Health Truth Fix Closed
+Last updated: 2026-07-20
 
-Status: CLOSED and pushed.
+This is the compact current handoff. Historical detail remains in `CONTINUITY.md`; full evidence for this checkpoint is in `docs/RUNTIME_CHECKPOINT_2026-07-20.md` and GitHub issue #9.
 
-Commit:
-- e42ad60 — ops: degrade runtime health on unsafe clock
+## Mandatory operating mode
 
-What changed:
-- `tools/bota_supervisor.sh` now treats unsafe/local-drifted clock state as a runtime health degradation.
-- If `logs/clock_drift_status.json` reports `DRIFT_WARN` or `local_clock_unsafe=true`, BotA runtime health becomes `DEGRADED` with reason `local_clock_drift`.
-- If server clock is unavailable, BotA runtime health becomes `DEGRADED` with reason `server_clock_unavailable`.
-
-Why:
-- Android/Termux system time is intentionally manual because ship-time alarms are operationally critical.
-- BotA must not report green `HEALTHY` while the local clock is unsafe.
-- We fixed the health truth layer, not the phone clock.
-
-Proof:
-- Cron supervisor proof passed after absolute-path fix.
-- `state/runtime_health.json` showed `bot_mode=DEGRADED`.
-- `failure_reasons=local_clock_drift`.
-- Supabase live row confirmed `bot_mode=DEGRADED`, `failure_reasons=local_clock_drift`, and fresh cache ages.
-
-Scope:
-- File committed: `tools/bota_supervisor.sh` only.
-- Trading logic changed: NO.
-- Scoring/thresholds/pairs changed: NO.
-- Cron changed: NO.
-- Supabase schema changed: NO.
-- ProfitLab changed: NO.
-
-Next:
-- Return to ProfitLab repo in Termux.
-- Inspect remote divergence before touching files.
-- Continue safe deployment path for `bota-health-admin` via GitHub Actions.
-
-Last updated: 2026-07-09
-
-This file is the compact current handoff. It does not replace the historical `CONTINUITY.md`; it prevents new AI sessions from relying on stale assumptions.
+- Work one phase and one acceptance gate at a time.
+- Display `audits/ERROR_LOG.md` before every Termux package.
+- Print `ERROR_LOG_REVIEWED=YES` and `CIRCULAR_ERROR_CHECK=PASS`.
+- Use compact, active-path-only checks.
+- Do not use top-level `exit` that closes the user's Termux shell.
+- Do not use interactive approval waits.
+- Separate staging, approval, and mutation execution.
+- End with exactly one next action.
 
 ## Scope lock
 
-Reliability work only.
+Do not change during runtime-reliability work:
 
-Do not change:
+- strategy;
+- thresholds;
+- pairs;
+- scoring;
+- SL/TP;
+- filters;
+- PR #7;
+- DeepSource work;
+- Supabase signal semantics;
+- direct pushes to `main`;
+- unrelated cleanup or broad refactors.
 
-- trading strategy
-- thresholds
-- H1 confirmation/veto logic
-- pair selection
-- risk/reward logic
-- ProfitLab subscription/billing/RLS
-- Supabase `signals` semantics
+## Five-phase state
 
-## Verified current incident
+1. Single execution source and cron hygiene — COMPLETE.
+2. Runtime survival controls — COMPLETE.
+3. Ship-time safety proof — COMPLETE.
+4. Reboot and endurance proof — IN PROGRESS.
+5. Monday readiness/data collection — NOT STARTED.
 
-### Incident name
+Completed: 3/5.
+Remaining: 2/5.
 
-BotA runtime crontab wipe / silent signal-factory stop.
+Phase 4 details:
 
-### Evidence from Termux output
+- reboot gate: PASS and closed;
+- endurance/control-plane ownership: FAIL and unresolved.
 
-Before repair, live crontab contained only:
+## Current device/runtime facts
 
-- dividend-capture-scanner block
-- BotA Daily Proof block
+- Termux checkout: `/data/data/com.termux/files/home/BotA`.
+- Shortcut: `~/BotA`.
+- Current verified boot ID: `ae204a40-c3ff-4c4e-abc2-39696b867781`.
+- Canonical service root: `$PREFIX/var/service`.
+- Valid crond foreground form: `crond -n -s`.
+- Ship-time wall clock is display-only; trading and same-boot cadence use trusted server UTC or monotonic time.
 
-The following BotA runtime lines were missing:
+## Current control-plane state
 
-- watcher: `tools/signal_watcher_pro.sh`
-- updater: `tools/indicators_updater.sh`
-- shadow: `tools/run_shadow_manager.sh`
-- closer: `tools/run_signal_closer_live.sh`
-- supervisor: `tools/bota_supervisor.sh`
-- clock drift checker: `tools/clock_drift_check.sh`
+### What the new-boot audit proved
 
-Runtime log mtimes proved the stop:
+The first fresh snapshot showed:
 
-- `logs/cron.signals.log` frozen around 2026-06-22 19:30 local
-- `logs/cron.indicators.log` frozen around 2026-06-22 19:28 local
-- `logs/cron.closer.log` frozen around 2026-06-22 19:30 local
-- `logs/api_credits.json` frozen around 2026-06-22 19:28 local
+- one standard `runsvdir` manager, PID 25793;
+- six BotA `runsv` supervisors orphaned under PID 1;
+- manager-owned `runsv crond` unable to start a supervised daemon;
+- one old detached `crond -n -s` under PID 1;
+- stable runsv PID sets across samples.
 
-Daily Proof continued running because it was restored separately on 2026-07-05, which masked the failure by reporting `Cron: running` while the signal factory was not scheduled.
+### Crond repair result
 
-## Verified repair
+The file-gated V2 repair did execute and consumed its approval file.
 
-### C1-SAFE-V2
+Verified log evidence:
 
-- Installed runtime cron from `logs/crontab.backup.before_closer_20260603_085158.txt`.
-- Aborted earlier when optional `tools/logrotate.sh` was missing.
-- V2 skipped old logrotate line and restored core runtime.
+- approval accepted;
+- preflight passed with manager 25793, runsv 29960, old crond 29386;
+- old crond reached an idle boundary and exited after SIGTERM;
+- first `sv -w 30 up crond` timed out with rc 111;
+- automatic availability recovery succeeded;
+- supervised crond PID 28296 came up.
 
-### C1C cleanup
+Do not rerun the crond split-brain repair or its rollback.
 
-C1C removed the accidental duplicate dividend scanner line inside the BotA block and restored timezone separation.
+### Remaining structural blocker
 
-Installed crontab passed required counts:
+The latest forensic snapshot showed:
 
-- dividend scanner: 1
-- watcher: 1
-- updater: 1
-- shadow: 1
-- closer: 1
-- daily proof: 1
-- clock drift: 1
-- supervisor: 1
+- `STANDARD_MANAGER_COUNT=0`;
+- all six BotA `runsv` supervisors under PID 1;
+- `runsv crond` also under PID 1;
+- one live supervised crond PID 28296.
 
-Tracked file changes from Termux: none.
+The next structural task is to restore exactly one standard Termux `runsvdir` manager and migrate all seven stable supervisors beneath it without duplicate wrappers, historical replay, or service-state corruption.
 
-### C2 liveness proof — PASS
+## RapidAPI calendar quota incident
 
-Input metadata:
+The Global Economic Calendar API BASIC subscription reached 100% usage.
 
-- `INPUT_TIMESTAMP_LOCAL=2026-07-08 14:45:51 CEST`
-- `INPUT_TIMESTAMP_UTC=2026-07-08 12:45:51 UTC`
-- `SOURCE=Termux`
-- `SCOPE=BotA`
+This is separate from Twelve Data, which Telegram reported at 600/800 credits.
 
-Verified:
-
-- `crond` running with PID `8633`.
-- Required BotA crontab line counts all equal `1`:
-  - watcher
-  - updater
-  - shadow
-  - closer
-  - daily proof
-  - clock drift
-  - supervisor
-- Fresh log/state ages:
-  - `logs/cron.signals.log AGE_MIN=0`
-  - `logs/cron.indicators.log AGE_MIN=2`
-  - `logs/cron.closer.log AGE_MIN=0`
-  - `logs/cron.shadow.log AGE_MIN=0`
-  - `logs/cron.supervisor.log AGE_MIN=0`
-  - `logs/api_credits.json AGE_MIN=2`
-  - `state/runtime_health.json AGE_MIN=0`
-- Watcher reached live scan on 2026-07-08 and rejected/no-sent due to live gates, not runtime failure.
-- Updater fetched and built EURUSD, GBPUSD, and USDJPY M15/H1/H4/D1 with `fetch_fail_count=0 build_fail_count=0`.
-- Closer ran live and found `0 ACTIVE` signals.
-- Shadow manager ran and found `0 active signals`.
-- Supervisor wrote `state/runtime_health.json` and reported `bot_mode=HEALTHY`.
-- API credits moved to `used=60` for `2026-07-08`.
-
-Known non-blocking observation:
-
-- `logs/cron.shadow.log` still contains older network-unreachable traceback from before recovery, but current runs after restore are successful.
-
-### Phase 2 canonical crontab — PASS
-
-Input metadata:
-
-- `INPUT_TIMESTAMP_LOCAL=2026-07-08 15:20:17 CEST` for commit/push.
-- `INPUT_TIMESTAMP_UTC=2026-07-08 13:20:17 UTC` for commit/push.
-- `INPUT_TIMESTAMP_LOCAL=2026-07-08 15:25:21 CEST` for restore drill.
-- `INPUT_TIMESTAMP_UTC=2026-07-08 13:25:21 UTC` for restore drill.
-- `SOURCE=Termux`
-- `SCOPE=BotA`
-
-Verified files committed and pushed:
-
-- `docs/BOTA_CANONICAL_CRONTAB.md`
-- `ops/bota_crontab.canonical`
-- `tools/install_canonical_crontab.sh`
-- `tools/verify_canonical_crontab.sh`
-
-Commit:
-
-- `e58844f ops: add canonical BotA crontab verification`
-
-Verifier result:
-
-- `PHASE2_VERIFY_PASS=YES`
-- all required live line counts equal `1`
-- `CANONICAL_HASH=b9e00a191dc5c719fd86ca981a7e78563271c6b523325aa41e289a2586104889`
-- `LIVE_BOTA_BLOCK_HASH=b9e00a191dc5c719fd86ca981a7e78563271c6b523325aa41e289a2586104889`
-- `BOTA_BLOCK_HASH_MATCH=YES`
-
-Restore drill result:
-
-- installer preserved Dividend Capture Scanner block
-- installer preserved `CRON_TZ=America/New_York` for Dividend Capture Scanner
-- installer installed BotA canonical block with `CRON_TZ=UTC`
-- `INSTALL_RC=0`
-- post-install verifier returned `PHASE2_VERIFY_PASS=YES`
-- backup created at `logs/crontab.backup.before_canonical_install_20260708_132521.txt`
-
-## Still not verified
-
-Do not claim these are solved until evidence proves them:
-
-- Termux:Boot installed and configured
-- wake lock active
-- Daily Proof upgraded to prove watcher/updater/closer/shadow/supervisor freshness — CLOSED by commit `5744802`.
-- runtime health pushed to Supabase
-- ProfitLab Admin Health Panel displaying BotA health
-- reboot recovery proof
-
-## Next mandatory phase
-
-Phase 3: Termux:Boot and wake-lock recovery.
-
-Required:
-
-- verify Termux:Boot package/app availability
-- verify or create `~/.termux/boot/` script
-- start `termux-wake-lock` during boot recovery
-- start `crond` on boot
-- run canonical crontab verifier or installer on boot recovery path
-- write boot marker/log
-- prove recovery after reboot later, when safe for the user
-
-## Reliability conclusion
-
-BotA's confirmed risk was silent runtime failure, not strategy weakness.
-
-C2 proves the restored Termux runtime is alive again.
-
-Phase 2 proves the crontab can now be verified and restored from committed source of truth.
-
-The minimum safe architecture remains:
+Verified active caller chain:
 
 ```text
-BotA runtime
-  -> supervisor
-  -> runtime_health.json
-  -> Supabase runtime health row
-  -> ProfitLab Admin Health Panel
-  -> Telegram DEGRADED/RECOVERY transition alerts
+bota-watcher runit service
+  -> tools/signal_watcher_pro.sh every 900 seconds
+  -> tools/calendar_guard.py for each pair path
+  -> TradingEconomics guest access
+  -> RapidAPI fallback whenever TradingEconomics returns no events
 ```
 
-## ProfitLab impact
+The watcher comment says the calendar guard is disabled, but the condition is always true when the file exists because of its second `|| [[ -f ... ]]` clause.
 
-ProfitLab signal ingestion is not the immediate defect. ProfitLab correctly shows no active signals when no signals are published.
+Proof:
 
-ProfitLab must add runtime-health visibility so it can distinguish:
+- `.env` contains a non-empty `RAPIDAPI_CALENDAR_KEY`;
+- `.env.runtime` contains a non-empty key;
+- recent logs show RapidAPI fallback for EURUSD and GBPUSD;
+- the active caller is runit, not a direct cron line.
 
-- no signal because market/setup is quiet
-- no signal because BotA is dead/offline
+### Staged runtime-only mitigation
 
-## Production readiness
+Stage directory:
 
-Current reliability score: 72/100.
+`audits/p4_rapidapi_runtime_disable_ae204a40`
 
-Reason for increase from 64:
+Pinned artifacts:
 
-- canonical crontab source of truth committed
-- verifier committed
-- installer committed
-- restore drill passed
-- Dividend Capture Scanner preservation confirmed
-- BotA UTC timezone separation confirmed
+- disable script SHA-256: `29fa5f954a1c4db3438753712d49dc355293c1991099bda713a090203fd67dbb`;
+- rollback script SHA-256: `c4d3efbc90c92dc3866fd0ce8d95052ba34f2f75f6f41f74ebe61237fc0d0bb5`;
+- expected `.env.runtime` SHA-256: `794b160586e670d08e6a2c9dd0756b57c08b0f7e719005f1d15918df8ac79f48`;
+- expected mode: `600`.
 
-Still below production-hardened because real reboot recovery, Supabase runtime health push, and ProfitLab Admin Health panel remain open. Daily Proof truth upgrade is now closed.
+Planned effect:
 
-Target after minimal reliability roadmap: 85/100.
+- blank only `RAPIDAPI_CALENDAR_KEY` in `.env.runtime`;
+- preserve `.env`;
+- create a mode-600 backup;
+- replace atomically;
+- make no API call;
+- restart no service.
 
-A phone-based Termux runtime should not be scored above 90 unless an independent cloud watchdog or VPS deployment exists.
+Evidence boundary:
 
-## Phase 4C closure — Daily Proof truth upgrade PASS
+The user supplied the approval-file creation command, but returned output has not yet proven approval-file creation or disable execution. Do not claim RapidAPI runtime use is disabled until explicit output proves it.
 
-Timestamp: 2026-07-08 15:44:34 UTC
+## Crontab state
 
-Commit pushed:
-- `5744802` — `tools: strengthen BotA daily proof runtime reporting`
+Live crontab SHA-256:
 
-Changed file:
-- `tools/daily_summary.sh`
+`2fbbf08b8611ae22ecfc08f9d41a078a6a3437fe1ecfcd6ba931f2f1c99b9a68`
 
-Verified behavior:
-- Daily Proof now reports `Runtime`, `Reported`, supervisor age, watcher/updater/closer/shadow ages, cache ages, canonical crontab status, hash match, and reasons.
-- Real dry-run after rebase:
-  - `Runtime: HEALTHY`
-  - `Canonical crontab: PASS`
-  - `Hash match: YES`
-  - `Reasons: none`
-- Failure-mode tests passed:
-  - missing `runtime_health.json` -> `UNKNOWN`, no crash
-  - corrupt `runtime_health.json` -> `DEGRADED`, no crash
-  - stale `runtime_health.json` -> `DEGRADED`, no crash
-  - missing verifier -> `UNKNOWN`, no crash
-  - cron-like environment -> pass
-  - secret leak check -> pass
+Daily Proof reported canonical verification failure and hash mismatch.
 
-Explicitly not changed:
-- crontab
-- boot files
-- trading strategy
-- thresholds
-- H1 logic
-- pair selection
-- Supabase schema/signals
-- ProfitLab UI
-- Telegram config
+Observed structure:
 
-Reliability score updated: 72/100.
+- migrated watcher/updater/shadow/closer/heartbeat/supervisor cron lines are commented with `#MIGRATED_TO_RUNIT`;
+- no duplicate active execution was proven from those lines;
+- Daily Proof remains active;
+- runtime-health push remains active every five minutes;
+- dividend scanner remains active and separate.
 
-Next open phase:
-- Phase 5 — push `state/runtime_health.json` to Supabase runtime health storage.
+Do not blindly reinstall canonical cron until intended runit/cron ownership is reconciled.
 
-<!-- PHASE5_RUNTIME_HEALTH_PUSH_CLOSURE_20260708 -->
-## Phase 5 Runtime Health Push — Closed
+## Health and Telegram truth
 
-Status: **PASS / FUNCTIONALLY CLOSED**
+Telegram showed alternating DEGRADED, DEADMAN, and RECOVERY transitions.
 
-Verified facts:
+These are not sufficient proof of runtime health because the current supervisor still relies partly on wall-clock/file-mtime freshness. Quiet successful cycles can look stale, and restart log touches can look like recovery.
 
-- `public.bot_runtime_health` row exists for `bota-termux-primary`.
-- Health push uses limited `BOTA_HEALTH_INGEST_SECRET`, not a Supabase service-role key.
-- Edge Function `bot-health-ingest` returned HTTP 200 with `ok:true`.
-- Manual sender push passed.
-- Wrapper real push passed.
-- Cron installed one line:
-  - `*/5 * * * * ... tools/run_runtime_health_push.sh ...`
-- Cron-fire proof passed with real updates at 5-minute intervals.
-- Canonical crontab verifier passed after install.
-- Core BotA cron jobs still count once each.
+Deferred suppression defect:
 
-Latest Phase 5 commits:
-- `55194f6 tools: add BotA runtime health sender`
-- `2f8d091 tools: add BotA runtime health push wrapper`
-- `b715729 ops: add BotA runtime health push cron`
+- emitted reasons use names such as `watcher_stale`, `updater_stale`, and `shadow_stale`;
+- the suppression regex expects names such as `watcher_log_stale`;
+- intended suppression is ineffective.
 
-Next open work:
-1. Phase 6: ProfitLab Admin Health panel.
-2. Reboot/Termux:Boot recovery proof remains open.
-3. Profitability/proof scoring remains separate from runtime reliability.
+## Ordered next steps
 
-Phase 5 closure docs committed:
-- `633f873 docs: close BotA Phase 5 runtime health push`
+1. Prove the RapidAPI-disable approval file exists.
+2. Execute the already-staged runtime-only RapidAPI disable.
+3. Verify the runtime key is empty without making an API request.
+4. Reconcile the missing standard manager and all seven orphaned supervisors.
+5. Run bounded parentage/PID stability checks and continue the endurance gate.
+6. Fix calendar invocation logic and add cache/call-budget controls on a reviewed branch.
+7. Re-run canonical crontab verification.
+8. Repair health-transition truth and stale-reason suppression separately.
+9. Address Twelve Data call budgeting separately.
+
+## Deferred findings
+
+- root cause of repeated standard-manager death;
+- seven-service manager reconciliation;
+- calendar caching and daily call budget;
+- calendar 429/quota observability;
+- canonical crontab mismatch;
+- monotonic useful-progress health model;
+- stale-reason suppression mismatch;
+- Twelve Data quota budgeting;
+- external independent dead-man monitor.
