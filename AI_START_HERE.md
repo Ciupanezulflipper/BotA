@@ -2,52 +2,27 @@
 
 Last updated: 2026-07-20
 
-This file prevents new AI sessions from guessing BotA runtime state. Read it before proposing commands, code, cron, service, strategy, or deployment changes.
+Read this before proposing BotA commands, code, cron, service, strategy, or deployment changes.
 
-## Mandatory evidence rule
+## Evidence and scope rules
 
-Classify every material claim as:
+Classify material claims as VERIFIED, ASSUMED, or UNKNOWN. Do not promote a failed acceptance criterion because adjacent behavior worked.
 
-- VERIFIED — proven by GitHub content, Termux output, Supabase query, provider response, or user-provided logs;
-- ASSUMED — plausible but not proven;
-- UNKNOWN — must be checked before acting.
+Current work is reliability-only. Do not change strategy, thresholds, pairs, scoring, SL/TP, filters, PR #7, DeepSource, Supabase signal semantics, or `main` directly.
 
-Do not convert a failed acceptance criterion into a pass merely because some adjacent behavior worked.
+Every Termux package must:
 
-## Mandatory Termux package protocol
-
-Every operational package must:
-
-1. display `$HOME/BotA/audits/ERROR_LOG.md` first;
+1. display `$HOME/BotA/audits/ERROR_LOG.md`;
 2. print `ERROR_LOG_REVIEWED=YES`;
 3. print `CIRCULAR_ERROR_CHECK=PASS`;
-4. use active paths only;
-5. avoid recursive scans through runit supervise FIFOs;
-6. avoid top-level `exit` that closes the user's Termux shell;
-7. avoid interactive approval waits;
-8. separate staging, approval, and mutation execution;
-9. keep output compact;
-10. end with exactly one next action.
+4. use compact active-path checks;
+5. avoid supervise FIFOs and broad historical scans;
+6. avoid top-level exits that close Termux;
+7. avoid blocking interactive approval;
+8. separate staging, approval, and mutation;
+9. end with exactly one next action.
 
-Read-only packages may be one paste. Mutating work must be staged first and executed separately after exact file-gated approval.
-
-## Scope lock
-
-During the current reliability incident, do not change:
-
-- strategy;
-- thresholds;
-- pairs;
-- scoring;
-- SL/TP;
-- filters;
-- PR #7;
-- DeepSource work;
-- Supabase signal semantics;
-- direct pushes to `main`;
-- unrelated cleanup or broad refactors.
-
-## Current phase state
+## Phase state
 
 1. Single execution source and cron hygiene — COMPLETE.
 2. Runtime survival controls — COMPLETE.
@@ -55,135 +30,85 @@ During the current reliability incident, do not change:
 4. Reboot and endurance proof — IN PROGRESS.
 5. Monday readiness/data collection — NOT STARTED.
 
-Completed: 3/5.
-Remaining: 2/5.
+Completed: 3/5. Remaining: 2/5.
 
-Reboot recovery passed and is closed. The open Phase 4 blocker is control-plane ownership/endurance.
+## Current runtime state
 
-## Current verified runtime state
+- Checkout: `/data/data/com.termux/files/home/BotA`.
+- Verified boot ID: `ae204a40-c3ff-4c4e-abc2-39696b867781`.
+- Service root: `$PREFIX/var/service`.
+- Valid crond command: `crond -n -s`.
+- Ship wall time is not authoritative for trading or same-boot freshness.
 
-- Termux checkout: `/data/data/com.termux/files/home/BotA`.
-- Shortcut: `~/BotA`.
-- Current verified boot ID: `ae204a40-c3ff-4c4e-abc2-39696b867781`.
-- Canonical service root: `$PREFIX/var/service`.
-- Correct crond foreground form: `crond -n -s`.
-- Ship-time wall clock is not authoritative for trading decisions or same-boot freshness.
+The earlier V2 crond repair removed the detached crond and restored one supervised crond. Do not rerun it.
 
-### Control plane
+Latest snapshot:
 
-A fresh new-boot audit originally showed one standard manager, six orphaned BotA supervisors, and a crond split-brain.
+- one standard `runsvdir` manager, PID `4090`, PPID 1;
+- all six BotA `runsv` supervisors remain under PID 1;
+- `runsv crond` also remains under PID 1;
+- all seven services report running;
+- one live crond PID `28296`, PPID `29960`.
 
-The V2 file-gated crond repair executed and:
+The manager exists but owns none of the services because the orphaned supervisors retain the supervise locks.
 
-- accepted exact approval;
-- proved preflight state;
-- stopped the old detached crond;
-- initially timed out bringing supervised crond up;
-- automatically recovered availability;
-- restored one supervised crond PID 28296.
+## V5 reconciliation state
 
-Do not rerun the crond repair or its rollback.
+V5 was derived from the pinned V4 handoff implementation and replaces only its interactive approval boundary with exact, single-use, current-boot-bound approval files.
 
-Latest forensic state:
+Pinned artifacts:
 
-- `STANDARD_MANAGER_COUNT=0`;
-- all six BotA `runsv` supervisors are under PID 1;
-- `runsv crond` is also under PID 1;
-- one live supervised crond exists.
+- V5 SHA-256: `ac67fa2b53f1d9a3034e417f5ddf940fc17cf9a09817354211d88aa9468c6e46`;
+- V5 rollback SHA-256: `518f8f8d2bbed4791a41821e87ea8576828a03ab43d97982c63753573566132c`;
+- both mode `700`.
 
-Next structural objective: restore exactly one standard Termux `runsvdir` manager and migrate all seven stable supervisors beneath it without duplicate wrappers or historical replay.
+Semantic validation passed:
 
-## RapidAPI calendar quota incident
+- exact seven-service set;
+- manager revalidation and idle-boundary calls;
+- manager-acquisition and final-verification calls;
+- recovery rollback call;
+- required file-gated markers;
+- no `secrets` import, random challenge, or `input()`;
+- no hard-coded boot UUID;
+- V5 executed: NO;
+- runtime mutation: NO.
 
-The Global Economic Calendar API BASIC subscription reached 100% usage.
+The exact approval phrase and filenames are pinned in V5 and `docs/RUNTIME_CHECKPOINT_2026-07-20.md`. The next action is approval-file creation only, not execution.
 
-Verified cause:
+## RapidAPI incident
 
-```text
-bota-watcher
-  -> signal_watcher_pro.sh every 900 seconds
-  -> calendar_guard.py for each pair path
-  -> TradingEconomics guest access
-  -> RapidAPI fallback when TradingEconomics returns no events
-```
+The calendar guard was being called for every pair cycle and fell back to RapidAPI whenever TradingEconomics returned no events. The supposed disabled condition was logically always true when the file existed.
 
-The watcher source says the calendar guard is disabled, but its shell condition is logically always true whenever `calendar_guard.py` exists.
+The runtime-only mitigation passed:
 
-Verified supporting evidence:
-
-- non-empty `RAPIDAPI_CALENDAR_KEY` in `.env`;
-- the runtime key was originally non-empty in `.env.runtime`;
-- recent EURUSD and GBPUSD RapidAPI fallback lines in `cron.signals.log`.
-
-This is separate from Twelve Data usage, reported at 600/800 credits.
-
-### Immediate mitigation — VERIFIED PASS
-
-The runtime-only disable at `audits/p4_rapidapi_runtime_disable_ae204a40` executed with exact file-gated approval.
-
-Verified result:
-
-- approval consumed;
 - `RAPIDAPI_CALENDAR_KEY` remains declared once in `.env.runtime` but is empty;
 - `RAPIDAPI_RUNTIME_DISABLED=YES`;
-- atomic edit;
-- rollback backup present;
-- exit code `0`;
-- no service restart;
-- no external API call by the package;
-- `.env` source file unchanged.
+- rollback backup verified;
+- no service restart or external call by the package;
+- `.env` source unchanged.
 
-Future watcher cycles therefore cannot use the RapidAPI fallback unless the runtime key is restored. The durable watcher condition is still defective and needs a later reviewed source fix with caching and call-budget controls.
+The durable source condition, caching, and daily call budget remain deferred. Twelve Data quota is a separate issue.
 
-Rollback:
+## Other open findings
 
-`audits/p4_rapidapi_runtime_disable_ae204a40/ROLLBACK_RAPIDAPI_CALENDAR_RUNTIME_V1.sh`
+- canonical crontab verification FAIL/hash mismatch;
+- no duplicate active execution proven from commented migrated cron lines;
+- Telegram DEGRADED/RECOVERY transitions are not authoritative alone;
+- stale-reason suppression pattern does not match emitted names;
+- standard-manager death root cause remains unknown.
 
-Pinned hashes and full evidence are in `docs/RUNTIME_CHECKPOINT_2026-07-20.md`.
+## Ordered work
 
-## Crontab and health truth
+1. Create and verify V5 current-boot approval files without executing V5.
+2. Execute V5 once and verify exact seven-service ownership under one manager.
+3. Continue bounded endurance proof.
+4. Address calendar source logic/caching, canonical cron, health truth, and Twelve Data budgeting separately.
 
-Live crontab SHA-256:
-
-`2fbbf08b8611ae22ecfc08f9d41a078a6a3437fe1ecfcd6ba931f2f1c99b9a68`
-
-Daily Proof reported canonical verification failure and hash mismatch.
-
-Migrated watcher/updater/shadow/closer/heartbeat/supervisor cron entries are commented with `#MIGRATED_TO_RUNIT`; no duplicate active execution was proven from them.
-
-Telegram DEGRADED/DEADMAN/RECOVERY transitions are not authoritative by themselves. The current supervisor still relies partly on wall-clock/file-mtime freshness, and the stale-reason suppression names do not match emitted reason names.
-
-## Ordered next work
-
-1. Reconcile the standard manager and seven orphaned supervisors.
-2. Continue bounded parentage/PID stability and endurance verification.
-3. Fix calendar invocation and add cache/call-budget controls on a reviewed branch.
-4. Re-run canonical crontab verification.
-5. Repair health-transition truth and stale-reason suppression separately.
-6. Address Twelve Data budgeting separately.
-
-## Files to read next
+## Files to read
 
 - `CONTINUITY_CURRENT.md`
 - `docs/RUNTIME_CHECKPOINT_2026-07-20.md`
 - `ERRORS.md`
-- `docs/BOTA_RUNTIME_RELIABILITY_PATH.md`
-- `docs/BOTA_CANONICAL_CRONTAB.md`
 - GitHub issue #9
-
-## Hosting spend gate
-
-Do not recommend paid hosting as the immediate answer merely to escape the current defect. First complete the current runtime evidence and establish whether BotA produces useful live-market evidence. A VPS reduces Android lifecycle risk but does not remove provider quotas, network failures, strategy risk, or observability defects.
-
-## Core diagnostic order
-
-When signals stop, first verify:
-
-1. control-plane manager and supervisor parentage;
-2. crond and canonical crontab integrity;
-3. watcher/updater/closer/shadow useful progress;
-4. provider quotas and cache freshness;
-5. active signal lifecycle state;
-6. network and Telegram/Supabase connectivity.
-
-Do not first blame H1 veto, thresholds, ADX, strategy weakness, or pair selection.
+- draft PR #10
