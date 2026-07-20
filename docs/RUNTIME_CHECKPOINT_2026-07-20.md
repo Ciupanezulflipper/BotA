@@ -100,18 +100,73 @@ Conclusion:
 - the crond split-brain repair must not be rerun;
 - the crond rollback must not be run unless a new verified failure explicitly requires it.
 
-### Post-repair control-plane state
+### Latest control-plane snapshot
 
-The later forensic snapshot showed:
+The latest compact read-only snapshot showed:
 
-- `STANDARD_MANAGER_COUNT=0`;
-- all six BotA `runsv` supervisors orphaned under PID 1;
-- `runsv crond` also orphaned under PID 1;
-- one live supervised crond PID 28296.
+- `STANDARD_MANAGER_COUNT=1`;
+- standard manager PID `4090`, PPID 1;
+- all six BotA `runsv` supervisors remain orphaned under PID 1;
+- `runsv crond` also remains orphaned under PID 1;
+- all seven services report `run`;
+- one live supervised crond PID `28296`, PPID `29960`;
+- no runtime mutation occurred during the snapshot.
+
+The manager has therefore reappeared, but it owns none of the seven services because the orphaned `runsv` processes retain the supervise locks.
 
 Current structural blocker:
 
-Restore exactly one standard Termux `runsvdir` manager and migrate all seven stable supervisors beneath it without duplicate wrappers, historical replay, or service-state corruption.
+Migrate all seven stable orphaned supervisors beneath the existing standard manager without duplicate wrappers, historical replay, or service-state corruption.
+
+### V5 file-gated seven-service reconciliation — STAGED AND VALIDATED
+
+The pinned V4 base was inspected completely before reuse:
+
+- V4 SHA-256: `0ca9276096f2e97af13365feefbc397e59b8cc9fe5e21fe0750abd99620d0e19`;
+- original rollback SHA-256: `09f7be4ec893649cdd6b1fa5256b33f285802d4aae069f463817dd47d039372f`;
+- V4 syntax: PASS;
+- no hard-coded boot UUIDs or observed PIDs;
+- handoff sequence includes manager revalidation, idle boundaries, temporary `down` markers, wrapper shutdown, orphan `runsv` exit, standard-manager acquisition, final `up`, final verification, and automatic availability rollback;
+- V4 must not be executed because it still uses `secrets.token_hex()` and blocking `input()` approval.
+
+V5 was deterministically transformed from the pinned V4 and replaces only the approval boundary with exact, mode-600, single-use, current-boot-bound approval files.
+
+Staged artifacts:
+
+- `audits/p4_control_plane_reconcile_1bd27eb5_49498/RECONCILE_BOTA_RUNSV_V5_FILE_APPROVAL.py`;
+  - SHA-256: `ac67fa2b53f1d9a3034e417f5ddf940fc17cf9a09817354211d88aa9468c6e46`;
+  - mode: `700`;
+- `audits/p4_control_plane_reconcile_1bd27eb5_49498/ROLLBACK_RECONCILE_BOTA_RUNSV_V5.sh`;
+  - SHA-256: `518f8f8d2bbed4791a41821e87ea8576828a03ab43d97982c63753573566132c`;
+  - mode: `700`.
+
+Semantic validation evidence:
+
+- V5 present: YES;
+- rollback present: YES;
+- Python syntax: PASS;
+- rollback shell syntax: PASS;
+- exact seven-service set: PASS;
+- `run_sv` call count: 5;
+- `wait_for_idle_boundary` call count: 1;
+- `wait_manager_acquisition` call count: 1;
+- `final_verify` call count: 1;
+- `recovery_rollback` call count: 1;
+- required file-gated approval and pass tokens: PASS;
+- prohibited interactive/secrets tokens: NONE;
+- hard-coded UUID count: 0;
+- semantic validation: PASS;
+- V5 executed: NO;
+- approval files created: NO;
+- runtime mutation performed: NO.
+
+Required approval files before execution:
+
+- `APPROVE_P4_CONTROL_PLANE_V5.txt` containing exactly `APPROVE P4 CONTROL PLANE RECONCILIATION V5 4A73C2`;
+- `APPROVED_BOOT_ID_P4_CONTROL_PLANE_V5.txt` containing the current boot ID;
+- both files mode `600`.
+
+Do not execute V5 without fresh approval-file verification and a current boot-ID match.
 
 ## RapidAPI calendar quota incident
 
@@ -255,17 +310,17 @@ Every Termux package must:
 
 ## Ordered next steps
 
-1. Reconcile the missing standard `runsvdir` manager and seven orphaned supervisors.
-2. Run bounded PID/parentage stability checks and continue the endurance gate.
-3. Repair the calendar invocation condition and add caching/call-budget controls on a reviewed source branch.
-4. Re-run canonical crontab verification.
-5. Repair health-transition truth and stale-reason suppression separately.
-6. Address Twelve Data call budgeting separately.
+1. Create and verify the two V5 current-boot approval files without executing V5.
+2. Execute V5 once and verify exact seven-service ownership under the same standard manager.
+3. Run bounded PID/parentage stability checks and continue the endurance gate.
+4. Repair the calendar invocation condition and add caching/call-budget controls on a reviewed source branch.
+5. Re-run canonical crontab verification.
+6. Repair health-transition truth and stale-reason suppression separately.
+7. Address Twelve Data call budgeting separately.
 
 ## Deferred findings
 
 - root cause of repeated standard-manager death;
-- full seven-service manager reconciliation;
 - calendar caching and per-day call budget;
 - calendar failure/429 observability;
 - canonical crontab mismatch;
