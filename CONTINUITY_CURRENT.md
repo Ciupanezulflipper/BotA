@@ -115,11 +115,11 @@ The watcher comment says the calendar guard is disabled, but the condition is al
 Proof:
 
 - `.env` contains a non-empty `RAPIDAPI_CALENDAR_KEY`;
-- `.env.runtime` contains a non-empty key;
-- recent logs show RapidAPI fallback for EURUSD and GBPUSD;
+- `.env.runtime` originally contained a non-empty key;
+- recent logs showed RapidAPI fallback for EURUSD and GBPUSD;
 - the active caller is runit, not a direct cron line.
 
-### Staged runtime-only mitigation
+### Runtime-only mitigation — PASS
 
 Stage directory:
 
@@ -129,21 +129,28 @@ Pinned artifacts:
 
 - disable script SHA-256: `29fa5f954a1c4db3438753712d49dc355293c1991099bda713a090203fd67dbb`;
 - rollback script SHA-256: `c4d3efbc90c92dc3866fd0ce8d95052ba34f2f75f6f41f74ebe61237fc0d0bb5`;
-- expected `.env.runtime` SHA-256: `794b160586e670d08e6a2c9dd0756b57c08b0f7e719005f1d15918df8ac79f48`;
-- expected mode: `600`.
+- pre-mutation `.env.runtime` SHA-256: `794b160586e670d08e6a2c9dd0756b57c08b0f7e719005f1d15918df8ac79f48`;
+- pre-mutation mode: `600`.
 
-Planned effect:
+Verified execution:
 
-- blank only `RAPIDAPI_CALENDAR_KEY` in `.env.runtime`;
-- preserve `.env`;
-- create a mode-600 backup;
-- replace atomically;
-- make no API call;
-- restart no service.
+- exact approval file present, valid, and mode `600`;
+- approval consumed;
+- one `RAPIDAPI_CALENDAR_KEY` declaration remains in `.env.runtime`;
+- non-empty runtime declarations: `0`;
+- `RAPIDAPI_RUNTIME_DISABLED=YES`;
+- edit was atomic;
+- mode-600 rollback backup created and independently verified present;
+- exit code `0`;
+- services restarted: NO;
+- external API calls made by the package: NO;
+- `.env` source file changed: NO.
 
-Evidence boundary:
+The watcher reloads `.env.runtime` every cycle, so future RapidAPI fallbacks are disabled without a restart. The source condition remains defective and requires a later reviewed code fix with caching and call-budget controls.
 
-The user supplied the approval-file creation command, but returned output has not yet proven approval-file creation or disable execution. Do not claim RapidAPI runtime use is disabled until explicit output proves it.
+Rollback:
+
+`audits/p4_rapidapi_runtime_disable_ae204a40/ROLLBACK_RAPIDAPI_CALENDAR_RUNTIME_V1.sh`
 
 ## Crontab state
 
@@ -177,15 +184,12 @@ Deferred suppression defect:
 
 ## Ordered next steps
 
-1. Prove the RapidAPI-disable approval file exists.
-2. Execute the already-staged runtime-only RapidAPI disable.
-3. Verify the runtime key is empty without making an API request.
-4. Reconcile the missing standard manager and all seven orphaned supervisors.
-5. Run bounded parentage/PID stability checks and continue the endurance gate.
-6. Fix calendar invocation logic and add cache/call-budget controls on a reviewed branch.
-7. Re-run canonical crontab verification.
-8. Repair health-transition truth and stale-reason suppression separately.
-9. Address Twelve Data call budgeting separately.
+1. Reconcile the missing standard manager and all seven orphaned supervisors.
+2. Run bounded parentage/PID stability checks and continue the endurance gate.
+3. Fix calendar invocation logic and add cache/call-budget controls on a reviewed branch.
+4. Re-run canonical crontab verification.
+5. Repair health-transition truth and stale-reason suppression separately.
+6. Address Twelve Data call budgeting separately.
 
 ## Deferred findings
 
