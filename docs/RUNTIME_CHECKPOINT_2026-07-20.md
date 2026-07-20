@@ -144,15 +144,15 @@ Therefore the second clause bypasses the intended key/enable gate.
 Additional proof:
 
 - `.env` contains one non-empty `RAPIDAPI_CALENDAR_KEY` declaration;
-- `.env.runtime` contains one non-empty declaration;
-- recent `cron.signals.log` lines show:
+- `.env.runtime` originally contained one non-empty declaration;
+- recent `cron.signals.log` lines showed:
   - `CLEAR: EURUSD safe via rapidapi`;
   - `CLEAR: GBPUSD safe via rapidapi`;
 - no active cron line directly calls the calendar guard; the active runit watcher is the caller.
 
 The calendar guard fails open when both providers are unavailable, so blanking the runtime key does not intentionally block all trading. The durable source fix still needs review and testing.
 
-### Immediate runtime-only mitigation
+### Runtime-only mitigation — EXECUTED AND VERIFIED
 
 A reversible mitigation was staged at:
 
@@ -164,26 +164,38 @@ Artifacts:
   - SHA-256: `29fa5f954a1c4db3438753712d49dc355293c1991099bda713a090203fd67dbb`;
 - `ROLLBACK_RAPIDAPI_CALENDAR_RUNTIME_V1.sh`
   - SHA-256: `c4d3efbc90c92dc3866fd0ce8d95052ba34f2f75f6f41f74ebe61237fc0d0bb5`;
-- expected `.env.runtime` SHA-256:
+- pre-mutation `.env.runtime` SHA-256:
   - `794b160586e670d08e6a2c9dd0756b57c08b0f7e719005f1d15918df8ac79f48`;
-- expected `.env.runtime` mode: `600`.
+- pre-mutation `.env.runtime` mode: `600`.
 
-Planned effect:
+The exact file-gated approval was created and verified:
 
-- blank only `RAPIDAPI_CALENDAR_KEY` in `.env.runtime`;
-- preserve `.env` unchanged;
-- create a mode-600 backup;
-- replace `.env.runtime` atomically;
-- do not restart services;
-- make no API call.
+- approval present: YES;
+- approval valid: YES;
+- approval mode: `600`.
 
-Reason no restart is required:
+Execution result:
 
-The runit watcher sources `.env.runtime` on each cycle.
+- `APPROVAL_CONSUMED=YES`;
+- `RAPIDAPI_RUNTIME_KEY_DECLARATIONS=1`;
+- `RAPIDAPI_RUNTIME_KEY_NONEMPTY=0`;
+- `RAPIDAPI_RUNTIME_DISABLED=YES`;
+- `ENV_RUNTIME_BACKUP_CREATED=YES`;
+- `ENV_RUNTIME_EDIT=ATOMIC`;
+- `RAPIDAPI_RUNTIME_DISABLE=PASS`;
+- independent post-check: `RAPIDAPI_RUNTIME_KEY_DISABLED=YES`;
+- rollback backup present: YES;
+- exit code: `0`;
+- services restarted: NO;
+- external API calls made by the package: NO;
+- `.env` source file changed: NO.
 
-Current evidence boundary:
+Current conclusion:
 
-The user supplied the approval-file creation command, but no returned output yet proves that the approval file was created or that the disable script executed. Do not claim the runtime key is disabled until explicit output proves it.
+- further RapidAPI fallback calls from future watcher cycles are blocked at runtime because the watcher reloads `.env.runtime` each cycle;
+- a call already in flight at mutation time could have completed, but no service restart was required;
+- the durable source-code condition remains defective and must be fixed separately on a reviewed branch;
+- the rollback remains available at `audits/p4_rapidapi_runtime_disable_ae204a40/ROLLBACK_RAPIDAPI_CALENDAR_RUNTIME_V1.sh`.
 
 ## Crontab findings
 
@@ -243,15 +255,12 @@ Every Termux package must:
 
 ## Ordered next steps
 
-1. Prove the RapidAPI disable approval file exists.
-2. Execute the already-staged runtime-only RapidAPI disable.
-3. Verify the runtime key is empty without making an API request.
-4. Reconcile the missing standard `runsvdir` manager and seven orphaned supervisors.
-5. Run bounded PID/parentage stability checks and continue the endurance gate.
-6. Repair the calendar invocation condition and add caching/call-budget controls on a reviewed source branch.
-7. Re-run canonical crontab verification.
-8. Repair health-transition truth and stale-reason suppression separately.
-9. Address Twelve Data call budgeting separately.
+1. Reconcile the missing standard `runsvdir` manager and seven orphaned supervisors.
+2. Run bounded PID/parentage stability checks and continue the endurance gate.
+3. Repair the calendar invocation condition and add caching/call-budget controls on a reviewed source branch.
+4. Re-run canonical crontab verification.
+5. Repair health-transition truth and stale-reason suppression separately.
+6. Address Twelve Data call budgeting separately.
 
 ## Deferred findings
 
