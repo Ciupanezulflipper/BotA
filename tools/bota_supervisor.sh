@@ -22,13 +22,25 @@ mkdir -p "${LOGS}/state" "${STATE}"
 load_env() {
   local file="$1"
   [[ -f "${file}" ]] || return 0
+  local line key value
   while IFS= read -r line || [[ -n "${line}" ]]; do
-    [[ "${line}" =~ ^[[:space:]]*# ]] && continue
-    [[ -z "${line//[[:space:]]/}" ]] && continue
-    [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
-    local key="${BASH_REMATCH[1]}" value="${BASH_REMATCH[2]}"
-    if [[ "${value}" =~ ^\"(.*)\"$ ]]; then value="${BASH_REMATCH[1]}"; fi
-    if [[ "${value}" =~ ^\'(.*)\'$ ]]; then value="${BASH_REMATCH[1]}"; fi
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    case "${line}" in
+      ""|\#*) continue ;;
+      *=*)
+        key="${line%%=*}"
+        value="${line#*=}"
+        ;;
+      *) continue ;;
+    esac
+    case "${key}" in
+      ""|[0-9]*|*[!A-Za-z0-9_]*) continue ;;
+    esac
+    case "${value}" in
+      \"*\") value="${value#\"}"; value="${value%\"}" ;;
+      \'*\') value="${value#\'}"; value="${value%\'}" ;;
+    esac
     export "${key}=${value}"
   done < "${file}"
 }
@@ -88,8 +100,7 @@ log "=== SUPERVISOR START ==="
 
 control_tmp="$(mktemp)"
 pipeline_tmp="$(mktemp)"
-cleanup() { rm -f "${control_tmp}" "${pipeline_tmp}"; }
-trap cleanup EXIT
+trap 'rm -f "${control_tmp}" "${pipeline_tmp}"' EXIT
 
 control_rc=0
 python3 "${TOOLS}/control_plane_status.py" >"${control_tmp}" 2>>"${LOGS}/error.log" || control_rc=$?
@@ -100,7 +111,7 @@ if bash "${TOOLS}/market_open.sh" >/dev/null 2>&1; then
 fi
 
 pipeline_rc=0
-if [[ "${market_state}" == "open" ]]; then
+if [ "${market_state}" = "open" ]; then
   python3 "${TOOLS}/pipeline_health.py" --market-open >"${pipeline_tmp}" 2>>"${LOGS}/error.log" || pipeline_rc=$?
 else
   python3 "${TOOLS}/pipeline_health.py" --market-closed >"${pipeline_tmp}" 2>>"${LOGS}/error.log" || pipeline_rc=$?
@@ -165,7 +176,7 @@ tmp.write_text(json.dumps(health, indent=2, sort_keys=True) + "\n", encoding="ut
 os.replace(tmp, path)
 PY
 
-if [[ "${BOT_MODE}" == "DEGRADED" ]]; then
+if [ "${BOT_MODE}" = "DEGRADED" ]; then
   log "DEGRADED: ${FAILURE_STR}"
   if [[ ! -f "${DEGRADED_FLAG}" ]]; then
     send_telegram "[BotA DEGRADED] ${FAILURE_STR} — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
