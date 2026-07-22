@@ -90,7 +90,7 @@ def load_state_unlocked(path: Path) -> dict[str, Any]:
         data = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise ValueError("state is not an object")
-    except (OSError, json.JSONDecodeError, ValueError):
+    except (OSError, ValueError):
         data = empty_state()
 
     if data.get("utc_date") != utc_day():
