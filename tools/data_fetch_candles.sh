@@ -58,7 +58,7 @@ tf_minutes() {
   tf="$(printf '%s' "${tf}" | tr '[:lower:]' '[:upper:]')"
   [[ "${tf}" =~ ^M[0-9]+$ ]] && echo "${tf:1}" && return
   [[ "${tf}" =~ ^H[0-9]+$ ]] && echo "$(( ${tf:1} * 60 ))" && return
-  [[ "${tf}" == "D1" || "${tf}" == "1D" ]] && echo "1440" && return
+  [[ "${tf}" = "D1" || "${tf}" = "1D" ]] && echo "1440" && return
   echo "0"
 }
 
@@ -129,8 +129,6 @@ cleanup() { rm -f "${TMP_JSON}" "${TMP_CSV}" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 PROVIDER_USED=""
-
-# PRIMARY: OANDA
 OANDA_GRAN="$(oanda_granularity_for_tf "${TF}")"
 OANDA_INSTRUMENT="${PAIR:0:3}_${PAIR:3:3}"
 
@@ -216,7 +214,7 @@ print("1")
 PY
   )" || OANDA_OK="0"
 
-  if [[ "${OANDA_OK}" == "1" ]]; then
+  if [[ "${OANDA_OK}" = "1" ]]; then
     provider_record oanda success "granularity=${OANDA_GRAN}"
     PROVIDER_USED="oanda"
     log "[FETCH] OANDA OK"
@@ -228,7 +226,6 @@ else
   log "[FETCH] OANDA skipped (token missing or no gran mapping for ${TF})"
 fi
 
-# FALLBACK: Yahoo
 if [[ "${PROVIDER_USED}" != "oanda" ]]; then
   Y_SYMBOL="$(yahoo_symbol_for_pair "${PAIR}")"
   Y_INTERVAL="$(yahoo_interval_for_tf "${TF}")"
@@ -243,7 +240,7 @@ if [[ "${PROVIDER_USED}" != "oanda" ]]; then
       curl -sSL -A "${UA}" "${URL}" -o "${TMP_JSON}" \
         -w "%{http_code}" --max-time 15 2>>"${ROOT}/logs/error.log" || echo "000"
     )"
-    if [[ "${YAHOO_HTTP}" == "429" ]]; then
+    if [[ "${YAHOO_HTTP}" = "429" ]]; then
       provider_record yahoo blocked "http=429"
       log "[FETCH] Yahoo 429 rate-limited — skipping fallback"
       exit 3
@@ -275,7 +272,6 @@ if [[ "${PROVIDER_USED}" != "oanda" ]]; then
   log "[FETCH] Yahoo OK"
 fi
 
-# Integrity gate
 PY_OUT="$(python3 - "${TMP_JSON}" "${expected_min}" "${PAIR}" "${TF}" "${TMP_CSV}" <<'PY' 2>>"${ROOT}/logs/error.log" || true
 import datetime
 import json
@@ -364,7 +360,7 @@ fi
 mv -f "${TMP_JSON}" "${OUT_JSON}"
 [[ -s "${TMP_CSV}" ]] && mv -f "${TMP_CSV}" "${OUT_CSV}"
 
-if [[ "${TF}" == "${LEGACY_PAIR_CACHE_TF}" ]]; then
+if [[ "${TF}" = "${LEGACY_PAIR_CACHE_TF}" ]]; then
   cp -f "${OUT_JSON}" "${LEGACY_JSON}" >/dev/null 2>&1 || true
   log "[FETCH] legacy cache updated: ${LEGACY_JSON}"
 else
