@@ -96,7 +96,7 @@ def trusted_server_epoch(cli_epoch: int, log_text: str) -> int:
 
 
 def log_outcome(lines: list[str]) -> tuple[str, str, str, str]:
-    """Classify a terminal outcome and delivery results from bounded lines."""
+    """Classify the most specific terminal outcome and delivery results."""
     joined = "\n".join(lines)
     rules = (
         (r"raw_cache missing/invalid", "raw_cache_invalid"),
@@ -118,6 +118,7 @@ def log_outcome(lines: list[str]) -> tuple[str, str, str, str]:
     for pattern, name in rules:
         if re.search(pattern, joined):
             outcome = name
+            break
 
     telegram = "not_attempted"
     if "SENT: via" in joined:
