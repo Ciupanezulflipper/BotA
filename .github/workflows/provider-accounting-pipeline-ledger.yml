@@ -1,0 +1,52 @@
+name: Provider accounting and pipeline ledger
+
+on:
+  pull_request:
+    paths:
+      - "tools/api_credit_tracker.py"
+      - "tools/provider_usage.py"
+      - "tools/pipeline_ledger.py"
+      - "tools/pipeline_health.py"
+      - "tools/control_plane_status.py"
+      - "tools/watcher_cycle_ledger.py"
+      - "tools/run_signal_watcher_with_ledger.sh"
+      - "tools/data_fetch_candles.sh"
+      - "tools/indicators_updater.sh"
+      - "tools/run_shadow_manager.sh"
+      - "tools/bota_supervisor.sh"
+      - "tools/heartbeat.sh"
+      - "tests/test_provider_accounting_pipeline_ledger.py"
+      - ".github/workflows/provider-accounting-pipeline-ledger.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile Python
+        run: |
+          python -m py_compile \
+            tools/api_credit_tracker.py \
+            tools/provider_usage.py \
+            tools/pipeline_ledger.py \
+            tools/pipeline_health.py \
+            tools/control_plane_status.py \
+            tools/watcher_cycle_ledger.py
+      - name: Check shell syntax
+        run: |
+          bash -n tools/data_fetch_candles.sh
+          bash -n tools/indicators_updater.sh
+          bash -n tools/run_signal_watcher_with_ledger.sh
+          bash -n tools/run_shadow_manager.sh
+          bash -n tools/bota_supervisor.sh
+          bash -n tools/heartbeat.sh
+      - name: Run focused regression tests
+        run: python -m unittest -v tests.test_provider_accounting_pipeline_ledger
