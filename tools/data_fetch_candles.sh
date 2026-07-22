@@ -54,11 +54,28 @@ TF="$(printf '%s' "${TF_RAW}" | tr -d ' ' | tr '[:lower:]' '[:upper:]')"
 mkdir -p "${CACHE_DIR}" "${DATA_DIR}" "${ROOT}/logs" >/dev/null 2>&1 || true
 
 tf_minutes() {
-  local tf="${1:-}"
+  local tf="${1:-}" digits=""
   tf="$(printf '%s' "${tf}" | tr '[:lower:]' '[:upper:]')"
-  [[ "${tf}" =~ ^M[0-9]+$ ]] && echo "${tf:1}" && return
-  [[ "${tf}" =~ ^H[0-9]+$ ]] && echo "$(( ${tf:1} * 60 ))" && return
-  [[ "${tf}" = "D1" || "${tf}" = "1D" ]] && echo "1440" && return
+  case "${tf}" in
+    M*)
+      digits="${tf#M}"
+      case "${digits}" in
+        ""|*[!0-9]*) ;;
+        *) echo "${digits}"; return ;;
+      esac
+      ;;
+    H*)
+      digits="${tf#H}"
+      case "${digits}" in
+        ""|*[!0-9]*) ;;
+        *) echo "$(( digits * 60 ))"; return ;;
+      esac
+      ;;
+    D1|1D)
+      echo "1440"
+      return
+      ;;
+  esac
   echo "0"
 }
 
