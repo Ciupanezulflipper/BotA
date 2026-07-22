@@ -1,90 +1,77 @@
-#!/bin/bash
-# heartbeat.sh — quiet hourly heartbeat (cron: minute 0)
+#!/data/data/com.termux/files/usr/bin/bash
+# Hourly reachability heartbeat. Pipeline transitions are owned by bota_supervisor.sh.
 set -euo pipefail
 
-ROOT="$HOME/BotA"
-TMPDIR="$ROOT/tmp"
-LOGDIR="$ROOT/logs"
-TELE="$ROOT/config/tele.env"
+ROOT="${HOME}/BotA"
+LOGDIR="${ROOT}/logs"
+TELE="${ROOT}/config/tele.env"
+HEALTH="${ROOT}/state/runtime_health.json"
+mkdir -p "${LOGDIR}"
 
-mkdir -p "$TMPDIR" "$LOGDIR"
+log() {
+  printf '[%s] %s\n' "$(date -u +'%Y-%m-%d %H:%M:%S UTC')" "$*" >> "${LOGDIR}/cron.heartbeat.log"
+}
 
-log(){ echo "[$(date -u +'%Y-%m-%d %H:%M:%S UTC')] $*" >> "$LOGDIR/cron.heartbeat.log"; }
-
-# --- Load Telegram creds ---
-if [ -f "$TELE" ]; then
-  . "$TELE"
+if [[ -f "${TELE}" ]]; then
+  # shellcheck disable=SC1090
+  . "${TELE}"
 else
-  log "❌ tele.env missing"
+  log "tele.env missing"
   exit 0
 fi
 
-if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
-  log "❌ TELEGRAM_* vars missing"
+if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+  log "TELEGRAM variables missing"
   exit 0
 fi
 
-# --- Send heartbeat ---
-API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
-TEXT="💓 <b>Heartbeat</b> — BotA alive at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+summary="$(HEALTH_PATH="${HEALTH}" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
 
-RESP="$(curl -sS -X POST "$API" \
-  -d "chat_id=${TELEGRAM_CHAT_ID}" \
-  -d "parse_mode=HTML" \
-  --data-urlencode "disable_web_page_preview=true" \
-  --data-urlencode "text=$TEXT" || true)"
-
-if echo "$RESP" | grep -q '"ok":true'; then
-  log "✅ Heartbeat sent"
-else
-  log "❌ Heartbeat failed resp=$(echo "$RESP" | tr '\n' ' ')"
-fi
-
-# --- Deadman alert: shadow_manager pipeline staleness check ---
-{
-  DEADMAN_FLAG="$LOGDIR/state/deadman.flag"
-  SHADOW_HB="$LOGDIR/shadow_manager_heartbeat.txt"
-  mkdir -p "$LOGDIR/state"
-
-  if [[ -f "$SHADOW_HB" ]]; then
-    LAST_LINE="$(tail -1 "$SHADOW_HB" 2>/dev/null || true)"
-    LAST_TS="$(echo "$LAST_LINE" | awk -F'|' '{print $1}' | tr -d ' ')"
-
-    if [[ -n "${LAST_TS:-}" ]]; then
-      LAST_EPOCH="$(LAST_TS="${LAST_TS}" python3 -c "
-import datetime, os
-ts = os.environ.get('LAST_TS','').strip()
+path = Path(os.environ["HEALTH_PATH"])
 try:
-    print(int(datetime.datetime.fromisoformat(ts).timestamp()))
-except:
-    print(0)
-" 2>/dev/null || echo 0)"
-      NOW_EPOCH="$(date +%s)"
-      AGE_MIN=$(( (NOW_EPOCH - LAST_EPOCH) / 60 ))
+    health = json.loads(path.read_text(encoding="utf-8"))
+except Exception:
+    print("mode=UNKNOWN | runtime_health.json missing or unreadable")
+    raise SystemExit
 
-      if (( AGE_MIN > 60 )); then
-        if [[ ! -f "$DEADMAN_FLAG" ]]; then
-          DM_TEXT="[BotA DEADMAN] Pipeline stale for ${AGE_MIN}min — last heartbeat: ${LAST_TS}"
-          curl -sS --max-time 10 -X POST "$API" \
-            -d "chat_id=${TELEGRAM_CHAT_ID}" \
-            -d "parse_mode=HTML" \
-            --data-urlencode "text=${DM_TEXT}" >/dev/null 2>&1 || true
-          echo "${DM_TEXT}" > "$DEADMAN_FLAG"
-          log "⚠️ DEADMAN alert sent: pipeline stale ${AGE_MIN}min"
-        fi
-      else
-        if [[ -f "$DEADMAN_FLAG" ]]; then
-          REC_TEXT="[BotA RECOVERY] Pipeline alive again — last heartbeat: ${LAST_TS}"
-          curl -sS --max-time 10 -X POST "$API" \
-            -d "chat_id=${TELEGRAM_CHAT_ID}" \
-            -d "parse_mode=HTML" \
-            --data-urlencode "text=${REC_TEXT}" >/dev/null 2>&1 || true
-          rm -f "$DEADMAN_FLAG"
-          log "✅ RECOVERY alert sent: pipeline alive again"
-        fi
-      fi
-    fi
-  fi
-} || true
+mode = str(health.get("bot_mode") or "UNKNOWN")
+market = str(health.get("market_state") or "unknown")
+failures = health.get("failure_reasons") or []
+control = health.get("control_plane") or {}
+pipeline = health.get("pipeline_progress") or {}
+owned = control.get("owned", "?")
+required = control.get("required", 7)
+running = control.get("running", "?")
+orphaned = control.get("orphaned", "?")
+progress_ok = pipeline.get("healthy")
+parts = [
+    f"mode={mode}",
+    f"market={market}",
+    f"owned={owned}/{required}",
+    f"running={running}/{required}",
+    f"orphaned={orphaned}",
+    f"useful_progress={'PASS' if progress_ok is True else 'FAIL' if progress_ok is False else 'UNKNOWN'}",
+]
+if failures:
+    parts.append("failures=" + "|".join(str(item) for item in failures[:4]))
+print(" | ".join(parts))
+PY
+)"
+
+api="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
+text="💓 BotA process heartbeat — ${summary}\nThis confirms Telegram reachability only; signal health is reported by the fields above."
+
+response="$(curl -sS --max-time 15 -X POST "${api}" \
+  -d "chat_id=${TELEGRAM_CHAT_ID}" \
+  --data-urlencode "text=${text}" || true)"
+
+if grep -q '"ok":true' <<<"${response}"; then
+  log "heartbeat sent: ${summary}"
+else
+  log "heartbeat failed"
+fi
 
 exit 0
