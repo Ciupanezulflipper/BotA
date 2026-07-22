@@ -45,125 +45,189 @@ def basename(row: dict[str, Any]) -> str:
     return Path(argv[0]).name if argv else ""
 
 
-def service_status(service_root: Path, service: str) -> tuple[bool, str]:
+def service_status(
+    sv_binary: Path,
+    service_root: Path,
+    service: str,
+) -> tuple[bool, str]:
     """Read sv status without attempting any mutation."""
+    if not sv_binary.is_file():
+        return False, f"sv_binary_missing:{sv_binary}"
     try:
         result = subprocess.run(
-            ["sv", "status", str(service_root / service)],
+            [str(sv_binary), "status", str(service_root / service)],
             text=True,
             capture_output=True,
             check=False,
             timeout=5,
         )
-        output = (result.stdout or result.stderr).strip()
-        return result.returncode == 0 and output.startswith("run:"), output
     except (OSError, subprocess.TimeoutExpired) as exc:
         return False, f"status_error:{type(exc).__name__}"
+    output = (result.stdout or result.stderr).strip()
+    return result.returncode == 0 and output.startswith("run:"), output
 
 
-def snapshot() -> dict[str, Any]:
-    """Build the exact seven-service ownership snapshot."""
-    prefix = Path(os.environ.get("PREFIX", "/data/data/com.termux/files/usr"))
-    service_root = prefix / "var" / "service"
-    table = process_table()
+def standard_managers(
+    table: dict[int, dict[str, Any]],
+    service_root: Path,
+) -> list[int]:
+    """Return runsvdir processes managing the standard Termux service root."""
     root_text = str(service_root)
-
-    managers = [
+    return [
         pid
         for pid, row in table.items()
-        if basename(row) == "runsvdir" and root_text in " ".join(row.get("argv", [])[1:])
+        if basename(row) == "runsvdir"
+        and root_text in " ".join(row.get("argv", [])[1:])
     ]
-    manager = managers[0] if len(managers) == 1 else None
-    rows: dict[str, Any] = {}
-    owned = orphaned = running = duplicate = 0
 
-    for service in SERVICES:
-        candidates = [
-            (pid, row)
-            for pid, row in table.items()
-            if basename(row) == "runsv" and (row.get("argv") or [])[-1:] == [service]
-        ]
-        if len(candidates) > 1:
-            duplicate += 1
-        runsv_pid = candidates[0][0] if len(candidates) == 1 else None
-        runsv_ppid = candidates[0][1]["ppid"] if len(candidates) == 1 else None
-        if manager is not None and runsv_ppid == manager:
-            owner = "manager"
-            owned += 1
-        elif runsv_ppid == 1:
-            owner = "pid1_orphan"
-            orphaned += 1
-        else:
-            owner = "other_or_missing"
 
-        is_running, status_text = service_status(service_root, service)
-        running += int(is_running)
-        try:
-            wrapper_text = (service_root / service / "supervise" / "pid").read_text().strip()
-            wrapper_pid = int(wrapper_text) if wrapper_text else None
-        except (OSError, ValueError):
-            wrapper_pid = None
-        wrapper_alive = bool(wrapper_pid and Path(f"/proc/{wrapper_pid}").is_dir())
+def runsv_candidates(
+    table: dict[int, dict[str, Any]],
+    service: str,
+) -> list[tuple[int, dict[str, Any]]]:
+    """Return exact runsv processes for one service name."""
+    return [
+        (pid, row)
+        for pid, row in table.items()
+        if basename(row) == "runsv"
+        and (row.get("argv") or [])[-1:] == [service]
+    ]
 
-        rows[service] = {
-            "runsv_count": len(candidates),
-            "runsv_pid": runsv_pid,
-            "runsv_ppid": runsv_ppid,
-            "owner": owner,
-            "service_running": is_running,
-            "sv_status": status_text,
-            "wrapper_pid": wrapper_pid,
-            "wrapper_alive": wrapper_alive,
-        }
 
-    live_crond = [
+def wrapper_pid(service_root: Path, service: str) -> int | None:
+    """Read the current supervised child PID when available."""
+    try:
+        value = (service_root / service / "supervise" / "pid").read_text().strip()
+        return int(value) if value else None
+    except (OSError, ValueError):
+        return None
+
+
+def inspect_service(
+    table: dict[int, dict[str, Any]],
+    sv_binary: Path,
+    service_root: Path,
+    manager: int | None,
+    service: str,
+) -> dict[str, Any]:
+    """Return exact ownership, status, and wrapper evidence for one service."""
+    candidates = runsv_candidates(table, service)
+    runsv_pid = candidates[0][0] if len(candidates) == 1 else None
+    runsv_ppid = candidates[0][1]["ppid"] if len(candidates) == 1 else None
+    if manager is not None and runsv_ppid == manager:
+        owner = "manager"
+    elif runsv_ppid == 1:
+        owner = "pid1_orphan"
+    else:
+        owner = "other_or_missing"
+
+    is_running, status_text = service_status(
+        sv_binary,
+        service_root,
+        service,
+    )
+    child_pid = wrapper_pid(service_root, service)
+    child_alive = bool(child_pid and Path(f"/proc/{child_pid}").is_dir())
+    return {
+        "runsv_count": len(candidates),
+        "runsv_pid": runsv_pid,
+        "runsv_ppid": runsv_ppid,
+        "owner": owner,
+        "service_running": is_running,
+        "sv_status": status_text,
+        "wrapper_pid": child_pid,
+        "wrapper_alive": child_alive,
+    }
+
+
+def crond_processes(table: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return live foreground crond processes and parentage."""
+    return [
         {
             "pid": pid,
             "ppid": row["ppid"],
             "argv": row.get("argv") or [],
         }
         for pid, row in table.items()
-        if basename(row) == "crond" and "-n" in (row.get("argv") or []) and "-s" in (row.get("argv") or [])
+        if basename(row) == "crond"
+        and "-n" in (row.get("argv") or [])
+        and "-s" in (row.get("argv") or [])
     ]
 
-    healthy = (
-        len(managers) == 1
-        and owned == len(SERVICES)
-        and orphaned == 0
-        and duplicate == 0
-        and running == len(SERVICES)
-        and len(live_crond) == 1
-        and rows["crond"]["wrapper_pid"] == live_crond[0]["pid"]
-    )
 
+def topology_failures(
+    manager_count: int,
+    owned: int,
+    running: int,
+    orphaned: int,
+    duplicates: int,
+    rows: dict[str, Any],
+    live_crond: list[dict[str, Any]],
+) -> list[str]:
+    """Build compact acceptance failures from an inspected topology."""
+    failures: list[str] = []
+    checks = (
+        (manager_count != 1, f"manager_count:{manager_count}"),
+        (owned != len(SERVICES), f"owned:{owned}/{len(SERVICES)}"),
+        (running != len(SERVICES), f"running:{running}/{len(SERVICES)}"),
+        (orphaned != 0, f"orphaned:{orphaned}"),
+        (duplicates != 0, f"duplicate_service_rows:{duplicates}"),
+        (len(live_crond) != 1, f"live_crond_count:{len(live_crond)}"),
+    )
+    failures.extend(reason for failed, reason in checks if failed)
+    if (
+        len(live_crond) == 1
+        and rows.get("crond", {}).get("wrapper_pid") != live_crond[0]["pid"]
+    ):
+        failures.append("crond_not_owned_by_current_runsv")
+    return failures
+
+
+def snapshot() -> dict[str, Any]:
+    """Build the exact seven-service ownership snapshot."""
+    prefix = Path(os.environ.get("PREFIX", "/data/data/com.termux/files/usr"))
+    service_root = prefix / "var" / "service"
+    sv_binary = prefix / "bin" / "sv"
+    table = process_table()
+    managers = standard_managers(table, service_root)
+    manager = managers[0] if len(managers) == 1 else None
+    rows = {
+        service: inspect_service(
+            table,
+            sv_binary,
+            service_root,
+            manager,
+            service,
+        )
+        for service in SERVICES
+    }
+    owned = sum(row["owner"] == "manager" for row in rows.values())
+    orphaned = sum(row["owner"] == "pid1_orphan" for row in rows.values())
+    running = sum(bool(row["service_running"]) for row in rows.values())
+    duplicates = sum(int(row["runsv_count"] > 1) for row in rows.values())
+    live_crond = crond_processes(table)
+    failures = topology_failures(
+        len(managers),
+        owned,
+        running,
+        orphaned,
+        duplicates,
+        rows,
+        live_crond,
+    )
     return {
-        "schema_version": "1.0",
-        "healthy": healthy,
+        "schema_version": "1.1",
+        "healthy": not failures,
         "manager_count": len(managers),
         "manager_pid": manager,
         "owned": owned,
         "required": len(SERVICES),
         "running": running,
         "orphaned": orphaned,
-        "duplicate_service_rows": duplicate,
+        "duplicate_service_rows": duplicates,
         "services": rows,
         "live_crond": live_crond,
-        "failure_reasons": [
-            reason
-            for condition, reason in (
-                (len(managers) != 1, f"manager_count:{len(managers)}"),
-                (owned != len(SERVICES), f"owned:{owned}/{len(SERVICES)}"),
-                (running != len(SERVICES), f"running:{running}/{len(SERVICES)}"),
-                (orphaned != 0, f"orphaned:{orphaned}"),
-                (duplicate != 0, f"duplicate_service_rows:{duplicate}"),
-                (len(live_crond) != 1, f"live_crond_count:{len(live_crond)}"),
-                (
-                    len(live_crond) == 1 and rows["crond"]["wrapper_pid"] != live_crond[0]["pid"],
-                    "crond_not_owned_by_current_runsv",
-                ),
-            )
-            if condition
-        ],
+        "failure_reasons": failures,
     }
 
 
