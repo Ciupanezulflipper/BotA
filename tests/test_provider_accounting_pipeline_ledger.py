@@ -10,13 +10,14 @@ import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+from types import ModuleType
 from unittest import mock
 
 REPO = Path(__file__).resolve().parents[1]
 TOOLS = REPO / "tools"
 
 
-def load_module(name: str, path: Path):
+def load_module(name: str, path: Path) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load {path}")
@@ -32,41 +33,56 @@ pipeline_health = load_module("pipeline_health_test", TOOLS / "pipeline_health.p
 watcher_cycle = load_module("watcher_cycle_test", TOOLS / "watcher_cycle_ledger.py")
 
 
-class TemporaryBotARoot(unittest.TestCase):
+class TemporaryBotARootMixin:
     def setUp(self) -> None:
+        super().setUp()
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         (self.root / "state").mkdir(parents=True)
         (self.root / "logs").mkdir(parents=True)
-        self.env = mock.patch.dict(os.environ, {"BOTA_ROOT": str(self.root)}, clear=False)
+        self.env = mock.patch.dict(
+            os.environ,
+            {"BOTA_ROOT": str(self.root)},
+            clear=False,
+        )
         self.env.start()
 
     def tearDown(self) -> None:
         self.env.stop()
         self.temp.cleanup()
+        super().tearDown()
 
 
-class ProviderAccountingTests(TemporaryBotARoot):
-    def call(self, argv: list[str]) -> tuple[int, str]:
+class ProviderAccountingTests(TemporaryBotARootMixin, unittest.TestCase):
+    @staticmethod
+    def call(argv: list[str]) -> tuple[int, str]:
         output = StringIO()
         with redirect_stdout(output):
             rc = provider_usage.main(argv)
         return rc, output.getvalue()
 
     def state(self) -> dict:
-        return json.loads((self.root / "state" / "provider_usage.json").read_text())
+        return json.loads(
+            (self.root / "state" / "provider_usage.json").read_text()
+        )
 
     def test_oanda_and_yahoo_never_consume_twelve_data_credits(self) -> None:
         for provider in ("oanda", "yahoo"):
             rc, _ = self.call(
                 [
                     "record",
-                    "--provider", provider,
-                    "--caller", "test",
-                    "--pair", "EURUSD",
-                    "--timeframe", "M15",
-                    "--status", "success",
-                    "--credits", "0",
+                    "--provider",
+                    provider,
+                    "--caller",
+                    "test",
+                    "--pair",
+                    "EURUSD",
+                    "--timeframe",
+                    "M15",
+                    "--status",
+                    "success",
+                    "--credits",
+                    "0",
                 ]
             )
             self.assertEqual(rc, 0)
@@ -81,10 +97,14 @@ class ProviderAccountingTests(TemporaryBotARoot):
             rc = provider_usage.main(
                 [
                     "record",
-                    "--provider", "oanda",
-                    "--caller", "test",
-                    "--status", "success",
-                    "--credits", "1",
+                    "--provider",
+                    "oanda",
+                    "--caller",
+                    "test",
+                    "--status",
+                    "success",
+                    "--credits",
+                    "1",
                 ]
             )
         self.assertEqual(rc, 2)
@@ -92,23 +112,32 @@ class ProviderAccountingTests(TemporaryBotARoot):
     def test_twelve_data_reservation_stops_at_hard_cap(self) -> None:
         with mock.patch.dict(
             os.environ,
-            {"TWELVE_DATA_DAILY_LIMIT": "800", "TWELVE_DATA_RESERVE_CREDITS": "100"},
+            {
+                "TWELVE_DATA_DAILY_LIMIT": "800",
+                "TWELVE_DATA_RESERVE_CREDITS": "100",
+            },
             clear=False,
         ):
             rc, first = self.call(
                 [
                     "reserve",
-                    "--provider", "twelvedata",
-                    "--caller", "test",
-                    "--credits", "700",
+                    "--provider",
+                    "twelvedata",
+                    "--caller",
+                    "test",
+                    "--credits",
+                    "700",
                 ]
             )
             blocked_rc, blocked = self.call(
                 [
                     "reserve",
-                    "--provider", "twelvedata",
-                    "--caller", "test",
-                    "--credits", "1",
+                    "--provider",
+                    "twelvedata",
+                    "--caller",
+                    "test",
+                    "--credits",
+                    "1",
                 ]
             )
         self.assertEqual(rc, 0)
@@ -116,12 +145,18 @@ class ProviderAccountingTests(TemporaryBotARoot):
         self.assertEqual(blocked_rc, 3)
         self.assertFalse(json.loads(blocked)["allowed"])
         self.assertEqual(
-            self.state()["providers"]["twelvedata"]["credits_consumed"], 700
+            self.state()["providers"]["twelvedata"]["credits_consumed"],
+            700,
         )
 
     def test_legacy_generic_increment_is_disabled(self) -> None:
         result = subprocess.run(
-            [sys.executable, str(TOOLS / "api_credit_tracker.py"), "increment", "1"],
+            [
+                sys.executable,
+                str(TOOLS / "api_credit_tracker.py"),
+                "increment",
+                "1",
+            ],
             text=True,
             capture_output=True,
             check=False,
@@ -131,8 +166,9 @@ class ProviderAccountingTests(TemporaryBotARoot):
         self.assertIn("provider_required", result.stderr)
 
 
-class PipelineProgressTests(TemporaryBotARoot):
-    def ledger(self, argv: list[str]) -> int:
+class PipelineProgressTests(TemporaryBotARootMixin, unittest.TestCase):
+    @staticmethod
+    def ledger(argv: list[str]) -> int:
         with redirect_stdout(StringIO()):
             return pipeline_ledger.main(argv)
 
@@ -142,9 +178,12 @@ class PipelineProgressTests(TemporaryBotARoot):
                 self.ledger(
                     [
                         "component",
-                        "--component", component,
-                        "--status", "completed",
-                        "--cycle-id", f"cycle-{component}",
+                        "--component",
+                        component,
+                        "--status",
+                        "completed",
+                        "--cycle-id",
+                        f"cycle-{component}",
                     ]
                 ),
                 0,
@@ -154,13 +193,20 @@ class PipelineProgressTests(TemporaryBotARoot):
                 self.ledger(
                     [
                         "decision",
-                        "--component", "watcher",
-                        "--status", "completed",
-                        "--cycle-id", "cycle-watcher",
-                        "--pair", pair,
-                        "--timeframe", "M15",
-                        "--outcome", "filter_rejected",
-                        "--filter-rejected", "true",
+                        "--component",
+                        "watcher",
+                        "--status",
+                        "completed",
+                        "--cycle-id",
+                        "cycle-watcher",
+                        "--pair",
+                        pair,
+                        "--timeframe",
+                        "M15",
+                        "--outcome",
+                        "filter_rejected",
+                        "--filter-rejected",
+                        "true",
                     ]
                 ),
                 0,
@@ -176,25 +222,34 @@ class PipelineProgressTests(TemporaryBotARoot):
         self.ledger(
             [
                 "component",
-                "--component", "updater",
-                "--status", "started",
-                "--cycle-id", "stuck-cycle",
+                "--component",
+                "updater",
+                "--status",
+                "started",
+                "--cycle-id",
+                "stuck-cycle",
             ]
         )
         path = self.root / "state" / "pipeline_progress.json"
         state = json.loads(path.read_text())
         state["components"]["updater"]["monotonic_ns"] -= 301 * 1_000_000_000
         path.write_text(json.dumps(state))
-        with mock.patch.dict(os.environ, {"MAX_COMPONENT_START_GRACE_SECS": "300"}):
+        with mock.patch.dict(
+            os.environ,
+            {"MAX_COMPONENT_START_GRACE_SECS": "300"},
+        ):
             result = pipeline_health.evaluate(market_open=True)
         self.assertFalse(result["healthy"])
         self.assertEqual(
-            result["components"]["updater"]["evaluation"], "stuck_started"
+            result["components"]["updater"]["evaluation"],
+            "stuck_started",
         )
 
     def test_market_closed_suspends_decision_freshness(self) -> None:
         state = pipeline_ledger.empty_state()
-        (self.root / "state" / "pipeline_progress.json").write_text(json.dumps(state))
+        (self.root / "state" / "pipeline_progress.json").write_text(
+            json.dumps(state)
+        )
         result = pipeline_health.evaluate(market_open=False)
         self.assertTrue(result["healthy"], result["failure_reasons"])
 
@@ -203,15 +258,23 @@ class WatcherCycleTests(unittest.TestCase):
     def test_server_epoch_is_taken_only_from_current_bounded_log(self) -> None:
         text = (
             "old unrelated line\n"
-            "[CLOCK 2026-07-22T16:00:00Z] server_clock_ok BOTA_SERVER_EPOCH=1784736000\n"
+            "[CLOCK 2026-07-22T16:00:00Z] "
+            "server_clock_ok BOTA_SERVER_EPOCH=1784736000\n"
         )
-        self.assertEqual(watcher_cycle.trusted_server_epoch(0, text), 1784736000)
-        self.assertEqual(watcher_cycle.trusted_server_epoch(1784737000, text), 1784737000)
+        self.assertEqual(
+            watcher_cycle.trusted_server_epoch(0, text),
+            1784736000,
+        )
+        self.assertEqual(
+            watcher_cycle.trusted_server_epoch(1784737000, text),
+            1784737000,
+        )
 
     def test_filter_and_delivery_outcomes_are_terminal(self) -> None:
         outcome, telegram, _, rejection = watcher_cycle.log_outcome(
             [
-                "[FILTER now] EURUSD M15 rejected_by_filter score=61 filters=adx_regime_block",
+                "[FILTER now] EURUSD M15 rejected_by_filter "
+                "score=61 filters=adx_regime_block",
             ]
         )
         self.assertEqual(outcome, "filter_rejected")
@@ -230,7 +293,10 @@ class WatcherCycleTests(unittest.TestCase):
     def test_new_csv_parser_does_not_read_historical_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "alerts.csv"
-            historical = "ts,pair,tf,score,filter_rejected\nold,EURUSD,M15,50,true\n"
+            historical = (
+                "ts,pair,tf,score,filter_rejected\n"
+                "old,EURUSD,M15,50,true\n"
+            )
             path.write_text(historical)
             offset = path.stat().st_size
             with path.open("a") as handle:
