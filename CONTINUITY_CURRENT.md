@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-22
 
-This is the compact current handoff. Historical detail remains in `CONTINUITY.md`, `ERRORS.md`, `audits/ERROR_LOG.md`, `docs/PHASE4_FUNCTIONAL_RECOVERY_2026-07-22.md`, and issue #9.
+This is the compact current handoff. Historical detail remains in `CONTINUITY.md`, `ERRORS.md`, `audits/ERROR_LOG.md`, `docs/PHASE4_FUNCTIONAL_RECOVERY_2026-07-22.md`, `docs/PHASE5_WATCHER_ROUTING_2026-07-22.md`, and issue #9.
 
 ## Operating rules
 
@@ -19,14 +19,14 @@ This is the compact current handoff. Historical detail remains in `CONTINUITY.md
 1. Single execution source and cron hygiene — COMPLETE.
 2. Runtime survival controls — COMPLETE.
 3. Ship-time safety proof — COMPLETE.
-4. Reboot and functional recovery proof — COMPLETE, with recurrence finding open.
-5. Monday readiness and decision-data collection — IN PROGRESS.
+4. Reboot and functional recovery proof — **REOPENED BY REPEATED MANAGER LOSS**.
+5. Monday readiness and decision-data collection — **BLOCKED**.
 
-Completed: **4/5**. Remaining: **1/5**.
+Completed: **3/5**. Remaining: **2/5**.
 
-## Current control plane
+## Control-plane sequence
 
-A Phase 5 baseline captured a real temporary split:
+A Phase 5 baseline first captured a temporary split:
 
 ```text
 MANAGER_COUNT=1
@@ -36,10 +36,9 @@ RUNNING=7/7
 ORPHANED=6
 ```
 
-A later compact snapshot proved automatic same-boot reconvergence:
+A later compact snapshot proved same-boot reconvergence:
 
 ```text
-BOOT_ID=ae204a40-c3ff-4c4e-abc2-39696b867781
 MANAGER_COUNT=1
 MANAGER_PID=24052
 OWNED=7/7
@@ -47,42 +46,33 @@ RUNNING=7/7
 ORPHANED=0
 ```
 
-No V5 rerun, rollback, restart, or runtime mutation was required. Gate A ownership must pass before every later Phase 5 data package.
-
-## Local error-log synchronization
-
-The phone and GitHub copies of `audits/ERROR_LOG.md` are synchronized through E028:
+The next Gate A check then captured a more severe recurrence:
 
 ```text
-LOCAL_ERROR_LOG_SYNC=PASS
-LOCAL_ERROR_LOG_INDEPENDENT_VERIFY=PASS
-LOCAL_ERROR_LOG_BLOB=a64143e153511bf43d19607f3521073f693ee0cc
-ERROR_RANGE_PRESENT=E022_THROUGH_E028
-BACKUP_PRESENT=YES
-RUNTIME_SERVICES_CHANGED=NO
-STRATEGY_CHANGED=NO
-ROLLBACK_REQUIRED=NO
+PHASE5_GATE_A=FAIL
+MANAGER_COUNT=0
+MANAGER_PID=NONE
+OWNED=0/7
+RUNNING=6/7
+ORPHANED=6
+PHASE5_CURRENT_WATCHER_LOG=BLOCKED_OWNERSHIP
+RUNTIME_MUTATION_PERFORMED=NO
 ```
 
-Backup:
+Interpretation:
 
-`$HOME/BotA/audits/local_error_log_sync_e016_e028/ERROR_LOG.before.md`
+- the standard `runsvdir $PREFIX/var/service` manager disappeared again during the same boot;
+- six surviving `runsv` supervisors are orphaned under PID 1;
+- one of seven required services is no longer running;
+- this is a real control-plane availability failure, not a watcher-log parser issue;
+- Phase 5 must stop before reading logs, CSV, caches, Telegram history, or strategy evidence;
+- do not rerun V5 or mutate until one compact resample identifies whether the manager self-recovers and which service is absent/down.
 
-## Phase 5 package defects already rejected
+This recurrence is tracked as **E029 — standard manager disappeared after 7/7 reconvergence**. GitHub continuity is updated now. The phone-local `audits/ERROR_LOG.md` remains synchronized only through E028 and must receive E029 later through a separate staged mutation after control-plane stabilization.
 
-The original Phase 5 package was too large and crashed Termux. Its data-path conclusions are invalid because it:
+## Watcher output routing — VERIFIED BEFORE THE REGRESSION
 
-- selected historical 2026-07-14 watcher data as current evidence;
-- parsed `FILTER 2026` as `FILTER/2026`;
-- compared historical server epochs with 2026-07-22 candles;
-- assumed the `alerts.csv` schema before inspecting it;
-- counted historical Telegram totals as current behavior.
-
-Do not use those results to judge strategy restrictiveness or signal generation.
-
-## Gate B watcher-output routing — VERIFIED
-
-The watcher service remains healthy and manager-owned:
+Before manager loss, the watcher service was manager-owned and running:
 
 ```text
 WATCHER_ROUTING_PREFLIGHT=PASS
@@ -90,47 +80,40 @@ MANAGER_PID=24052
 WATCHER_RUNSV_PID=24058
 WATCHER_RUNSV_PPID=24052
 WATCHER_WRAPPER_PID=24075
-WATCHER_STATUS=run
 ```
 
-The service has no runit `log/` subservice. The wrapper and current sleep child both have stdout and stderr connected to `/dev/null`:
-
-```text
-PROCESS_FD1=/dev/null
-PROCESS_FD2=/dev/null
-WATCHER_OUTPUT_ROUTING=DEV_NULL
-```
-
-This is not evidence loss by itself. The run script explicitly defines:
-
-```bash
-LOG="${ROOT}/logs/cron.signals.log"
-log() { printf ... | tee -a "${LOG}"; }
-```
-
-Therefore the authoritative watcher evidence candidate is the exact file:
+The service has no runit `log/` subservice. Wrapper stdout/stderr route to `/dev/null`, while the run script explicitly appends service evidence to:
 
 `$HOME/BotA/logs/cron.signals.log`
 
-The earlier mistake was treating historical content from that file as current, not identifying the file itself. Current evidence must be taken only from a small tail and anchored by the latest trusted-server marker.
+This routing fact remains valid, but current log reading is blocked until Gate A ownership passes again.
 
-This routing finding is not classified as E029 because the explicit file-log path is intentional. It becomes an error only if that exact file is absent, not advancing, or lacks current-cycle evidence.
+## Local error-log state
 
-## Compact Phase 5 workflow
+The phone and GitHub copies were previously synchronized through E028:
 
-1. **Gate A:** one manager, seven manager-owned supervisors, seven running services, zero orphans.
-2. **Gate B:** read only a small tail of the exact watcher log and identify the latest trusted-server marker and current EURUSD/GBPUSD outcomes.
-3. **Gate C:** print only the exact `alerts.csv` header and last three raw rows.
-4. **Gate D:** inspect only current cache timestamps and compare them with the Gate B trusted-server epoch.
-5. Combine conclusions outside Termux, not inside one large device package.
+```text
+LOCAL_ERROR_LOG_SYNC=PASS
+LOCAL_ERROR_LOG_INDEPENDENT_VERIFY=PASS
+LOCAL_ERROR_LOG_BLOB=a64143e153511bf43d19607f3521073f693ee0cc
+ERROR_RANGE_PRESENT=E022_THROUGH_E028
+```
 
-## RapidAPI containment
+After E029, current state is:
 
-`RAPIDAPI_CALENDAR_KEY` remains declared once and empty in `.env.runtime`. Persistent `.env` is unchanged. Durable source-condition, caching, and call-budget work remain deferred.
+- GitHub continuity: updated through E029;
+- GitHub `audits/ERROR_LOG.md`: E029 update pending;
+- phone-local `audits/ERROR_LOG.md`: through E028;
+- local synchronization must not be mixed with the active manager-loss diagnostic.
+
+## Rejected Phase 5 package conclusions
+
+The oversized Phase 5 package crashed Termux and mixed historical/current evidence. Its log, CSV, cache-age, Telegram-count, and strategy conclusions remain invalid.
 
 ## Deferred findings
 
 - durable cause and bounded recovery time for repeated manager replacement/orphaning;
+- exact identity of the seventh missing/down service in the current snapshot;
 - dead-man time-source and future/negative-age protection;
 - stale-reason suppression mismatch;
 - canonical crontab verifier/hash mismatch;
@@ -141,4 +124,4 @@ This routing finding is not classified as E029 because the explicit file-log pat
 
 ## Exactly one next action
 
-Run one compact read-only tail of `$HOME/BotA/logs/cron.signals.log`, after Gate A, and return only current trusted-clock and EURUSD/GBPUSD evidence. Do not inspect CSV or caches in the same package.
+Run one compact read-only control-plane resample that reports all `runsvdir` processes, each required service's runsv PID/PPID and `sv status`, and identifies the missing/down service. Do not inspect watcher logs, CSV, or caches.
