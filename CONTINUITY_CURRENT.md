@@ -2,17 +2,17 @@
 
 Last updated: 2026-07-22
 
-This is the compact current handoff. Historical detail remains in `CONTINUITY.md`. Phase 4 closure evidence is recorded in `docs/PHASE4_FUNCTIONAL_RECOVERY_2026-07-22.md`. A later Phase 5 baseline exposed a temporary split control plane, and the subsequent compact ownership snapshot proved automatic reconvergence.
+This is the compact current handoff. Historical detail remains in `CONTINUITY.md`, `ERRORS.md`, `audits/ERROR_LOG.md`, `docs/PHASE4_FUNCTIONAL_RECOVERY_2026-07-22.md`, and issue #9.
 
 ## Operating rules
 
 - Reliability and observability only. Strategy, thresholds, pairs, scoring, SL/TP, filters, PR #7, DeepSource, and Supabase signal semantics remain frozen.
 - No direct push to `main`.
 - Every Termux package displays `audits/ERROR_LOG.md`, prints `ERROR_LOG_REVIEWED=YES` and `CIRCULAR_ERROR_CHECK=PASS`, uses active paths only, and ends with exactly one next action.
-- Mutations require separate staging, approval, execution, rollback, and independent verification.
+- Read-only packages answer one narrow question and remain compact enough to inspect before execution.
+- Never combine infrastructure, watcher-log, CSV, cache, Telegram-history, and strategy analysis in one package.
 - Never depend on `/proc/uptime` on this Android build.
-- Ship/Android wall time is display-only. Use trusted server/provider UTC for market semantics and monotonic time for same-boot cadence and health.
-- Read-only Termux packages must answer one narrow question and remain compact enough to inspect visually before execution. Do not combine infrastructure, log parsing, CSV parsing, cache parsing, and strategy evidence in one package.
+- Trusted server/provider UTC controls market semantics; monotonic time controls same-boot cadence and health; Android/ship wall time is display-only.
 
 ## Phase state
 
@@ -24,115 +24,34 @@ This is the compact current handoff. Historical detail remains in `CONTINUITY.md
 
 Completed: **4/5**. Remaining: **1/5**.
 
-## Latest control-plane sequence
+## Current control plane
 
-The first Phase 5 baseline captured a real transient split:
+A Phase 5 baseline captured a real temporary split:
 
 ```text
 MANAGER_COUNT=1
 MANAGER_PID=12712
 OWNED=1/7
 RUNNING=7/7
-WRAPPER_CHAIN=7/7
 ORPHANED=6
 ```
 
-A subsequent compact ownership snapshot showed automatic reconvergence on the same boot:
+A later compact snapshot proved automatic same-boot reconvergence:
 
 ```text
 BOOT_ID=ae204a40-c3ff-4c4e-abc2-39696b867781
 MANAGER_COUNT=1
 MANAGER_PID=24052
-MANAGER_PPID=1
-PHASE4_OWNERSHIP_SNAPSHOT=PASS
 OWNED=7/7
 RUNNING=7/7
 ORPHANED=0
 ```
 
-Current service ownership:
-
-- updater runsv PID `24057`, PPID `24052`;
-- watcher runsv PID `24058`, PPID `24052`;
-- closer runsv PID `24059`, PPID `24052`;
-- shadow runsv PID `24060`, PPID `24052`;
-- heartbeat runsv PID `24065`, PPID `24052`;
-- supervisor runsv PID `24066`, PPID `24052`;
-- crond runsv PID `24056`, PPID `24052`.
-
-Interpretation:
-
-- the split was real, not a parser artifact;
-- the control plane later converged automatically to one manager with all seven supervisors;
-- no runtime mutation, V5 rerun, or rollback was required;
-- Phase 5 may proceed only through compact Gate A checks before each data-path package;
-- durable root cause and recovery-latency instrumentation remain open findings, but they do not block the current healthy snapshot.
-
-## Phase 5 baseline package defects
-
-The original Phase 5 baseline was too large and crashed Termux. Its data-path conclusions are not authoritative because it mixed too many concerns and contained parser defects.
-
-Verified defects:
-
-- selected historical `logs/cron.signals.log` cycles from 2026-07-14 while cache candles were from 2026-07-22;
-- generic regex misread `FILTER 2026` as `FILTER/2026`;
-- cache ages became negative;
-- `alerts.csv` schema assumptions were not validated;
-- historical Telegram totals were treated as current;
-- infrastructure, logs, CSV, cache JSON, and Telegram analysis were combined in one oversized process.
-
-Do not use those results to judge strategy restrictiveness or signal generation.
-
-## Correct Phase 5 workflow
-
-### Gate A — compact ownership snapshot
-
-Before each Phase 5 data package, verify one manager, seven manager-owned runsv supervisors, seven running services, and zero orphans. If this fails, stop.
-
-### Gate B — current watcher evidence only
-
-Inspect only the active watcher output path and require a recent trusted-server marker. Do not search for the file with the most historical marker strings.
-
-### Gate C — CSV schema only
-
-Print only the exact `alerts.csv` header and last three raw rows before designing any parser.
-
-### Gate D — cache timestamps only
-
-Inspect current cache timestamps separately, using the trusted server epoch from Gate B.
-
-Combine conclusions in analysis, not in one giant Termux package.
-
-## Gate B current finding
-
-The compact watcher-evidence package passed Gate A but found no active runit watcher logger at the expected paths:
-
-```text
-PHASE5_GATE_A=PASS
-MANAGER_COUNT=1
-MANAGER_PID=24052
-OWNED=7/7
-RUNNING=7/7
-ORPHANED=0
-PHASE5_WATCHER_EVIDENCE=BLOCKED_NO_ACTIVE_LOG
-LOGGER_RUNNING=NO
-RUNTIME_MUTATION_PERFORMED=NO
-```
-
-Interpretation:
-
-- the watcher service itself remains manager-owned and reports running;
-- this result does **not** prove that the watcher is dead;
-- it proves only that `bota-watcher/log` is not an active runit log service and neither expected `current` file exists;
-- the actual stdout/stderr destination must be identified from the watcher service run script, wrapper PID, and `/proc/<pid>/fd/1` and `/proc/<pid>/fd/2` links before reading any current output.
-
-This is currently a Phase 5 observability-path blocker, not a runtime availability failure.
+No V5 rerun, rollback, restart, or runtime mutation was required. Gate A ownership must pass before every later Phase 5 data package.
 
 ## Local error-log synchronization
 
-The phone copy and GitHub copy of `audits/ERROR_LOG.md` are synchronized through E028.
-
-Verified execution markers:
+The phone and GitHub copies of `audits/ERROR_LOG.md` are synchronized through E028:
 
 ```text
 LOCAL_ERROR_LOG_SYNC=PASS
@@ -147,29 +66,79 @@ ROLLBACK_REQUIRED=NO
 
 Backup:
 
-`/data/data/com.termux/files/home/BotA/audits/local_error_log_sync_e016_e028/ERROR_LOG.before.md`
+`$HOME/BotA/audits/local_error_log_sync_e016_e028/ERROR_LOG.before.md`
 
-Rollback script remains available but is not required.
+## Phase 5 package defects already rejected
 
-## RapidAPI quota mitigation
+The original Phase 5 package was too large and crashed Termux. Its data-path conclusions are invalid because it:
 
-The runtime containment remains verified:
+- selected historical 2026-07-14 watcher data as current evidence;
+- parsed `FILTER 2026` as `FILTER/2026`;
+- compared historical server epochs with 2026-07-22 candles;
+- assumed the `alerts.csv` schema before inspecting it;
+- counted historical Telegram totals as current behavior.
 
-- `RAPIDAPI_CALENDAR_KEY` is declared once and empty in `.env.runtime`;
-- RapidAPI fallback remains disabled;
-- persistent `.env` remains unchanged.
+Do not use those results to judge strategy restrictiveness or signal generation.
+
+## Gate B watcher-output routing — VERIFIED
+
+The watcher service remains healthy and manager-owned:
+
+```text
+WATCHER_ROUTING_PREFLIGHT=PASS
+MANAGER_PID=24052
+WATCHER_RUNSV_PID=24058
+WATCHER_RUNSV_PPID=24052
+WATCHER_WRAPPER_PID=24075
+WATCHER_STATUS=run
+```
+
+The service has no runit `log/` subservice. The wrapper and current sleep child both have stdout and stderr connected to `/dev/null`:
+
+```text
+PROCESS_FD1=/dev/null
+PROCESS_FD2=/dev/null
+WATCHER_OUTPUT_ROUTING=DEV_NULL
+```
+
+This is not evidence loss by itself. The run script explicitly defines:
+
+```bash
+LOG="${ROOT}/logs/cron.signals.log"
+log() { printf ... | tee -a "${LOG}"; }
+```
+
+Therefore the authoritative watcher evidence candidate is the exact file:
+
+`$HOME/BotA/logs/cron.signals.log`
+
+The earlier mistake was treating historical content from that file as current, not identifying the file itself. Current evidence must be taken only from a small tail and anchored by the latest trusted-server marker.
+
+This routing finding is not classified as E029 because the explicit file-log path is intentional. It becomes an error only if that exact file is absent, not advancing, or lacks current-cycle evidence.
+
+## Compact Phase 5 workflow
+
+1. **Gate A:** one manager, seven manager-owned supervisors, seven running services, zero orphans.
+2. **Gate B:** read only a small tail of the exact watcher log and identify the latest trusted-server marker and current EURUSD/GBPUSD outcomes.
+3. **Gate C:** print only the exact `alerts.csv` header and last three raw rows.
+4. **Gate D:** inspect only current cache timestamps and compare them with the Gate B trusted-server epoch.
+5. Combine conclusions outside Termux, not inside one large device package.
+
+## RapidAPI containment
+
+`RAPIDAPI_CALENDAR_KEY` remains declared once and empty in `.env.runtime`. Persistent `.env` is unchanged. Durable source-condition, caching, and call-budget work remain deferred.
 
 ## Deferred findings
 
-- durable root cause and bounded recovery time for repeated manager replacement/orphaning;
-- dead-man time-source and negative/future-age protection;
+- durable cause and bounded recovery time for repeated manager replacement/orphaning;
+- dead-man time-source and future/negative-age protection;
 - stale-reason suppression mismatch;
 - canonical crontab verifier/hash mismatch;
 - durable calendar guard fix, caching, and call budget;
 - Twelve Data budgeting;
 - external independent monitoring;
-- strategy/threshold review only after clean Phase 5 evidence.
+- strategy review only after clean Phase 5 evidence.
 
 ## Exactly one next action
 
-Run one compact read-only watcher-output-routing audit. Inspect only the watcher service metadata, run script, wrapper process, and stdout/stderr file-descriptor targets. Do not inspect CSV or caches.
+Run one compact read-only tail of `$HOME/BotA/logs/cron.signals.log`, after Gate A, and return only current trusted-clock and EURUSD/GBPUSD evidence. Do not inspect CSV or caches in the same package.
