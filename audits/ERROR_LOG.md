@@ -197,9 +197,34 @@ Evidence:
 - ORPHANED=6
 - crond remained live and supervised by an orphaned runsv
 
-Prevention: Phase 4 is reopened. A durable reconciliation mechanism is required;
-a one-time ownership transfer is not sufficient. Do not begin Phase 5 data
-analysis while the control plane is structurally split.
+Prevention: stop Phase 5 data analysis whenever ownership is split. Run one
+compact ownership snapshot before deeper diagnostics. Do not trust `sv status`
+alone and do not rerun a broad repair without proving persistent failure.
+
+## E028 — Split control plane automatically reconverged
+A later compact snapshot on the same boot found a new standard manager PID 24052
+owning all seven supervisors:
+
+- OWNED=7/7
+- RUNNING=7/7
+- ORPHANED=0
+- updater runsv 24057
+- watcher runsv 24058
+- closer runsv 24059
+- shadow runsv 24060
+- heartbeat runsv 24065
+- supervisor runsv 24066
+- crond runsv 24056
+
+No runtime mutation, V5 rerun, or rollback was performed.
+
+Interpretation: the 1/7 split was real but temporary, and the service manager
+later converged automatically. Phase 5 may continue only while Gate A ownership
+passes. Durable root cause and recovery-latency instrumentation remain open.
+
+Prevention: record both the failure snapshot and recovery snapshot. Do not erase
+the recurrence, but do not keep Phase 5 blocked after verified one-manager 7/7
+reconvergence.
 
 ## Efficient package protocol
 
