@@ -39,8 +39,16 @@ def load_progress() -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
         return value if isinstance(value, dict) else {}
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return {}
+
+
+def event_map(container: dict[str, Any], key: str) -> dict[str, Any]:
+    """Return one event object while rejecting non-dictionary JSON values."""
+    value = container.get(key)
+    if not isinstance(value, dict):
+        return {}
+    return {str(item_key): item_value for item_key, item_value in value.items()}
 
 
 def age_seconds(event: dict[str, Any], now_ns: int) -> int | None:
@@ -88,7 +96,7 @@ def component_health(
 
 
 def evaluate(market_open: bool) -> dict[str, Any]:
-    """Return useful-progress health without using filesystem wall-clock mtimes."""
+    """Return useful-progress health without filesystem wall-clock mtimes."""
     state = load_progress()
     current_boot = boot_id()
     now_ns = monotonic_ns()
@@ -106,18 +114,18 @@ def evaluate(market_open: bool) -> dict[str, Any]:
             "shadow": int(os.environ.get("MAX_SHADOW_PROGRESS_AGE_SECS", "1500")),
         }
         start_grace = int(os.environ.get("MAX_COMPONENT_START_GRACE_SECS", "300"))
-        components = (
-            state.get("components", {})
-            if isinstance(state.get("components"), dict)
-            else {}
+        raw_components = state.get("components")
+        components: dict[str, Any] = (
+            raw_components if isinstance(raw_components, dict) else {}
         )
         for name, maximum in thresholds.items():
-            event = (
-                components.get(name)
-                if isinstance(components.get(name), dict)
-                else {}
+            result = component_health(
+                name,
+                event_map(components, name),
+                now_ns,
+                maximum,
+                start_grace,
             )
-            result = component_health(name, event, now_ns, maximum, start_grace)
             component_results[name] = result
             if not result["healthy"]:
                 failures.append(
@@ -125,18 +133,13 @@ def evaluate(market_open: bool) -> dict[str, Any]:
                     f"{result['age_seconds']}:{result['status']}:{result['evaluation']}"
                 )
 
-        decisions = (
-            state.get("decisions", {})
-            if isinstance(state.get("decisions"), dict)
-            else {}
+        raw_decisions = state.get("decisions")
+        decisions: dict[str, Any] = (
+            raw_decisions if isinstance(raw_decisions, dict) else {}
         )
         maximum = int(os.environ.get("MAX_DECISION_AGE_SECS", "1500"))
         for key in REQUIRED_DECISIONS:
-            event = (
-                decisions.get(key)
-                if isinstance(decisions.get(key), dict)
-                else {}
-            )
+            event = event_map(decisions, key)
             age = age_seconds(event, now_ns)
             outcome = str(event.get("outcome") or "missing")
             status = str(event.get("status") or "missing")
