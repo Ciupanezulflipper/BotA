@@ -140,13 +140,75 @@ Prevention: update issue #9, detailed incident record, CONTINUITY_CURRENT.md,
 ERRORS.md, AI_START_HERE.md, and this log immediately after a phase gate or
 material correction.
 
+## E022 — Oversized Phase 5 package crashed Termux
+The Phase 5 baseline combined process inspection, service inspection, log-source
+selection, cycle parsing, CSV parsing, cache JSON parsing, and Telegram counting
+inside one very large pasted Python package. Termux crashed during execution.
+
+Prevention: read-only packages must answer one narrow question, target roughly
+80 shell lines or fewer, avoid scanning multi-megabyte logs and 1,000 CSV rows in
+one process, and split infrastructure, watcher logs, CSV, and cache checks into
+separate packages.
+
+## E023 — Historical watcher log selected as current evidence
+The Phase 5 baseline selected `logs/cron.signals.log` and parsed server epochs
+from 2026-07-14 while current cache candles were from 2026-07-22.
+
+Effect: current and historical evidence were mixed, producing impossible negative
+cache ages and invalid current-cycle conclusions.
+
+Prevention: identify the active watcher service output first. Require a recent
+trusted-server timestamp before using any log as current evidence. Never select a
+log merely because it contains the most marker strings.
+
+## E024 — Generic pair/timeframe regex parsed log tags as symbols
+The Phase 5 parser interpreted text such as `FILTER 2026` as pair/timeframe
+`FILTER/2026`, so every expected EURUSD/M15 and GBPUSD/M15 cycle appeared absent.
+
+Prevention: match only configured pairs and timeframes explicitly. Never infer a
+trading symbol from a generic six-capital-letter regex over arbitrary log text.
+
+## E025 — alerts.csv schema assumption was not validated first
+The package assumed a specific current header and row alignment, then reported
+`ALERTS_COLUMNS_OK=NO` and persistence `0/12`. Displayed rows had blank timestamp
+and rejection fields, proving the assumption did not match the existing file.
+
+Prevention: first print only the exact header and last three raw CSV lines. Define
+schema/version handling only after direct inspection. Do not combine CSV schema
+discovery with persistence reconciliation.
+
+## E026 — Historical Telegram counters mixed into a current baseline
+The Phase 5 package counted historical watcher log events such as `dedup:1683`
+and `sent:16` without a current-cycle boundary.
+
+Prevention: count only lines after a verified recent server-UTC marker or use a
+bounded current service log. Historical totals may not be presented as present
+runtime behavior.
+
+## E027 — Phase 4 control-plane regression after closure
+The Phase 5 baseline found one standard manager PID 12712 but only one of seven
+supervisors owned by it. Six live supervisors were orphaned under PID 1 while all
+seven wrappers still reported running.
+
+Evidence:
+- OWNED=1/7
+- RUNNING=7/7
+- WRAPPER_CHAIN=7/7
+- ORPHANED=6
+- crond remained live and supervised by an orphaned runsv
+
+Prevention: Phase 4 is reopened. A durable reconciliation mechanism is required;
+a one-time ownership transfer is not sufficient. Do not begin Phase 5 data
+analysis while the control plane is structurally split.
+
 ## Efficient package protocol
 
-1. Functional snapshot only: one manager, seven owned/running chains, zero
-   orphans, one supervised crond, API protection, and useful progress.
-2. If one invariant fails, inspect only that service or data path.
-3. If ownership is correct but one child is absent, take one bounded recovery
+1. Functional snapshot only: boot, one manager, seven runsv PID/PPID pairs,
+   seven `sv status` results, orphan count.
+2. If ownership fails, stop. Do not parse logs, CSV, caches, or strategy data.
+3. Inspect only the failed ownership/recovery mechanism.
+4. If ownership is correct but one child is absent, take one bounded recovery
    sample before proposing mutation.
-4. Mutate only for persistent failure, with backup, rollback, separate typed
+5. Mutate only for persistent failure, with backup, rollback, separate typed
    approval, and independent verification.
-5. End every package with exactly one next action.
+6. End every package with exactly one next action.
