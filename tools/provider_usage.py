@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Provider-specific request accounting and Twelve Data budget reservations.
 
-This module deliberately separates *request counts* from *provider credits*.
-OANDA and Yahoo requests are recorded for observability but never counted as
-Twelve Data credits. Twelve Data callers must reserve credits before a request;
-the reservation itself consumes the configured budget so concurrent callers
-cannot oversubscribe it.
+This module deliberately separates request counts from provider credits. OANDA
+and Yahoo requests are recorded for observability but never counted as Twelve
+Data credits. Twelve Data callers must reserve credits before a request; the
+reservation itself consumes the configured budget so concurrent callers cannot
+oversubscribe it.
 """
 from __future__ import annotations
 
@@ -37,7 +37,9 @@ def utc_day() -> str:
 def root_dir() -> Path:
     """Resolve the BotA root, allowing isolated tests through BOTA_ROOT."""
     configured = os.environ.get("BOTA_ROOT", "").strip()
-    return Path(configured).expanduser() if configured else Path(__file__).resolve().parent.parent
+    if configured:
+        return Path(configured).expanduser()
+    return Path(__file__).resolve().parent.parent
 
 
 def state_path() -> Path:
@@ -77,7 +79,7 @@ def empty_state(day: str | None = None) -> dict[str, Any]:
 
 
 def normalize_provider(value: str) -> str:
-    """Normalize a provider name without silently mapping it to Twelve Data."""
+    """Normalize a provider without mapping unknown names to Twelve Data."""
     provider = str(value or "unknown").strip().lower()
     return provider if provider in KNOWN_PROVIDERS else provider or "unknown"
 
@@ -88,7 +90,7 @@ def load_state_unlocked(path: Path) -> dict[str, Any]:
         data = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise ValueError("state is not an object")
-    except Exception:
+    except (OSError, json.JSONDecodeError, ValueError):
         data = empty_state()
 
     if data.get("utc_date") != utc_day():
@@ -104,9 +106,12 @@ def save_state_unlocked(path: Path, state: dict[str, Any]) -> None:
     """Atomically persist provider usage state."""
     path.parent.mkdir(parents=True, exist_ok=True)
     state["updated_at_utc"] = utc_now().isoformat()
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(state, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(temporary, path)
 
 
 def append_event_unlocked(event: dict[str, Any]) -> None:
@@ -114,7 +119,9 @@ def append_event_unlocked(event: dict[str, Any]) -> None:
     path = events_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(event, separators=(",", ":"), sort_keys=True) + "\n")
+        handle.write(
+            json.dumps(event, separators=(",", ":"), sort_keys=True) + "\n"
+        )
         handle.flush()
         os.fsync(handle.fileno())
 
@@ -134,7 +141,10 @@ def locked_state() -> Iterator[tuple[Path, dict[str, Any]]]:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
-def provider_counters(state: dict[str, Any], provider: str) -> dict[str, int]:
+def provider_counters(
+    state: dict[str, Any],
+    provider: str,
+) -> dict[str, int]:
     """Return and initialize counters for one provider."""
     providers = state.setdefault("providers", {})
     counters = providers.setdefault(provider, provider_template())
@@ -143,7 +153,11 @@ def provider_counters(state: dict[str, Any], provider: str) -> dict[str, int]:
     return counters
 
 
-def event_base(args: argparse.Namespace, provider: str, action: str) -> dict[str, Any]:
+def event_base(
+    args: argparse.Namespace,
+    provider: str,
+    action: str,
+) -> dict[str, Any]:
     """Build common immutable event fields."""
     return {
         "event_id": uuid.uuid4().hex,
@@ -161,12 +175,12 @@ def event_base(args: argparse.Namespace, provider: str, action: str) -> dict[str
 
 
 def command_record(args: argparse.Namespace) -> int:
-    """Record a completed provider request without changing another provider's credits."""
+    """Record a completed provider request."""
     provider = normalize_provider(args.provider)
-    credits = int(args.credits)
-    if credits < 0:
+    credit_cost = int(args.credits)
+    if credit_cost < 0:
         raise ValueError("credits must be non-negative")
-    if provider != "twelvedata" and credits != 0:
+    if provider != "twelvedata" and credit_cost != 0:
         raise ValueError("non-Twelve-Data requests must use credits=0")
 
     with locked_state() as (path, state):
@@ -176,7 +190,7 @@ def command_record(args: argparse.Namespace) -> int:
             counters["successes"] += 1
         else:
             counters["failures"] += 1
-        counters["credits_consumed"] += credits
+        counters["credits_consumed"] += credit_cost
 
         event = event_base(args, provider, "record")
         append_event_unlocked(event)
@@ -188,19 +202,27 @@ def command_record(args: argparse.Namespace) -> int:
 
 def budget_values() -> tuple[int, int, int]:
     """Return configured Twelve Data limit, reserve, and usable hard cap."""
-    daily_limit = max(0, int(os.environ.get("TWELVE_DATA_DAILY_LIMIT", "800")))
-    reserve = max(0, int(os.environ.get("TWELVE_DATA_RESERVE_CREDITS", "100")))
+    daily_limit = max(
+        0,
+        int(os.environ.get("TWELVE_DATA_DAILY_LIMIT", "800")),
+    )
+    reserve = max(
+        0,
+        int(os.environ.get("TWELVE_DATA_RESERVE_CREDITS", "100")),
+    )
     hard_cap = max(0, daily_limit - reserve)
     return daily_limit, reserve, hard_cap
 
 
 def command_reserve(args: argparse.Namespace) -> int:
-    """Atomically reserve Twelve Data credits before making an API request."""
+    """Atomically reserve Twelve Data credits before an API request."""
     provider = normalize_provider(args.provider)
-    credits = int(args.credits)
+    credit_cost = int(args.credits)
     if provider != "twelvedata":
-        raise ValueError("credit reservations are supported only for provider=twelvedata")
-    if credits <= 0:
+        raise ValueError(
+            "credit reservations are supported only for provider=twelvedata"
+        )
+    if credit_cost <= 0:
         raise ValueError("credits must be positive")
 
     daily_limit, reserve, hard_cap = budget_values()
@@ -209,7 +231,7 @@ def command_reserve(args: argparse.Namespace) -> int:
     with locked_state() as (path, state):
         counters = provider_counters(state, provider)
         used = int(counters["credits_consumed"])
-        allowed = used + credits <= hard_cap
+        allowed = used + credit_cost <= hard_cap
         event = event_base(args, provider, "reserve")
         event.update(
             {
@@ -219,14 +241,14 @@ def command_reserve(args: argparse.Namespace) -> int:
                 "reserve_credits": reserve,
                 "hard_cap": hard_cap,
                 "credits_before": used,
-                "credits_after": used + credits if allowed else used,
+                "credits_after": used + credit_cost if allowed else used,
             }
         )
 
         if allowed:
-            counters["credits_consumed"] += credits
+            counters["credits_consumed"] += credit_cost
             state.setdefault("reservations", {})[reservation_id] = {
-                "credits": credits,
+                "credits": credit_cost,
                 "caller": event["caller"],
                 "pair": event["pair"],
                 "timeframe": event["timeframe"],
@@ -242,12 +264,19 @@ def command_reserve(args: argparse.Namespace) -> int:
 
 
 def command_complete(args: argparse.Namespace) -> int:
-    """Mark a prior Twelve Data reservation as completed without charging twice."""
+    """Mark a prior reservation completed without charging twice."""
     reservation_id = str(args.reservation_id).strip()
     with locked_state() as (path, state):
         reservation = state.setdefault("reservations", {}).get(reservation_id)
         if not isinstance(reservation, dict):
-            print(json.dumps({"result": "missing_reservation", "reservation_id": reservation_id}))
+            print(
+                json.dumps(
+                    {
+                        "result": "missing_reservation",
+                        "reservation_id": reservation_id,
+                    }
+                )
+            )
             return 2
 
         reservation["status"] = args.status.lower()
@@ -269,14 +298,18 @@ def command_status(args: argparse.Namespace) -> int:
         snapshot = json.loads(json.dumps(state))
 
     daily_limit, reserve, hard_cap = budget_values()
-    twelve = snapshot.get("providers", {}).get("twelvedata", provider_template())
+    twelve = snapshot.get("providers", {}).get(
+        "twelvedata",
+        provider_template(),
+    )
     snapshot["twelvedata_budget"] = {
         "daily_limit": daily_limit,
         "reserve_credits": reserve,
         "hard_cap": hard_cap,
         "credits_consumed": int(twelve.get("credits_consumed", 0)),
         "credits_remaining_to_hard_cap": max(
-            0, hard_cap - int(twelve.get("credits_consumed", 0))
+            0,
+            hard_cap - int(twelve.get("credits_consumed", 0)),
         ),
     }
     if args.json:
@@ -287,13 +320,15 @@ def command_status(args: argparse.Namespace) -> int:
             row = providers[name]
             print(
                 f"PROVIDER={name} REQUESTS={row.get('requests', 0)} "
-                f"SUCCESS={row.get('successes', 0)} FAIL={row.get('failures', 0)} "
+                f"SUCCESS={row.get('successes', 0)} "
+                f"FAIL={row.get('failures', 0)} "
                 f"CREDITS={row.get('credits_consumed', 0)}"
             )
         print(
             "TWELVE_DATA_BUDGET "
             f"USED={snapshot['twelvedata_budget']['credits_consumed']} "
-            f"HARD_CAP={hard_cap} DAILY_LIMIT={daily_limit} RESERVE={reserve}"
+            f"HARD_CAP={hard_cap} "
+            f"DAILY_LIMIT={daily_limit} RESERVE={reserve}"
         )
     return 0
 
@@ -303,37 +338,57 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    record = sub.add_parser("record", help="record one completed provider request")
+    record = sub.add_parser(
+        "record",
+        help="record one completed provider request",
+    )
     record.add_argument("--provider", required=True)
     record.add_argument("--caller", required=True)
     record.add_argument("--pair", default="")
     record.add_argument("--timeframe", default="")
-    record.add_argument("--status", choices=("success", "failure", "blocked"), required=True)
+    record.add_argument(
+        "--status",
+        choices=("success", "failure", "blocked"),
+        required=True,
+    )
     record.add_argument("--credits", type=int, default=0)
     record.add_argument("--note", default="")
     record.set_defaults(func=command_record)
 
-    reserve = sub.add_parser("reserve", help="reserve Twelve Data credits before a request")
-    reserve.add_argument("--provider", default="twelvedata")
-    reserve.add_argument("--caller", required=True)
-    reserve.add_argument("--pair", default="")
-    reserve.add_argument("--timeframe", default="")
-    reserve.add_argument("--status", default="reserved")
-    reserve.add_argument("--credits", type=int, required=True)
-    reserve.add_argument("--note", default="")
-    reserve.set_defaults(func=command_reserve)
+    reserve_parser = sub.add_parser(
+        "reserve",
+        help="reserve Twelve Data credits before a request",
+    )
+    reserve_parser.add_argument("--provider", default="twelvedata")
+    reserve_parser.add_argument("--caller", required=True)
+    reserve_parser.add_argument("--pair", default="")
+    reserve_parser.add_argument("--timeframe", default="")
+    reserve_parser.add_argument("--status", default="reserved")
+    reserve_parser.add_argument("--credits", type=int, required=True)
+    reserve_parser.add_argument("--note", default="")
+    reserve_parser.set_defaults(func=command_reserve)
 
-    complete = sub.add_parser("complete", help="complete a prior reservation")
+    complete = sub.add_parser(
+        "complete",
+        help="complete a prior reservation",
+    )
     complete.add_argument("--reservation-id", required=True)
     complete.add_argument("--caller", default="unknown")
     complete.add_argument("--pair", default="")
     complete.add_argument("--timeframe", default="")
-    complete.add_argument("--status", choices=("success", "failure"), required=True)
+    complete.add_argument(
+        "--status",
+        choices=("success", "failure"),
+        required=True,
+    )
     complete.add_argument("--credits", type=int, default=0)
     complete.add_argument("--note", default="")
     complete.set_defaults(func=command_complete)
 
-    status = sub.add_parser("status", help="show current provider-specific usage")
+    status = sub.add_parser(
+        "status",
+        help="show current provider-specific usage",
+    )
     status.add_argument("--json", action="store_true")
     status.set_defaults(func=command_status)
     return parser
@@ -346,7 +401,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return int(args.func(args))
     except (OSError, ValueError) as exc:
-        print(f"PROVIDER_USAGE_ERROR={type(exc).__name__}:{exc}", file=sys.stderr)
+        print(
+            f"PROVIDER_USAGE_ERROR={type(exc).__name__}:{exc}",
+            file=sys.stderr,
+        )
         return 2
 
 
