@@ -103,6 +103,29 @@ Inspect current cache timestamps separately, using the trusted server epoch from
 
 Combine conclusions in analysis, not in one giant Termux package.
 
+## Local error-log synchronization
+
+The phone copy and GitHub copy of `audits/ERROR_LOG.md` are synchronized.
+
+Verified execution markers:
+
+```text
+LOCAL_ERROR_LOG_SYNC=PASS
+LOCAL_ERROR_LOG_INDEPENDENT_VERIFY=PASS
+LOCAL_ERROR_LOG_BLOB=a64143e153511bf43d19607f3521073f693ee0cc
+ERROR_RANGE_PRESENT=E022_THROUGH_E028
+BACKUP_PRESENT=YES
+RUNTIME_SERVICES_CHANGED=NO
+STRATEGY_CHANGED=NO
+ROLLBACK_REQUIRED=NO
+```
+
+Backup:
+
+`/data/data/com.termux/files/home/BotA/audits/local_error_log_sync_e016_e028/ERROR_LOG.before.md`
+
+Rollback script remains available but is not required.
+
 ## RapidAPI quota mitigation
 
 The runtime containment remains verified:
@@ -124,4 +147,4 @@ The runtime containment remains verified:
 
 ## Exactly one next action
 
-Synchronize the newly recorded E022-E028 entries into the local phone copy of `~/BotA/audits/ERROR_LOG.md` using the staged mutation protocol. Then resume Phase 5 with a compact current-watcher-log check.
+Run one compact read-only current-watcher-service evidence check. Do not inspect CSV or caches in the same package.
