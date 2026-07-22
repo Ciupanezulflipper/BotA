@@ -91,7 +91,7 @@ Before each Phase 5 data package, verify one manager, seven manager-owned runsv 
 
 ### Gate B — current watcher evidence only
 
-Inspect only the active watcher service output and require a recent trusted-server marker. Do not search for the log with the most marker strings.
+Inspect only the active watcher output path and require a recent trusted-server marker. Do not search for the file with the most historical marker strings.
 
 ### Gate C — CSV schema only
 
@@ -103,9 +103,34 @@ Inspect current cache timestamps separately, using the trusted server epoch from
 
 Combine conclusions in analysis, not in one giant Termux package.
 
+## Gate B current finding
+
+The compact watcher-evidence package passed Gate A but found no active runit watcher logger at the expected paths:
+
+```text
+PHASE5_GATE_A=PASS
+MANAGER_COUNT=1
+MANAGER_PID=24052
+OWNED=7/7
+RUNNING=7/7
+ORPHANED=0
+PHASE5_WATCHER_EVIDENCE=BLOCKED_NO_ACTIVE_LOG
+LOGGER_RUNNING=NO
+RUNTIME_MUTATION_PERFORMED=NO
+```
+
+Interpretation:
+
+- the watcher service itself remains manager-owned and reports running;
+- this result does **not** prove that the watcher is dead;
+- it proves only that `bota-watcher/log` is not an active runit log service and neither expected `current` file exists;
+- the actual stdout/stderr destination must be identified from the watcher service run script, wrapper PID, and `/proc/<pid>/fd/1` and `/proc/<pid>/fd/2` links before reading any current output.
+
+This is currently a Phase 5 observability-path blocker, not a runtime availability failure.
+
 ## Local error-log synchronization
 
-The phone copy and GitHub copy of `audits/ERROR_LOG.md` are synchronized.
+The phone copy and GitHub copy of `audits/ERROR_LOG.md` are synchronized through E028.
 
 Verified execution markers:
 
@@ -147,4 +172,4 @@ The runtime containment remains verified:
 
 ## Exactly one next action
 
-Run one compact read-only current-watcher-service evidence check. Do not inspect CSV or caches in the same package.
+Run one compact read-only watcher-output-routing audit. Inspect only the watcher service metadata, run script, wrapper process, and stdout/stderr file-descriptor targets. Do not inspect CSV or caches.
