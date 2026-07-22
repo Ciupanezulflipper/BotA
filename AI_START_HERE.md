@@ -6,7 +6,7 @@ Read this before proposing BotA commands, code, cron, service, strategy, or depl
 
 ## Evidence and scope rules
 
-Classify material claims as VERIFIED, ASSUMED, or UNKNOWN. Do not promote a failed acceptance criterion because adjacent behavior worked, and do not fail a healthy recovery because process IDs changed.
+Classify material claims as VERIFIED, ASSUMED, or UNKNOWN. Do not fail healthy recovery because PIDs changed, and do not hide a real split-control-plane snapshot because it later recovered.
 
 Current work is Phase 5 observability and decision-data collection. Do not change strategy, thresholds, pairs, scoring, SL/TP, filters, PR #7, DeepSource, Supabase signal semantics, or `main` directly.
 
@@ -15,168 +15,120 @@ Every Termux package must:
 1. display `$HOME/BotA/audits/ERROR_LOG.md`;
 2. print `ERROR_LOG_REVIEWED=YES`;
 3. print `CIRCULAR_ERROR_CHECK=PASS`;
-4. use compact active-path checks;
-5. avoid supervise FIFOs and broad historical scans;
-6. avoid top-level exits that close Termux;
-7. avoid blocking interactive approval;
+4. answer one narrow question;
+5. use active paths only;
+6. avoid supervise FIFOs and broad historical scans;
+7. avoid top-level exits that close Termux;
 8. separate staging, approval, mutation, rollback, and verification;
 9. end with exactly one next action.
 
 Additional mandatory rules:
 
-- do not use `/proc/uptime` on this Android build;
+- do not use `/proc/uptime`;
 - changed PIDs are restart events, not failures by themselves;
 - use trusted server/provider UTC for market semantics;
 - use monotonic time for same-boot cadence and health;
 - Android/ship wall time is display-only;
-- when one correctly owned service child is absent, take one targeted bounded recovery sample before proposing mutation;
-- do not rerun V5 or a broad seven-service repair while one-manager ownership remains healthy.
+- stop Phase 5 immediately when Gate A finds split ownership;
+- resume Phase 5 after a compact snapshot proves one manager owns all seven supervisors;
+- never combine infrastructure, watcher logs, CSV, cache JSON, and Telegram history in one Termux package.
 
 ## Phase state
 
 1. Single execution source and cron hygiene — COMPLETE.
 2. Runtime survival controls — COMPLETE.
 3. Ship-time safety proof — COMPLETE.
-4. Reboot and functional recovery proof — COMPLETE.
-5. Monday readiness and decision-data collection — NOT STARTED.
+4. Reboot and functional recovery proof — COMPLETE, recurrence finding open.
+5. Monday readiness and decision-data collection — IN PROGRESS.
 
 Completed: **4/5**. Remaining: **1/5**.
 
-## Final Phase 4 state
+## Latest control-plane sequence
 
-Boot ID:
-
-`ae204a40-c3ff-4c4e-abc2-39696b867781`
-
-Final marker:
+A Phase 5 baseline captured a real temporary split:
 
 ```text
-PHASE4_FUNCTIONAL_RECOVERY=PASS MANAGER_COUNT=1 MANAGER_PID=31330 OWNED=7/7 RUNNING=7/7 WRAPPER_CHAIN=7/7 ORPHANED=0 DOWN_MARKERS=0 LIVE_CROND_COUNT=1 CROND_SUPERVISED=YES RAPIDAPI_DISABLED=YES
+MANAGER_COUNT=1 MANAGER_PID=12712 OWNED=1/7 RUNNING=7/7 ORPHANED=6
 ```
 
-Verified topology at the final sample:
+A later compact ownership snapshot on the same boot proved automatic reconvergence:
 
-- exactly one standard Termux `runsvdir` manager;
-- manager PID `31330`, PPID 1;
-- all seven supervisors owned by that manager;
-- all seven services and wrapper chains running;
-- zero orphaned supervisors;
-- zero `down` markers;
-- one supervised `crond -n -s`;
-- RapidAPI runtime key declared once and empty;
-- no V5 rerun or rollback required.
+```text
+BOOT_ID=ae204a40-c3ff-4c4e-abc2-39696b867781
+MANAGER_COUNT=1 MANAGER_PID=24052 MANAGER_PPID=1
+PHASE4_OWNERSHIP_SNAPSHOT=PASS OWNED=7/7 RUNNING=7/7 ORPHANED=0
+```
 
-The manager changed during the same boot from PID `4090` to `20630` and later to `31330`. This is not a Phase 4 failure because each replacement rebuilt a valid single control plane.
+Current runsv ownership:
 
-One snapshot found the crond supervisor without a child. A targeted audit then proved automatic recovery:
+- updater `24057` -> manager `24052`;
+- watcher `24058` -> manager `24052`;
+- closer `24059` -> manager `24052`;
+- shadow `24060` -> manager `24052`;
+- heartbeat `24065` -> manager `24052`;
+- supervisor `24066` -> manager `24052`;
+- crond `24056` -> manager `24052`.
 
-- crond runsv PID `24619`, PPID `31330`;
-- live crond PID `13521`, PPID `24619`;
-- crond and crond/log both reported `run`;
-- no manual restart occurred.
+No runtime mutation, V5 rerun, or rollback was performed.
 
-Classification:
+Interpretation:
 
-`TARGETED_CROND_AUDIT=CROND_RECOVERED_DURING_AUDIT`
+- the split was real but temporary;
+- automatic convergence restored one healthy control plane;
+- Phase 5 may proceed while Gate A remains healthy;
+- durable cause and recovery-latency instrumentation remain deferred.
 
-Full evidence:
+## Known Phase 5 package defects
 
-`docs/PHASE4_FUNCTIONAL_RECOVERY_2026-07-22.md`
+The first Phase 5 baseline was too large and crashed Termux. Its data-path conclusions are invalid because it:
 
-## Known audit mistakes that must not recur
+- selected historical July 14 watcher logs;
+- parsed `FILTER 2026` as `FILTER/2026`;
+- compared historical server epochs with July 22 cache candles;
+- assumed the wrong `alerts.csv` schema;
+- counted historical Telegram events as current;
+- mixed infrastructure, logs, CSV, cache, and Telegram analysis in one process.
 
-- fixed-PID stability was incorrectly used as the endurance criterion;
-- `/proc/uptime` caused a permission failure;
-- the user's explicit current date/time was misinterpreted and produced an unnecessary wait;
-- a transient crond child absence was escalated before bounded recovery;
-- continuity was not updated quickly enough after runtime truth changed;
-- a dead-man alert claimed server UTC `14:13`, last shadow `15:10`, and `198min` stale, an impossible ordering.
+Read `audits/ERROR_LOG.md` and `ERRORS.md` before designing any package.
 
-Read `ERRORS.md` before designing any package.
+## Efficient Phase 5 workflow
 
-## Efficient workflow
+### Gate A — ownership only
 
-### Gate A — one-line functional snapshot
+One manager, seven manager-owned supervisors, seven running services, zero orphans. If this fails, stop.
 
-Check:
+### Gate B — active watcher output only
 
-- manager count;
-- seven manager-owned supervisors;
-- seven running wrapper chains;
-- orphan count;
-- one supervised crond;
-- API protection;
-- useful-progress markers.
+Inspect only the current watcher service output and require a recent trusted-server marker.
 
-If all pass, stop infrastructure diagnosis.
+### Gate C — CSV schema only
 
-### Gate B — targeted diagnostic only
+Print the exact `alerts.csv` header and last three raw lines. Do not parse persistence yet.
 
-Inspect only the failed service or data path. Do not run a full control-plane audit for a single-service finding.
+### Gate D — cache timestamps only
 
-### Gate C — bounded automatic-recovery sample
+Inspect current cache timestamps separately using the trusted server epoch from Gate B.
 
-When ownership is correct but a child is absent, take one short targeted resample. Classify automatic recovery, persistent unavailability, or structural ownership failure.
-
-### Gate D — staged mutation
-
-Mutation requires persistent failure, a narrow cause/hypothesis, backup, rollback, separate typed approval, and independent verification.
+Combine conclusions in analysis, not in one giant Termux package.
 
 ## RapidAPI incident
 
-The calendar fallback leak remains blocked at runtime:
+The runtime fallback remains blocked:
 
 - `RAPIDAPI_CALENDAR_KEY` is declared once and empty in `.env.runtime`;
-- future watcher cycles cannot use the RapidAPI fallback;
-- persistent `.env` is unchanged.
-
-The durable source-condition fix, caching, daily call budget, and Twelve Data quota work remain deferred.
-
-## Phase 5 objective
-
-Do not force a signal.
-
-Prove that every scheduled live-market cycle produces one auditable result:
-
-1. a complete parsed decision recorded in `logs/alerts.csv`; or
-2. an explicit pre-fusion skip reason in active runtime logs.
-
-The evidence must distinguish:
-
-- trusted-clock unavailable;
-- stale or missing raw candle cache;
-- pause guard;
-- news gate;
-- calendar block;
-- fusion empty/fail-closed;
-- parse failure;
-- filter rejection/HOLD;
-- accepted signal;
-- Telegram score, tier, cooldown, dedup, or connectivity gate.
-
-Only after clean decision-data collection may the strategy be judged too restrictive.
+- persistent `.env` remains unchanged.
 
 ## Deferred findings
 
-- root cause of repeated standard-manager replacement;
+- durable root cause and bounded recovery time for repeated manager replacement/orphaning;
 - dead-man time-source and future/negative-age protection;
 - stale-reason suppression mismatch;
-- canonical crontab verification/hash mismatch;
-- durable calendar source condition and caching;
+- canonical crontab verifier/hash mismatch;
+- durable calendar condition/caching/call budget;
 - Twelve Data budgeting;
-- external independent dead-man monitoring;
-- strategy review after Phase 5 evidence.
+- external independent monitoring;
+- strategy review only after clean Phase 5 evidence.
 
-## Files to read
+## Exactly one next action
 
-- `CONTINUITY_CURRENT.md`
-- `docs/PHASE4_FUNCTIONAL_RECOVERY_2026-07-22.md`
-- `docs/RUNTIME_HANDOFF_V5_RESULT_2026-07-20.md`
-- `docs/RUNTIME_CHECKPOINT_2026-07-20.md`
-- `ERRORS.md`
-- GitHub issue #9
-- draft PR #10
-
-## Exactly one next phase
-
-Begin Phase 5 with one read-only, bounded decision-path and useful-progress baseline. Do not mutate runtime configuration or strategy.
+Synchronize E022-E028 into the local phone copy of `~/BotA/audits/ERROR_LOG.md` using staged mutation. Then inspect only the active watcher service output.
