@@ -64,7 +64,12 @@ def parse_new_rows(path: Path, offset: int) -> list[dict[str, str]]:
         if not values or values == header:
             continue
         padded = values + [""] * max(0, len(header) - len(values))
-        rows.append({key: padded[index] if index < len(padded) else "" for index, key in enumerate(header)})
+        rows.append(
+            {
+                key: padded[index] if index < len(padded) else ""
+                for index, key in enumerate(header)
+            }
+        )
     return rows
 
 
@@ -77,6 +82,17 @@ def pair_lines(log_text: str, pair: str, timeframe: str) -> list[str]:
     """Return exact current-cycle lines for one configured pair/timeframe."""
     token = f"{pair} {timeframe}"
     return [line for line in log_text.splitlines() if token in line]
+
+
+def trusted_server_epoch(cli_epoch: int, log_text: str) -> int:
+    """Resolve the current cycle's server epoch from CLI or bounded log evidence."""
+    if cli_epoch > 1_000_000_000:
+        return cli_epoch
+    matches = re.findall(r"BOTA_SERVER_EPOCH=(\d+)", log_text)
+    if not matches:
+        return 0
+    value = int(matches[-1])
+    return value if value > 1_000_000_000 else 0
 
 
 def log_outcome(lines: list[str]) -> tuple[str, str, str, str]:
@@ -102,18 +118,28 @@ def log_outcome(lines: list[str]) -> tuple[str, str, str, str]:
     for pattern, name in rules:
         if re.search(pattern, joined):
             outcome = name
+
     telegram = "not_attempted"
     if "SENT: via" in joined:
         telegram = "sent"
     elif "send failed" in joined or "FAILED:" in joined:
         telegram = "failed"
-    elif outcome in {"telegram_score_gate", "telegram_tier_gate", "telegram_cooldown", "delivery_dedup"}:
+    elif outcome in {
+        "telegram_score_gate",
+        "telegram_tier_gate",
+        "telegram_cooldown",
+        "delivery_dedup",
+    }:
         telegram = outcome
+
     supabase = "not_attempted"
     if "publish failed" in joined:
         supabase = "failed"
+    elif "published" in joined.lower():
+        supabase = "published"
     elif "skip non-GREEN" in joined:
         supabase = "skipped_non_green"
+
     rejection = ""
     match = re.findall(r"filters=([^\n]+)", joined)
     if match:
@@ -155,20 +181,34 @@ def ledger_decision(
         sys.executable,
         str(root_dir() / "tools" / "pipeline_ledger.py"),
         "decision",
-        "--component", "watcher",
-        "--status", "completed" if outcome != "no_terminal_outcome" else "failed",
-        "--cycle-id", cycle_id,
-        "--pair", pair,
-        "--timeframe", timeframe,
-        "--outcome", outcome,
-        "--provider", row.get("provider", "unknown") or "unknown",
-        "--candle-timestamp", candle_timestamp,
-        "--filter-rejected", "true" if rejected else "false",
-        "--rejection-gate", row.get("filter_reasons", "") or rejection,
-        "--alerts-csv-persisted", "true" if persisted else "false",
-        "--telegram-result", telegram,
-        "--supabase-result", supabase,
-        "--server-epoch", str(server_epoch),
+        "--component",
+        "watcher",
+        "--status",
+        "completed" if outcome != "no_terminal_outcome" else "failed",
+        "--cycle-id",
+        cycle_id,
+        "--pair",
+        pair,
+        "--timeframe",
+        timeframe,
+        "--outcome",
+        outcome,
+        "--provider",
+        row.get("provider", "unknown") or "unknown",
+        "--candle-timestamp",
+        candle_timestamp,
+        "--filter-rejected",
+        "true" if rejected else "false",
+        "--rejection-gate",
+        row.get("filter_reasons", "") or rejection,
+        "--alerts-csv-persisted",
+        "true" if persisted else "false",
+        "--telegram-result",
+        telegram,
+        "--supabase-result",
+        supabase,
+        "--server-epoch",
+        str(server_epoch),
     ]
     if candle_age is not None:
         command.extend(["--candle-age", str(candle_age)])
@@ -183,6 +223,7 @@ def ledger_decision(
         "persisted": persisted,
         "telegram": telegram,
         "supabase": supabase,
+        "server_epoch": server_epoch,
         "ledger_rc": result.returncode,
         "ledger_stderr": result.stderr.strip()[:500],
     }
@@ -202,6 +243,7 @@ def main() -> int:
     log_path = root / "logs" / "cron.signals.log"
     rows = parse_new_rows(alerts, args.alerts_offset)
     log_text = read_new_bytes(log_path, args.log_offset)
+    effective_epoch = trusted_server_epoch(args.server_epoch, log_text)
     results: list[dict[str, Any]] = []
 
     for pair, timeframe in EXPECTED:
@@ -214,7 +256,7 @@ def main() -> int:
         results.append(
             ledger_decision(
                 cycle_id=args.cycle_id,
-                server_epoch=args.server_epoch,
+                server_epoch=effective_epoch,
                 pair=pair,
                 timeframe=timeframe,
                 row=matching[-1] if matching else None,
@@ -222,24 +264,43 @@ def main() -> int:
             )
         )
 
-    healthy = all(item["outcome"] != "no_terminal_outcome" and item["ledger_rc"] == 0 for item in results)
+    healthy = all(
+        item["outcome"] != "no_terminal_outcome" and item["ledger_rc"] == 0
+        for item in results
+    )
     status = "completed" if healthy else "failed"
     subprocess.run(
         [
             sys.executable,
             str(root / "tools" / "pipeline_ledger.py"),
             "component",
-            "--component", "watcher",
-            "--status", status,
-            "--cycle-id", args.cycle_id,
-            "--details", json.dumps(results, separators=(",", ":")),
-            "--server-epoch", str(args.server_epoch),
+            "--component",
+            "watcher",
+            "--status",
+            status,
+            "--cycle-id",
+            args.cycle_id,
+            "--details",
+            json.dumps(results, separators=(",", ":")),
+            "--server-epoch",
+            str(effective_epoch),
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         check=False,
     )
-    print(json.dumps({"healthy": healthy, "cycle_id": args.cycle_id, "results": results}, indent=2, sort_keys=True))
+    print(
+        json.dumps(
+            {
+                "healthy": healthy,
+                "cycle_id": args.cycle_id,
+                "server_epoch": effective_epoch,
+                "results": results,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
     return 0 if healthy else 3
 
 
