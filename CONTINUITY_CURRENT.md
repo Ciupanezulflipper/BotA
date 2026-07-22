@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-22
 
-This is the compact current handoff. Historical detail remains in `CONTINUITY.md`. Phase 4 closure evidence is recorded in `docs/PHASE4_FUNCTIONAL_RECOVERY_2026-07-22.md`, but a later Phase 5 baseline exposed a new control-plane regression that reopens Phase 4.
+This is the compact current handoff. Historical detail remains in `CONTINUITY.md`. Phase 4 closure evidence is recorded in `docs/PHASE4_FUNCTIONAL_RECOVERY_2026-07-22.md`. A later Phase 5 baseline exposed a temporary split control plane, and the subsequent compact ownership snapshot proved automatic reconvergence.
 
 ## Operating rules
 
@@ -12,85 +12,96 @@ This is the compact current handoff. Historical detail remains in `CONTINUITY.md
 - Mutations require separate staging, approval, execution, rollback, and independent verification.
 - Never depend on `/proc/uptime` on this Android build.
 - Ship/Android wall time is display-only. Use trusted server/provider UTC for market semantics and monotonic time for same-boot cadence and health.
-- Read-only Termux packages must now be compact enough to inspect visually before execution: target under roughly 80 shell lines and one narrow question. Do not combine infrastructure, log parsing, CSV parsing, cache parsing, and strategy evidence in one package.
+- Read-only Termux packages must answer one narrow question and remain compact enough to inspect visually before execution. Do not combine infrastructure, log parsing, CSV parsing, cache parsing, and strategy evidence in one package.
 
 ## Phase state
 
 1. Single execution source and cron hygiene — COMPLETE.
 2. Runtime survival controls — COMPLETE.
 3. Ship-time safety proof — COMPLETE.
-4. Reboot and functional recovery proof — **REOPENED BY REGRESSION**.
-5. Monday readiness and decision-data collection — **BLOCKED**.
+4. Reboot and functional recovery proof — COMPLETE, with recurrence finding open.
+5. Monday readiness and decision-data collection — IN PROGRESS.
 
-Completed: **3/5**. Remaining: **2/5**.
+Completed: **4/5**. Remaining: **1/5**.
 
-## Latest verified regression
+## Latest control-plane sequence
 
-The first Phase 5 baseline produced:
+The first Phase 5 baseline captured a real transient split:
 
 ```text
-PHASE5_DECISION_BASELINE=FAIL_INFRA
 MANAGER_COUNT=1
 MANAGER_PID=12712
 OWNED=1/7
 RUNNING=7/7
 WRAPPER_CHAIN=7/7
 ORPHANED=6
-CROND_SUPERVISED=YES
-RAPIDAPI_DISABLED=YES
 ```
+
+A subsequent compact ownership snapshot showed automatic reconvergence on the same boot:
+
+```text
+BOOT_ID=ae204a40-c3ff-4c4e-abc2-39696b867781
+MANAGER_COUNT=1
+MANAGER_PID=24052
+MANAGER_PPID=1
+PHASE4_OWNERSHIP_SNAPSHOT=PASS
+OWNED=7/7
+RUNNING=7/7
+ORPHANED=0
+```
+
+Current service ownership:
+
+- updater runsv PID `24057`, PPID `24052`;
+- watcher runsv PID `24058`, PPID `24052`;
+- closer runsv PID `24059`, PPID `24052`;
+- shadow runsv PID `24060`, PPID `24052`;
+- heartbeat runsv PID `24065`, PPID `24052`;
+- supervisor runsv PID `24066`, PPID `24052`;
+- crond runsv PID `24056`, PPID `24052`.
 
 Interpretation:
 
-- one new standard manager exists;
-- only `bota-updater` is owned by that manager;
-- watcher, closer, shadow, heartbeat, supervisor, and crond supervisors are alive under PID 1;
-- all seven wrappers still run, so `sv status` alone looks healthy;
-- the control plane has again degraded into one manager plus six orphaned supervisors;
-- Phase 5 evidence cannot be trusted until ownership is repaired durably.
+- the split was real, not a parser artifact;
+- the control plane later converged automatically to one manager with all seven supervisors;
+- no runtime mutation, V5 rerun, or rollback was required;
+- Phase 5 may proceed only through compact Gate A checks before each data-path package;
+- durable root cause and recovery-latency instrumentation remain open findings, but they do not block the current healthy snapshot.
 
-This is a recurrence of the earlier dead-manager/orphaned-supervisor failure mode. It proves that the prior functional Phase 4 PASS was not durable enough to advance permanently.
+## Phase 5 baseline package defects
 
-## Phase 5 package defects
+The original Phase 5 baseline was too large and crashed Termux. Its data-path conclusions are not authoritative because it mixed too many concerns and contained parser defects.
 
-The Phase 5 baseline itself was too large and crashed Termux. Its data-path conclusions are not authoritative because the package mixed too many concerns and contained parser defects.
+Verified defects:
 
-Verified parser/audit defects:
+- selected historical `logs/cron.signals.log` cycles from 2026-07-14 while cache candles were from 2026-07-22;
+- generic regex misread `FILTER 2026` as `FILTER/2026`;
+- cache ages became negative;
+- `alerts.csv` schema assumptions were not validated;
+- historical Telegram totals were treated as current;
+- infrastructure, logs, CSV, cache JSON, and Telegram analysis were combined in one oversized process.
 
-- selected `logs/cron.signals.log`, whose parsed cycles were from 2026-07-14 while current cache candles were from 2026-07-22;
-- generic pair/timeframe regex misread log tags such as `FILTER 2026` as `FILTER/2026`;
-- every cycle therefore appeared to miss `EURUSD/M15` and `GBPUSD/M15`;
-- cache ages became negative because old server epochs were compared with current candles;
-- `alerts.csv` header/schema assumptions were wrong for the existing file, so `ALERTS_COLUMNS_OK=NO` and persistence `0/12` are not trustworthy;
-- historical Telegram counts (`dedup:1683`, `sent:16`) were mixed into a current baseline;
-- infrastructure, logs, CSV, cache JSON, and Telegram analysis were combined into one oversized process.
+Do not use those results to judge strategy restrictiveness or signal generation.
 
-Do not use these Phase 5 parser results to judge strategy restrictiveness or signal generation.
-
-## Correct next workflow
+## Correct Phase 5 workflow
 
 ### Gate A — compact ownership snapshot
 
-Only verify:
+Before each Phase 5 data package, verify one manager, seven manager-owned runsv supervisors, seven running services, and zero orphans. If this fails, stop.
 
-- boot ID;
-- manager PID;
-- exact seven runsv PIDs and PPIDs;
-- orphan count;
-- seven `sv status` results.
+### Gate B — current watcher evidence only
 
-### Gate B — ownership repair design
+Inspect only the active watcher service output and require a recent trusted-server marker. Do not search for the log with the most marker strings.
 
-If the same `1/7 owned, 6 orphaned` state persists, design a durable manager-reconciliation mechanism. Do not rerun V5 blindly and do not touch strategy.
+### Gate C — CSV schema only
 
-### Gate C — Phase 5 restart
+Print only the exact `alerts.csv` header and last three raw rows before designing any parser.
 
-Only after one manager owns all seven supervisors again:
+### Gate D — cache timestamps only
 
-1. inspect the current watcher service log only;
-2. inspect `alerts.csv` header and last 10 rows only;
-3. inspect current cache timestamps only;
-4. combine conclusions in analysis, not in one giant Termux script.
+Inspect current cache timestamps separately, using the trusted server epoch from Gate B.
+
+Combine conclusions in analysis, not in one giant Termux package.
 
 ## RapidAPI quota mitigation
 
@@ -102,15 +113,15 @@ The runtime containment remains verified:
 
 ## Deferred findings
 
-- durable root cause and prevention for repeated standard-manager replacement;
+- durable root cause and bounded recovery time for repeated manager replacement/orphaning;
 - dead-man time-source and negative/future-age protection;
 - stale-reason suppression mismatch;
 - canonical crontab verifier/hash mismatch;
 - durable calendar guard fix, caching, and call budget;
 - Twelve Data budgeting;
-- external independent dead-man monitoring;
+- external independent monitoring;
 - strategy/threshold review only after clean Phase 5 evidence.
 
 ## Exactly one next action
 
-Run one compact read-only control-plane ownership snapshot. Do not rerun the Phase 5 data parser and do not mutate runtime state yet.
+Synchronize the newly recorded E022-E028 entries into the local phone copy of `~/BotA/audits/ERROR_LOG.md` using the staged mutation protocol. Then resume Phase 5 with a compact current-watcher-log check.
