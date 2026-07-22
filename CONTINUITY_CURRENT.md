@@ -2,141 +2,115 @@
 
 Last updated: 2026-07-22
 
-This is the compact current handoff. Historical detail remains in `CONTINUITY.md`. Phase 4 closure and the corrected recovery model are recorded in `docs/PHASE4_FUNCTIONAL_RECOVERY_2026-07-22.md`. V5 ownership-transfer detail remains in `docs/RUNTIME_HANDOFF_V5_RESULT_2026-07-20.md` and GitHub issue #9.
+This is the compact current handoff. Historical detail remains in `CONTINUITY.md`. Phase 4 closure evidence is recorded in `docs/PHASE4_FUNCTIONAL_RECOVERY_2026-07-22.md`, but a later Phase 5 baseline exposed a new control-plane regression that reopens Phase 4.
 
 ## Operating rules
 
-- Reliability and observability work only until Phase 5 decision-data collection is complete.
-- Strategy, thresholds, pairs, scoring, SL/TP, filters, PR #7, DeepSource, and Supabase signal semantics remain frozen.
+- Reliability and observability only. Strategy, thresholds, pairs, scoring, SL/TP, filters, PR #7, DeepSource, and Supabase signal semantics remain frozen.
 - No direct push to `main`.
 - Every Termux package displays `audits/ERROR_LOG.md`, prints `ERROR_LOG_REVIEWED=YES` and `CIRCULAR_ERROR_CHECK=PASS`, uses active paths only, and ends with exactly one next action.
 - Mutations require separate staging, approval, execution, rollback, and independent verification.
-- A changed PID is a restart event, not a failure by itself. Judge runtime health by functional ownership, liveness, useful progress, and automatic recovery.
 - Never depend on `/proc/uptime` on this Android build.
 - Ship/Android wall time is display-only. Use trusted server/provider UTC for market semantics and monotonic time for same-boot cadence and health.
+- Read-only Termux packages must now be compact enough to inspect visually before execution: target under roughly 80 shell lines and one narrow question. Do not combine infrastructure, log parsing, CSV parsing, cache parsing, and strategy evidence in one package.
 
 ## Phase state
 
 1. Single execution source and cron hygiene — COMPLETE.
 2. Runtime survival controls — COMPLETE.
 3. Ship-time safety proof — COMPLETE.
-4. Reboot and functional recovery proof — COMPLETE.
-5. Monday readiness and decision-data collection — NOT STARTED.
+4. Reboot and functional recovery proof — **REOPENED BY REGRESSION**.
+5. Monday readiness and decision-data collection — **BLOCKED**.
 
-Completed: **4/5**. Remaining: **1/5**.
+Completed: **3/5**. Remaining: **2/5**.
 
-## Phase 4 closure
+## Latest verified regression
 
-Final marker:
+The first Phase 5 baseline produced:
 
 ```text
-PHASE4_FUNCTIONAL_RECOVERY=PASS MANAGER_COUNT=1 MANAGER_PID=31330 OWNED=7/7 RUNNING=7/7 WRAPPER_CHAIN=7/7 ORPHANED=0 DOWN_MARKERS=0 LIVE_CROND_COUNT=1 CROND_SUPERVISED=YES RAPIDAPI_DISABLED=YES
+PHASE5_DECISION_BASELINE=FAIL_INFRA
+MANAGER_COUNT=1
+MANAGER_PID=12712
+OWNED=1/7
+RUNNING=7/7
+WRAPPER_CHAIN=7/7
+ORPHANED=6
+CROND_SUPERVISED=YES
+RAPIDAPI_DISABLED=YES
 ```
 
-Verified:
+Interpretation:
 
-- unchanged boot ID `ae204a40-c3ff-4c4e-abc2-39696b867781`;
-- exactly one standard Termux `runsvdir` manager;
-- manager PID `31330`, PPID 1 at the final sample;
-- all seven runsv supervisors owned by that manager;
-- all seven services and wrapper chains running;
-- zero orphaned supervisors;
-- zero `down` markers;
-- exactly one supervised `crond -n -s`;
-- RapidAPI runtime disable preserved;
-- V5 rerun not required;
-- rollback not required;
-- no runtime mutation performed by the final audits.
+- one new standard manager exists;
+- only `bota-updater` is owned by that manager;
+- watcher, closer, shadow, heartbeat, supervisor, and crond supervisors are alive under PID 1;
+- all seven wrappers still run, so `sv status` alone looks healthy;
+- the control plane has again degraded into one manager plus six orphaned supervisors;
+- Phase 5 evidence cannot be trusted until ownership is repaired durably.
 
-## Recovery evidence and corrected interpretation
+This is a recurrence of the earlier dead-manager/orphaned-supervisor failure mode. It proves that the prior functional Phase 4 PASS was not durable enough to advance permanently.
 
-The standard manager changed more than once during the same boot: PID `4090`, then `20630`, then `31330`.
+## Phase 5 package defects
 
-This does not invalidate Phase 4. Each later manager reconstructed a single manager-owned service tree without duplicate or orphaned supervisors.
+The Phase 5 baseline itself was too large and crashed Termux. Its data-path conclusions are not authoritative because the package mixed too many concerns and contained parser defects.
 
-One snapshot captured the manager-owned crond supervisor without a live crond child and returned `6/7`. A targeted audit then proved automatic runit recovery:
+Verified parser/audit defects:
 
-- crond runsv PID `24619`, PPID `31330`;
-- live crond PID `13521`, PPID `24619`;
-- command `crond -n -s`;
-- crond and crond/log both reported `run`;
-- active spool `u0_a414`, mode `600`, UID `10414`;
-- no manual repair was performed.
+- selected `logs/cron.signals.log`, whose parsed cycles were from 2026-07-14 while current cache candles were from 2026-07-22;
+- generic pair/timeframe regex misread log tags such as `FILTER 2026` as `FILTER/2026`;
+- every cycle therefore appeared to miss `EURUSD/M15` and `GBPUSD/M15`;
+- cache ages became negative because old server epochs were compared with current candles;
+- `alerts.csv` header/schema assumptions were wrong for the existing file, so `ALERTS_COLUMNS_OK=NO` and persistence `0/12` are not trustworthy;
+- historical Telegram counts (`dedup:1683`, `sent:16`) were mixed into a current baseline;
+- infrastructure, logs, CSV, cache JSON, and Telegram analysis were combined into one oversized process.
 
-Classification:
+Do not use these Phase 5 parser results to judge strategy restrictiveness or signal generation.
 
-`TARGETED_CROND_AUDIT=CROND_RECOVERED_DURING_AUDIT`
+## Correct next workflow
 
-The earlier requirement for identical PIDs over 12 hours was rejected as an invalid acceptance criterion. Phase 4 proves functional recovery, not permanent PID identity.
+### Gate A — compact ownership snapshot
 
-## New errors and findings
+Only verify:
 
-- `/proc/uptime` is inaccessible and caused a read-only package to fail with `PermissionError`.
-- The user-provided current date/time was misinterpreted, causing an unnecessary additional wait instruction.
-- Exact PID matching incorrectly converted healthy runit recovery into an audit failure.
-- A transient crond-child absence was escalated before allowing a bounded automatic-recovery sample.
-- A dead-man alert reported server UTC `14:13` but last shadow `15:10`, making the claimed `198min` stale duration impossible and untrustworthy.
-- Documentation lagged runtime truth and still named manager PID `4090` after later recovery evidence.
+- boot ID;
+- manager PID;
+- exact seven runsv PIDs and PPIDs;
+- orphan count;
+- seven `sv status` results.
 
-Full analysis and prevention rules:
+### Gate B — ownership repair design
 
-`docs/PHASE4_FUNCTIONAL_RECOVERY_2026-07-22.md`
+If the same `1/7 owned, 6 orphaned` state persists, design a durable manager-reconciliation mechanism. Do not rerun V5 blindly and do not touch strategy.
 
-## Efficient workflow
+### Gate C — Phase 5 restart
 
-Use a four-gate protocol:
+Only after one manager owns all seven supervisors again:
 
-1. **Functional snapshot:** manager, seven supervisors, seven wrappers, orphan count, supervised crond, API protection, useful progress.
-2. **Targeted diagnostic:** inspect only the failing service or data path.
-3. **Bounded recovery resample:** when ownership is correct but a child is temporarily absent, allow one short recovery sample before proposing mutation.
-4. **Staged mutation:** only for a persistent failure, with cause/hypothesis, backup, rollback, separate approval, and independent verification.
-
-Do not rerun V5, broad seven-service repair, or rollback while the functional invariants remain healthy.
+1. inspect the current watcher service log only;
+2. inspect `alerts.csv` header and last 10 rows only;
+3. inspect current cache timestamps only;
+4. combine conclusions in analysis, not in one giant Termux script.
 
 ## RapidAPI quota mitigation
 
-The calendar fallback leak remains blocked at runtime:
+The runtime containment remains verified:
 
 - `RAPIDAPI_CALENDAR_KEY` is declared once and empty in `.env.runtime`;
-- RapidAPI fallback cannot run in future watcher cycles;
-- persistent `.env` remains unchanged;
-- rollback backup remains available.
-
-The durable calendar source condition, caching, daily call budget, and Twelve Data budgeting remain deferred.
-
-## Phase 5 objective
-
-Do not force a signal or lower thresholds.
-
-Prove that every scheduled live-market cycle produces one auditable outcome:
-
-1. a complete parsed decision recorded in `logs/alerts.csv`; or
-2. an explicit pre-fusion skip reason in active runtime logs.
-
-This must distinguish:
-
-- valid quiet/HOLD behavior;
-- stale or missing market data;
-- trusted-clock failure;
-- news/calendar blocking;
-- fusion/parse failure;
-- filter rejection;
-- Telegram delivery gating;
-- a genuinely accepted signal.
-
-Only after clean decision-data collection may strategy restrictiveness be evaluated.
+- RapidAPI fallback remains disabled;
+- persistent `.env` remains unchanged.
 
 ## Deferred findings
 
-- root cause of repeated standard-manager replacement;
+- durable root cause and prevention for repeated standard-manager replacement;
 - dead-man time-source and negative/future-age protection;
 - stale-reason suppression mismatch;
 - canonical crontab verifier/hash mismatch;
 - durable calendar guard fix, caching, and call budget;
 - Twelve Data budgeting;
 - external independent dead-man monitoring;
-- strategy/threshold review after Phase 5 evidence.
+- strategy/threshold review only after clean Phase 5 evidence.
 
-## Exactly one next phase
+## Exactly one next action
 
-Begin Phase 5 with a read-only, bounded decision-path and useful-progress baseline. Do not mutate strategy or runtime configuration.
+Run one compact read-only control-plane ownership snapshot. Do not rerun the Phase 5 data parser and do not mutate runtime state yet.
