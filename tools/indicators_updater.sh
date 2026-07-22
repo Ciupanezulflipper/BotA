@@ -41,21 +41,6 @@ ledger_component() {
     >/dev/null 2>>"${LOGS}/error.log" || true
 }
 
-provider_from_cache() {
-  local path="$1"
-  CACHE_PATH="${path}" python3 - <<'PY' 2>/dev/null || echo unknown
-import json
-import os
-try:
-    data = json.load(open(os.environ["CACHE_PATH"], "r", encoding="utf-8"))
-    meta = data.get("chart", {}).get("result", [{}])[0].get("meta", {})
-    provider = str(meta.get("_provider") or "unknown").strip().lower()
-    print(provider or "unknown")
-except Exception:
-    print("unknown")
-PY
-}
-
 on_exit() {
   local rc=$?
   if [[ "${ledger_finalized}" != 1 ]]; then
@@ -119,7 +104,14 @@ build_indicators_cli_args() {
 }
 
 find_latest_backup_updater() {
-  ls -1t "${TOOLS}/indicators_updater.sh.bak_pre16k_"* 2>/dev/null | head -n 1 || true
+  TOOLS_DIR="${TOOLS}" python3 - <<'PY'
+import os
+from pathlib import Path
+root = Path(os.environ["TOOLS_DIR"])
+files = [path for path in root.glob("indicators_updater.sh.bak_pre16k_*") if path.is_file()]
+if files:
+    print(max(files, key=lambda path: (path.stat().st_mtime_ns, path.name)))
+PY
 }
 
 fetch_with_retry() {
@@ -262,7 +254,17 @@ for pair in ${PAIRS}; do
 
     fetch_rc=0
     if fetch_with_retry "${pair}" "${tf}" "${in_path}"; then
-      provider="$(provider_from_cache "${in_path}")"
+      provider="$(CACHE_PATH="${in_path}" python3 - <<'PY' 2>/dev/null || echo unknown
+import json
+import os
+try:
+    data = json.load(open(os.environ["CACHE_PATH"], "r", encoding="utf-8"))
+    meta = data.get("chart", {}).get("result", [{}])[0].get("meta", {})
+    print(str(meta.get("_provider") or "unknown").strip().lower() or "unknown")
+except Exception:
+    print("unknown")
+PY
+)"
       fetch_success_count=$((fetch_success_count + 1))
       log "[UPDATER] FETCH OK ${pair} ${tf} provider=${provider}"
     else
@@ -273,7 +275,7 @@ for pair in ${PAIRS}; do
     fi
 
     cli_lines="$(build_indicators_cli_args "${pair}" "${tf}" "${in_path}" "${out_path}")"
-    if [[ "${cli_lines}" == "no_cli" ]]; then
+    if [[ "${cli_lines}" = "no_cli" ]]; then
       build_fail_count=$((build_fail_count + 1))
       log "[UPDATER] BUILD FAIL ${pair} ${tf} could_not_read_cli_help"
       continue
