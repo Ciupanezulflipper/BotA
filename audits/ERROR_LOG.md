@@ -226,6 +226,41 @@ Prevention: record both the failure snapshot and recovery snapshot. Do not erase
 the recurrence, but do not keep Phase 5 blocked after verified one-manager 7/7
 reconvergence.
 
+## E029 — Standard manager disappeared after 7/7 reconvergence
+A later Gate A check on the same boot found no standard
+`runsvdir $PREFIX/var/service` process. Six surviving supervisors were orphaned
+under PID 1 and only six of seven required services remained running.
+
+Initial evidence:
+
+- MANAGER_COUNT=0
+- OWNED=0/7
+- RUNNING=6/7
+- ORPHANED=6
+
+Prevention: stop Phase 5 immediately, do not inspect watcher logs or strategy
+data, and take one compact control-plane resample before deciding on mutation.
+
+## E030 — Manager absence persisted and crond became unavailable
+The compact resample confirmed that automatic recovery had not occurred:
+
+- no `runsvdir` processes existed;
+- updater, watcher, closer, shadow, heartbeat, and supervisor runsv processes
+  remained under PID 1;
+- crond runsv was absent;
+- crond reported down;
+- a stale crond supervise PID file still contained wrapper PID 24068;
+- `CONTROL_PLANE_RESAMPLE=MANAGER_ABSENT`;
+- `MISSING_OR_DOWN=crond`.
+
+Effect: cron-based support jobs are unavailable and the six surviving services
+cannot be recreated if their orphaned supervisors die.
+
+Prevention: do not start a fresh manager directly while orphaned runsv processes
+remain, because duplicate supervisors may be created. Verify the existing,
+previously validated V5 reconciliation and rollback artifacts, then stage a
+fresh approval-gated reconciliation without executing it in the same package.
+
 ## Efficient package protocol
 
 1. Functional snapshot only: boot, one manager, seven runsv PID/PPID pairs,
@@ -234,6 +269,9 @@ reconvergence.
 3. Inspect only the failed ownership/recovery mechanism.
 4. If ownership is correct but one child is absent, take one bounded recovery
    sample before proposing mutation.
-5. Mutate only for persistent failure, with backup, rollback, separate typed
+5. For persistent manager loss with orphaned runsv processes, verify the exact
+   validated reconciliation artifact and approval/rollback contract before any
+   mutation.
+6. Mutate only for persistent failure, with backup, rollback, separate typed
    approval, and independent verification.
-6. End every package with exactly one next action.
+7. End every package with exactly one next action.
