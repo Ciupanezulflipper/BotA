@@ -20,14 +20,14 @@ This is the compact current handoff. Historical detail remains in `CONTINUITY.md
 1. Single execution source and cron hygiene — COMPLETE.
 2. Runtime survival controls — COMPLETE.
 3. Ship-time safety proof — COMPLETE.
-4. Reboot and functional recovery proof — **REOPENED BY PERSISTENT MANAGER LOSS**.
+4. Reboot and functional recovery proof — **REOPENED BY REPEATED MANAGER LOSS**.
 5. Monday readiness and decision-data collection — **BLOCKED**.
 
 Completed: **3/5**. Remaining: **2/5**.
 
-## Persistent control-plane failure
+## Control-plane sequence
 
-The first Phase 5 baseline captured a temporary split:
+The first Phase 5 baseline captured a split:
 
 ```text
 MANAGER_COUNT=1
@@ -47,7 +47,7 @@ RUNNING=7/7
 ORPHANED=0
 ```
 
-The next Gate A check found the standard manager absent and one service down. A separate compact resample confirmed the failure persisted:
+The next Gate A check then found the manager absent and crond down. A separate compact resample confirmed persistence:
 
 ```text
 BOOT_ID=ae204a40-c3ff-4c4e-abc2-39696b867781
@@ -60,66 +60,92 @@ ORPHANED=6
 MISSING_OR_DOWN=crond
 ```
 
-Exact current service state at that resample:
+Exact persistent state at that resample:
 
-- updater runsv `24057`, PPID 1, wrapper `24070`, running;
-- watcher runsv `24058`, PPID 1, wrapper `24075`, running;
-- closer runsv `24059`, PPID 1, wrapper `24071`, running;
-- shadow runsv `24060`, PPID 1, wrapper `24074`, running;
-- heartbeat runsv `24065`, PPID 1, wrapper `24073`, running;
-- supervisor runsv `24066`, PPID 1, wrapper `24069`, running;
-- crond runsv absent, stale supervise PID `24068`, service down.
-
-Interpretation:
-
-- this is not a transient sample or parser defect;
-- the standard `runsvdir $PREFIX/var/service` manager remains absent;
-- all six surviving BotA supervisors are orphaned under PID 1;
-- crond has no runsv supervisor and is down;
-- cron-based support jobs are unavailable;
-- Phase 5 must remain blocked;
-- a recovery mutation is now justified, but only after verifying the already validated V5 reconciliation artifact and its approval/rollback contract;
-- do not start a new manager directly while six orphaned runsv processes remain, because that can create duplicate supervisors.
+- updater runsv `24057`, PPID 1, running;
+- watcher runsv `24058`, PPID 1, running;
+- closer runsv `24059`, PPID 1, running;
+- shadow runsv `24060`, PPID 1, running;
+- heartbeat runsv `24065`, PPID 1, running;
+- supervisor runsv `24066`, PPID 1, running;
+- crond runsv absent and service down.
 
 This sequence is tracked as:
 
 - **E029 — standard manager disappeared after 7/7 reconvergence**;
-- **E030 — manager absence persisted and crond became definitively unavailable**.
+- **E030 — manager absence persisted and crond became unavailable**.
+
+## V5 recovery artifact preflight — PASS
+
+The existing validated reconciliation and rollback artifacts were reverified:
+
+```text
+V5_SCRIPT_HASH_MATCH=YES
+V5_ROLLBACK_HASH_MATCH=YES
+V5_SCRIPT_SYNTAX=PASS
+V5_ARTIFACT_PREFLIGHT=PASS
+APPROVAL_FILE_CREATED=NO
+V5_EXECUTED=NO
+```
+
+Pinned hashes:
+
+- reconciliation: `ac67fa2b53f1d9a3034e417f5ddf940fc17cf9a09817354211d88aa9468c6e46`;
+- rollback: `518f8f8d2bbed4791a41821e87ea8576828a03ab43d97982c63753573566132c`.
+
+The exact typed approval was received and recorded, but approval-file creation remained a separate package.
+
+## Approval staging safety abort — CURRENT
+
+Before creating the two boot-bound approval files, the package revalidated the live topology. The topology had changed again:
+
+```text
+APPROVAL_STAGE_MANAGER_COUNT=1
+APPROVAL_STAGE_ORPHANED=5/6
+APPROVAL_STAGE_INVALID_SERVICE_ROWS=1
+APPROVAL_STAGE_CROND_RUNSV_COUNT=1
+APPROVAL_STAGE_CROND_STATUS=down: ... normally up, want up; run: log: ...
+V5_APPROVAL_STAGE=ABORTED_STATE_CHANGED
+APPROVAL_FILES_CREATED=NO
+V5_EXECUTED=NO
+RUNTIME_MUTATION_PERFORMED=NO
+```
+
+Interpretation:
+
+- a standard manager and a crond runsv reappeared automatically after the prior persistent-failure sample;
+- five of the six BotA supervisors were still orphaned;
+- one BotA service row had changed ownership or identity, but the staging package intentionally did not identify which one;
+- crond had a runsv again but its main service was still down while its log service was running;
+- this is a partial automatic recovery or handoff state, not a verified healthy topology;
+- the fail-closed approval gate worked correctly and prevented V5 from running against stale assumptions;
+- no approval files exist and the previously typed approval has not authorized any mutation.
+
+Do not rerun V5 or recreate approval files until one compact topology snapshot names the current manager, every service runsv PID/PPID/owner, and current crond main/log state.
+
+This safety abort is not a new runtime error. It is evidence that the state-revalidation guard prevented an unsafe mutation.
 
 ## Watcher output routing — VERIFIED BEFORE THE REGRESSION
 
-Before manager loss, the watcher was manager-owned and running. Its wrapper stdout/stderr route to `/dev/null`, while the run script explicitly appends service evidence to:
+The watcher run script explicitly appends service evidence to:
 
 `$HOME/BotA/logs/cron.signals.log`
 
-That routing fact remains valid. Current log reading is blocked until the control plane is repaired and Gate A passes.
+Current log reading remains blocked until Gate A passes.
 
 ## Local error-log state
 
-The phone and GitHub copies were previously synchronized through E028:
-
-```text
-LOCAL_ERROR_LOG_SYNC=PASS
-LOCAL_ERROR_LOG_INDEPENDENT_VERIFY=PASS
-LOCAL_ERROR_LOG_BLOB=a64143e153511bf43d19607f3521073f693ee0cc
-ERROR_RANGE_PRESENT=E022_THROUGH_E028
-```
-
-Current state:
-
-- GitHub continuity: through E030;
+- GitHub continuity: through E030 plus the approval-stage safety abort;
 - GitHub `audits/ERROR_LOG.md`: through E030;
 - phone-local `audits/ERROR_LOG.md`: through E028;
-- local error-log synchronization remains deferred until control-plane recovery and must use a separate staged mutation.
-
-## Rejected Phase 5 package conclusions
-
-The oversized Phase 5 package crashed Termux and mixed historical/current evidence. Its log, CSV, cache-age, Telegram-count, and strategy conclusions remain invalid.
+- local error-log synchronization remains deferred and separate.
 
 ## Deferred findings
 
 - durable cause and bounded recovery time for repeated manager replacement/orphaning;
-- why Android repeatedly removes the standard manager while leaving children alive;
+- why Android repeatedly removes and recreates the standard manager while children survive;
+- current identity of the one non-orphan BotA service during partial recovery;
+- crond main-service recovery status;
 - dead-man time-source and future/negative-age protection;
 - stale-reason suppression mismatch;
 - canonical crontab verifier/hash mismatch;
@@ -130,4 +156,4 @@ The oversized Phase 5 package crashed Termux and mixed historical/current eviden
 
 ## Exactly one next action
 
-Run one compact read-only preflight of the existing validated V5 reconciliation script and rollback artifact: verify exact paths and hashes, confirm the script is intact, and extract only its approval-file contract. Do not execute or create approval files in the same package.
+Run one compact read-only current-topology snapshot. Identify the current manager PID, all seven required runsv PID/PPID/owner states, wrapper status, and crond main/log state. Do not create approval files, execute V5, read watcher logs, or inspect CSV/caches.
