@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-22
 
-This is the compact current handoff. Historical detail remains in `CONTINUITY.md`, `ERRORS.md`, `audits/ERROR_LOG.md`, `docs/PHASE4_FUNCTIONAL_RECOVERY_2026-07-22.md`, `docs/PHASE5_WATCHER_ROUTING_2026-07-22.md`, and issue #9.
+This is the compact current handoff. Historical detail remains in `CONTINUITY.md`, `ERRORS.md`, `audits/ERROR_LOG.md`, `docs/PHASE4_FUNCTIONAL_RECOVERY_2026-07-22.md`, `docs/PHASE5_WATCHER_ROUTING_2026-07-22.md`, `docs/PHASE4_PERSISTENT_MANAGER_LOSS_2026-07-22.md`, and issue #9.
 
 ## Operating rules
 
@@ -108,7 +108,7 @@ ERROR_RANGE_PRESENT=E022_THROUGH_E028
 Current state:
 
 - GitHub continuity: through E030;
-- GitHub `audits/ERROR_LOG.md`: must be updated through E030;
+- GitHub `audits/ERROR_LOG.md`: through E030;
 - phone-local `audits/ERROR_LOG.md`: through E028;
 - local error-log synchronization remains deferred until control-plane recovery and must use a separate staged mutation.
 
