@@ -41,15 +41,7 @@ ledger_component() {
     >/dev/null 2>>"${LOGS}/error.log" || true
 }
 
-on_exit() {
-  local rc=$?
-  if [[ "${ledger_finalized}" != 1 ]]; then
-    ledger_component failed "exit_code=${rc}"
-  fi
-  trap - EXIT
-  exit "${rc}"
-}
-trap on_exit EXIT
+trap 'rc=$?; if [[ "${ledger_finalized}" != 1 ]]; then ledger_component failed "exit_code=${rc}"; fi; trap - EXIT; exit "${rc}"' EXIT
 
 need_file() {
   local file="$1"
