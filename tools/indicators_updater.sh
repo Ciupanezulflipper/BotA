@@ -2,8 +2,10 @@
 ###############################################################################
 # FILE: tools/indicators_updater.sh
 # PURPOSE:
-#   Fetch raw candles, build indicators, and emit provider/progress evidence.
-#   Strategy, pair scope, timeframes, and indicator construction are unchanged.
+#   Fetch raw candles, build indicators, and emit useful-progress evidence.
+#   Actual provider requests are accounted at the network boundary by
+#   data_fetch_candles.sh. Strategy, pairs, timeframes, and indicators are
+#   unchanged.
 ###############################################################################
 
 set -euo pipefail
@@ -39,19 +41,6 @@ ledger_component() {
     >/dev/null 2>>"${LOGS}/error.log" || true
 }
 
-provider_record() {
-  local provider="$1" pair="$2" tf="$3" status="$4" note="${5:-}"
-  python3 "${TOOLS}/provider_usage.py" record \
-    --provider "${provider}" \
-    --caller indicators_updater \
-    --pair "${pair}" \
-    --timeframe "${tf}" \
-    --status "${status}" \
-    --credits 0 \
-    --note "${note}" \
-    >/dev/null 2>>"${LOGS}/error.log" || true
-}
-
 provider_from_cache() {
   local path="$1"
   CACHE_PATH="${path}" python3 - <<'PY' 2>/dev/null || echo unknown
@@ -72,22 +61,23 @@ on_exit() {
   if [[ "${ledger_finalized}" != 1 ]]; then
     ledger_component failed "exit_code=${rc}"
   fi
+  trap - EXIT
   exit "${rc}"
 }
 trap on_exit EXIT
 
 need_file() {
-  local f="$1"
-  if [[ ! -f "$f" ]]; then
-    log "[UPDATER] ERROR: missing file: $f"
+  local file="$1"
+  if [[ ! -f "${file}" ]]; then
+    log "[UPDATER] ERROR: missing file: ${file}"
     return 1
   fi
 }
 
 need_exec() {
-  local f="$1"
-  if [[ ! -x "$f" ]]; then
-    log "[UPDATER] ERROR: not executable: $f"
+  local file="$1"
+  if [[ ! -x "${file}" ]]; then
+    log "[UPDATER] ERROR: not executable: ${file}"
     return 1
   fi
 }
@@ -102,10 +92,30 @@ build_indicators_cli_args() {
   fi
 
   supports() { grep -qF -- "$1" <<<"${help}"; }
-  if supports "--pair"; then printf '%s\n' "--pair" "${pair}"; elif supports "--symbol"; then printf '%s\n' "--symbol" "${pair}"; fi
-  if supports "--tf"; then printf '%s\n' "--tf" "${tf}"; elif supports "--timeframe"; then printf '%s\n' "--timeframe" "${tf}"; elif supports "--interval"; then printf '%s\n' "--interval" "${tf}"; fi
-  if supports "--in"; then printf '%s\n' "--in" "${in_path}"; elif supports "--input"; then printf '%s\n' "--input" "${in_path}"; elif supports "--json"; then printf '%s\n' "--json" "${in_path}"; fi
-  if supports "--out"; then printf '%s\n' "--out" "${out_path}"; elif supports "-o"; then printf '%s\n' "-o" "${out_path}"; fi
+  if supports "--pair"; then
+    printf '%s\n' "--pair" "${pair}"
+  elif supports "--symbol"; then
+    printf '%s\n' "--symbol" "${pair}"
+  fi
+  if supports "--tf"; then
+    printf '%s\n' "--tf" "${tf}"
+  elif supports "--timeframe"; then
+    printf '%s\n' "--timeframe" "${tf}"
+  elif supports "--interval"; then
+    printf '%s\n' "--interval" "${tf}"
+  fi
+  if supports "--in"; then
+    printf '%s\n' "--in" "${in_path}"
+  elif supports "--input"; then
+    printf '%s\n' "--input" "${in_path}"
+  elif supports "--json"; then
+    printf '%s\n' "--json" "${in_path}"
+  fi
+  if supports "--out"; then
+    printf '%s\n' "--out" "${out_path}"
+  elif supports "-o"; then
+    printf '%s\n' "-o" "${out_path}"
+  fi
 }
 
 find_latest_backup_updater() {
@@ -186,38 +196,40 @@ def record(pair: str, status: str, note: str = "") -> None:
     )
 
 for pair, instrument in pairs:
-    req = urllib.request.Request(
+    request = urllib.request.Request(
         f"{base}/v3/instruments/{instrument}/candles?count=50&granularity=D&price=M",
         headers={"Authorization": f"Bearer {token}"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(request, timeout=10) as response:
             data = json.loads(response.read())
         record(pair, "success")
-        candles = [c for c in data["candles"] if c.get("complete", True)]
-        closes = [float(c["mid"]["c"]) for c in candles]
+        candles = [candle for candle in data["candles"] if candle.get("complete", True)]
+        closes = [float(candle["mid"]["c"]) for candle in candles]
 
         def ema(values, period):
-            k = 2.0 / (period + 1)
+            factor = 2.0 / (period + 1)
             result = sum(values[:period]) / period
             for value in values[period:]:
-                result = value * k + result * (1 - k)
+                result = value * factor + result * (1 - factor)
             return result
 
-        e9 = ema(closes, 9)
-        e21 = ema(closes, 21)
-        trend = "BUY" if e9 > e21 else "SELL"
+        ema9 = ema(closes, 9)
+        ema21 = ema(closes, 21)
+        trend = "BUY" if ema9 > ema21 else "SELL"
         bundle = {
             "pair": pair,
-            "ema9": e9,
-            "ema21": e21,
+            "ema9": ema9,
+            "ema21": ema21,
             "trend": trend,
             "weak": False,
             "error": "",
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        (root / "cache" / f"d1_trend_{pair}.json").write_text(json.dumps(bundle), encoding="utf-8")
-        print(f"[D1] {pair}: {trend} EMA9={e9:.5f} EMA21={e21:.5f}")
+        (root / "cache" / f"d1_trend_{pair}.json").write_text(
+            json.dumps(bundle), encoding="utf-8"
+        )
+        print(f"[D1] {pair}: {trend} EMA9={ema9:.5f} EMA21={ema21:.5f}")
     except Exception as exc:
         record(pair, "failure", type(exc).__name__)
         print(f"[D1] {pair} error: {type(exc).__name__}", flush=True)
@@ -227,7 +239,7 @@ PYEOF
 ledger_component started "pairs=${PAIRS};timeframes=${TIMEFRAMES}"
 
 log "------------------------------------------------------------"
-log "[UPDATER] start provider-specific accounting + progress ledger"
+log "[UPDATER] start provider-boundary accounting + progress ledger"
 log "[UPDATER] PAIRS=${PAIRS}"
 log "[UPDATER] TIMEFRAMES=${TIMEFRAMES}"
 log "------------------------------------------------------------"
@@ -251,13 +263,11 @@ for pair in ${PAIRS}; do
     fetch_rc=0
     if fetch_with_retry "${pair}" "${tf}" "${in_path}"; then
       provider="$(provider_from_cache "${in_path}")"
-      provider_record "${provider}" "${pair}" "${tf}" success "cache=${in_path}"
       fetch_success_count=$((fetch_success_count + 1))
       log "[UPDATER] FETCH OK ${pair} ${tf} provider=${provider}"
     else
       fetch_rc=$?
       fetch_fail_count=$((fetch_fail_count + 1))
-      provider_record unknown "${pair}" "${tf}" failure "fetch_rc=${fetch_rc}"
       log "[UPDATER] FETCH FAIL ${pair} ${tf} rc=${fetch_rc}; skip build"
       continue
     fi
