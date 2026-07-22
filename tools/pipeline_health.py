@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 REQUIRED_DECISIONS = ("EURUSD:M15", "GBPUSD:M15")
+TERMINAL_COMPONENT_STATUSES = {"completed", "progress", "skipped_market_closed"}
 
 
 def root_dir() -> Path:
@@ -52,6 +53,40 @@ def age_seconds(event: dict[str, Any], now_ns: int) -> int | None:
     return None if delta < 0 else delta // 1_000_000_000
 
 
+def component_health(
+    name: str,
+    event: dict[str, Any],
+    now_ns: int,
+    maximum: int,
+    start_grace: int,
+) -> dict[str, Any]:
+    """Evaluate a component, allowing only a short explicit in-progress grace."""
+    age = age_seconds(event, now_ns)
+    status = str(event.get("status") or "missing")
+    if status == "started":
+        healthy = age is not None and age <= start_grace
+        maximum_used = start_grace
+        state = "in_progress_grace" if healthy else "stuck_started"
+    else:
+        healthy = (
+            age is not None
+            and age <= maximum
+            and status in TERMINAL_COMPONENT_STATUSES
+        )
+        maximum_used = maximum
+        state = "terminal_progress" if healthy else "missing_stale_or_failed"
+    return {
+        "component": name,
+        "healthy": healthy,
+        "age_seconds": age,
+        "max_age_seconds": maximum_used,
+        "status": status,
+        "evaluation": state,
+        "cycle_id": event.get("cycle_id"),
+        "event_id": event.get("event_id"),
+    }
+
+
 def evaluate(market_open: bool) -> dict[str, Any]:
     """Return useful-progress health without using filesystem wall-clock mtimes."""
     state = load_progress()
@@ -70,49 +105,71 @@ def evaluate(market_open: bool) -> dict[str, Any]:
             "watcher": int(os.environ.get("MAX_WATCHER_PROGRESS_AGE_SECS", "1500")),
             "shadow": int(os.environ.get("MAX_SHADOW_PROGRESS_AGE_SECS", "1500")),
         }
-        components = state.get("components", {}) if isinstance(state.get("components"), dict) else {}
+        start_grace = int(os.environ.get("MAX_COMPONENT_START_GRACE_SECS", "300"))
+        components = (
+            state.get("components", {})
+            if isinstance(state.get("components"), dict)
+            else {}
+        )
         for name, maximum in thresholds.items():
-            event = components.get(name) if isinstance(components.get(name), dict) else {}
-            age = age_seconds(event, now_ns)
-            status = str(event.get("status") or "missing")
-            acceptable = status in {"completed", "progress", "started", "skipped_market_closed"}
-            healthy = age is not None and age <= maximum and acceptable
-            component_results[name] = {
-                "healthy": healthy,
-                "age_seconds": age,
-                "max_age_seconds": maximum,
-                "status": status,
-                "cycle_id": event.get("cycle_id"),
-                "event_id": event.get("event_id"),
-            }
-            if not healthy:
-                failures.append(f"{name}_progress_stale_or_failed:{age}:{status}")
+            event = (
+                components.get(name)
+                if isinstance(components.get(name), dict)
+                else {}
+            )
+            result = component_health(name, event, now_ns, maximum, start_grace)
+            component_results[name] = result
+            if not result["healthy"]:
+                failures.append(
+                    f"{name}_progress_stale_or_failed:"
+                    f"{result['age_seconds']}:{result['status']}:{result['evaluation']}"
+                )
 
-        decisions = state.get("decisions", {}) if isinstance(state.get("decisions"), dict) else {}
+        decisions = (
+            state.get("decisions", {})
+            if isinstance(state.get("decisions"), dict)
+            else {}
+        )
         maximum = int(os.environ.get("MAX_DECISION_AGE_SECS", "1500"))
         for key in REQUIRED_DECISIONS:
-            event = decisions.get(key) if isinstance(decisions.get(key), dict) else {}
+            event = (
+                decisions.get(key)
+                if isinstance(decisions.get(key), dict)
+                else {}
+            )
             age = age_seconds(event, now_ns)
             outcome = str(event.get("outcome") or "missing")
-            healthy = age is not None and age <= maximum and outcome != "missing"
+            status = str(event.get("status") or "missing")
+            healthy = (
+                age is not None
+                and age <= maximum
+                and outcome != "missing"
+                and status == "completed"
+            )
             decision_results[key] = {
                 "healthy": healthy,
                 "age_seconds": age,
                 "max_age_seconds": maximum,
                 "outcome": outcome,
+                "status": status,
                 "event_id": event.get("event_id"),
             }
             if not healthy:
-                failures.append(f"decision_missing_or_stale:{key}:{age}:{outcome}")
+                failures.append(
+                    f"decision_missing_or_stale:{key}:{age}:{status}:{outcome}"
+                )
     else:
         component_results["market"] = {
             "healthy": True,
             "status": "closed",
-            "note": "useful-progress freshness gates are suspended while the configured market gate is closed",
+            "note": (
+                "useful-progress freshness gates are suspended while the "
+                "configured market gate is closed"
+            ),
         }
 
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "healthy": not failures,
         "market_open": market_open,
         "boot_id": current_boot,
