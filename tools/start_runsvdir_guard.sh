@@ -4,7 +4,8 @@ set -euo pipefail
 
 ROOT="${BOTA_ROOT:-${HOME}/BotA}"
 PYTHON="${PREFIX}/bin/python3"
-GUARD="${ROOT}/tools/runsvdir_guard.py"
+GUARD="${ROOT}/tools/runsvdir_guard_runtime.py"
+BASE_GUARD="${ROOT}/tools/runsvdir_guard.py"
 LAUNCH_LOG="${ROOT}/logs/runsvdir_guard.launch.log"
 
 mkdir -p "${ROOT}/logs" "${ROOT}/state"
@@ -14,8 +15,13 @@ mkdir -p "${ROOT}/logs" "${ROOT}/state"
     exit 1
 }
 
+[ -f "${BASE_GUARD}" ] || {
+    echo "RUNSVDIR_GUARD_START=ABORTED_BASE_GUARD_MISSING"
+    exit 1
+}
+
 [ -f "${GUARD}" ] || {
-    echo "RUNSVDIR_GUARD_START=ABORTED_GUARD_MISSING"
+    echo "RUNSVDIR_GUARD_START=ABORTED_RUNTIME_GUARD_MISSING"
     exit 1
 }
 
