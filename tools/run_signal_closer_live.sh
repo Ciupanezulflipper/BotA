@@ -3,7 +3,7 @@
 # BotA signal closer live wrapper.
 #
 # Purpose:
-# - Load only the Supabase env values required by tools/signal_closer.py.
+# - Load only the env values required by tools/signal_closer.py.
 # - Run signal_closer.py in explicit LIVE mode.
 # - Keep signal_closer.py safe defaults unchanged.
 #
@@ -13,6 +13,7 @@
 # - Live DB writes only happen when ACTIVE Supabase signals need closing.
 # - Max batch is capped by SIGNAL_CLOSER_MAX_BATCH, default 5.
 # - --allow-bulk is intentional, protected by --max-batch.
+# - Secret values are never printed or echoed.
 
 set -u
 
@@ -32,6 +33,9 @@ allowed = {
     "SUPABASE_URL",
     "SIGNAL_MAX_AGE_HOURS",
     "SIGNAL_CLOSER_MAX_BATCH",
+    "OANDA_API_TOKEN",
+    "OANDA_API_URL",
+    "SIGNAL_CLOSER_HARD_MAX_AGE_HOURS",
 }
 
 for filename in ("config/strategy.env", ".env", ".env.runtime"):
@@ -74,9 +78,11 @@ fi
 
 MAX_AGE="${SIGNAL_MAX_AGE_HOURS:-24}"
 MAX_BATCH="${SIGNAL_CLOSER_MAX_BATCH:-5}"
+HARD_MAX_AGE="${SIGNAL_CLOSER_HARD_MAX_AGE_HOURS:-168}"
 
 python3 "$ROOT/tools/signal_closer.py" \
   --max-age "$MAX_AGE" \
+  --hard-max-age "$HARD_MAX_AGE" \
   --live \
   --confirm CLOSE_SIGNALS \
   --max-batch "$MAX_BATCH" \

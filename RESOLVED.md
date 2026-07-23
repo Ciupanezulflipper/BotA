@@ -78,6 +78,67 @@
 
 ---
 
+<!-- BOTA_SIGNAL_LIFECYCLE_V31_2026_07_14 -->
+
+## 2026-07-14 — Signal Lifecycle v3.1 — Seven Root-Cause Defects
+
+**Status: RESOLVED IN ISOLATED IMPLEMENTATION**
+**Rollout status: NOT PUSHED / NOT MERGED / NOT DEPLOYED**
+**Real production behavior: NOT YET PROVEN**
+**Subscriber closure notification: NOT IMPLEMENTED**
+
+### Root causes
+
+1. Signal expiry used wall-clock elapsed hours. Weekend gaps and closed-market periods counted incorrectly toward the holding period.
+2. TP/SL evaluation was deferred until the market-time threshold. Signals that reached TP or SL before threshold were not closed; they waited until expiry and were then cancelled as unresolved instead of being closed WIN/LOSS.
+3. Same-M15-candle ambiguity applied a TP-first rule. When both TP and SL were touched in the same M15 candle, the closer reported WIN. The SL may have been the actual first touch, making the result optimistic.
+4. M15 cache coverage logic could reject a valid historical cache. A cache that started before `effective_start` but contained a candle whose range spanned `effective_start` was incorrectly rejected.
+5. `created_at` microseconds were truncated via `int(created.timestamp())` before the S5 boundary calculation, shifting the effective entry boundary to the wrong second.
+6. Exact threshold-minus-five-second S5 data was required. Real OANDA S5 data is sparse; the closer returned `DATA_UNAVAILABLE` when the last available S5 candle was a few seconds earlier than exactly `threshold - 5`.
+7. A partial-entry signal at an exact M15 threshold boundary unconditionally required S5 data (`need_s5=True` when `is_partial_start=True`) and returned `DATA_UNAVAILABLE` even when the whole-candle M15 H/L proved no boundary touch. The full-candle OHLC subsumes any sub-period H/L, making S5 unnecessary in this case. Found by adversarial test F-35.
+
+### Fixes
+
+1. Replaced wall-clock age check with `compute_threshold()` counting completed M15 candles (900s each). Weekend gaps excluded. Normal threshold: 96 candles / 24 market hours.
+2. `resolve_signal_outcome` is now called on every closer run. TP/SL hits before threshold are detected and returned; `prepare_signal_action` only returns `None` (leave ACTIVE) on clean `OPEN`.
+3. Same-S5 ambiguity now resolves as `LOSS` with reason `AMBIGUOUS_S5_STOP_FIRST`. Optimistic TP-first rule removed.
+4. Coverage check fixed: accepts any cache where at least one candle satisfies `int(c["t"]) <= effective_start_epoch < int(c["t"]) + tf_sec`.
+5. `ceil_to_s5_from_datetime(dt)` uses microsecond-accurate integer arithmetic: `total_us = days*86400*1_000_000 + seconds*1_000_000 + microseconds`. No truncation.
+6. S5 lookback extended one M15 period back for partial-start candles. `valid_exit` filter accepts any S5 where `t + 5 <= threshold`. Sparse coverage accepted when structurally valid.
+7. Early TIME_EXIT path added: when `is_threshold_at_m15_boundary=True` and `not m15_touches_any_boundary(...)`, return M15 close directly regardless of `is_partial_start`.
+
+### Regression-test proof
+
+- `tests/test_signal_closer_lifecycle.py`
+- 119 tests, 0 failures, 0 errors
+- PYTHONHASHSEED 0 / 1 / 17 / 99991 — all EXIT=0
+- `python3 -m py_compile tools/signal_closer.py` — PASS
+- `bash -n tools/run_signal_closer_live.sh` — PASS
+- `git diff --check` — PASS
+
+### Commit
+
+`be8c6efc8eab43c3e9b99c995787a825d3c3b8f5` on branch `fix/signal-lifecycle-market-hours-20260713`
+
+Changed files:
+- `tools/signal_closer.py`
+- `tools/run_signal_closer_live.sh`
+- `tests/test_signal_closer_lifecycle.py`
+
+### What is NOT yet resolved
+
+- Branch push to origin: NOT done
+- Draft PR: NOT opened
+- CI: NOT run
+- Read-only dry-run on live BotA: NOT done
+- Production deployment: NOT done
+- Real-signal proof: NOT done
+- Telegram closure notification: NOT implemented
+
+Do not label the rollout as resolved until all remaining gates are completed and recorded.
+
+---
+
 ## 2026-07-10 — Watcher pre-journal dedup observability defect
 
 <!-- BOTA_OBSERVABILITY_V4_2026_07_10 -->
@@ -94,3 +155,71 @@
 - [proven] Installed watcher SHA-256: `b8a3adf46582e3a69d5b22d12a4da070bc8be2ceff76a4aa99e9d6c96544a9ef`.
 - [proven] Strategy and production selection rules changed: NO.
 - [not proven] Whether any valid signal was missed during the historical June outage remains unresolved.
+
+---
+
+<!-- BOTA_SIGNAL_LIFECYCLE_V31_DEEPSOURCE_2026_07_16 -->
+
+## 2026-07-16 — Signal Lifecycle v3.1 DeepSource Python Analysis (PARTIALLY RESOLVED)
+
+**PR:** #7 (`fix/signal-lifecycle-market-hours-20260713`)
+**Current head:** `cfe3e97b089f624c1e17cdf07a7ad2366aced499`
+**DeepSource run:** `e7b68c3a-0b65-412d-8bc8-085b77835fdb`
+**Status: BLOCKER REMAINS — awaiting repository-owner dashboard action**
+
+### What is resolved
+
+- DeepSource Major findings: 0
+- DeepSource: Secrets — PASS
+- DeepSource: Shell — PASS
+- Bandit (Security Scan) — PASS
+- Gitleaks — PASS
+- ShellCheck — PASS
+- SonarCloud — PASS
+- PYL-R0201 (unnecessary `self`) — 9 instances, all resolved
+- PYL-W0404 (reimport within function scope) — 12 instances, all resolved
+- PYL-W0612 (unused loop variable) — 1 instance, resolved
+- PY-W2000 (unused import) — 1 instance, resolved
+- PYL-W0108 (unnecessary lambda) — 1 instance, resolved
+- PTC-W0062 (nested `with` blocks) — 1 instance, resolved
+- Application code documentation: 47/47 PR-introduced callables documented (100%)
+
+### What remains unresolved (requires repository-owner dashboard action)
+
+- DeepSource Python — FAIL
+- Root cause: Documentation Coverage metric at ~24.3% vs 44.9% comparison value
+- The 44.9% value is a DeepSource dynamic baseline, not a configured threshold in `.deepsource.toml`
+- ~504 undocumented pre-existing callables outside PR #7 scope prevent closing the gap
+- Required action: change Documentation Coverage threshold in DeepSource dashboard to 18%
+- Dashboard URL: `https://app.deepsource.com/gh/Ciupanezulflipper/BotA/settings/`
+- Path: Repository Settings → Quality Gates → Python → Documentation Coverage
+
+### Test validation (on head `cfe3e97`)
+
+- Tests run: 183
+- Tests passed: 183
+- Failures: 0
+- Errors: 0
+- `PYTHONHASHSEED` 42, 137, 999, 2026 — all PASS
+- `python3 -m py_compile tools/signal_closer.py tools/signal_resolution.py` — PASS
+- `git diff --check` — PASS
+
+### Documentation coverage audit (AST)
+
+| File | Documented | Total | Coverage |
+|------|-----------|-------|----------|
+| `tools/signal_closer.py` | 26 | 26 | 100% |
+| `tools/signal_resolution.py` | 21 | 21 | 100% |
+| Repository-wide (application, excl. tests/archive) | 174 | 678 | 25.7% |
+
+### Commit chain on PR branch
+
+- `be8c6ef` — initial v3.1 rewrite
+- `ec1fcfb` — refactor: extract signal resolution engine
+- `1091c0a` — fix: remove unused re-exports and declare public signal_resolution API
+- `c408320` — fix: remove unused signal_resolution re-exports from signal_closer
+- `82952bd` — refactor: extract fetch_s5_candles helpers (cyclomatic complexity)
+- `eabdb75` — fix: resolve PYL-R0201/W0404/W0612 and add docstrings for coverage
+- `cfe3e97` — fix: resolve PYL-R0201/W0404/W2000/W0108/PTC-W0062 in test file
+
+Do not mark this issue RESOLVED until the DeepSource Python check passes on the exact PR head.
