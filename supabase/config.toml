@@ -1,6 +1,0 @@
-# BotA Supabase Edge Functions configuration.
-# bot-health-ingest is called by Termux using a limited BotA health secret.
-# It does not require a user JWT because the function validates X-BotA-Health-Secret itself.
-
-[functions.bot-health-ingest]
-verify_jwt = false

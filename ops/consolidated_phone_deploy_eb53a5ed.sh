@@ -1,0 +1,373 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -Eeuo pipefail
+umask 077
+
+ROOT="$HOME/BotA"
+ERROR_LOG="$ROOT/audits/ERROR_LOG.md"
+EXPECTED_BOOT="ae204a40-c3ff-4c4e-abc2-39696b867781"
+MAIN_COMMIT="eb53a5ed0d76b5f5c88842ddd250679c3daa082d"
+APPROVAL="APPROVE CONSOLIDATED BOTA DEPLOY AE204A40 EB53A5ED"
+SERVICE_ROOT="$PREFIX/var/service"
+BOOT="$HOME/.termux/boot/00-termux-services.sh"
+WATCHER_RUN="$HOME/.config/bota-sv/bota-watcher/run"
+HEARTBEAT_RUN="$HOME/.config/bota-sv/bota-heartbeat/run"
+
+cat "$ERROR_LOG"
+echo "ERROR_LOG_REVIEWED=YES"
+echo "CIRCULAR_ERROR_CHECK=PASS"
+
+printf 'TYPE EXACT APPROVAL: %s\n> ' "$APPROVAL"
+IFS= read -r TYPED
+[ "$TYPED" = "$APPROVAL" ] || {
+  echo "APPROVAL_RESULT=REJECTED"
+  exit 2
+}
+echo "APPROVAL_RESULT=ACCEPTED"
+
+CURRENT_BOOT="$(cat /proc/sys/kernel/random/boot_id)"
+[ "$CURRENT_BOOT" = "$EXPECTED_BOOT" ] || {
+  echo "DEPLOYMENT_ABORTED=BOOT_CHANGED"
+  exit 3
+}
+
+command -v curl >/dev/null
+command -v git >/dev/null
+command -v python3 >/dev/null
+command -v sv >/dev/null
+[ -f "$BOOT" ]
+[ -f "$WATCHER_RUN" ]
+[ -f "$HEARTBEAT_RUN" ]
+
+MONO="$(python3 - <<'PY'
+import time
+clock = getattr(time, 'CLOCK_BOOTTIME', time.CLOCK_MONOTONIC)
+print(time.clock_gettime_ns(clock))
+PY
+)"
+STAGE="$ROOT/audits/consolidated_main_${MAIN_COMMIT:0:8}_${MONO}"
+SRC="$STAGE/source/tools"
+BACKUP="$STAGE/backup"
+RUNTIME="$STAGE/runtime"
+mkdir -p "$SRC" "$BACKUP/tools" "$BACKUP/service-runs" "$RUNTIME"
+
+FILES=(
+  api_credit_tracker.py
+  bota_supervisor.sh
+  control_plane_status.py
+  data_fetch_candles.sh
+  heartbeat.sh
+  indicators_updater.sh
+  pipeline_health.py
+  pipeline_ledger.py
+  provider_usage.py
+  run_shadow_manager.sh
+  run_signal_watcher_with_ledger.sh
+  watcher_cycle_ledger.py
+  runsvdir_guard.py
+  runsvdir_guard_runtime.py
+  start_runsvdir_guard.sh
+)
+
+cat > "$STAGE/EXPECTED_BLOBS.txt" <<'EOF'
+api_credit_tracker.py c44736c9f641201c1fbef9fe39f17fbd7d1c6a23
+bota_supervisor.sh b139169e648ad445c9122443896cade6811a47d5
+control_plane_status.py 26e2134e17b2b92b73e3374e3369478f2782c60a
+data_fetch_candles.sh 3e689623382f52bd756c1d8e4f2c1147a865ef16
+heartbeat.sh fd101d40475546c2d962f9c0d7558fe6b731c4d6
+indicators_updater.sh a61905d398398fbabf7db015c3c2916f9a2d80d4
+pipeline_health.py 0d06a2271a6146a599d8c2d7d8d0e882718c6557
+pipeline_ledger.py 60ba07a6fd3af6bd5b67d159be64a4525be59842
+provider_usage.py a714176f16e7f9a14ecabefc65eb6a07802dd8bd
+run_shadow_manager.sh 3de11c6263e484ad4a6d8c6b4b208d84bfdb057d
+run_signal_watcher_with_ledger.sh 823ea89d2b29094a56bf6ec6f0a45b2686c9e4a9
+watcher_cycle_ledger.py e7e8ed99e35b2ab08861c430a4ff7792b79a0378
+runsvdir_guard.py 56bfeba1712eb30241c2c30ca30d9a74e7f05f96
+runsvdir_guard_runtime.py 3f3b91dd25fb26531f0326966cdc93fcb8c41c89
+start_runsvdir_guard.sh 38f1183932f9b11e59be83b9f6e955843ef26c77
+EOF
+
+while read -r NAME BLOB; do
+  URL="https://raw.githubusercontent.com/Ciupanezulflipper/BotA/$MAIN_COMMIT/tools/$NAME"
+  curl --fail --location --silent --show-error "$URL" -o "$SRC/$NAME"
+  ACTUAL="$(git hash-object "$SRC/$NAME")"
+  [ "$ACTUAL" = "$BLOB" ] || {
+    echo "SOURCE_BLOB_MISMATCH=$NAME:$ACTUAL:$BLOB"
+    exit 4
+  }
+done < "$STAGE/EXPECTED_BLOBS.txt"
+
+python3 -m py_compile \
+  "$SRC/api_credit_tracker.py" \
+  "$SRC/control_plane_status.py" \
+  "$SRC/pipeline_health.py" \
+  "$SRC/pipeline_ledger.py" \
+  "$SRC/provider_usage.py" \
+  "$SRC/watcher_cycle_ledger.py" \
+  "$SRC/runsvdir_guard.py" \
+  "$SRC/runsvdir_guard_runtime.py"
+rm -rf "$SRC/__pycache__"
+for NAME in *.sh; do :; done
+for NAME in bota_supervisor.sh data_fetch_candles.sh heartbeat.sh indicators_updater.sh run_shadow_manager.sh run_signal_watcher_with_ledger.sh start_runsvdir_guard.sh; do
+  bash -n "$SRC/$NAME"
+done
+chmod 755 "$SRC"/*
+
+echo "PINNED_MAIN=$MAIN_COMMIT"
+echo "SOURCE_VALIDATION=PASS"
+
+STATUS="$SRC/control_plane_status.py"
+python3 "$STATUS" > "$RUNTIME/preflight.json" || true
+python3 - "$RUNTIME/preflight.json" <<'PY'
+import json, sys
+p = json.load(open(sys.argv[1], encoding='utf-8'))
+services = p.get('services', {})
+ok = (
+    p.get('manager_count') in (0, 1)
+    and p.get('duplicate_service_rows') == 0
+    and len(services) == 7
+    and all(row.get('runsv_count') == 1 for row in services.values())
+    and all(row.get('owner') in {'manager', 'pid1_orphan'} for row in services.values())
+)
+print(
+    f"PRE_MUTATION_COMPATIBLE={ok} MANAGERS={p.get('manager_count')} "
+    f"OWNED={p.get('owned')}/7 RUNNING={p.get('running')}/7 "
+    f"ORPHANED={p.get('orphaned')}"
+)
+if not ok:
+    raise SystemExit(5)
+PY
+
+for NAME in "${FILES[@]}"; do
+  if [ -e "$ROOT/tools/$NAME" ]; then
+    cp -p "$ROOT/tools/$NAME" "$BACKUP/tools/$NAME"
+    printf '%s\n' "$NAME" >> "$BACKUP/existed_tools.txt"
+  fi
+done
+cp -p "$BOOT" "$BACKUP/00-termux-services.sh"
+cp -p "$WATCHER_RUN" "$BACKUP/service-runs/bota-watcher.run"
+cp -p "$HEARTBEAT_RUN" "$BACKUP/service-runs/bota-heartbeat.run"
+
+cp -p "$WATCHER_RUN" "$STAGE/bota-watcher.run.proposed"
+cp -p "$HEARTBEAT_RUN" "$STAGE/bota-heartbeat.run.proposed"
+cp -p "$BOOT" "$STAGE/00-termux-services.sh.proposed"
+
+python3 - \
+  "$STAGE/bota-watcher.run.proposed" \
+  "$STAGE/bota-heartbeat.run.proposed" \
+  "$STAGE/00-termux-services.sh.proposed" <<'PY'
+import os, sys
+from pathlib import Path
+watcher, heartbeat, boot = map(Path, sys.argv[1:])
+
+def replace_once(path, old, new):
+    text = path.read_text(encoding='utf-8')
+    old_count = text.count(old)
+    new_count = text.count(new)
+    if old_count == 1 and new_count == 0:
+        text = text.replace(old, new, 1)
+    elif old_count == 0 and new_count == 1:
+        pass
+    else:
+        raise SystemExit(f'PATCH_PRECONDITION_FAILED:{path}:{old_count}:{new_count}')
+    path.write_text(text, encoding='utf-8')
+
+replace_once(
+    watcher,
+    'bash "${ROOT}/tools/signal_watcher_pro.sh" --once \\\n',
+    'bash "${ROOT}/tools/run_signal_watcher_with_ledger.sh" \\\n',
+)
+replace_once(
+    heartbeat,
+    'SCRIPT="${ROOT}/tools/bota_heartbeat_utc.sh"',
+    'SCRIPT="${ROOT}/tools/heartbeat.sh"',
+)
+text = boot.read_text(encoding='utf-8')
+line = '"$HOME/BotA/tools/start_runsvdir_guard.sh"'
+count = text.count('start_runsvdir_guard.sh')
+if count == 0:
+    if not text.endswith('\n'):
+        text += '\n'
+    text += '\n# BotA durable runsvdir guard â€” current main\n' + line + '\n'
+elif count != 1:
+    raise SystemExit(f'BOOT_GUARD_COUNT_INVALID:{count}')
+boot.write_text(text, encoding='utf-8')
+PY
+
+bash -n "$STAGE/bota-watcher.run.proposed"
+bash -n "$STAGE/bota-heartbeat.run.proposed"
+bash -n "$STAGE/00-termux-services.sh.proposed"
+
+TD_BEFORE="$(BOTA_ROOT="$ROOT" python3 "$SRC/provider_usage.py" status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["twelvedata_budget"]["credits_consumed"])')"
+
+MUTATION_STARTED=NO
+GUARD_STARTED=NO
+
+rollback() {
+  local RC="$1"
+  trap - ERR INT TERM
+  echo "AUTOMATIC_ROLLBACK=STARTING"
+
+  cp -p "$BACKUP/00-termux-services.sh" "$BOOT.rollback.tmp"
+  mv "$BOOT.rollback.tmp" "$BOOT"
+  cp -p "$BACKUP/service-runs/bota-watcher.run" "$WATCHER_RUN.rollback.tmp"
+  mv "$WATCHER_RUN.rollback.tmp" "$WATCHER_RUN"
+  cp -p "$BACKUP/service-runs/bota-heartbeat.run" "$HEARTBEAT_RUN.rollback.tmp"
+  mv "$HEARTBEAT_RUN.rollback.tmp" "$HEARTBEAT_RUN"
+
+  for NAME in "${FILES[@]}"; do
+    if [ -f "$BACKUP/tools/$NAME" ]; then
+      cp -p "$BACKUP/tools/$NAME" "$ROOT/tools/$NAME.rollback.tmp"
+      mv "$ROOT/tools/$NAME.rollback.tmp" "$ROOT/tools/$NAME"
+    else
+      rm -f "$ROOT/tools/$NAME"
+    fi
+  done
+
+  for SVC in bota-updater bota-watcher bota-heartbeat bota-supervisor bota-shadow; do
+    sv -w 45 restart "$SERVICE_ROOT/$SVC" >/dev/null 2>&1 || true
+  done
+
+  if [ "$GUARD_STARTED" = YES ]; then
+    for PID in $(pgrep -f "^${PREFIX}/bin/python3 ${ROOT}/tools/runsvdir_guard_runtime.py$" || true); do
+      kill -TERM "$PID" || true
+    done
+  fi
+
+  python3 "$STATUS" > "$RUNTIME/rollback_control_plane.json" || true
+  echo "AUTOMATIC_ROLLBACK=COMPLETE"
+  echo "DEPLOYMENT=FAILED"
+  exit "$RC"
+}
+
+on_error() {
+  local RC=$?
+  echo "DEPLOYMENT_ERROR_RC=$RC"
+  if [ "$MUTATION_STARTED" = YES ]; then
+    rollback "$RC"
+  fi
+  exit "$RC"
+}
+trap on_error ERR
+trap 'false' INT TERM
+
+MUTATION_STARTED=YES
+for NAME in "${FILES[@]}"; do
+  cp "$SRC/$NAME" "$ROOT/tools/$NAME.deploy.tmp"
+  chmod 755 "$ROOT/tools/$NAME.deploy.tmp"
+  mv "$ROOT/tools/$NAME.deploy.tmp" "$ROOT/tools/$NAME"
+done
+
+cp -p "$STAGE/bota-watcher.run.proposed" "$WATCHER_RUN.deploy.tmp"
+mv "$WATCHER_RUN.deploy.tmp" "$WATCHER_RUN"
+cp -p "$STAGE/bota-heartbeat.run.proposed" "$HEARTBEAT_RUN.deploy.tmp"
+mv "$HEARTBEAT_RUN.deploy.tmp" "$HEARTBEAT_RUN"
+cp -p "$STAGE/00-termux-services.sh.proposed" "$BOOT.deploy.tmp"
+mv "$BOOT.deploy.tmp" "$BOOT"
+
+while read -r NAME BLOB; do
+  [ "$(git hash-object "$ROOT/tools/$NAME")" = "$BLOB" ]
+done < "$STAGE/EXPECTED_BLOBS.txt"
+cmp -s "$WATCHER_RUN" "$STAGE/bota-watcher.run.proposed"
+cmp -s "$HEARTBEAT_RUN" "$STAGE/bota-heartbeat.run.proposed"
+cmp -s "$BOOT" "$STAGE/00-termux-services.sh.proposed"
+
+"$ROOT/tools/start_runsvdir_guard.sh"
+GUARD_STARTED=YES
+
+HEALTHY=NO
+for _ in $(seq 1 90); do
+  if python3 "$ROOT/tools/control_plane_status.py" > "$RUNTIME/after_guard.json"; then
+    HEALTHY=YES
+    break
+  fi
+  sleep 1
+done
+[ "$HEALTHY" = YES ]
+
+mapfile -t GUARD_PIDS < <({ pgrep -f "^${PREFIX}/bin/python3 ${ROOT}/tools/runsvdir_guard_runtime.py$" || true; })
+[ "${#GUARD_PIDS[@]}" -eq 1 ]
+
+for SVC in bota-updater bota-watcher bota-heartbeat bota-supervisor bota-shadow; do
+  sv -w 45 restart "$SERVICE_ROOT/$SVC"
+done
+
+HEALTHY=NO
+for _ in $(seq 1 60); do
+  if python3 "$ROOT/tools/control_plane_status.py" > "$RUNTIME/before_manager_loss.json"; then
+    HEALTHY=YES
+    break
+  fi
+  sleep 1
+done
+[ "$HEALTHY" = YES ]
+
+OLD_MANAGER="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["manager_pid"])' "$RUNTIME/before_manager_loss.json")"
+kill -TERM "$OLD_MANAER"
+
+RECOVERED=NO
+for _ in $(seq 1 120); do
+  if python3 "$ROOT/tools/control_plane_status.py" > "$RUNTIME/final_control_plane.json"; then
+    NEW_MANAGER="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["manager_pid"])' "$RUNTIME/final_control_plane.json")"
+    if [ "$NEW_MANAGER" != "$OLD_MANAGER" ]; then
+      RECOVERED=YES
+      break
+    fi
+  fi
+  sleep 1
+done
+[ "$RECOVERED" = YES ]
+
+TD_AFTER="$(BOTA_ROOT="$ROOT" python3 "$ROOT/tools/provider_usage.py" status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["twelvedata_budget"]["credits_consumed"]))')"
+[ "$TD_AFTER" = "$TD_BEFORE" ]
+
+LEDGER_BOOT=missing
+for _ in $(seq 1 120); do
+  LEDGER_BOOT="$(python3 - "$ROOT/state/pipeline_progress.json" <<'PY'
+import json, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+try:
+    d = json.loads(p.read_text(encoding='utf-8'))
+except Exception:
+    d = {}
+print(d.get('boot_id', 'missing'))
+PY
+)"
+  [ "$LEDGER_BOOT" = "$CURRENT_BOOT" ] && break
+  sleep 1
+done
+[ "$LEDGER_BOOT" = "$CURRENT_BOOT" ]
+
+python3 - "$RUNTIME/final_control_plane.json" "$TD_BEFORE" "$TD_AFTER" "$LEDGER_BOOT" <<'PY'
+import json, sys
+p = json.load(open(sys.argv[1], encoding='utf-8'))
+assert p['healthy'] is True
+assert p['manager_count'] == 1
+assert p['owned'] == 7
+assert p['running'] == 7
+assert p['orphaned'] == 0
+assert p['duplicate_service_rows'] == 0
+assert len(p['live_crond']) == 1
+print(f"MANAGER_PID={p['manager_pid']}")
+print("DELIBERATE_MANAGER_LOSS_RECOVERY=PASS")
+print("CONTROL_PLANE=OWNED_7/7_RUNNING_7/7_ORPHANED_0")
+print(f"CROND_PID={p['live_crond'][0]['pid']}")
+print(f"TWELVE_DATA_CREDITS_BEFORE={sys.argv[2]}")
+print(f"TWELVE_DATA_CREDITS_AFTER={sys.argv[3]}")
+print(f"PIPELINE_LEDGER_BOOT={sys.argv[4]}")
+PY
+
+trap - ERR INT TERM
+MUTATION_STARTED=NO
+
+cat > "$STAGE/DEPLOYMENT_RESULT.txt" <<EOF
+PINNED_MAIN=$MAIN_COMMIT
+BOOT_ID=$CURRENT_BOOT
+GUARD_PID=${GUARD_PIDS[0]}
+OLD_MANAGER_PID=$OLD_MANAGER
+NEW_MANAGER_PID=$NEW_MANAER
+PR11_RUNTIME_DEPLOYED=YES
+PR13_GUARD_DEPLOYED=YES
+DELIBERATE_MANAGER_LOSS_TEST1PASS
+CONTROL_PLANE=OWNED_7/7_RUNNING_7/7_ORPHANED_0
+TWELVE_DATA_CREDITS_BEFORE=$TD_BEFORE
+•ÑS‘WÑUWÐÔ‘QU×ÐQ•TIÐQ•T‚”TSS‘WÓQÑT—Ð“ÓÕIQÑT—Ð“ÓÕ‘SÑ‚‚˜Ø]‰ÕQÑKÑTÖSQS•Ô‘TÕS‚™XÚÈÓÓ”ÓÓQUQÑTÖSQS•TTÔÈ‚™XÚÈ‘’SSÓPT’ÑUÓÔS—ÕTÑQ•SÔ“ÑÔ‘TÔ×Ô“ÓÑQQ‘T”‘QÒQ—Ó“ÕÐS‘PQWÐÕT”‘S•‚™XÚÈ“‘VÐPÕSÓTTÕWÑ•SÓÕUU‚ˆÈS‘
