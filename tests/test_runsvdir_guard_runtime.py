@@ -120,6 +120,7 @@ class RunningStateTests(unittest.TestCase):
                 return_value=healthy_topology(100),
             ),
             mock.patch.object(runtime.base, "topology", side_effect=snapshots),
+            mock.patch.object(runtime.base, "service_running", return_value=True),
         ):
             with self.assertRaisesRegex(
                 runtime.base.GuardError,
