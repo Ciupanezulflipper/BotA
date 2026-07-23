@@ -4,8 +4,10 @@ on:
   pull_request:
     paths:
       - "tools/runsvdir_guard.py"
+      - "tools/runsvdir_guard_runtime.py"
       - "tools/start_runsvdir_guard.sh"
       - "tests/test_runsvdir_guard.py"
+      - "tests/test_runsvdir_guard_runtime.py"
       - ".github/workflows/runsvdir-guard.yml"
   workflow_dispatch:
 
@@ -20,9 +22,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Compile guard
-        run: python -m py_compile tools/runsvdir_guard.py
+      - name: Compile guards
+        run: |
+          python -m py_compile \
+            tools/runsvdir_guard.py \
+            tools/runsvdir_guard_runtime.py
       - name: Check launcher syntax
         run: bash -n tools/start_runsvdir_guard.sh
       - name: Run focused tests
-        run: python -m unittest tests/test_runsvdir_guard.py -v
+        run: |
+          python -m unittest \
+            tests/test_runsvdir_guard.py \
+            tests/test_runsvdir_guard_runtime.py \
+            -v
