@@ -449,6 +449,8 @@ def main() -> int:
     signal.signal(signal.SIGTERM, stop_handler)
     signal.signal(signal.SIGINT, stop_handler)
 
+    exit_code = 0
+    last_state: tuple[str, str | int | None] | None = None
     try:
         request_wake_lock()
         append_event(args.log, "guard_started", pid=os.getpid())
@@ -462,21 +464,29 @@ def main() -> int:
                     args.settle_seconds,
                     args.command_timeout,
                 )
-                append_event(
-                    args.log,
-                    "topology_healthy",
-                    manager_pid=final["manager_pid"],
-                    owned=final["owned"],
-                )
+                state = ("healthy", final["manager_pid"])
+                if state != last_state:
+                    append_event(
+                        args.log,
+                        "topology_healthy",
+                        manager_pid=final["manager_pid"],
+                        owned=final["owned"],
+                    )
+                last_state = state
             except GuardError as exc:
-                append_event(args.log, "recovery_failed", error=str(exc))
+                state = ("failed", str(exc))
+                if state != last_state:
+                    append_event(args.log, "recovery_failed", error=str(exc))
+                last_state = state
+                if args.once:
+                    exit_code = 4
             if args.once:
                 break
             time.sleep(max(args.poll_seconds, 1.0))
     finally:
         append_event(args.log, "guard_stopped", pid=os.getpid())
         lock_handle.close()
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":
