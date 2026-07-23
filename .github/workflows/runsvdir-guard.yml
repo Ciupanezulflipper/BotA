@@ -1,0 +1,28 @@
+name: Durable runsvdir guard
+
+on:
+  pull_request:
+    paths:
+      - "tools/runsvdir_guard.py"
+      - "tools/start_runsvdir_guard.sh"
+      - "tests/test_runsvdir_guard.py"
+      - ".github/workflows/runsvdir-guard.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile guard
+        run: python -m py_compile tools/runsvdir_guard.py
+      - name: Check launcher syntax
+        run: bash -n tools/start_runsvdir_guard.sh
+      - name: Run focused tests
+        run: python -m unittest tests/test_runsvdir_guard.py -v
