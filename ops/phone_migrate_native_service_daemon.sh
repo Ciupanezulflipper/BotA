@@ -55,7 +55,6 @@ STAGE="${AUDIT}/stage"
 BACKUP="${AUDIT}/backup"
 BOOT="${HOME}/.termux/boot/00-termux-services.sh"
 mkdir -p "${STAGE}/tools" "${BACKUP}/tools"
-BACKUP_READY=0
 
 PATHS=(
     tools/native_service_daemon_watchdog.py
@@ -79,7 +78,7 @@ restore_files() {
 
 on_exit() {
     local rc=$?
-    if ((rc)) && ((BACKUP_READY)); then
+    if ((rc)) && [[ -f "${BACKUP}/00-termux-services.sh" ]]; then
         restore_files
         printf 'FILE_ROLLBACK=PASS\n'
     fi
@@ -118,7 +117,6 @@ for path in "${PATHS[@]}"; do
     [[ -f "${ROOT}/tools/${name}" ]] &&
         cp -p "${ROOT}/tools/${name}" "${BACKUP}/tools/${name}"
 done
-BACKUP_READY=1
 
 install -m 0755 "${STAGE}/tools/native_service_daemon_watchdog.py" \
     "${ROOT}/tools/native_service_daemon_watchdog.py"
