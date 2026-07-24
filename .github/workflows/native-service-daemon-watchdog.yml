@@ -5,7 +5,10 @@ on:
     paths:
       - "tools/native_service_daemon_watchdog.py"
       - "tools/start_native_service_daemon_watchdog.sh"
+      - "tools/native_service_daemon_migration.py"
+      - "ops/phone_migrate_native_service_daemon.sh"
       - "tests/test_native_service_daemon_watchdog.py"
+      - "tests/test_native_service_daemon_migration.py"
       - ".github/workflows/native-service-daemon-watchdog.yml"
   workflow_dispatch:
 
@@ -24,13 +27,28 @@ jobs:
         run: |
           python -m py_compile \
             tools/native_service_daemon_watchdog.py \
-            tests/test_native_service_daemon_watchdog.py
-      - name: Check launcher syntax
-        run: bash -n tools/start_native_service_daemon_watchdog.sh
+            tools/native_service_daemon_migration.py \
+            tests/test_native_service_daemon_watchdog.py \
+            tests/test_native_service_daemon_migration.py
+      - name: Check shell syntax
+        run: |
+          bash -n tools/start_native_service_daemon_watchdog.sh
+          bash -n ops/phone_migrate_native_service_daemon.sh
       - name: Run focused tests
-        run: python -m unittest -v tests/test_native_service_daemon_watchdog.py
+        run: |
+          python -m unittest -v \
+            tests/test_native_service_daemon_watchdog.py \
+            tests/test_native_service_daemon_migration.py
       - name: Prevent direct runsvdir launch regression
         run: |
           ! grep -En 'runsvdir[^[:alnum:]_].*-P|Popen\(.*runsvdir|launch_manager' \
             tools/native_service_daemon_watchdog.py \
-            tools/start_native_service_daemon_watchdog.sh
+            tools/native_service_daemon_migration.py \
+            tools/start_native_service_daemon_watchdog.sh \
+            ops/phone_migrate_native_service_daemon.sh
+      - name: Enforce non-interactive phone executor
+        run: |
+          ! grep -En 'read[[:space:]]+-r|(^|[[:space:]])source[[:space:]]|eval|pkill|killall|SIGKILL|kill[[:space:]]+-9' \
+            ops/phone_migrate_native_service_daemon.sh
+          grep -Fq -- '--apply' ops/phone_migrate_native_service_daemon.sh
+          grep -Fq 'SOURCE_COMMIT' ops/phone_migrate_native_service_daemon.sh
