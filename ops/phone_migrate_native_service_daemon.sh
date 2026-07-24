@@ -32,8 +32,14 @@ printf '%s\n' \
     printf 'MIGRATION_ABORTED=APPLY_FLAG_REQUIRED\n'
     exit 3
 }
-[[ ${SOURCE_COMMIT} =~ ^[0-9a-f]{40}$ ]] || {
-    printf 'MIGRATION_ABORTED=INVALID_SOURCE_COMMIT\n'
+case "${SOURCE_COMMIT}" in
+    ""|*[!0-9a-f]*)
+        printf 'MIGRATION_ABORTED=INVALID_SOURCE_COMMIT\n'
+        exit 4
+        ;;
+esac
+[[ ${#SOURCE_COMMIT} -eq 40 ]] || {
+    printf 'MIGRATION_ABORTED=INVALID_SOURCE_COMMIT_LENGTH\n'
     exit 4
 }
 
@@ -71,7 +77,14 @@ restore_files() {
         cp -p "${BACKUP}/00-termux-services.sh" "${BOOT}"
 }
 
-trap 'rc=$?; if ((rc)) && ((BACKUP_READY)); then restore_files; printf "FILE_ROLLBACK=PASS\n"; fi' EXIT
+on_exit() {
+    local rc=$?
+    if ((rc)) && ((BACKUP_READY)); then
+        restore_files
+        printf 'FILE_ROLLBACK=PASS\n'
+    fi
+}
+trap on_exit EXIT
 
 for path in "${PATHS[@]}"; do
     git cat-file -e "${SOURCE_COMMIT}:${path}" || {
@@ -81,7 +94,7 @@ for path in "${PATHS[@]}"; do
     git show "${SOURCE_COMMIT}:${path}" > "${STAGE}/${path}"
     EXPECTED_BLOB="$(git rev-parse "${SOURCE_COMMIT}:${path}")"
     ACTUAL_BLOB="$(git hash-object "${STAGE}/${path}")"
-    [[ "${ACTUAL_BLOB}" == "${EXPECTED_BLOB}" ]] || {
+    [[ "${ACTUAL_BLOB}" = "${EXPECTED_BLOB}" ]] || {
         printf 'MIGRATION_ABORTED=BLOB_MISMATCH:%s\n' "${path}"
         exit 7
     }
@@ -93,7 +106,7 @@ done
 }
 OLD_COUNT="$(grep -Foc 'start_runsvdir_guard.sh' "${BOOT}" || true)"
 NEW_COUNT="$(grep -Foc 'start_native_service_daemon_watchdog.sh' "${BOOT}" || true)"
-[[ "${OLD_COUNT}" == 1 && "${NEW_COUNT}" == 0 ]] || {
+[[ "${OLD_COUNT}" = 1 && "${NEW_COUNT}" = 0 ]] || {
     printf 'MIGRATION_ABORTED=BOOT_LAUNCHER_COUNTS:OLD=%s:NEW=%s\n' \
         "${OLD_COUNT}" "${NEW_COUNT}"
     exit 9
@@ -117,7 +130,7 @@ install -m 0755 "${STAGE}/tools/native_service_daemon_migration.py" \
 BOOT_NEW="${AUDIT}/00-termux-services.sh.new"
 sed 's/start_runsvdir_guard\.sh/start_native_service_daemon_watchdog.sh/' \
     "${BOOT}" > "${BOOT_NEW}"
-[[ "$(grep -Foc 'start_native_service_daemon_watchdog.sh' "${BOOT_NEW}" || true)" == 1 ]] ||
+[[ "$(grep -Foc 'start_native_service_daemon_watchdog.sh' "${BOOT_NEW}" || true)" = 1 ]] ||
     {
         printf 'MIGRATION_ABORTED=BOOT_REWRITE_FAILED\n'
         exit 10
