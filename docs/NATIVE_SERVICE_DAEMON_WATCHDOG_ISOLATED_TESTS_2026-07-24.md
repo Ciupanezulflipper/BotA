@@ -8,7 +8,7 @@ Validation completed before publishing the branch:
 - `bash -n` passed for the detached launcher.
 - Nine focused unit tests passed.
 - A regression scan found no direct `runsvdir -P`, `Popen(...runsvdir)`, or `launch_manager` path in the new implementation.
-- Local Git blob hashes matched the files uploaded to GitHub exactly.
+- GitHub Actions validates the exact published branch head independently.
 
 Covered cases:
 
