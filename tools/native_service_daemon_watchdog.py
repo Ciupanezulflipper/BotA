@@ -146,7 +146,10 @@ def start_native(root, daemon, pidfile, settle, timeout, table_fn, run_fn, wait_
         detail = (result.stdout or result.stderr).strip()
         raise WatchdogError(
             f"native_service_daemon_start_failed:rc={result.returncode}:{detail}")
-    ready = lambda: _native_ready(root, pidfile, table_fn)
+
+    def ready():
+        return _native_ready(root, pidfile, table_fn)
+
     if not wait_fn(ready, settle):
         raise WatchdogError("native_service_daemon_start_timeout")
     return require_native(root, pidfile, table_fn), stale
@@ -170,49 +173,79 @@ def handoff(service, manager, root, sv, timeout, table_fn, sv_fn,
             detail = (result.stdout or result.stderr).strip()
             raise WatchdogError(
                 f"sv_{command}_failed:{service}:rc={result.returncode}:{detail}")
-    acquired = lambda: len(runsv_rows(table_fn(), service)) == 1 and \
-        runsv_rows(table_fn(), service)[0][1]["ppid"] == manager
+
+    def acquired():
+        rows = runsv_rows(table_fn(), service)
+        return len(rows) == 1 and rows[0][1]["ppid"] == manager
+
     if not wait_fn(acquired, timeout):
         raise WatchdogError(f"manager_acquire_timeout:{service}")
-    if not wait_fn(lambda: running_fn(sv, root, service), timeout):
+
+    def service_ready():
+        return running_fn(sv, root, service)
+
+    if not wait_fn(service_ready, timeout):
         raise WatchdogError(f"service_restart_timeout:{service}")
+
+
+def manager_owned(service, manager, root, pidfile, table_fn):
+    try:
+        if require_native(root, pidfile, table_fn) != manager:
+            return False
+    except WatchdogError:
+        return False
+    row = topology(table_fn(), root)["services"][service]
+    return row["runsv_count"] == 1 and row["owner"] == "manager"
+
+
+def reconcile_service(service, manager, root, pidfile, sv, timeout, table_fn,
+                      sv_fn, running_fn, wait_fn):
+    if require_native(root, pidfile, table_fn) != manager:
+        raise WatchdogError("manager_changed")
+    row = topology(table_fn(), root)["services"][service]
+    if row["runsv_count"] > 1:
+        raise WatchdogError(f"duplicate_runsv:{service}")
+
+    handed = False
+    if row["owner"] == "pid1_orphan":
+        handoff(service, manager, root, sv, timeout, table_fn, sv_fn,
+                running_fn, wait_fn)
+        handed = True
+    elif row["owner"] != "manager":
+        def ownership_ready():
+            return manager_owned(service, manager, root, pidfile, table_fn)
+
+        if not wait_fn(ownership_ready, timeout):
+            raise WatchdogError(
+                f"service_not_manager_owned:{service}:{row['owner']}")
+
+    if running_fn(sv, root, service):
+        return handed, False
+    result = sv_fn(sv, root, service, "up", timeout)
+    if result.returncode:
+        detail = (result.stdout or result.stderr).strip()
+        raise WatchdogError(
+            f"sv_up_failed:{service}:rc={result.returncode}:{detail}")
+
+    def service_ready():
+        return running_fn(sv, root, service)
+
+    if not wait_fn(service_ready, timeout):
+        raise WatchdogError(f"service_up_timeout:{service}")
+    return handed, True
 
 
 def reconcile_services(manager, root, pidfile, sv, timeout, table_fn, sv_fn,
                        running_fn, wait_fn):
     restarted, handed = [], []
     for service in SERVICES:
-        if require_native(root, pidfile, table_fn) != manager:
-            raise WatchdogError("manager_changed")
-        row = topology(table_fn(), root)["services"][service]
-        if row["runsv_count"] > 1:
-            raise WatchdogError(f"duplicate_runsv:{service}")
-        if row["owner"] == "pid1_orphan":
-            handoff(service, manager, root, sv, timeout, table_fn, sv_fn,
-                    running_fn, wait_fn)
+        was_handed, was_restarted = reconcile_service(
+            service, manager, root, pidfile, sv, timeout, table_fn, sv_fn,
+            running_fn, wait_fn)
+        if was_handed:
             handed.append(service)
-        elif row["owner"] != "manager":
-            def owned():
-                try:
-                    if require_native(root, pidfile, table_fn) != manager:
-                        return False
-                except WatchdogError:
-                    return False
-                fresh = topology(table_fn(), root)["services"][service]
-                return fresh["runsv_count"] == 1 and fresh["owner"] == "manager"
-            if not wait_fn(owned, timeout):
-                raise WatchdogError(
-                    f"service_not_manager_owned:{service}:{row['owner']}")
-        if running_fn(sv, root, service):
-            continue
-        result = sv_fn(sv, root, service, "up", timeout)
-        if result.returncode:
-            detail = (result.stdout or result.stderr).strip()
-            raise WatchdogError(
-                f"sv_up_failed:{service}:rc={result.returncode}:{detail}")
-        if not wait_fn(lambda s=service: running_fn(sv, root, s), timeout):
-            raise WatchdogError(f"service_up_timeout:{service}")
-        restarted.append(service)
+        if was_restarted:
+            restarted.append(service)
 
     final = topology(table_fn(), root)
     down = [s for s in SERVICES if not running_fn(sv, root, s)]
@@ -308,9 +341,11 @@ def main():
         return 0 if str(exc) == "watchdog_already_running" else 3
 
     stop = False
+
     def stop_handler(_sig, _frame):
         nonlocal stop
         stop = True
+
     signal.signal(signal.SIGTERM, stop_handler)
     signal.signal(signal.SIGINT, stop_handler)
 
