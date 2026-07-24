@@ -1,0 +1,36 @@
+name: Native service-daemon watchdog
+
+on:
+  pull_request:
+    paths:
+      - "tools/native_service_daemon_watchdog.py"
+      - "tools/start_native_service_daemon_watchdog.sh"
+      - "tests/test_native_service_daemon_watchdog.py"
+      - ".github/workflows/native-service-daemon-watchdog.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  focused-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile Python
+        run: |
+          python -m py_compile \
+            tools/native_service_daemon_watchdog.py \
+            tests/test_native_service_daemon_watchdog.py
+      - name: Check launcher syntax
+        run: bash -n tools/start_native_service_daemon_watchdog.sh
+      - name: Run focused tests
+        run: python -m unittest -v tests/test_native_service_daemon_watchdog.py
+      - name: Prevent direct runsvdir launch regression
+        run: |
+          ! grep -En 'runsvdir[^[:alnum:]_].*-P|Popen\(.*runsvdir|launch_manager' \
+            tools/native_service_daemon_watchdog.py \
+            tools/start_native_service_daemon_watchdog.sh
