@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Migrate BotA from a detached runsvdir manager to native Termux service-daemon."""
+"""Migrate BotA to native Termux service-daemon from supported runtime states."""
 from __future__ import annotations
 
 import argparse
@@ -23,57 +23,85 @@ class MigrationError(RuntimeError):
     """Raised when the native-manager migration cannot complete safely."""
 
 
-def detached_preflight(
+def migration_preflight(
     table: dict[int, dict[str, Any]],
     service_root: Path,
     pidfile_value: int | None,
     watchdog_count: int,
     legacy_guard_count: int,
-) -> int:
-    """Return the sole detached manager PID or fail closed."""
+) -> int | None:
+    """Return detached manager PID, or None for an exact seven-orphan state."""
     state = watchdog.topology(table, service_root)
-    if state["manager_count"] != 1:
-        raise MigrationError(f"preflight_manager_count:{state['manager_count']}")
-    if state["owned"] != len(watchdog.SERVICES):
-        raise MigrationError(f"preflight_owned:{state['owned']}/7")
-    if state["orphaned"] or state["invalid"] or state["duplicates"]:
-        raise MigrationError(
-            "preflight_topology:"
-            f"orphaned={state['orphaned']};invalid={state['invalid']};"
-            f"duplicates={state['duplicates']}"
-        )
     if pidfile_value is not None:
         raise MigrationError(f"preflight_native_pidfile_present:{pidfile_value}")
     if watchdog_count:
         raise MigrationError(f"preflight_new_watchdog_count:{watchdog_count}")
     if legacy_guard_count:
         raise MigrationError(f"preflight_legacy_guard_count:{legacy_guard_count}")
+    if state["duplicates"] or state["invalid"]:
+        raise MigrationError(
+            "preflight_topology:"
+            f"orphaned={state['orphaned']};invalid={state['invalid']};"
+            f"duplicates={state['duplicates']}"
+        )
 
-    manager = int(state["manager_pid"])
-    argv = table[manager].get("argv") or []
-    if "-P" not in argv:
-        raise MigrationError(f"preflight_manager_not_detached_p:{manager}")
-    return manager
+    if state["manager_count"] == 1:
+        if state["owned"] != len(watchdog.SERVICES) or state["orphaned"]:
+            raise MigrationError(
+                f"preflight_detached_topology:owned={state['owned']}/7;"
+                f"orphaned={state['orphaned']}"
+            )
+        manager = int(state["manager_pid"])
+        argv = table[manager].get("argv") or []
+        if "-P" not in argv:
+            raise MigrationError(f"preflight_manager_not_detached_p:{manager}")
+        return manager
+
+    if state["manager_count"] == 0:
+        rows = state["services"]
+        exact_orphans = (
+            state["owned"] == 0
+            and state["orphaned"] == len(watchdog.SERVICES)
+            and all(
+                rows[service]["runsv_count"] == 1
+                and rows[service]["owner"] == "pid1_orphan"
+                for service in watchdog.SERVICES
+            )
+        )
+        if not exact_orphans:
+            raise MigrationError(
+                f"preflight_zero_manager_topology:owned={state['owned']}/7;"
+                f"orphaned={state['orphaned']};invalid={state['invalid']};"
+                f"duplicates={state['duplicates']}"
+            )
+        return None
+
+    raise MigrationError(f"preflight_manager_count:{state['manager_count']}")
+
+
+# Compatibility for callers and older focused tests.
+detached_preflight = migration_preflight
 
 
 def execute_cutover(
     *,
-    preflight_fn: Callable[[], int],
+    preflight_fn: Callable[[], int | None],
     terminate_fn: Callable[[int], None],
     manager_alive_fn: Callable[[int], bool],
     start_native_fn: Callable[[], None],
     reconcile_native_fn: Callable[[], dict[str, Any]],
     verify_native_fn: Callable[[bool], dict[str, Any]],
     start_watchdog_fn: Callable[[], None],
-    rollback_fn: Callable[[], dict[str, Any]],
+    rollback_fn: Callable[[int | None], dict[str, Any]],
     wait_fn: Callable[[Callable[[], bool], float], bool],
     term_timeout: float,
 ) -> dict[str, Any]:
-    """Execute one cutover, rolling back only after the old manager exits."""
+    """Execute one cutover from a detached manager or exact orphan-only state."""
     old_manager = preflight_fn()
-    terminate_fn(old_manager)
-    if not wait_fn(lambda: not manager_alive_fn(old_manager), term_timeout):
-        raise MigrationError(f"detached_manager_term_timeout:{old_manager}")
+    if old_manager is not None:
+        terminate_fn(old_manager)
+        if not wait_fn(lambda: not manager_alive_fn(old_manager), term_timeout):
+            raise MigrationError(f"detached_manager_term_timeout:{old_manager}")
 
     try:
         start_native_fn()
@@ -83,7 +111,7 @@ def execute_cutover(
         final = verify_native_fn(True)
     except Exception as exc:
         try:
-            rollback = rollback_fn()
+            rollback = rollback_fn(old_manager)
         except Exception as rollback_exc:
             raise MigrationError(
                 f"cutover_failed:{exc};rollback_failed:{rollback_exc}"
@@ -93,6 +121,7 @@ def execute_cutover(
         ) from exc
 
     return {
+        "source_state": "detached_manager" if old_manager is not None else "orphan_only",
         "old_manager_pid": old_manager,
         "new_manager_pid": final["manager_pid"],
         "reconcile": reconcile,
@@ -265,8 +294,8 @@ def main() -> int:
         if not executable.is_file() or not os.access(executable, os.X_OK):
             raise MigrationError(f"required_executable_missing:{executable}")
 
-    def preflight() -> int:
-        return detached_preflight(
+    def preflight() -> int | None:
+        return migration_preflight(
             watchdog.process_table(),
             service_root,
             read_pidfile(pidfile),
@@ -308,28 +337,48 @@ def main() -> int:
         if not wait_for(lambda: len(process_matches(new_watchdog)) == 1, 15):
             raise MigrationError("new_watchdog_start_timeout")
 
-    def rollback() -> dict[str, Any]:
+    def rollback(old_manager: int | None) -> dict[str, Any]:
         stop_exact_watchdogs(new_watchdog)
         if pidfile.exists():
             run_checked([str(service_daemon), "stop"], 20)
-        run_checked([str(old_launcher)], 20)
 
-        def old_topology_healthy() -> bool:
-            state = watchdog.topology(watchdog.process_table(), service_root)
-            return (
-                state["manager_count"] == 1
-                and state["owned"] == len(watchdog.SERVICES)
-                and state["orphaned"] == 0
-                and state["invalid"] == 0
-                and state["duplicates"] == 0
-                and all(
-                    watchdog.running(sv_binary, service_root, service)
-                    for service in watchdog.SERVICES
+        if old_manager is not None:
+            run_checked([str(old_launcher)], 20)
+
+            def rollback_healthy() -> bool:
+                state = watchdog.topology(watchdog.process_table(), service_root)
+                return (
+                    state["manager_count"] == 1
+                    and state["owned"] == len(watchdog.SERVICES)
+                    and state["orphaned"] == 0
+                    and state["invalid"] == 0
+                    and state["duplicates"] == 0
+                    and all(
+                        watchdog.running(sv_binary, service_root, service)
+                        for service in watchdog.SERVICES
+                    )
                 )
-            )
+        else:
 
-        if not wait_for(old_topology_healthy, 60):
-            raise MigrationError("old_guard_rollback_timeout")
+            def rollback_healthy() -> bool:
+                state = watchdog.topology(watchdog.process_table(), service_root)
+                return (
+                    state["manager_count"] == 0
+                    and state["owned"] == 0
+                    and state["orphaned"] == len(watchdog.SERVICES)
+                    and state["invalid"] == 0
+                    and state["duplicates"] == 0
+                    and all(
+                        state["services"][service]["runsv_count"] == 1
+                        and state["services"][service]["owner"] == "pid1_orphan"
+                        and watchdog.running(sv_binary, service_root, service)
+                        for service in watchdog.SERVICES
+                    )
+                )
+
+        if not wait_for(rollback_healthy, 60):
+            mode = "detached" if old_manager is not None else "orphan_only"
+            raise MigrationError(f"rollback_timeout:{mode}")
         return watchdog.topology(watchdog.process_table(), service_root)
 
     result = execute_cutover(
@@ -346,6 +395,7 @@ def main() -> int:
     )
     output = audit / "native_manager_migration_result.json"
     output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    print(f"MIGRATION_SOURCE_STATE={result['source_state']}")
     print(
         "FINAL_TOPOLOGY="
         f"MANAGERS={result['final']['manager_count']} "
