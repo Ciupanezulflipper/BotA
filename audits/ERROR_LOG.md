@@ -261,6 +261,74 @@ remain, because duplicate supervisors may be created. Verify the existing,
 previously validated V5 reconciliation and rollback artifacts, then stage a
 fresh approval-gated reconciliation without executing it in the same package.
 
+## E031 — supervise/pid was misidentified as the runsv supervisor PID
+Repeated ownership audits initially treated each service's `supervise/pid` value
+as the `runsv` supervisor PID. In runit, that file identifies the supervised
+service process. The actual `runsv` supervisor is the service process parent.
+
+Effect: earlier ownership conclusions were incomplete and repeated audits did not
+resolve the native-manager versus orphan topology.
+
+Prevention: resolve each service chain as `supervise/pid` service PID -> service
+PPID -> `runsv` supervisor. Validate supervisor command, state, PPID, and cwd
+together. Never classify ownership from `supervise/pid` alone.
+
+## E032 — Native manager existed while all seven supervisors remained PID-1 orphans
+The corrected parent-chain audit conclusively found:
+
+- native `service-daemon` manager PID `18537`;
+- native pidfile matched PID `18537`;
+- `OWNED=0/7`;
+- `ORPHANED=7/7`;
+- `INVALID=0`;
+- `MISSING=0`;
+- native watchdog count `0`.
+
+All seven services were alive, but none of their `runsv` supervisors was owned by
+the native manager. No runtime mutation was performed.
+
+Prevention: treat manager existence and service ownership as separate gates. A
+valid pidfile and live manager do not prove that any existing supervisors are
+children of that manager.
+
+## E033 — Migration rejected a real but unsupported source topology
+The first native migration stopped safely with:
+
+`preflight_native_pidfile_present:18537`
+
+The implementation accepted only a detached manager owning all seven services or
+zero managers with exactly seven PID-1 orphans. It did not support the verified
+third state: one valid native manager plus exactly seven PID-1 orphan supervisors.
+
+Effect: deployment failed closed before process mutation. File rollback was
+available; no services were stopped, no supervisors were signalled, and no
+watchdog was started.
+
+Prevention: migration preflight must explicitly classify all supported source
+states and reject everything else. The existing native manager must not be
+restarted or duplicated when reconciling this third state.
+
+## E034 — PR #17 added native-manager-plus-seven-orphans reconciliation
+PR #17 implemented source state `native_manager_orphans` and merged as:
+
+`507df7e8319bded4f34d9d80f9aa9d3ec7e501fe`
+
+The corrected migration now:
+
+- requires one manager matching the native pidfile;
+- requires exactly seven unique PID-1 orphan supervisors;
+- skips `service-daemon start`;
+- does not stop or restart the existing manager;
+- reconciles the seven supervisors before watchdog startup;
+- preserves fail-closed verification and rollback behavior.
+
+Security Scan and Native service-daemon watchdog CI passed. The phone was not
+mutated during implementation or merge.
+
+Prevention: deploy only the exact merged commit through one bounded child-script
+package. Revalidate immediately before mutation and accept only: one manager,
+7/7 owned and running, zero orphans, zero invalid/duplicates, and one watchdog.
+
 ## Efficient package protocol
 
 1. Functional snapshot only: boot, one manager, seven runsv PID/PPID pairs,
