@@ -76,16 +76,18 @@ def migration_preflight(
 def execute_cutover(**kwargs: Any) -> dict[str, Any]:
     """Reuse the original cutover while skipping native start for partial orphans."""
     preflight_fn = kwargs["preflight_fn"]
+    actual_source: list[str] = []
 
     def compatible_preflight() -> tuple[str, int | None]:
         source_state, manager = preflight_fn()
+        actual_source.append(source_state)
         if source_state == "native_manager_partial_orphans":
             return "native_manager_orphans", manager
         return source_state, manager
 
     kwargs["preflight_fn"] = compatible_preflight
     result = _ORIGINAL_EXECUTE_CUTOVER(**kwargs)
-    if result["source_state"] == "native_manager_orphans":
+    if actual_source == ["native_manager_partial_orphans"]:
         result["source_state"] = "native_manager_partial_orphans"
     return result
 
