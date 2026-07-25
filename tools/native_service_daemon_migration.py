@@ -276,7 +276,7 @@ def main() -> int:
     root = args.root.resolve()
     prefix = args.prefix.resolve()
     service_root = prefix / "var/service"
-    service_daemon = prefix / "etc/init.d/service-daemon"
+    service_daemon = prefix / "bin/service-daemon"
     pidfile = prefix / "var/run/service-daemon.pid"
     sv_binary = prefix / "bin/sv"
     new_watchdog = root / "tools/native_service_daemon_watchdog.py"
