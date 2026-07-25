@@ -38,6 +38,8 @@ def migration_preflight(
         raise MigrationError(f"preflight_new_watchdog_count:{watchdog_count}")
     if legacy_guard_count:
         raise MigrationError(f"preflight_legacy_guard_count:{legacy_guard_count}")
+    if state["manager_count"] > 1:
+        raise MigrationError(f"preflight_manager_count:{state['manager_count']}")
     if state["duplicates"] or state["invalid"]:
         raise MigrationError(
             "preflight_topology:"
