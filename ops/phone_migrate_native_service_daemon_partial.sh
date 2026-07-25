@@ -143,11 +143,54 @@ while True:
 PY
 }
 
+restore_from_backup() {
+    local backup_dir="$1"
+    local path name
+    [[ -f "${backup_dir}/00-termux-services.sh" ]] || return 1
+    for path in "${PATHS[@]}"; do
+        name="${path##*/}"
+        if [[ -f "${backup_dir}/tools/${name}" ]]; then
+            cp -p "${backup_dir}/tools/${name}" "${ROOT}/tools/${name}"
+        else
+            rm -f "${ROOT}/tools/${name}"
+        fi
+    done
+    cp -p "${backup_dir}/00-termux-services.sh" "${BOOT}"
+}
+
+journal_audit_dir() {
+    python3 - "${JOURNAL}" "${ROOT}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+journal = Path(sys.argv[1])
+root = Path(sys.argv[2]).resolve()
+try:
+    data = json.loads(journal.read_text())
+    audit = Path(data["audit"]).resolve()
+except Exception:
+    raise SystemExit(1)
+allowed = root / "audits"
+if allowed not in audit.parents or not audit.name.startswith("native_manager_partial_migration_"):
+    raise SystemExit(1)
+print(audit)
+PY
+}
+
 if [[ -f "${JOURNAL}" ]]; then
     printf 'INCOMPLETE_MIGRATION_JOURNAL=%s\n' "${JOURNAL}"
     if runtime_recovery_gate; then
-        archive_journal recovered_safe
-        printf 'INCOMPLETE_MIGRATION_RECOVERY=SAFE_TO_RESUME\n'
+        PREVIOUS_AUDIT="$(journal_audit_dir)" || {
+            printf 'MIGRATION_ABORTED=INCOMPLETE_JOURNAL_INVALID\n'
+            exit 11
+        }
+        restore_from_backup "${PREVIOUS_AUDIT}/backup" || {
+            printf 'MIGRATION_ABORTED=INCOMPLETE_BACKUP_MISSING:%s\n' "${PREVIOUS_AUDIT}/backup"
+            exit 11
+        }
+        archive_journal recovered_files_restored
+        printf 'INCOMPLETE_MIGRATION_RECOVERY=FILES_RESTORED_SAFE_TO_RETRY\n'
     else
         printf 'MIGRATION_ABORTED=INCOMPLETE_MIGRATION_RECOVERY_REQUIRED\n'
         exit 11
@@ -155,17 +198,7 @@ if [[ -f "${JOURNAL}" ]]; then
 fi
 
 restore_files() {
-    local path name
-    for path in "${PATHS[@]}"; do
-        name="${path##*/}"
-        if [[ -f "${BACKUP}/tools/${name}" ]]; then
-            cp -p "${BACKUP}/tools/${name}" "${ROOT}/tools/${name}"
-        else
-            rm -f "${ROOT}/tools/${name}"
-        fi
-    done
-    [[ -f "${BACKUP}/00-termux-services.sh" ]] &&
-        cp -p "${BACKUP}/00-termux-services.sh" "${BOOT}"
+    restore_from_backup "${BACKUP}"
 }
 
 on_exit() {
