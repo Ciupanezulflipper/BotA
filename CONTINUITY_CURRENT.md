@@ -2,36 +2,26 @@
 
 Last updated: 2026-07-25
 
-This is the compact current handoff. Historical detail remains in `CONTINUITY.md`, `ERRORS.md`, `audits/ERROR_LOG.md`, the runtime incident records, draft PR #10, and issue #9.
+This is the compact current handoff. Historical detail remains in `CONTINUITY.md`, `ERRORS.md`, `audits/ERROR_LOG.md`, the Phase 4/5 incident records, and issue #9.
 
 ## Operating rules
 
 - Reliability and observability only. Strategy, thresholds, pairs, scoring, SL/TP, filters, PR #7, DeepSource, and Supabase signal semantics remain frozen.
 - No direct push to `main`.
-- Every Termux package must display `audits/ERROR_LOG.md`, print `ERROR_LOG_REVIEWED=YES` and `CIRCULAR_ERROR_CHECK=PASS`, preserve the parent Termux session, avoid interactive `set -e`, use active paths only, and end with exactly one next action.
+- Every Termux package displays `audits/ERROR_LOG.md`, prints `ERROR_LOG_REVIEWED=YES` and `CIRCULAR_ERROR_CHECK=PASS`, uses active paths only, and ends with exactly one next action.
 - Read-only packages answer one narrow question.
-- Runtime mutation requires fresh topology proof, backup, rollback, explicit approval, bounded execution, and independent verification.
+- Mutating recovery requires staging, fresh explicit approval, execution, rollback availability, and independent verification.
 - Never depend on `/proc/uptime` on this Android build.
 - Trusted server/provider UTC controls market semantics; monotonic time controls same-boot cadence and health; Android/ship wall time is display-only.
 
-## Current project phase
+## Current verified runtime topology
 
-1. Single execution source and cron hygiene — COMPLETE.
-2. Runtime survival controls — COMPLETE.
-3. Ship-time safety proof — COMPLETE.
-4. Native service-manager migration implementation — COMPLETE IN GITHUB.
-5. Phone reconciliation and final runtime acceptance — PENDING.
-
-Completed: **4/5**. Remaining: **1/5**.
-
-## Proven phone topology before final deployment
-
-The latest bounded parent-chain audit proved:
+The corrected parent-chain audit proved the following exact state:
 
 ```text
 NATIVE_MANAGER_COUNT=1
 NATIVE_MANAGER_PID=18537
-NATIVE_PIDFILE_VALUE=18537
+NATIVE_PIDFILE_MATCH=YES
 OWNED=0/7
 ORPHANED=7/7
 INVALID=0
@@ -40,20 +30,11 @@ NATIVE_WATCHDOG_COUNT=0
 RUNTIME_MUTATION_PERFORMED=NO
 ```
 
-All seven required `runsv` supervisors are alive, in state `S`, supervise the correct service directories, and have PPID 1. The seven services remain running, but none is currently owned by the native manager.
-
-## Diagnostic corrections
-
-Two earlier assumptions were corrected:
-
-1. `supervise/pid` contains the service process PID, not the `runsv` supervisor PID.
-2. The phone already has a valid native `service-daemon` manager; migration must not require starting a second manager.
-
-The correct supervisor identity is obtained from the parent of the service process, then verified using PPID, process state, command name, and service-directory cwd.
+Each service's `supervise/pid` identifies the supervised service process, not the `runsv` supervisor. The actual supervisor was resolved through the service process PPID, then validated by command, state, PPID, and cwd. All seven required `runsv` supervisors are alive under PID 1.
 
 ## Failed migration and root cause
 
-The first native migration attempt stopped safely before runtime mutation with:
+The first native migration stopped safely with:
 
 ```text
 preflight_native_pidfile_present:18537
@@ -61,61 +42,54 @@ preflight_native_pidfile_present:18537
 
 The implementation supported only:
 
-- one detached legacy manager owning 7/7; or
-- zero managers with exactly seven PID-1 orphans.
+1. one detached manager owning all seven services; or
+2. zero managers with exactly seven PID-1 orphan supervisors.
 
-It did not support the observed source state:
-
-```text
-one valid native manager + seven PID-1 orphan supervisors + zero watchdogs
-```
-
-File rollback passed and the phone runtime remained unchanged.
+It did not support the verified third state: one valid native manager plus seven PID-1 orphan supervisors. The failure occurred before runtime mutation. No services were stopped, no supervisors were signalled, no watchdog was started, and file rollback remained available.
 
 ## GitHub correction
 
-PR #17, `fix: reconcile native manager with seven orphan supervisors`, was merged after focused tests and both required GitHub Actions workflows passed.
+PR #17 added source state `native_manager_orphans` and merged successfully.
 
 ```text
-PR=17
 PR_HEAD=3e827403428516ac1e8892868b70fced64ea7eab
 MERGE_COMMIT=507df7e8319bded4f34d9d80f9aa9d3ec7e501fe
 SECURITY_SCAN=PASS
-NATIVE_SERVICE_DAEMON_WATCHDOG=PASS
+NATIVE_SERVICE_DAEMON_WATCHDOG_CI=PASS
 PHONE_MUTATION=NONE
 ```
 
-The migration now recognizes source state `native_manager_orphans`, verifies that the pidfile matches the sole manager, requires the exact seven-orphan topology, keeps the existing manager, skips `service-daemon start`, reconciles the seven supervisors, verifies 7/7 native ownership, starts one watchdog, and performs final acceptance verification.
+The corrected migration now requires the manager to match the native pidfile, requires exactly seven unique PID-1 orphan supervisors, skips `service-daemon start`, preserves the existing native manager, reconciles the seven supervisors, verifies ownership, and only then starts the watchdog.
 
-It remains fail-closed for pidfile mismatch, multiple managers, missing services, invalid ownership, duplicate supervisors, an existing watchdog, or an active legacy guard.
+## Error-log checkpoint
 
-## Required final transition
+`audits/ERROR_LOG.md` is current through E034 and records:
 
-Before:
+- E031 — `supervise/pid` was misidentified as the supervisor PID;
+- E032 — native manager present with seven PID-1 orphan supervisors;
+- E033 — migration rejected the real but unsupported source topology;
+- E034 — PR #17 added the safe reconciliation path.
+
+## Remaining runtime step
+
+Deploy exact merge commit:
 
 ```text
-MANAGERS=1
-OWNED=0/7
-ORPHANED=7
-WATCHDOGS=0
+507df7e8319bded4f34d9d80f9aa9d3ec7e501fe
 ```
 
-Required after deployment:
+The deployment must run as one bounded child script, display the current error log, revalidate the source topology immediately before mutation, preserve rollback, and independently verify:
 
 ```text
-MANAGERS=1
+MANAGER_COUNT=1
 OWNED=7/7
 RUNNING=7/7
 ORPHANED=0
 INVALID=0
 DUPLICATES=0
-WATCHDOGS=1
+WATCHDOG_COUNT=1
 ```
-
-## Runtime safety boundary
-
-No service was stopped, no process was signalled, no watchdog was started, and no phone mutation was performed while diagnosing or implementing PR #17.
 
 ## Exactly one next action
 
-Deploy merge commit `507df7e8319bded4f34d9d80f9aa9d3ec7e501fe` using one hash-pinned, bounded Termux package that revalidates the exact source topology immediately before mutation, preserves rollback, reconciles the seven orphan supervisors under the existing native manager, and independently verifies the required final topology.
+After this documentation checkpoint is merged, execute one hash-pinned Termux deployment package for merge commit `507df7e8319bded4f34d9d80f9aa9d3ec7e501fe`. Do not inspect strategy or Phase 5 data in that package.
