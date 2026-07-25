@@ -1,184 +1,129 @@
 # BotA Errors and Silent-Failure Register
 
-Last updated: 2026-07-08
+Last updated: 2026-07-25
 
-Purpose: record runtime failures that must not be rediscovered from scratch in new chats.
+Purpose: record runtime failures, audit mistakes, and prevention rules that must not be rediscovered from scratch.
 
-## Error class E-001: Closer lifecycle freeze
+## Current highest-priority incident
 
-Status: fixed structurally, still needs ongoing runtime monitoring.
+Verified phone state:
 
-Verified history:
+```text
+NATIVE_MANAGER_COUNT=1
+NATIVE_MANAGER_PID=18537
+NATIVE_PIDFILE_MATCH=YES
+OWNED=0/7
+ORPHANED=7/7
+INVALID=0
+MISSING=0
+NATIVE_WATCHDOG_COUNT=0
+RUNTIME_MUTATION_PERFORMED=NO
+```
 
-- Stale ACTIVE Supabase signals blocked new per-pair signals through dedup.
-- `tools/run_signal_closer_live.sh` was added.
-- `tools/signal_closer.py` was updated to use trusted server clock and OANDA-backed cache.
+All seven services are alive, but all seven `runsv` supervisors are parented by PID 1 rather than the native manager.
 
-Required future detection:
+The first migration stopped safely with:
 
-- `logs/cron.closer.log` age.
-- ACTIVE signal count.
-- Oldest ACTIVE signal age.
-- Signal transition proof: ACTIVE -> CLOSED/CANCELLED.
+```text
+preflight_native_pidfile_present:18537
+```
 
-Alert rule:
+Root cause: the implementation supported one detached manager owning 7/7 or zero managers with seven orphans, but not one existing native manager plus seven orphans.
 
-- DEGRADED if closer log stale during market hours.
-- DEGRADED if any ACTIVE signal exceeds the approved lifecycle threshold.
+PR #17 added source state `native_manager_orphans`, passed Security Scan and Native service-daemon watchdog CI, and merged as:
 
-## Error class E-002: Runtime crontab wipe
+```text
+507df7e8319bded4f34d9d80f9aa9d3ec7e501fe
+```
 
-Status: immediate crontab restored by C1C; hardening not complete.
+No phone mutation occurred during diagnosis, patching, CI, or merge.
 
-Verified on 2026-07-08:
+## Critical diagnostic correction
 
-- Live crontab lost BotA runtime lines.
-- Only dividend scanner and BotA Daily Proof remained.
-- Watcher, updater, closer, shadow, supervisor, and clock-drift lines were missing.
-- `cron.signals.log`, `cron.indicators.log`, `cron.closer.log`, and `api_credits.json` were frozen around 2026-06-22.
-- Daily Proof gave false comfort because it reported `Cron: running`, meaning only that `crond` existed.
+`supervise/pid` identifies the supervised service process. It is not the `runsv` supervisor PID.
 
-Required future detection:
+Correct ownership chain:
 
-- Required cron line count.
-- Canonical crontab hash.
-- Crontab drift detection.
-- Freshness of watcher/updater/closer/supervisor logs.
+```text
+supervise/pid service PID
+-> service PPID
+-> runsv supervisor PID
+-> supervisor PPID and cwd
+```
 
-Required recovery:
+Every future ownership audit must validate supervisor command, state, PPID, and cwd together.
 
-- Restore from committed canonical crontab template, not from ad-hoc backups.
-- Verify line counts after restore.
-- Run C2 liveness proof.
+## Current prevention and deployment rule
 
-Alert rule:
+The next package must:
 
-- RED/DEGRADED if required cron lines are missing or crontab hash changed.
+- display `audits/ERROR_LOG.md`, current through E034;
+- be pinned to merge commit `507df7e8319bded4f34d9d80f9aa9d3ec7e501fe`;
+- run as a bounded child process so failure cannot close the parent Termux session;
+- revalidate the exact source topology immediately before mutation;
+- stop without signalling services if the source topology differs;
+- preserve rollback;
+- independently verify one manager, 7/7 owned and running, zero orphans, zero invalid/duplicates, and one watchdog.
 
-## Error class E-003: Daily Proof incomplete truth
+## Historical error classes still applicable
 
-Status: open.
+### Runtime ownership and scheduler integrity
 
-Verified issue:
+- stale or wiped crontab can leave Daily Proof alive while the signal factory is unscheduled;
+- `sv status` alone cannot prove healthy ownership or restart capability;
+- Android can replace a manager while child supervisors survive;
+- detached crond and runit crond can create split-brain behavior;
+- ownership must be proven through manager, supervisor, wrapper, and service parentage.
 
-- Daily Proof currently proves `crond` is running.
-- It does not fully prove watcher freshness, updater freshness, closer freshness, supervisor freshness, crontab integrity, or runtime health.
+### Health and time semantics
 
-Required fix:
+- service presence is not useful progress;
+- future or negative stale ages must be rejected;
+- use trusted provider/server UTC for market semantics;
+- use monotonic time for same-boot health and cadence;
+- never depend on `/proc/uptime` on this Android build;
+- PID changes are restart events, not failures by themselves.
 
-Daily Proof must report:
+### Provider and observability risks
 
-- crond status
-- required cron lines OK/FAIL
-- crontab hash OK/CHANGED
-- watcher log age
-- updater log age
-- closer log age
-- shadow log age
-- supervisor log age
-- cache ages
-- runtime mode
-- last signal created time
-- active signal count
-- oldest active signal age
-- API credit status
-- clock status
+- provider quotas must be tracked per provider rather than by generic successful fetches;
+- RapidAPI calendar fallback must remain disabled until its source condition, caching, and budget are corrected;
+- Telegram, Supabase, network, provider, and runtime failures must be distinguished;
+- quiet/no-signal behavior must not be reported as infrastructure death.
 
-## Error class E-004: Termux/Android runtime fragility
+### Operational package failures
 
-Status: open / external to trading code.
+- broad scans can enter runit FIFOs or mix active and historical evidence;
+- expected zero-match commands must not be allowed to abort under `pipefail`;
+- top-level `exit` can close the Termux session;
+- oversized pasted scripts can crash Termux;
+- read-only packages must answer one narrow question;
+- mutation requires fresh topology validation, backup, rollback, explicit approval, and independent verification.
 
-Risk:
+## Efficient diagnostic order when signals stop
 
-- Android may kill background processes.
-- Phone reboot may stop crond.
-- Battery optimization may suspend Termux.
-- Ship/mobile network may block or intercept HTTPS.
-- Lack of phone internet stops Termux-hosted BotA.
+### Gate A — control plane
 
-Required fix:
+Verify:
 
-- Verify Termux:Boot installed.
-- Verify `~/.termux/boot/` script starts `termux-wake-lock` and `crond`.
-- Verify boot script restores canonical crontab if missing.
-- Verify battery optimization disabled for Termux and Termux:Boot.
+1. exactly one intended manager;
+2. seven manager-owned supervisors;
+3. seven running service/wrapper chains;
+4. zero orphaned supervisors;
+5. one supervised crond;
+6. no duplicates or invalid rows;
+7. the intended watchdog state.
 
-## Error class E-005: Network / TLS / Telegram failure
+If Gate A fails, stop. Do not inspect strategy, watcher decisions, CSV, caches, or Telegram history.
 
-Status: observed and recovered manually.
+### Gate B — targeted runtime path
 
-Verified issue:
+After Gate A passes, inspect only the failing component or evidence path.
 
-- Telegram send failed with TLS hostname mismatch to `api.telegram.org` during ship/cabin network condition.
-- Later `curl -I https://api.telegram.org` returned HTTP 302 and Telegram send passed.
+### Gate C — bounded recovery sample
 
-Interpretation:
+When ownership is correct but one child is briefly absent, allow one compact recovery resample before mutation.
 
-- This was network/certificate interception or captive network behavior, not BotA code failure.
+### Gate D — mutation
 
-Required detection:
-
-- Telegram connectivity check.
-- Supabase connectivity check.
-- Provider connectivity check.
-- Alert if network is down after recovery, but avoid spam during transient failures.
-
-## Error class E-006: API/data-provider degradation
-
-Status: partially mitigated historically; still monitor.
-
-Known risks:
-
-- Twelve Data credit exhaustion.
-- Yahoo 429/rate-limit behavior.
-- OANDA/cache gaps.
-- Server clock source unavailable.
-
-Required detection:
-
-- `logs/api_credits.json` movement and usage percent.
-- provider error counts.
-- cache freshness.
-- server clock status.
-
-Required reporting:
-
-- Daily Proof must distinguish quiet market from provider/data failure.
-
-## Error class E-007: ProfitLab observability gap
-
-Status: open.
-
-Verified issue:
-
-- ProfitLab displays signals from Supabase.
-- It does not know whether BotA is alive.
-- No Supabase runtime-health bridge is verified yet.
-
-Required fix:
-
-- Add BotA runtime-health push to Supabase.
-- Add ProfitLab Admin Health Panel.
-- Show BotA OFFLINE/DEGRADED if heartbeat is stale.
-
-## Do not misdiagnose again
-
-If signals stop, do not first blame:
-
-- H1 veto
-- thresholds
-- ADX
-- strategy weakness
-- pair list
-
-First verify runtime:
-
-1. crontab line counts
-2. crond process
-3. watcher log mtime
-4. updater log mtime
-5. closer log mtime
-6. supervisor log mtime
-7. cache freshness
-8. Supabase ACTIVE count
-9. Telegram/Supabase connectivity
+Require a persistent failure, narrow cause, exact expected source topology, backup, rollback, explicit approval, and independent post-change verification.
