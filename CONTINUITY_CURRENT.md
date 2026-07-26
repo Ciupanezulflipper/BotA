@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: 2026-07-25
+Last updated: 2026-07-26
 
 This is the compact current handoff. Historical detail remains in `CONTINUITY.md`, `ERRORS.md`, `audits/ERROR_LOG.md`, the Phase 4/5 incident records, and issue #9.
 
@@ -8,88 +8,88 @@ This is the compact current handoff. Historical detail remains in `CONTINUITY.md
 
 - Reliability and observability only. Strategy, thresholds, pairs, scoring, SL/TP, filters, PR #7, DeepSource, and Supabase signal semantics remain frozen.
 - No direct push to `main`.
-- Every Termux package displays `audits/ERROR_LOG.md`, prints `ERROR_LOG_REVIEWED=YES` and `CIRCULAR_ERROR_CHECK=PASS`, uses active paths only, and ends with exactly one next action.
+- Every Termux package displays `audits/ERROR_LOG.md`, runs in a bounded child script, preserves the parent shell, and ends with exactly one next action.
 - Read-only packages answer one narrow question.
-- Mutating recovery requires staging, fresh explicit approval, execution, rollback availability, and independent verification.
+- Mutating recovery requires fresh topology validation, backup, rollback, explicit approval, and independent verification.
 - Never depend on `/proc/uptime` on this Android build.
 - Trusted server/provider UTC controls market semantics; monotonic time controls same-boot cadence and health; Android/ship wall time is display-only.
 
-## Current verified runtime topology
+## Native service-manager migration: complete
 
-The corrected parent-chain audit proved the following exact state:
+The migration from the legacy boot guard to the native `service-daemon` manager and watchdog is complete.
+
+Repository milestones:
 
 ```text
-NATIVE_MANAGER_COUNT=1
-NATIVE_MANAGER_PID=18537
-NATIVE_PIDFILE_MATCH=YES
-OWNED=0/7
-ORPHANED=7/7
-INVALID=0
-MISSING=0
-NATIVE_WATCHDOG_COUNT=0
-RUNTIME_MUTATION_PERFORMED=NO
+PR #18 MERGED=ef94e4fd1c9a7a786f7514024828fbdfc1146143
+PR #19 MERGED=12000f04137a000cb3d1c6bf7acb45da288907c9
+PR #20 MERGED=87e43ce76d43d625e7e9c7a6715cabb59f4b65c9
+PR #21 MERGED=09a1bd5b57e0bf3a39e79afc827d14e09e8b1031
+PR #22 MERGED=0694e17c09c3c8663622dce745d8b449c3cd2405
 ```
 
-Each service's `supervise/pid` identifies the supervised service process, not the `runsv` supervisor. The actual supervisor was resolved through the service process PPID, then validated by command, state, PPID, and cwd. All seven required `runsv` supervisors are alive under PID 1.
+PR #22 made the partial migration journaled, resumable, and fail-closed after interruption. The phone had already reconverged to a fully owned native state, so the partial executor correctly rejected that source topology and rolled files back. The fully-owned finalizer from PR #20 was then used instead.
 
-## Failed migration and root cause
+## Final verified runtime topology
 
-The first native migration stopped safely with:
-
-```text
-preflight_native_pidfile_present:18537
-```
-
-The implementation supported only:
-
-1. one detached manager owning all seven services; or
-2. zero managers with exactly seven PID-1 orphan supervisors.
-
-It did not support the verified third state: one valid native manager plus seven PID-1 orphan supervisors. The failure occurred before runtime mutation. No services were stopped, no supervisors were signalled, no watchdog was started, and file rollback remained available.
-
-## GitHub correction
-
-PR #17 added source state `native_manager_orphans` and merged successfully.
+Finalization evidence:
 
 ```text
-PR_HEAD=3e827403428516ac1e8892868b70fced64ea7eab
-MERGE_COMMIT=507df7e8319bded4f34d9d80f9aa9d3ec7e501fe
-SECURITY_SCAN=PASS
-NATIVE_SERVICE_DAEMON_WATCHDOG_CI=PASS
-PHONE_MUTATION=NONE
-```
-
-The corrected migration now requires the manager to match the native pidfile, requires exactly seven unique PID-1 orphan supervisors, skips `service-daemon start`, preserves the existing native manager, reconciles the seven supervisors, verifies ownership, and only then starts the watchdog.
-
-## Error-log checkpoint
-
-`audits/ERROR_LOG.md` is current through E034 and records:
-
-- E031 — `supervise/pid` was misidentified as the supervisor PID;
-- E032 — native manager present with seven PID-1 orphan supervisors;
-- E033 — migration rejected the real but unsupported source topology;
-- E034 — PR #17 added the safe reconciliation path.
-
-## Remaining runtime step
-
-Deploy exact merge commit:
-
-```text
-507df7e8319bded4f34d9d80f9aa9d3ec7e501fe
-```
-
-The deployment must run as one bounded child script, display the current error log, revalidate the source topology immediately before mutation, preserve rollback, and independently verify:
-
-```text
+FINALIZER_SOURCE_STATE=native_manager_fully_owned_no_watchdog
 MANAGER_COUNT=1
+MANAGER_PID=22175
+PIDFILE_VALUE=22175
 OWNED=7/7
 RUNNING=7/7
 ORPHANED=0
 INVALID=0
 DUPLICATES=0
+DOWN_SERVICES=NONE
 WATCHDOG_COUNT=1
+WATCHDOG_PID=8752
+WATCHDOG_LOCK_HOLDERS=8752
+BOOT_LEGACY_COUNT=0
+BOOT_WATCHDOG_COUNT=1
+ACTIVE_MIGRATION_JOURNAL=ABSENT
+FINALIZATION_PACKAGE=PASS
 ```
+
+A later read-only stability check after normal service cycles independently returned:
+
+```text
+CONTROL_PLANE_GATE=PASS
+STABILITY_CHECK=PASS
+STABILITY_WRAPPER_EXIT_CODE=0
+RUNTIME_MUTATION_PERFORMED=NO
+```
+
+All seven required services had exactly one `runsv` supervisor owned by the native manager:
+
+- `bota-updater`
+- `bota-watcher`
+- `bota-closer`
+- `bota-shadow`
+- `bota-heartbeat`
+- `bota-supervisor`
+- `crond`
+
+## Current repository/runtime distinction
+
+The phone checkout remains on operational branch `ops/ship-time-independent-runtime-20260717`, HEAD `c9ab9996190025ab51202b1f6508a05f8fc148c3`, with a dirty worktree. That repository housekeeping is separate from the verified runtime control-plane closure and must not be overwritten casually.
+
+## What remains
+
+The infrastructure migration is closed. Do not rerun either migration executor or the finalizer while the verified topology remains healthy.
+
+The next meaningful proof is market-session behavior:
+
+1. wait for Monday/open-market watcher cycles;
+2. verify fresh updater and watcher progress using active logs only;
+3. classify each cycle as normal HOLD/rejection, eligible signal, send failure, or infrastructure failure;
+4. when the next real signal becomes ACTIVE, verify Telegram delivery, Supabase persistence, closer execution, and transition to CLOSED/CANCELLED with result pips.
+
+Do not change ADX, scoring thresholds, pair scope, filters, SL/TP, or dedup merely because Monday produces no signal. A healthy rejected HOLD is valid runtime behavior.
 
 ## Exactly one next action
 
-After this documentation checkpoint is merged, execute one hash-pinned Termux deployment package for merge commit `507df7e8319bded4f34d9d80f9aa9d3ec7e501fe`. Do not inspect strategy or Phase 5 data in that package.
+On Monday after at least one verified open-market cycle, run one compact read-only watcher-cycle proof. Inspect strategy only if the infrastructure path passes and the recorded decision evidence is internally inconsistent.
