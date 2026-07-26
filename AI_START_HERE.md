@@ -1,6 +1,6 @@
 # BotA AI Start Here
 
-Last updated: 2026-07-25
+Last updated: 2026-07-26
 
 Read this before proposing BotA commands, code, cron, service, strategy, or deployment changes.
 
@@ -8,19 +8,18 @@ Read this before proposing BotA commands, code, cron, service, strategy, or depl
 
 Classify material claims as VERIFIED, ASSUMED, or UNKNOWN. Do not promote a failed acceptance criterion because adjacent behavior worked, and do not fail a healthy recovery because process IDs changed.
 
-Current work is native service-manager reconciliation only. Do not change strategy, thresholds, pairs, scoring, SL/TP, filters, PR #7, DeepSource, Supabase signal semantics, or `main` directly.
+The native service-manager migration is complete. Current work is open-market watcher and signal-path observation only. Do not change strategy, thresholds, pairs, scoring, SL/TP, filters, PR #7, DeepSource, Supabase signal semantics, or `main` directly.
 
 Every Termux package must:
 
 1. display `$HOME/BotA/audits/ERROR_LOG.md`;
-2. print `ERROR_LOG_REVIEWED=YES`;
-3. print `CIRCULAR_ERROR_CHECK=PASS`;
+2. run strict options only inside a bounded child script;
+3. preserve the interactive parent shell;
 4. use compact active-path checks;
 5. avoid supervise FIFOs and broad historical scans;
-6. avoid top-level exits that close Termux;
-7. avoid blocking interactive approval;
-8. separate staging, approval, mutation, rollback, and verification;
-9. end with exactly one next action.
+6. revalidate exact targets immediately before mutation;
+7. separate backup, rollback, mutation, and independent verification;
+8. end with exactly one next action.
 
 Additional mandatory rules:
 
@@ -29,84 +28,81 @@ Additional mandatory rules:
 - use trusted server/provider UTC for market semantics;
 - use monotonic time for same-boot cadence and health;
 - Android/ship wall time is display-only;
-- read-only packages must answer one narrow question and remain compact enough to inspect visually;
-- never combine infrastructure, watcher logs, CSV, cache JSON, Telegram history, and strategy conclusions in one Termux package;
+- read-only packages answer one narrow question;
+- never combine infrastructure, watcher logs, CSV, cache JSON, Telegram history, and strategy conclusions in one package;
 - `supervise/pid` identifies the supervised service process, not the `runsv` supervisor;
-- resolve ownership through service PID -> PPID -> runsv, then validate command, state, PPID, and cwd;
-- revalidate the full source topology immediately before any runtime mutation.
+- resolve ownership through service PID -> PPID -> `runsv`, then validate command, state, PPID, and cwd;
+- a normal rejected HOLD is not an infrastructure failure.
 
 ## Current verified control plane
 
 ```text
-NATIVE_MANAGER_COUNT=1
-NATIVE_MANAGER_PID=18537
-NATIVE_PIDFILE_MATCH=YES
-OWNED=0/7
-ORPHANED=7/7
-INVALID=0
-MISSING=0
-NATIVE_WATCHDOG_COUNT=0
-RUNTIME_MUTATION_PERFORMED=NO
-```
-
-All seven required `runsv` supervisors are alive under PID 1. The native manager exists but owns none of them.
-
-## Failed migration
-
-The first native migration stopped safely with:
-
-```text
-preflight_native_pidfile_present:18537
-```
-
-The implementation did not support one existing native manager plus seven PID-1 orphan supervisors. The abort happened before process mutation. No services were stopped, no supervisors were signalled, and no watchdog was started.
-
-## Corrected implementation
-
-PR #17 added source state `native_manager_orphans` and merged as:
-
-```text
-507df7e8319bded4f34d9d80f9aa9d3ec7e501fe
-```
-
-Verified CI:
-
-```text
-Security Scan: PASS
-Native service-daemon watchdog: PASS
-```
-
-The migration now preserves the existing native manager, skips `service-daemon start`, reconciles the exact seven orphan supervisors, verifies ownership, and starts the watchdog only after successful reconciliation.
-
-## Error-log state
-
-`audits/ERROR_LOG.md` is current through E034. It records the supervisor-PID diagnostic mistake, the exact native-manager/seven-orphan topology, the fail-closed migration error, and the PR #17 correction.
-
-## Required deployment acceptance
-
-The next runtime package must be pinned to merge commit `507df7e8319bded4f34d9d80f9aa9d3ec7e501fe` and must independently prove:
-
-```text
 MANAGER_COUNT=1
+MANAGER_PID=22175
+PIDFILE_VALUE=22175
 OWNED=7/7
 RUNNING=7/7
 ORPHANED=0
 INVALID=0
 DUPLICATES=0
+DOWN_SERVICES=NONE
 WATCHDOG_COUNT=1
+WATCHDOG_PID=8752
+WATCHDOG_LOCK_HOLDERS=8752
+BOOT_LEGACY_COUNT=0
+BOOT_WATCHDOG_COUNT=1
+ACTIVE_MIGRATION_JOURNAL=ABSENT
+CONTROL_PLANE_GATE=PASS
+STABILITY_CHECK=PASS
 ```
 
-Failure to match the expected source topology before mutation must stop the package without signalling services.
+All seven required services have exactly one native-manager-owned supervisor: updater, watcher, closer, shadow, heartbeat, supervisor, and crond.
+
+## Migration closure
+
+PRs #18 through #22 are merged. Final relevant merge:
+
+```text
+PR #22=0694e17c09c3c8663622dce745d8b449c3cd2405
+```
+
+The partial migration executor correctly rejected an already fully owned `7/7` source state and rolled files back. The fully-owned finalizer then replaced the legacy boot launcher and started exactly one watchdog without restarting or reconciling the healthy manager/service tree.
+
+Do not rerun the migration executors or finalizer while the control-plane gate remains healthy.
+
+## Repository caution
+
+The phone checkout remains on:
+
+```text
+BRANCH=ops/ship-time-independent-runtime-20260717
+HEAD=c9ab9996190025ab51202b1f6508a05f8fc148c3
+WORKTREE_DIRTY=YES
+```
+
+Do not reset, checkout, merge, or overwrite this worktree without first identifying and preserving every local change.
+
+## Next proof: Monday/open market
+
+After at least one verified open-market cycle, inspect only current active evidence and determine:
+
+1. updater produced fresh data;
+2. watcher completed the expected EURUSD/GBPUSD M15 cycle;
+3. the decision was persisted before dedup;
+4. the outcome was a valid HOLD/rejection, eligible signal, send failure, or infrastructure failure;
+5. if a signal becomes ACTIVE, Telegram, Supabase, and closer lifecycle complete correctly.
+
+Do not loosen ADX, score, H1/D1, volatility, macro, session, or dedup gates merely to manufacture signals.
 
 ## Files to read
 
 - `CONTINUITY_CURRENT.md`
 - `audits/ERROR_LOG.md`
 - `ERRORS.md`
-- GitHub PR #17
+- `CONTINUITY.md`
 - GitHub issue #9
-- documentation PR #10
+- PRs #18 through #22
 
 ## Exactly one next action
 
-Merge the documentation checkpoint after all checks pass, then run one bounded hash-pinned Termux deployment package. Do not inspect Phase 5 data or strategy in that package.
+On Monday after an open-market watcher cycle, run one compact read-only cycle proof. Stop if the control-plane gate fails; otherwise classify the watcher decision from current evidence before considering any code or strategy change.
