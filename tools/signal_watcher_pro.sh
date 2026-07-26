@@ -669,8 +669,8 @@ telegram_cooldown_check() {
     read -r saved_boot saved_mono < "${key}" || true
   fi
 
-  if [[ "${saved_boot}" == "${current_boot}" ]] &&
-     [[ "${saved_mono}" =~ ^[0-9]+$ ]] &&
+  if [[ "${saved_boot}" = "${current_boot}" ]] &&
+     [[ -n "${saved_mono}" && "${saved_mono}" != *[!0-9]* ]] &&
      (( current_mono >= saved_mono )) &&
      (( current_mono - saved_mono < cooldown ))
   then
