@@ -91,8 +91,7 @@ status = str(data.get("status") or "UNKNOWN")
 unsafe = data.get("local_clock_unsafe")
 if status == "SERVER_CLOCK_UNAVAILABLE":
     print("server_clock_unavailable")
-elif status == "DRIFT_WARN" or unsafe is True:
-    print("local_clock_drift")
+# A phone/ship-time difference is informational when trusted server time works.
 PY
 }
 
