@@ -657,22 +657,39 @@ telegram_cooldown_check() {
   local pair="$1" tf="$2"
   local cooldown="${TELEGRAM_COOLDOWN_SECONDS:-300}"
   local key="${STATE}/last_sent_${pair}_${tf}.txt"
-  local now last
-  now="$(date +%s)"
-  last="0"
+  local current_boot current_mono saved_boot saved_mono
+
+  current_boot="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || echo unknown)"
+  current_mono="$(python3 -c 'import time; c=getattr(time,"CLOCK_BOOTTIME",None); print(time.clock_gettime_ns(c)//1_000_000_000 if c is not None else time.monotonic_ns()//1_000_000_000)')"
+
+  saved_boot=""
+  saved_mono=""
+
   if [[ -f "${key}" ]]; then
-    last="$(cat "${key}" 2>/dev/null || echo 0)"
+    read -r saved_boot saved_mono < "${key}" || true
   fi
-  if [[ "${last}" =~ ^[0-9]+$ ]] && (( now - last < cooldown )); then
+
+  if [[ "${saved_boot}" = "${current_boot}" ]] &&
+     [[ -n "${saved_mono}" && "${saved_mono}" != *[!0-9]* ]] &&
+     (( current_mono >= saved_mono )) &&
+     (( current_mono - saved_mono < cooldown ))
+  then
     return 1
   fi
+
   return 0
 }
 
 telegram_cooldown_mark() {
   local pair="$1" tf="$2"
   local key="${STATE}/last_sent_${pair}_${tf}.txt"
-  date +%s > "${key}" 2>/dev/null || true
+  local current_boot current_mono
+
+  current_boot="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || echo unknown)"
+  current_mono="$(python3 -c 'import time; c=getattr(time,"CLOCK_BOOTTIME",None); print(time.clock_gettime_ns(c)//1_000_000_000 if c is not None else time.monotonic_ns()//1_000_000_000)')"
+
+  printf '%s %s\n' "${current_boot}" "${current_mono}" > "${key}" 2>/dev/null ||
+    true
 }
 
 network_fail_count() {
