@@ -182,3 +182,37 @@ First verify runtime:
 7. cache freshness
 8. Supabase ACTIVE count
 9. Telegram/Supabase connectivity
+
+## Heartbeat runtime correction — 2026-07-24 {HEARTBEAT_RECOVERY_20260724}
+
+Verified runtime evidence:
+
+- owned=7/7
+- running=7/7
+- orphaned=0
+- useful_progress=PASS
+- HEARTBEAT_DELIVERY_GATE=PASS_ENV_LOADED_NEW_CYCLE
+
+Root cause:
+
+- config/tele.env was missing.
+- .env and .env.runtime contained matching Telegram variables.
+- config/tele.env was created as an ignored runtime file with mode 600.
+
+Independent acceptance:
+
+- two fresh heartbeat cycles logged:
+  heartbeat sent
+
+Current degradation remaining:
+
+- local_clock_drift only.
+
+Branch:
+ops/ship-time-independent-runtime-20260717
+
+HEAD:
+c9ab9996190025ab51202b1f6508a05f8fc148c3
+
+Completed:
+4/5
