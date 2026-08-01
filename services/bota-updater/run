@@ -1,0 +1,104 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# FILE: services/bota-updater/run
+# PURPOSE:
+#   Keep the updater supervised continuously while preventing candle-provider
+#   requests whenever the authoritative BotA market gate is closed.
+#
+# PRODUCTION BEHAVIOR:
+#   - Service wrapper remains running under runit.
+#   - Market closed or market-clock unavailable: no updater execution.
+#   - Market open: run the existing updater with unchanged pairs, timeframes,
+#     retries, pacing, indicator logic, and provider order.
+#   - Gate failure is fail-closed.
+#
+# TEST CONTROLS:
+#   BOTA_UPDATER_RUN_ONCE=1 runs one cycle and exits.
+#   BOTA_UPDATER_INTERVAL overrides the default 900-second cadence.
+
+set -uo pipefail
+exec 2>&1
+
+ROOT="${BOTA_ROOT:-${HOME}/BotA}"
+LOG="${ROOT}/logs/cron.indicators.log"
+ENV_FILE="${ROOT}/.env.runtime"
+LOCK="${ROOT}/state/indicators_updater.lock"
+MARKET_GATE="${ROOT}/tools/market_open.sh"
+UPDATER="${ROOT}/tools/indicators_updater.sh"
+
+INTERVAL="${BOTA_UPDATER_INTERVAL:-900}"
+RUN_ONCE="${BOTA_UPDATER_RUN_ONCE:-0}"
+
+mkdir -p "${ROOT}/logs" "${ROOT}/state"
+
+log() {
+  printf '[RUNIT bota-updater %s] %s\n' \
+    "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+    "$*" |
+    tee -a "${LOG}"
+}
+
+mono_now() {
+  python3 -c '
+import time
+clock = getattr(time, "CLOCK_BOOTTIME", None)
+if clock is not None:
+    print(time.clock_gettime_ns(clock) // 1_000_000_000)
+else:
+    print(time.monotonic_ns() // 1_000_000_000)
+'
+}
+
+run_cycle() {
+  if [[ -f "${ENV_FILE}" ]]; then
+    # shellcheck source=/dev/null
+    . "${ENV_FILE}"
+  fi
+
+  if [[ ! -x "${MARKET_GATE}" ]]; then
+    log "SKIP: market_gate_missing_or_not_executable path=${MARKET_GATE}"
+    return 0
+  fi
+
+  if ! "${MARKET_GATE}" >/dev/null 2>&1; then
+    log "SKIP: market_closed_or_clock_unavailable"
+    return 0
+  fi
+
+  if [[ ! -x "${UPDATER}" ]]; then
+    log "SKIP: updater_missing_or_not_executable path=${UPDATER}"
+    return 0
+  fi
+
+  PAIRS="EURUSD GBPUSD USDJPY" \
+  TIMEFRAMES="M15 H1 H4 D1" \
+  FETCH_RETRIES=3 \
+  FETCH_BACKOFF_BASE=5 \
+  FETCH_BACKOFF_MAX=20 \
+  FETCH_MIN_GAP_SECS=1 \
+  timeout -k 30s 10m \
+    flock -n "${LOCK}" \
+      bash "${UPDATER}" ||
+    log "SKIP: updater_busy_timeout_or_failed rc=$?"
+}
+
+log "SERVICE_START pid=$$ interval=${INTERVAL}"
+
+while true; do
+  cycle_start="$(mono_now)"
+
+  run_cycle
+
+  if [[ "${RUN_ONCE}" = "1" ]]; then
+    log "RUN_ONCE_COMPLETE"
+    exit 0
+  fi
+
+  elapsed=$(( $(mono_now) - cycle_start ))
+  sleep_seconds=$(( INTERVAL - elapsed ))
+
+  if [[ "${sleep_seconds}" -lt 5 ]]; then
+    sleep_seconds=5
+  fi
+
+  sleep "${sleep_seconds}"
+done
