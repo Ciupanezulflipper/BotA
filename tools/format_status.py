@@ -93,25 +93,41 @@ def validate_bundle(
     ema21 = finite_float(bundle.get("ema21"))
     rsi = finite_float(bundle.get("rsi"))
     macd_hist = finite_float(bundle.get("macd_hist"))
-    if None in (price, ema9, ema21, rsi, macd_hist):
+    if (
+        price is None
+        or ema9 is None
+        or ema21 is None
+        or rsi is None
+        or macd_hist is None
+    ):
         return "invalid indicators", None
 
-    metrics = IndicatorMetrics(
-        price=float(price),
-        ema9=float(ema9),
-        ema21=float(ema21),
-        rsi=float(rsi),
-        macd_hist=float(macd_hist),
+    return "", IndicatorMetrics(
+        price=price,
+        ema9=ema9,
+        ema21=ema21,
+        rsi=rsi,
+        macd_hist=macd_hist,
     )
-    return "", metrics
 
 
 def timeframe_score(metrics: IndicatorMetrics) -> int:
     """Calculate the existing three-factor technical display score."""
     score = 0
-    score += 1 if metrics.ema9 > metrics.ema21 else -1 if metrics.ema9 < metrics.ema21 else 0
-    score += 1 if metrics.rsi > 55.0 else -1 if metrics.rsi < 45.0 else 0
-    score += 1 if metrics.macd_hist > 0.0 else -1 if metrics.macd_hist < 0.0 else 0
+    if metrics.ema9 > metrics.ema21:
+        score += 1
+    elif metrics.ema9 < metrics.ema21:
+        score -= 1
+
+    if metrics.rsi > 55.0:
+        score += 1
+    elif metrics.rsi < 45.0:
+        score -= 1
+
+    if metrics.macd_hist > 0.0:
+        score += 1
+    elif metrics.macd_hist < 0.0:
+        score -= 1
     return score
 
 
@@ -159,7 +175,8 @@ def render_pair(pair: str, display_name: str) -> list[str]:
     first_price: float | None = None
 
     for timeframe in TIMEFRAMES:
-        reason, metrics = validate_bundle(load_bundle(pair, timeframe), pair, timeframe)
+        bundle = load_bundle(pair, timeframe)
+        reason, metrics = validate_bundle(bundle, pair, timeframe)
         if metrics is None:
             lines.append(f"{timeframe}: unavailable ({reason})")
             continue
