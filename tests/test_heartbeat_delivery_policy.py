@@ -36,8 +36,10 @@ class FakeResponse:
     def getcode(self) -> int:
         return self.status
 
-    def read(self) -> bytes:
-        return self.body
+    def read(self, size: int = -1) -> bytes:
+        if size < 0:
+            return self.body
+        return self.body[:size]
 
 
 def write_runtime_health(path: Path) -> None:
@@ -96,7 +98,10 @@ class HeartbeatValueAndEnvTests(unittest.TestCase):
 
     def test_env_parser_accepts_ascii_keys_without_executing_shell(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary) / "tele.env"
+            directory = Path(temporary)
+            path = directory / "tele.env"
+            sentinel = directory / "should-not-run"
+            shell_value = f"$(touch {sentinel})"
             path.write_text(
                 "# comment\n"
                 "TELEGRAM_BOT_TOKEN=token-value\n"
@@ -105,18 +110,44 @@ class HeartbeatValueAndEnvTests(unittest.TestCase):
                 "1INVALID=value\n"
                 "BAD-KEY=value\n"
                 "ÅKEY=value\n"
-                "SHELL=$(touch should-not-run)\n",
+                f"SHELL={shell_value}\n",
                 encoding="utf-8",
             )
             values = heartbeat_delivery.parse_env_file(path)
+            sentinel_exists = sentinel.exists()
 
         self.assertEqual(values["TELEGRAM_BOT_TOKEN"], "token-value")
         self.assertEqual(values["TELEGRAM_CHAT_ID"], "chat-value")
         self.assertEqual(values["SAFE_UNDERSCORE"], "quoted value")
-        self.assertEqual(values["SHELL"], "$(touch should-not-run)")
+        self.assertEqual(values["SHELL"], shell_value)
         self.assertNotIn("1INVALID", values)
         self.assertNotIn("BAD-KEY", values)
         self.assertNotIn("ÅKEY", values)
+        self.assertFalse(sentinel_exists)
+
+    def test_timeout_configuration_is_bounded(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"HEARTBEAT_TELEGRAM_TIMEOUT_SEC": "0"},
+            clear=False,
+        ):
+            minimum = heartbeat_delivery.timeout_from_env()
+        with patch.dict(
+            os.environ,
+            {"HEARTBEAT_TELEGRAM_TIMEOUT_SEC": "999"},
+            clear=False,
+        ):
+            maximum = heartbeat_delivery.timeout_from_env()
+        with patch.dict(
+            os.environ,
+            {"HEARTBEAT_TELEGRAM_TIMEOUT_SEC": "invalid"},
+            clear=False,
+        ):
+            default = heartbeat_delivery.timeout_from_env()
+
+        self.assertEqual(minimum, 1.0)
+        self.assertEqual(maximum, 30.0)
+        self.assertEqual(default, heartbeat_delivery.DEFAULT_TIMEOUT_SEC)
 
 
 class HeartbeatSummaryTests(unittest.TestCase):
@@ -158,7 +189,12 @@ class HeartbeatStateTests(unittest.TestCase):
     def test_success_and_failure_state_schedule_distinct_suppression(self) -> None:
         base = heartbeat_delivery.default_state()
         success = heartbeat_delivery.record_success(base, 100.0, "boot-a")
-        failure = heartbeat_delivery.record_failure(base, 100.0, "boot-a", "timeout")
+        failure = heartbeat_delivery.record_failure(
+            base,
+            100.0,
+            "boot-a",
+            "timeout",
+        )
 
         success_reason, success_remaining = heartbeat_delivery.suppression_reason(
             success, 101.0
@@ -203,7 +239,7 @@ class HeartbeatStateTests(unittest.TestCase):
                         "delivery_failure": False,
                         "consecutive_failures": "99",
                         "last_attempt_monotonic": "bad",
-                        "next_retry_monotonic": math.inf,
+                        "next_retry_monotonic": "not-finite",
                         "last_error": "stale",
                     }
                 ),
@@ -228,7 +264,11 @@ class HeartbeatTransportTests(unittest.TestCase):
 
     def test_success_response_is_accepted(self) -> None:
         response = FakeResponse(200, '{"ok":true}')
-        with patch("urllib.request.urlopen", return_value=response):
+        with patch.object(
+            heartbeat_delivery.urllib.request,
+            "urlopen",
+            return_value=response,
+        ):
             success, detail = heartbeat_delivery.send_telegram(
                 "https://api.telegram.org/bottest/sendMessage",
                 "chat",
@@ -240,7 +280,11 @@ class HeartbeatTransportTests(unittest.TestCase):
 
     def test_invalid_json_and_url_error_are_reported(self) -> None:
         invalid_response = FakeResponse(200, "not-json")
-        with patch("urllib.request.urlopen", return_value=invalid_response):
+        with patch.object(
+            heartbeat_delivery.urllib.request,
+            "urlopen",
+            return_value=invalid_response,
+        ):
             success, detail = heartbeat_delivery.send_telegram(
                 "https://api.telegram.org/bottest/sendMessage",
                 "chat",
@@ -250,8 +294,9 @@ class HeartbeatTransportTests(unittest.TestCase):
         self.assertFalse(success)
         self.assertIn("invalid_json", detail)
 
-        with patch(
-            "urllib.request.urlopen",
+        with patch.object(
+            heartbeat_delivery.urllib.request,
+            "urlopen",
             side_effect=urllib.error.URLError("offline"),
         ):
             success, detail = heartbeat_delivery.send_telegram(
@@ -262,6 +307,25 @@ class HeartbeatTransportTests(unittest.TestCase):
             )
         self.assertFalse(success)
         self.assertEqual(detail, "url_error:offline")
+
+    def test_oversized_response_is_bounded(self) -> None:
+        oversized = "x" * (heartbeat_delivery.MAX_RESPONSE_BYTES + 100)
+        response = FakeResponse(500, oversized)
+        with patch.object(
+            heartbeat_delivery.urllib.request,
+            "urlopen",
+            return_value=response,
+        ):
+            success, detail = heartbeat_delivery.send_telegram(
+                "https://api.telegram.org/bottest/sendMessage",
+                "chat",
+                "message",
+                5.0,
+            )
+
+        self.assertFalse(success)
+        self.assertLessEqual(len(detail), heartbeat_delivery.MAX_DETAIL_CHARS)
+        self.assertIn("http_status:500", detail)
 
 
 class HeartbeatCycleTests(unittest.TestCase):
@@ -294,7 +358,11 @@ class HeartbeatCycleTests(unittest.TestCase):
             root = Path(temporary) / "BotA"
             write_runtime_health(root / "state" / "runtime_health.json")
             with (
-                patch.object(heartbeat_delivery.time, "monotonic", side_effect=[100.0, 101.0]),
+                patch.object(
+                    heartbeat_delivery.time,
+                    "monotonic",
+                    side_effect=[100.0, 101.0],
+                ),
                 patch.object(heartbeat_delivery, "boot_identity", return_value="boot-a"),
                 patch.object(heartbeat_delivery, "send_telegram") as sender,
             ):
