@@ -8,6 +8,7 @@ technical context from executable BotA trade signals.
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 from typing import Any
@@ -36,9 +37,7 @@ def safe_float(value: Any) -> float | None:
         number = float(value)
     except (TypeError, ValueError):
         return None
-    if number != number or number in (float("inf"), float("-inf")):
-        return None
-    return number
+    return number if math.isfinite(number) else None
 
 
 def load_bundle(pair: str, timeframe: str) -> dict[str, Any] | None:
