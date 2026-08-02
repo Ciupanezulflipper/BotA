@@ -47,15 +47,16 @@ if ! WORKDIR="$(mktemp -d "${TMPDIR}/autostatus.XXXXXX")"; then
   log "ERROR: temporary_workspace_creation_failed"
   exit 0
 fi
-trap 'rm -rf -- "${WORKDIR}"' EXIT
-trap 'exit 129' HUP
-trap 'exit 130' INT
-trap 'exit 143' TERM
 
 OUT="${WORKDIR}/status.out"
 ERR="${WORKDIR}/status.err"
 RESP_FILE="${WORKDIR}/telegram.response"
 CURL_ERR="${WORKDIR}/telegram.stderr"
+trap 'rm -f -- "${OUT}" "${ERR}" "${RESP_FILE}" "${CURL_ERR}"; rmdir -- "${WORKDIR}" 2>/dev/null || true' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 : >"${OUT}"
 : >"${ERR}"
 : >"${RESP_FILE}"
