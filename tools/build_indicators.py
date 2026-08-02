@@ -94,6 +94,8 @@ def _norm_ts(t: Any) -> Optional[int]:
 
 def tf_minutes(tf: str) -> int:
     tf = (tf or "").strip().upper()
+    if tf in ("D1", "1D"):
+        return 1440
     if tf.startswith("M"):
         try:
             return int(tf[1:])
@@ -574,4 +576,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
