@@ -1,108 +1,206 @@
 # BotA AI Start Here
 
-Last updated: 2026-07-26
+Last updated: 2026-08-02
 
-Read this before proposing BotA commands, code, cron, service, strategy, or deployment changes.
+Read this before proposing BotA commands, code, cron, service, strategy,
+notification, provider, or deployment changes.
 
-## Evidence and scope rules
+## Current truth
 
-Classify material claims as VERIFIED, ASSUMED, or UNKNOWN. Do not promote a failed acceptance criterion because adjacent behavior worked, and do not fail a healthy recovery because process IDs changed.
+The July 26 native-manager closure was valid at that timestamp, but the later
+one-week production validation failed.
 
-The native service-manager migration is complete. Current work is open-market watcher and signal-path observation only. Do not change strategy, thresholds, pairs, scoring, SL/TP, filters, PR #7, DeepSource, Supabase signal semantics, or `main` directly.
+Current authoritative status:
 
-Every Termux package must:
+```text
+PRODUCTION_VALIDATION=FAILED
+FINAL_ROLLBACK_CONTROL_PLANE=PASS_AT_RECORDED_TIMESTAMP
+AUTOMATIC_TOPOLOGY_RECOVERY=DISABLED
+CURRENT_PHONE_TOPOLOGY=UNKNOWN_UNTIL_FRESH_NARROW_PROOF
+PR24_MERGE_ALLOWED=NO
+STRATEGY_MUTATION_ALLOWED=NO
+```
+
+Read `audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md` before treating the
+service-manager or watchdog work as closed.
+
+## Scope lock
+
+Current work is limited to:
+
+- runtime reliability;
+- data integrity;
+- provider-budget accounting;
+- Telegram/status correctness;
+- repository/runtime convergence;
+- observability and signal-lifecycle proof.
+
+Do not change strategy, thresholds, pairs, scoring, ADX, H1/D1 rules, volatility
+or macro filters, dedup behavior, SL/TP, PR #7, or Supabase signal semantics to
+manufacture signals.
+
+Never push directly to `main`.
+
+## Evidence classification
+
+Classify material claims as:
+
+- VERIFIED: current direct evidence proves the claim;
+- ASSUMED: plausible but not proven;
+- UNKNOWN: insufficient evidence; do not mutate from it.
+
+A historical PASS does not override a later verified regression. A current
+recovery snapshot does not erase the preceding failure. A PID change alone is a
+restart event, not proof of failure.
+
+## Mandatory Termux package rules
+
+Every package must:
 
 1. display `$HOME/BotA/audits/ERROR_LOG.md`;
-2. run strict options only inside a bounded child script;
+2. run `set -Eeuo pipefail` only inside a bounded child script;
 3. preserve the interactive parent shell;
-4. use compact active-path checks;
-5. avoid supervise FIFOs and broad historical scans;
-6. revalidate exact targets immediately before mutation;
-7. separate backup, rollback, mutation, and independent verification;
-8. end with exactly one next action.
+4. answer one narrow question;
+5. inspect whitelisted active files and logs only;
+6. avoid runit supervise FIFOs and broad recursive scans;
+7. treat expected zero matches safely;
+8. revalidate exact targets immediately before mutation;
+9. separate preflight, backup, rollback, mutation, and independent verification;
+10. end with exactly one next action.
 
-Additional mandatory rules:
+Do not use `/proc/uptime` on this Android build.
 
-- do not use `/proc/uptime` on this Android build;
-- changed PIDs are restart events, not failures by themselves;
-- use trusted server/provider UTC for market semantics;
-- use monotonic time for same-boot cadence and health;
-- Android/ship wall time is display-only;
-- read-only packages answer one narrow question;
-- never combine infrastructure, watcher logs, CSV, cache JSON, Telegram history, and strategy conclusions in one package;
-- `supervise/pid` identifies the supervised service process, not the `runsv` supervisor;
-- resolve ownership through service PID -> PPID -> `runsv`, then validate command, state, PPID, and cwd;
-- a normal rejected HOLD is not an infrastructure failure.
+## Time semantics
 
-## Current verified control plane
+- Trusted provider/server UTC controls market-session and candle semantics.
+- Monotonic time controls same-boot cadence, cooldowns, and health.
+- Android/ship wall time is display-only.
+- Reject negative or future stale ages.
+- Print the exact timestamps used in any age calculation.
 
-```text
-MANAGER_COUNT=1
-MANAGER_PID=22175
-PIDFILE_VALUE=22175
-OWNED=7/7
-RUNNING=7/7
-ORPHANED=0
-INVALID=0
-DUPLICATES=0
-DOWN_SERVICES=NONE
-WATCHDOG_COUNT=1
-WATCHDOG_PID=8752
-WATCHDOG_LOCK_HOLDERS=8752
-BOOT_LEGACY_COUNT=0
-BOOT_WATCHDOG_COUNT=1
-ACTIVE_MIGRATION_JOURNAL=ABSENT
-CONTROL_PLANE_GATE=PASS
-STABILITY_CHECK=PASS
-```
+## Correct runit ownership proof
 
-All seven required services have exactly one native-manager-owned supervisor: updater, watcher, closer, shadow, heartbeat, supervisor, and crond.
+`supervise/pid` is the supervised service process, not the `runsv` supervisor.
 
-## Migration closure
-
-PRs #18 through #22 are merged. Final relevant merge:
+Resolve each service as:
 
 ```text
-PR #22=0694e17c09c3c8663622dce745d8b449c3cd2405
+service PID -> PPID -> runsv supervisor -> supervisor PPID/cwd/state/command
 ```
 
-The partial migration executor correctly rejected an already fully owned `7/7` source state and rolled files back. The fully-owned finalizer then replaced the legacy boot launcher and started exactly one watchdog without restarting or reconciling the healthy manager/service tree.
+A manager process and matching pidfile do not prove service ownership.
+`sv status` does not prove parentage or restart capability.
 
-Do not rerun the migration executors or finalizer while the control-plane gate remains healthy.
+## August 1 validation failure
 
-## Repository caution
+Verified failures included:
 
-The phone checkout remains on:
+- `owned=0/7`, `running=7/7`, `orphaned=7` during production operation;
+- temporary required-service counts below seven;
+- canonical crontab verification failure;
+- phone checkout and GitHub `main` divergence;
+- documented watchdog topology not matching the phone;
+- configured service-daemon executable unavailable;
+- repeated Termux restarts while a continuous `runsvdir` guard was active.
+
+The guard and watchdog were stopped. Automatic topology recovery was disabled.
+The recorded final rollback state was one manager, seven owned/running services,
+zero orphans, and `control_plane_rc=0`.
+
+Do not re-enable automatic recovery without a new bounded design and
+failure-injection proof.
+
+## Repository containment
+
+PR #24 is contaminated and non-mergeable. Its description says three files, but
+its actual scope expanded to unrelated runtime, provider, documentation,
+notification, and test changes on an old divergent base.
+
+Rules:
+
+- do not merge PR #24;
+- do not deploy from PR #24;
+- do not resolve its analyzer findings by blindly editing the same branch;
+- salvage only one behavior at a time from current `main`;
+- use complete-file replacements and focused tests;
+- keep documentation-only, runtime, provider, and notification work separate.
+
+The clean documentation containment branch is:
 
 ```text
-BRANCH=ops/ship-time-independent-runtime-20260717
-HEAD=c9ab9996190025ab51202b1f6508a05f8fc148c3
-WORKTREE_DIRTY=YES
+repair/production-validation-truth-20260802
 ```
 
-Do not reset, checkout, merge, or overwrite this worktree without first identifying and preserving every local change.
+## Latest data discovery
 
-## Next proof: Monday/open market
+The latest supplied Termux discovery is complete and read-only:
 
-After at least one verified open-market cycle, inspect only current active evidence and determine:
+```text
+LOCAL_STATUS_DATA_DISCOVERY_COMPLETE=YES
+RUNTIME_MUTATION_PERFORMED=NO
+GIT_CHANGED=NO
+```
 
-1. updater produced fresh data;
-2. watcher completed the expected EURUSD/GBPUSD M15 cycle;
-3. the decision was persisted before dedup;
-4. the outcome was a valid HOLD/rejection, eligible signal, send failure, or infrastructure failure;
-5. if a signal becomes ACTIVE, Telegram, Supabase, and closer lifecycle complete correctly.
+Do not request another broad file/cache dump.
 
-Do not loosen ADX, score, H1/D1, volatility, macro, session, or dedup gates merely to manufacture signals.
+The highest-priority concrete data defect from that evidence is:
+
+```text
+cache/indicators_EURUSD_D1.json
+error=tf_mismatch
+tf_ok=false
+tf_actual_min=0.0
+weak=true
+```
+
+Weekend candle age alone is not enough to declare failure. The explicit D1
+mismatch must be reproduced through the active fetch/build path.
+
+## Efficient diagnostic gates
+
+### Gate A — repository and phone safety
+
+Before any phone Git operation, identify and preserve every local modification.
+Do not reset, checkout, merge, pull, or overwrite an unclassified dirty worktree.
+
+### Gate B — control plane
+
+Only when current runtime evidence is needed, prove one intended manager, seven
+owned/running supervisors, zero orphans/invalid/duplicates, supervised crond,
+and the actual boot launcher. Do not assume a watchdog exists.
+
+### Gate C — active data path
+
+Prove exact provider response, timestamps, granularity, row count, cache writer,
+and indicator builder for one pair/timeframe. Do not mix multiple providers or
+all timeframes in one reproduction.
+
+### Gate D — decision integrity
+
+After data is valid, classify a watcher cycle as valid HOLD/rejection, eligible
+signal, send failure, persistence failure, or infrastructure failure. Confirm the
+full decision record exists before dedup.
+
+### Gate E — lifecycle
+
+When a real signal becomes ACTIVE, verify Telegram, Supabase, closer execution,
+and CLOSED/CANCELLED transition with result pips.
+
+### Gate F — mutation
+
+Mutation requires persistent failure, narrow cause, exact target state, backup,
+rollback, explicit authorization, and independent post-change verification.
 
 ## Files to read
 
-- `CONTINUITY_CURRENT.md`
-- `audits/ERROR_LOG.md`
-- `ERRORS.md`
-- `CONTINUITY.md`
-- GitHub issue #9
-- PRs #18 through #22
+1. `CONTINUITY_CURRENT.md`
+2. `audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`
+3. `audits/ERROR_LOG.md`
+4. `ERRORS.md`
+5. GitHub issue #9
 
 ## Exactly one next action
 
-On Monday after an open-market watcher cycle, run one compact read-only cycle proof. Stop if the control-plane gate fails; otherwise classify the watcher decision from current evidence before considering any code or strategy change.
+From current `main`, create a focused code branch that reproduces and repairs the
+EURUSD D1 `tf_mismatch`; do not touch runtime processes, strategy, Telegram, or
+the production phone checkout in that package.

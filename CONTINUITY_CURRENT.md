@@ -1,44 +1,46 @@
 # BotA Current Continuity State
 
-Last updated: 2026-07-26
+Last updated: 2026-08-02
 
-This is the compact current handoff. Historical detail remains in `CONTINUITY.md`, `ERRORS.md`, `audits/ERROR_LOG.md`, the Phase 4/5 incident records, and issue #9.
+This file is the compact authoritative handoff. Historical detail remains in
+`CONTINUITY.md`, `ERRORS.md`, `audits/ERROR_LOG.md`,
+`audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`, and GitHub issue #9.
 
-## Operating rules
+## Scope lock
 
-- Reliability and observability only. Strategy, thresholds, pairs, scoring, SL/TP, filters, PR #7, DeepSource, and Supabase signal semantics remain frozen.
-- No direct push to `main`.
-- Every Termux package displays `audits/ERROR_LOG.md`, runs in a bounded child script, preserves the parent shell, and ends with exactly one next action.
-- Read-only packages answer one narrow question.
-- Mutating recovery requires fresh topology validation, backup, rollback, explicit approval, and independent verification.
-- Never depend on `/proc/uptime` on this Android build.
-- Trusted server/provider UTC controls market semantics; monotonic time controls same-boot cadence and health; Android/ship wall time is display-only.
+Current work is reliability, data integrity, provider-budget accounting,
+notification correctness, and repository/runtime convergence.
 
-## Native service-manager migration: complete
+Do not change trading strategy, thresholds, configured pairs, scoring, ADX,
+H1/D1 confirmation rules, volatility or macro filters, dedup semantics, SL/TP,
+PR #7, or Supabase signal semantics merely to create more signals.
 
-The migration from the legacy boot guard to the native `service-daemon` manager and watchdog is complete.
+No direct push to `main`.
 
-Repository milestones:
+## Evidence rules
+
+Material claims must be classified as VERIFIED, ASSUMED, or UNKNOWN.
+
+- VERIFIED means proven by current GitHub state, direct Termux output, current
+  provider/server evidence, Supabase evidence, or an explicit user-provided log.
+- ASSUMED means plausible but not proven.
+- UNKNOWN means it must not drive mutation.
+
+Trusted provider/server UTC controls market semantics. Monotonic time controls
+same-boot cadence, cooldowns, and health. Android/ship wall time is display-only.
+Never depend on `/proc/uptime` on this Android build.
+
+Every Termux package must display `audits/ERROR_LOG.md`, run strict shell options
+only inside a bounded child script, preserve the interactive parent shell,
+inspect one narrow evidence domain, and end with exactly one next action.
+
+## Superseded July 26 snapshot
+
+On 2026-07-26, the native service-manager migration and watchdog finalization
+were verified at:
 
 ```text
-PR #18 MERGED=ef94e4fd1c9a7a786f7514024828fbdfc1146143
-PR #19 MERGED=12000f04137a000cb3d1c6bf7acb45da288907c9
-PR #20 MERGED=87e43ce76d43d625e7e9c7a6715cabb59f4b65c9
-PR #21 MERGED=09a1bd5b57e0bf3a39e79afc827d14e09e8b1031
-PR #22 MERGED=0694e17c09c3c8663622dce745d8b449c3cd2405
-```
-
-PR #22 made the partial migration journaled, resumable, and fail-closed after interruption. The phone had already reconverged to a fully owned native state, so the partial executor correctly rejected that source topology and rolled files back. The fully-owned finalizer from PR #20 was then used instead.
-
-## Final verified runtime topology
-
-Finalization evidence:
-
-```text
-FINALIZER_SOURCE_STATE=native_manager_fully_owned_no_watchdog
 MANAGER_COUNT=1
-MANAGER_PID=22175
-PIDFILE_VALUE=22175
 OWNED=7/7
 RUNNING=7/7
 ORPHANED=0
@@ -46,50 +48,133 @@ INVALID=0
 DUPLICATES=0
 DOWN_SERVICES=NONE
 WATCHDOG_COUNT=1
-WATCHDOG_PID=8752
-WATCHDOG_LOCK_HOLDERS=8752
-BOOT_LEGACY_COUNT=0
-BOOT_WATCHDOG_COUNT=1
-ACTIVE_MIGRATION_JOURNAL=ABSENT
-FINALIZATION_PACKAGE=PASS
-```
-
-A later read-only stability check after normal service cycles independently returned:
-
-```text
 CONTROL_PLANE_GATE=PASS
 STABILITY_CHECK=PASS
-STABILITY_WRAPPER_EXIT_CODE=0
-RUNTIME_MUTATION_PERFORMED=NO
 ```
 
-All seven required services had exactly one `runsv` supervisor owned by the native manager:
+That evidence remains historically valid for that timestamp. It is not the
+current production-readiness verdict because later validation exposed new
+regressions.
 
-- `bota-updater`
-- `bota-watcher`
-- `bota-closer`
-- `bota-shadow`
-- `bota-heartbeat`
-- `bota-supervisor`
-- `crond`
+## August 1 production validation: failed
 
-## Current repository/runtime distinction
+The one-week production validation did not pass.
 
-The phone checkout remains on operational branch `ops/ship-time-independent-runtime-20260717`, HEAD `c9ab9996190025ab51202b1f6508a05f8fc148c3`, with a dirty worktree. That repository housekeeping is separate from the verified runtime control-plane closure and must not be overwritten casually.
+Verified during the validation period:
 
-## What remains
+- BotA remained capable of fetching data, calculating decisions, and delivering
+  at least one eligible GBPUSD M15 signal.
+- The control plane regressed to one manager with all seven required `runsv`
+  supervisors orphaned under PID 1: `owned=0/7`, `running=7/7`, `orphaned=7`.
+- A later one-shot reconciliation restored one manager, `owned=7/7`,
+  `running=7/7`, and `orphaned=0`.
+- Required service counts temporarily fell below seven.
+- The phone checkout and GitHub `main` were not synchronized.
+- Canonical crontab verification failed.
+- Runtime and repository documentation described a watchdog configuration that
+  did not match the phone.
+- The configured native service-daemon executable was unavailable on the phone.
+- A continuous `runsvdir` guard was followed by repeated Termux restarts.
+- The continuous guard and watchdog were stopped.
+- The boot launcher was replaced with a safe launcher that starts the standard
+  Termux service tree but intentionally does not start automatic topology
+  recovery.
 
-The infrastructure migration is closed. Do not rerun either migration executor or the finalizer while the verified topology remains healthy.
+Final rollback verification recorded:
 
-The next meaningful proof is market-session behavior:
+```text
+manager_count=1
+owned=7/7
+running=7/7
+orphaned=0
+control_plane_rc=0
+automatic_recovery=disabled
+```
 
-1. wait for Monday/open-market watcher cycles;
-2. verify fresh updater and watcher progress using active logs only;
-3. classify each cycle as normal HOLD/rejection, eligible signal, send failure, or infrastructure failure;
-4. when the next real signal becomes ACTIVE, verify Telegram delivery, Supabase persistence, closer execution, and transition to CLOSED/CANCELLED with result pips.
+The full incident record is:
+`audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`.
 
-Do not change ADX, scoring thresholds, pair scope, filters, SL/TP, or dedup merely because Monday produces no signal. A healthy rejected HOLD is valid runtime behavior.
+## Repository containment
+
+PR #24 began as a three-file preservation PR based on an older phone checkout.
+It later drifted to seven commits and thirty-two changed files, diverged heavily
+from current `main`, became non-mergeable, and accumulated unrelated runtime,
+documentation, testing, provider, and notification changes.
+
+PR #24 must not be merged or used as a deployment source. Salvageable behavior
+must be reapplied deliberately from current `main` in narrow clean branches with
+complete-file replacements and focused tests.
+
+The clean containment branch is:
+
+```text
+repair/production-validation-truth-20260802
+```
+
+This branch changes repository documentation only. It performs no phone,
+service, process, cron, provider, Telegram, Supabase, strategy, or runtime
+mutation.
+
+## August 2 read-only data discovery
+
+The latest provided Termux package ended with:
+
+```text
+LOCAL_STATUS_DATA_DISCOVERY_COMPLETE=YES
+RUNTIME_MUTATION_PERFORMED=NO
+GIT_CHANGED=NO
+```
+
+Do not repeat that broad discovery.
+
+A concrete unresolved data defect was visible in the supplied cache evidence:
+
+```text
+cache/indicators_EURUSD_D1.json
+pair=EURUSD
+timeframe=D1
+tf_ok=false
+tf_actual_min=0.0
+weak=true
+error=tf_mismatch
+ema9=0.0
+ema21=0.0
+atr=0.0
+```
+
+Weekend-stale M15/H1/H4 candles are not automatically a defect. The EURUSD D1
+`tf_mismatch` is different: it is an explicit invalid-data state and must be
+traced through the active fetch/build path before any strategy conclusion.
+
+## Current verified status
+
+```text
+PRODUCTION_VALIDATION=FAILED
+FINAL_ROLLBACK_CONTROL_PLANE=PASS_AT_RECORDED_TIMESTAMP
+AUTOMATIC_TOPOLOGY_RECOVERY=DISABLED
+CURRENT_PHONE_TOPOLOGY=UNKNOWN_UNTIL_FRESH_NARROW_PROOF
+PR24_MERGE_ALLOWED=NO
+BROAD_DATA_DISCOVERY_REPEAT_REQUIRED=NO
+STRATEGY_MUTATION_ALLOWED=NO
+```
+
+## Efficient repair order
+
+1. Keep repository truth and incident records synchronized.
+2. Preserve the phone worktree before any checkout, reset, merge, or overwrite.
+3. Prove one current control-plane snapshot only when a runtime mutation or live
+   diagnosis actually requires it.
+4. Diagnose the EURUSD D1 timeframe mismatch from the active updater path using
+   exact files and a bounded reproduction.
+5. Reconcile provider calls and budgets per provider.
+6. Repair Telegram status wording and market gating separately from executable
+   signal delivery.
+7. Reintroduce automatic topology recovery only after a bounded implementation
+   passes failure-injection tests and does not restart Termux.
+8. Run a new production-validation window only after the above gates pass.
 
 ## Exactly one next action
 
-On Monday after at least one verified open-market cycle, run one compact read-only watcher-cycle proof. Inspect strategy only if the infrastructure path passes and the recorded decision evidence is internally inconsistent.
+Create one clean code-repair package from current `main` that reproduces and
+fixes the EURUSD D1 `tf_mismatch` without touching strategy, runtime processes,
+or the production phone checkout.

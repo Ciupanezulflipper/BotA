@@ -1,49 +1,172 @@
 # BotA Errors and Silent-Failure Register
 
-Last updated: 2026-07-26
+Last updated: 2026-08-02
 
-Purpose: record runtime failures, audit mistakes, and prevention rules that must not be rediscovered from scratch.
+Purpose: preserve verified failure classes, current open risks, and prevention
+rules so they are not rediscovered through repeated broad audits.
 
-## Current highest-priority incident: closed
+## Current highest-priority incident: open
 
-The native service-manager migration and watchdog finalization are complete.
+The one-week production validation ending 2026-08-01 failed.
 
-Final verified phone state:
+The July 26 service-manager closure remains valid historical evidence, but it was
+superseded as a production-readiness verdict by later regressions.
+
+Verified validation failures:
+
+- control-plane regression to `owned=0/7`, `running=7/7`, `orphaned=7`;
+- temporary required-service counts below seven;
+- canonical crontab verification failure;
+- phone checkout and GitHub `main` divergence;
+- repository documentation not matching the actual watchdog topology;
+- configured native service-daemon executable unavailable on the phone;
+- repeated Termux restarts while a continuous `runsvdir` guard was active;
+- production validation could not be declared complete despite valid data fetch,
+  decision calculation, and at least one eligible GBPUSD M15 signal.
+
+Final rollback evidence recorded:
 
 ```text
-MANAGER_COUNT=1
-MANAGER_PID=22175
-PIDFILE_VALUE=22175
-OWNED=7/7
-RUNNING=7/7
-ORPHANED=0
-INVALID=0
-DUPLICATES=0
-DOWN_SERVICES=NONE
-WATCHDOG_COUNT=1
-WATCHDOG_PID=8752
-WATCHDOG_LOCK_HOLDERS=8752
-BOOT_LEGACY_COUNT=0
-BOOT_WATCHDOG_COUNT=1
-ACTIVE_MIGRATION_JOURNAL=ABSENT
-CONTROL_PLANE_GATE=PASS
-STABILITY_CHECK=PASS
+manager_count=1
+owned=7/7
+running=7/7
+orphaned=0
+control_plane_rc=0
+automatic_recovery=disabled
 ```
 
-A later read-only check after normal service cycles confirmed the same healthy topology without mutation.
+The current phone topology after that timestamp is UNKNOWN until one fresh,
+narrow proof is actually required.
 
-## Migration lessons preserved
+See `audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`.
 
-- `supervise/pid` identifies the supervised service process, not the `runsv` supervisor.
-- Correct ownership proof is service PID -> service PPID -> `runsv` supervisor -> supervisor PPID/cwd/state/command.
-- Android may kill the Termux process during runtime mutation; migration steps must be journaled, resumable, bounded, and fail-closed.
-- A transient split control plane may reconverge automatically. Record both failure and recovery evidence.
-- The partial migration executor must not be used for an already fully owned native tree.
-- A fully owned native manager with no watchdog must use the dedicated finalizer, which changes only approved files/boot launcher and starts one watchdog.
-- `set -Eeuo pipefail` belongs only in a child script, never directly in the interactive Termux shell.
-- Printed `MUTATION_STARTED=YES` must follow the first actual mutation, not merely preflight completion.
+## Repository contamination: PR #24
 
-## Repository milestones
+PR #24 started as a three-file preservation branch from an older phone checkout.
+It later expanded to seven commits and thirty-two changed files, diverged heavily
+from current `main`, became non-mergeable, and mixed unrelated concerns.
+
+It must not be merged or deployed.
+
+Prevention:
+
+- create and verify a clean branch from current `main` before any write;
+- keep one behavior and one acceptance gate per branch;
+- never use a preservation branch as an integration branch;
+- salvage complete files deliberately rather than cherry-picking unknown scope;
+- close or mark contaminated PRs as superseded instead of repairing them in place.
+
+## Current data-integrity defect
+
+The August 2 read-only discovery ended with:
+
+```text
+LOCAL_STATUS_DATA_DISCOVERY_COMPLETE=YES
+RUNTIME_MUTATION_PERFORMED=NO
+GIT_CHANGED=NO
+```
+
+Do not repeat the broad discovery.
+
+The supplied cache evidence showed:
+
+```text
+cache/indicators_EURUSD_D1.json
+error=tf_mismatch
+tf_ok=false
+tf_actual_min=0.0
+weak=true
+ema9=0.0
+ema21=0.0
+atr=0.0
+```
+
+This is an explicit invalid-data state. It must be reproduced through the exact
+active EURUSD D1 fetch/build path before changing strategy or declaring a missed
+signal.
+
+Weekend-stale intraday candles alone are not proof of provider failure.
+
+## Runtime ownership and scheduler lessons
+
+- A manager process and matching pidfile do not prove service ownership.
+- `supervise/pid` identifies the supervised service process, not `runsv`.
+- Correct ownership proof is service PID -> PPID -> `runsv` -> supervisor
+  PPID/cwd/state/command.
+- `sv status` alone cannot prove parentage or restart capability.
+- Surviving supervisors may remain under PID 1 after manager death.
+- Starting a second manager while orphans remain can create duplicates.
+- A transient split control plane may reconverge; record both failure and
+  recovery without erasing either.
+- A stale or wiped crontab can leave Daily Proof alive while the signal factory
+  is unscheduled.
+- Detached crond and runit crond can create split-brain scheduling.
+- Multiple executable boot files can independently start the same daemon.
+
+## Automatic-recovery lessons
+
+- Automatic recovery is currently disabled by design after the August 1
+  rollback.
+- The configured native service-daemon executable must be verified on the phone
+  before any launcher references it.
+- A continuous recovery guard must not be deployed merely because a one-shot
+  reconciliation worked.
+- Any replacement guard requires bounded cadence, locking, backoff,
+  failure-injection tests, Termux restart observation, and a kill switch.
+- Do not re-enable a watchdog or guard from stale repository documentation.
+
+## Health and time semantics
+
+- Service presence is not useful progress.
+- Use trusted provider/server UTC for market semantics.
+- Use monotonic time for same-boot cadence, cooldowns, and health.
+- Android/ship wall time is display-only.
+- Reject negative and future stale ages.
+- Print exact time inputs used in diagnostics.
+- Never depend on `/proc/uptime` on this Android build.
+- Changed PIDs are restart events, not failures by themselves.
+
+## Provider and data risks
+
+- Track budgets per actual provider and endpoint, not through a generic success
+  counter.
+- Formatting or status code must not make hidden unaccounted network calls.
+- Provider fallback must have explicit source conditions, caching, and quota
+  ownership.
+- Validate pair, timeframe, granularity, timestamps, ordering, row count, and
+  closed-candle semantics before indicator calculation.
+- A cache writer must fail closed on timeframe mismatch; zero indicators must not
+  be treated as neutral valid data.
+- Do not mix Yahoo, OANDA, RapidAPI, or other provider evidence without naming
+  the exact source for each artifact.
+
+## Notification and persistence risks
+
+- Telegram status messages are context, not executable trade entries.
+- Internal vote/scoring language must not be presented as an entry signal.
+- Status notifications should respect configured market-session policy.
+- Telegram delivery, Supabase persistence, provider failure, runtime failure,
+  and a valid HOLD/rejection are distinct outcomes.
+- Count only events inside a verified current-cycle boundary.
+- Confirm the full decision record is written before dedup.
+
+## Operational package failures
+
+- Broad scans can enter runit FIFOs or mix active and historical evidence.
+- Generic symbol/timeframe regexes can parse arbitrary log tags as pairs.
+- Historical watcher logs must not be selected as current evidence because they
+  contain more marker strings.
+- CSV schema must be printed and verified before parsing assumptions are coded.
+- Expected zero-match commands must not abort under `pipefail`.
+- `set -Eeuo pipefail` belongs in a bounded child script, not the interactive
+  shell.
+- Top-level `exit` can close Termux.
+- Oversized pasted packages can crash Termux.
+- Read-only packages answer one narrow question.
+- Mutation requires fresh preflight, backup, rollback, authorization, and
+  independent verification.
+
+## Repository milestones retained
 
 ```text
 PR #18 MERGED=ef94e4fd1c9a7a786f7514024828fbdfc1146143
@@ -51,70 +174,51 @@ PR #19 MERGED=12000f04137a000cb3d1c6bf7acb45da288907c9
 PR #20 MERGED=87e43ce76d43d625e7e9c7a6715cabb59f4b65c9
 PR #21 MERGED=09a1bd5b57e0bf3a39e79afc827d14e09e8b1031
 PR #22 MERGED=0694e17c09c3c8663622dce745d8b449c3cd2405
+PR #23 MERGED=95c54beff7741b32da086bcbd5e87f1c9d132cb5
+PR #25 MERGED=2f50904644d86c5564e3d6ae9d3cc777a5a29278
 ```
 
-PR #22 added the persistent migration journal and recovery gate. During deployment, the partial executor correctly rejected `OWNED=7/7; ORPHANED=0` and performed file rollback. The dedicated fully-owned finalizer then completed successfully.
+These merges do not authorize redeploying the failed August 1 automatic-recovery
+configuration.
 
-## Current operational caution
+## Efficient diagnostic order
 
-The phone checkout remains on operational branch `ops/ship-time-independent-runtime-20260717`, HEAD `c9ab9996190025ab51202b1f6508a05f8fc148c3`, with a dirty worktree. Do not reset or overwrite it without first preserving and classifying all local changes.
+### Gate A — repository safety
 
-## Historical error classes still applicable
+Before phone Git operations, preserve and classify every local change. Do not
+reset, checkout, pull, merge, or overwrite a dirty production worktree.
 
-### Runtime ownership and scheduler integrity
+### Gate B — current control plane
 
-- stale or wiped crontab can leave Daily Proof alive while the signal factory is unscheduled;
-- `sv status` alone cannot prove healthy ownership or restart capability;
-- Android can replace a manager while child supervisors survive;
-- detached crond and runit crond can create split-brain behavior;
-- ownership must be proven through manager, supervisor, wrapper, and service parentage.
+When current runtime evidence is required, verify one intended manager, seven
+owned/running supervisors, zero orphans/invalid/duplicates, supervised crond,
+and the actual boot launcher. Do not assume a watchdog exists.
 
-### Health and time semantics
+If Gate B fails, stop. Do not inspect strategy, watcher decisions, CSV, caches,
+or Telegram history.
 
-- service presence is not useful progress;
-- future or negative stale ages must be rejected;
-- use trusted provider/server UTC for market semantics;
-- use monotonic time for same-boot health and cadence;
-- never depend on `/proc/uptime` on this Android build;
-- PID changes are restart events, not failures by themselves.
+### Gate C — one active data path
 
-### Provider and observability risks
+After Gate B passes, reproduce one pair/timeframe through exact provider fetch,
+cache write, and indicator build. Validate granularity and timestamps first.
 
-- provider quotas must be tracked per provider rather than by generic successful fetches;
-- RapidAPI calendar fallback must remain disabled until its source condition, caching, and budget are corrected;
-- Telegram, Supabase, network, provider, and runtime failures must be distinguished;
-- quiet/no-signal behavior must not be reported as infrastructure death;
-- a rejected HOLD with complete current evidence is normal strategy behavior, not a missed signal by itself.
+### Gate D — decision integrity
 
-### Operational package failures
+Classify one current cycle as valid HOLD/rejection, eligible signal, send failure,
+persistence failure, data failure, or infrastructure failure.
 
-- broad scans can enter runit FIFOs or mix active and historical evidence;
-- expected zero-match commands must not abort under `pipefail`;
-- top-level `exit` can close the Termux session;
-- oversized pasted scripts can crash Termux;
-- read-only packages must answer one narrow question;
-- mutation requires fresh topology validation, backup, rollback, explicit approval, and independent verification.
+### Gate E — signal lifecycle
 
-## Efficient diagnostic order when signals stop
+For the next ACTIVE signal, verify Telegram, Supabase, closer execution, and
+CLOSED/CANCELLED transition with result pips.
 
-### Gate A — control plane
+### Gate F — mutation
 
-Verify exactly one intended manager, seven owned/running supervisors, zero orphans/invalid/duplicates, one supervised crond, one watchdog holding its lock, correct boot launcher, and no active migration journal.
+Require persistent failure, narrow cause, exact expected source state, backup,
+rollback, explicit authorization, and independent post-change verification.
 
-If Gate A fails, stop. Do not inspect strategy, watcher decisions, CSV, caches, or Telegram history.
+## Current next repair
 
-### Gate B — current updater/watcher progress
-
-After Gate A passes, prove fresh data and one current watcher cycle using active logs only.
-
-### Gate C — decision integrity
-
-Classify the cycle as valid HOLD/rejection, eligible signal, send failure, persistence failure, or infrastructure failure. Confirm the full decision record exists before dedup.
-
-### Gate D — lifecycle proof
-
-When the next signal becomes ACTIVE, verify Telegram/Supabase creation, closer execution, and correct CLOSED/CANCELLED transition with result pips.
-
-### Gate E — mutation
-
-Require persistent failure, narrow cause, exact expected source topology, backup, rollback, explicit approval, and independent post-change verification. Do not change strategy merely because no signal is emitted.
+Reproduce and fix the EURUSD D1 `tf_mismatch` from current `main` on a focused
+clean branch. Do not touch strategy, notification code, automatic recovery, or
+the production phone in the same package.
