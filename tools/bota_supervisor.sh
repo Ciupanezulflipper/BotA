@@ -118,12 +118,47 @@ if [[ -f "${CLOCK_STATUS}" ]]; then
   clock_json="$(head -c 16384 -- "${CLOCK_STATUS}" 2>/dev/null || true)"
 fi
 
+clock_status_rc=0
 SUPERVISOR_MARKET_EXIT_CODE="${market_rc}" \
 SUPERVISOR_MARKET_STDOUT="${market_stdout}" \
 SUPERVISOR_MARKET_STDERR="${market_stderr}" \
 SUPERVISOR_CLOCK_PRESENT="${clock_present}" \
 SUPERVISOR_CLOCK_JSON="${clock_json}" \
-python3 "${TOOLS}/supervisor_clock_status.py" >"${clock_tmp}"
+python3 "${TOOLS}/supervisor_clock_status.py" \
+  >"${clock_tmp}" 2>>"${LOGS}/error.log" || clock_status_rc=$?
+
+if (( clock_status_rc != 0 )); then
+  log "CLOCK_STATUS_TOOL_FAILED: rc=${clock_status_rc}"
+  cat >"${clock_tmp}" <<'JSON'
+{
+  "schema_version": "1.0",
+  "market_gate": {
+    "state": "error",
+    "reason": "clock_status_tool_failed",
+    "exit_code": 255,
+    "trusted_server_clock_available": null,
+    "diagnostic": "supervisor_clock_status.py failed"
+  },
+  "clock_observability": {
+    "status": "TOOL_FAILED",
+    "snapshot_status": "UNKNOWN",
+    "source_file_present": false,
+    "source_file_valid": false,
+    "server_clock_ok": null,
+    "trading_clock_available": null,
+    "live_gate_overrode_snapshot": false,
+    "local_clock_unsafe": null,
+    "local_clock_warning": false,
+    "drift_seconds": null,
+    "server_reason": "clock_status_tool_failed",
+    "generated_utc": "",
+    "runtime_failure": false
+  },
+  "service_mutation_performed": false,
+  "strategy_changed": false
+}
+JSON
+fi
 
 market_state="$(
   CLOCK_REPORT_PATH="${clock_tmp}" python3 - <<'PY'
@@ -131,8 +166,19 @@ import json
 import os
 from pathlib import Path
 
-data = json.loads(Path(os.environ["CLOCK_REPORT_PATH"]).read_text(encoding="utf-8"))
-print(data["market_gate"]["state"])
+try:
+    data = json.loads(
+        Path(os.environ["CLOCK_REPORT_PATH"]).read_text(encoding="utf-8")
+    )
+except (OSError, UnicodeError, json.JSONDecodeError):
+    print("error")
+    raise SystemExit(0)
+
+market_gate = data.get("market_gate") if isinstance(data, dict) else None
+if not isinstance(market_gate, dict):
+    print("error")
+else:
+    print(str(market_gate.get("state") or "error"))
 PY
 )"
 
@@ -265,9 +311,19 @@ import json
 import os
 from pathlib import Path
 
-data = json.loads(Path(os.environ["CLOCK_REPORT_PATH"]).read_text(encoding="utf-8"))
-clock = data.get("clock_observability") or {}
-print(clock.get("status") or "UNKNOWN")
+try:
+    data = json.loads(
+        Path(os.environ["CLOCK_REPORT_PATH"]).read_text(encoding="utf-8")
+    )
+except (OSError, UnicodeError, json.JSONDecodeError):
+    print("UNKNOWN")
+    raise SystemExit(0)
+
+clock = data.get("clock_observability") if isinstance(data, dict) else None
+if not isinstance(clock, dict):
+    print("UNKNOWN")
+else:
+    print(str(clock.get("status") or "UNKNOWN"))
 PY
 )"
 
