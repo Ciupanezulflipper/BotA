@@ -158,10 +158,11 @@ class AutostatusBehaviorTests(unittest.TestCase):
             write_formatter(formatter, marker)
             result = run_autostatus(root, dry_run=True)
             log = read_log(root)
+            marker_called = marker.exists()
             leftovers = temporary_files(root)
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertFalse(marker.exists())
+        self.assertFalse(marker_called)
         self.assertIn("market_gate_missing_or_not_executable", log)
         self.assertEqual(leftovers, [])
 
@@ -173,10 +174,11 @@ class AutostatusBehaviorTests(unittest.TestCase):
             write_formatter(formatter, marker)
             result = run_autostatus(root, dry_run=True)
             log = read_log(root)
+            marker_called = marker.exists()
             leftovers = temporary_files(root)
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertFalse(marker.exists())
+        self.assertFalse(marker_called)
         self.assertIn("market_closed_or_clock_unavailable", log)
         self.assertEqual(leftovers, [])
 
