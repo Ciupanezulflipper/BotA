@@ -72,9 +72,10 @@ class StatusSourcePolicyTests(unittest.TestCase):
     def test_sender_uses_isolated_workspace_and_captures_transport_errors(self) -> None:
         source = AUTOSTATUS.read_text(encoding="utf-8")
         self.assertIn('mktemp -d "${TMPDIR}/autostatus.XXXXXX"', source)
-        self.assertIn("trap 'rm -rf --", source)
-        self.assertIn('rm -rf -- "${WORKDIR}"', source)
+        self.assertIn('rm -f -- "${OUT}" "${ERR}" "${RESP_FILE}" "${CURL_ERR}"', source)
+        self.assertIn('rmdir -- "${WORKDIR}"', source)
         self.assertIn('2>"${CURL_ERR}"', source)
+        self.assertNotIn("rm -rf", source)
         self.assertNotIn('${TMPDIR}/as.out', source)
         self.assertNotIn('${TMPDIR}/as.err', source)
 
