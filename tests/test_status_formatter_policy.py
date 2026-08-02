@@ -98,7 +98,8 @@ class StatusFormatterSourceTests(unittest.TestCase):
 class StatusFormatterBehaviorTests(unittest.TestCase):
     """Exercise cache validation and user-facing rendering."""
 
-    def render(self, cache_dir: Path) -> str:
+    @staticmethod
+    def render(cache_dir: Path) -> str:
         """Render status while temporarily using an isolated cache directory."""
         with patch.object(format_status, "CACHE_DIR", cache_dir):
             return format_status.build_status()
