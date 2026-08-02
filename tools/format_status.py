@@ -1,84 +1,185 @@
-import subprocess, json, datetime, os, pathlib
-ROOT = pathlib.Path(__file__).parent.parent
+#!/usr/bin/env python3
+"""Render BotA's user-facing technical trend context from local indicator caches.
 
-def run(pair):
-    r = subprocess.run(['python3', str(ROOT / 'tools' / 'emit_snapshot.py'), pair],
-        capture_output=True, text=True)
-    return r.stdout
+This formatter performs no network requests. It intentionally separates cached
+technical context from executable BotA trade signals.
+"""
 
-def parse(raw):
-    tfs = {}
-    for line in raw.splitlines():
-        if not line.startswith(('H1:','H4:','D1:')):
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+from typing import Any
+
+
+DEFAULT_ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(os.environ.get("BOTA_ROOT", str(DEFAULT_ROOT))).expanduser()
+CACHE_DIR = ROOT / "cache"
+
+PAIRS = (("EURUSD", "EUR/USD"), ("GBPUSD", "GBP/USD"))
+TIMEFRAMES = ("H1", "H4", "D1")
+
+STRONG_BUY = "STRONG BUY"
+BUY = "BUY"
+HOLD = "HOLD"
+SELL = "SELL"
+STRONG_SELL = "STRONG SELL"
+
+STATUS_TITLE = "BotA Technical Trend Context"
+DISCLAIMER = "Cached indicators only — not a trade entry."
+
+
+def safe_float(value: Any) -> float | None:
+    """Return a finite float or ``None`` for invalid input."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number or number in (float("inf"), float("-inf")):
+        return None
+    return number
+
+
+def load_bundle(pair: str, timeframe: str) -> dict[str, Any] | None:
+    """Load one indicator bundle from the canonical cache path."""
+    path = CACHE_DIR / f"indicators_{pair}_{timeframe}.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def bundle_error(bundle: dict[str, Any] | None, pair: str, timeframe: str) -> str:
+    """Return an explicit fail-closed reason for an unusable bundle."""
+    if bundle is None:
+        return "missing cache"
+    if str(bundle.get("pair", "")).upper() != pair:
+        return "pair mismatch"
+    if str(bundle.get("timeframe", "")).upper() != timeframe:
+        return "timeframe mismatch"
+    if bundle.get("tf_ok") is not True:
+        return str(bundle.get("error") or "invalid timeframe")
+    if bundle.get("weak") is not False:
+        return str(bundle.get("error") or "weak data")
+    if str(bundle.get("error") or "").strip():
+        return str(bundle["error"])
+    required = ("price", "ema9", "ema21", "rsi", "macd_hist")
+    if any(safe_float(bundle.get(key)) is None for key in required):
+        return "invalid indicators"
+    return ""
+
+
+def timeframe_score(bundle: dict[str, Any]) -> int:
+    """Compute the existing three-factor technical score for display only."""
+    ema9 = safe_float(bundle.get("ema9")) or 0.0
+    ema21 = safe_float(bundle.get("ema21")) or 0.0
+    rsi = safe_float(bundle.get("rsi")) or 50.0
+    macd_hist = safe_float(bundle.get("macd_hist")) or 0.0
+
+    score = 0
+    score += 1 if ema9 > ema21 else -1 if ema9 < ema21 else 0
+    score += 1 if rsi > 55.0 else -1 if rsi < 45.0 else 0
+    score += 1 if macd_hist > 0.0 else -1 if macd_hist < 0.0 else 0
+    return score
+
+
+def timeframe_label(score: int) -> str:
+    """Map one timeframe's score to plain user-facing trend language."""
+    if score >= 3:
+        return STRONG_BUY
+    if score >= 2:
+        return BUY
+    if score <= -3:
+        return STRONG_SELL
+    if score <= -2:
+        return SELL
+    return HOLD
+
+
+def overall_label(total_score: int, valid_timeframes: int) -> str:
+    """Map multi-timeframe context to a label, requiring useful coverage."""
+    if valid_timeframes < 2:
+        return HOLD
+    if total_score >= 5:
+        return STRONG_BUY
+    if total_score >= 2:
+        return BUY
+    if total_score <= -5:
+        return STRONG_SELL
+    if total_score <= -2:
+        return SELL
+    return HOLD
+
+
+def macd_direction(value: Any) -> str:
+    """Render MACD histogram direction without exposing raw internal scoring."""
+    number = safe_float(value)
+    if number is None or number == 0.0:
+        return "flat"
+    return "rising" if number > 0.0 else "falling"
+
+
+def format_price(value: Any) -> str:
+    """Format a cached price while retaining fail-closed output."""
+    number = safe_float(value)
+    if number is None:
+        return "unavailable"
+    return f"{number:.5f}"
+
+
+def render_pair(pair: str, label: str) -> list[str]:
+    """Render one pair from valid cached indicator bundles."""
+    lines = [f"━━━ {label} ━━━"]
+    bundles: dict[str, dict[str, Any]] = {}
+    scores: list[int] = []
+
+    for timeframe in TIMEFRAMES:
+        bundle = load_bundle(pair, timeframe)
+        reason = bundle_error(bundle, pair, timeframe)
+        if reason:
+            lines.append(f"{timeframe}: unavailable ({reason})")
             continue
-        parts = line.split()
-        tf = parts[0].rstrip(':')
-        d = {}
-        for p in parts[1:]:
-            if '=' in p:
-                k,v = p.split('=',1)
-                d[k] = v
-        tfs[tf] = d
-    return tfs
+        assert bundle is not None
+        bundles[timeframe] = bundle
+        score = timeframe_score(bundle)
+        scores.append(score)
+        rsi = safe_float(bundle.get("rsi")) or 50.0
+        lines.append(
+            f"{timeframe}: {timeframe_label(score)} | "
+            f"RSI {rsi:.1f} | MACD {macd_direction(bundle.get('macd_hist'))}"
+        )
 
-def vote_bar(v):
-    try: v = int(v)
-    except: return '⚪'
-    if v >= 2: return '🟢'
-    if v == 1: return '🟡'
-    if v == -1: return '🟠'
-    if v <= -2: return '🔴'
-    return '⚪'
+    price_bundle = next(
+        (bundles[timeframe] for timeframe in TIMEFRAMES if timeframe in bundles),
+        None,
+    )
+    if price_bundle is not None:
+        lines.insert(1, f"Price: {format_price(price_bundle.get('price'))}")
+    else:
+        lines.insert(1, "Price: unavailable")
 
-def macd_arrow(v):
-    try: return '↗️' if float(v) >= 0 else '↘️'
-    except: return '➡️'
+    total = sum(scores)
+    lines.append(f"Overall trend: {overall_label(total, len(scores))}")
+    lines.append(f"Coverage: {len(scores)} of {len(TIMEFRAMES)} timeframes")
+    return lines
 
-def total_vote(tfs):
-    try: return sum(int(tfs[t]['vote']) for t in ['H1','H4','D1'] if t in tfs)
-    except: return 0
 
-def bias(tv):
-    if tv >= 5: return '🟢 STRONG BULL'
-    if tv >= 2: return '🟢 BULL'
-    if tv <= -5: return '🔴 STRONG BEAR'
-    if tv <= -2: return '🔴 BEAR'
-    return '⚪ NEUTRAL'
+def build_status() -> str:
+    """Build the complete cache-only status message."""
+    lines = [STATUS_TITLE, DISCLAIMER, ""]
+    for index, (pair, label) in enumerate(PAIRS):
+        if index:
+            lines.append("")
+        lines.extend(render_pair(pair, label))
+    return "\n".join(lines)
 
-now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
-lines = [f'🕘 BotA Status — {now}', '']
 
-for pair, label in [('EURUSD','EUR/USD'), ('GBPUSD','GBP/USD')]:
-    raw = run(pair)
-    tfs = parse(raw)
-    if not tfs:
-        lines.append(f'⚠️ {label} — no data')
-        continue
-    close = tfs.get('H1',{}).get('close','?')
-    tv = total_vote(tfs)
-    lines.append(f'━━━ {label} ━━━')
-    lines.append(f'💰 {close}')
-    for tf in ['H1','H4','D1']:
-        if tf not in tfs: continue
-        d = tfs[tf]
-        rsi = float(d.get('rsi','rsi14'.split('=')[-1]) if 'rsi' in d else d.get('RSI14',0))
-        # parse RSI14 key
-        rsi_val = '?'
-        for k,v in d.items():
-            if 'rsi' in k.lower():
-                try: rsi_val = f'{float(v):.1f}'
-                except: pass
-        vote = d.get('vote','0')
-        macd = d.get('macd_hist') or d.get('MACD_hist','0')
-        lines.append(f'📊 {tf}  RSI {rsi_val} | MACD {macd_arrow(macd)} | Vote {vote} {vote_bar(vote)}')
-    lines.append(f'🧭 Bias: {bias(tv)} ({tv:+d}/9)')
-    lines.append('')
+def main() -> None:
+    """Print the user-facing cached technical context."""
+    print(build_status())
 
-print('\n'.join(lines))
 
-# Append API usage line
-import subprocess as _sp
-_api = _sp.run(['python3', str(ROOT / 'tools' / 'api_credit_tracker.py'), 'status'],
-    capture_output=True, text=True)
-if _api.stdout.strip():
-    print(_api.stdout.strip())
+if __name__ == "__main__":
+    main()
