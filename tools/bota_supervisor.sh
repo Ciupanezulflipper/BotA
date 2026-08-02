@@ -109,12 +109,21 @@ market_rc=0
 MARKET_OPEN_DEBUG=1 bash "${TOOLS}/market_open.sh" \
   >"${market_stdout_tmp}" 2>"${market_stderr_tmp}" || market_rc=$?
 
-python3 "${TOOLS}/supervisor_clock_status.py" \
-  --clock-file "${CLOCK_STATUS}" \
-  --market-exit-code "${market_rc}" \
-  --market-stdout-file "${market_stdout_tmp}" \
-  --market-stderr-file "${market_stderr_tmp}" \
-  >"${clock_tmp}"
+market_stdout="$(head -c 4096 -- "${market_stdout_tmp}" 2>/dev/null || true)"
+market_stderr="$(head -c 4096 -- "${market_stderr_tmp}" 2>/dev/null || true)"
+clock_present=0
+clock_json=""
+if [[ -f "${CLOCK_STATUS}" ]]; then
+  clock_present=1
+  clock_json="$(head -c 16384 -- "${CLOCK_STATUS}" 2>/dev/null || true)"
+fi
+
+SUPERVISOR_MARKET_EXIT_CODE="${market_rc}" \
+SUPERVISOR_MARKET_STDOUT="${market_stdout}" \
+SUPERVISOR_MARKET_STDERR="${market_stderr}" \
+SUPERVISOR_CLOCK_PRESENT="${clock_present}" \
+SUPERVISOR_CLOCK_JSON="${clock_json}" \
+python3 "${TOOLS}/supervisor_clock_status.py" >"${clock_tmp}"
 
 market_state="$(
   CLOCK_REPORT_PATH="${clock_tmp}" python3 - <<'PY'
