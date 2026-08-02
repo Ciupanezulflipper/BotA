@@ -69,6 +69,14 @@ class StatusSourcePolicyTests(unittest.TestCase):
         self.assertIn("market_open.sh", source)
         self.assertLess(gate_execution, formatter_execution)
 
+    def test_sender_uses_isolated_workspace_and_captures_transport_errors(self) -> None:
+        source = AUTOSTATUS.read_text(encoding="utf-8")
+        self.assertIn('mktemp -d "${TMPDIR}/autostatus.XXXXXX"', source)
+        self.assertIn("trap cleanup EXIT", source)
+        self.assertIn('2>"${CURL_ERR}"', source)
+        self.assertNotIn('${TMPDIR}/as.out', source)
+        self.assertNotIn('${TMPDIR}/as.err', source)
+
 
 class FormatterBehaviorTests(unittest.TestCase):
     """Exercise the formatter against isolated canonical cache files."""
@@ -206,15 +214,41 @@ class AutostatusMarketGateTests(unittest.TestCase):
         )
         self.gate.chmod(0o755)
 
-    def run_autostatus(self) -> subprocess.CompletedProcess[str]:
+    def write_telegram_env(self) -> None:
+        (self.root / "config" / "tele.env").write_text(
+            "TELEGRAM_BOT_TOKEN=unit-test-token\n"
+            "TELEGRAM_CHAT_ID=unit-test-chat\n",
+            encoding="utf-8",
+        )
+
+    def write_failing_curl(self) -> Path:
+        fake_curl = self.root / "tools" / "fake-curl.sh"
+        fake_curl.write_text(
+            "#!/usr/bin/env bash\n"
+            "printf '%s\\n' 'curl: (28) Operation timed out' >&2\n"
+            "printf '\\nHTTP_STATUS:000\\n'\n"
+            "exit 28\n",
+            encoding="utf-8",
+        )
+        fake_curl.chmod(0o755)
+        return fake_curl
+
+    def run_autostatus(
+        self,
+        *,
+        dry_run: bool = True,
+        curl_bin: Path | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         environment = os.environ.copy()
         environment.update(
             {
                 "HOME": str(self.root.parent),
                 "BOTA_ROOT": str(self.root),
-                "AUTOSTATUS_DRY_RUN": "1",
+                "AUTOSTATUS_DRY_RUN": "1" if dry_run else "0",
             }
         )
+        if curl_bin is not None:
+            environment["CURL_BIN"] = str(curl_bin)
         return subprocess.run(
             ["bash", str(AUTOSTATUS)],
             cwd=ROOT,
@@ -247,7 +281,7 @@ class AutostatusMarketGateTests(unittest.TestCase):
         )
         self.assertIn("SKIP: market_gate_missing_or_not_executable", log)
 
-    def test_open_market_renders_cache_only_status(self) -> None:
+    def test_open_market_renders_cache_only_status_and_cleans_workspace(self) -> None:
         self.write_gate("Open", 0)
 
         result = self.run_autostatus()
@@ -255,10 +289,27 @@ class AutostatusMarketGateTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(self.marker.exists())
         self.assertEqual(result.stdout.strip(), "cached technical context")
+        self.assertEqual(list((self.root / "tmp").iterdir()), [])
         log = (self.root / "logs" / "cron.autostatus.log").read_text(
             encoding="utf-8"
         )
         self.assertIn("DRY_RUN: status rendered; Telegram not called", log)
+
+    def test_telegram_failure_logs_transport_diagnostics_and_cleans_workspace(self) -> None:
+        self.write_gate("Open", 0)
+        self.write_telegram_env()
+        fake_curl = self.write_failing_curl()
+
+        result = self.run_autostatus(dry_run=False, curl_bin=fake_curl)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(list((self.root / "tmp").iterdir()), [])
+        log = (self.root / "logs" / "cron.autostatus.log").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("curl_rc=28", log)
+        self.assertIn("http=000", log)
+        self.assertIn("Operation timed out", log)
 
 
 if __name__ == "__main__":
