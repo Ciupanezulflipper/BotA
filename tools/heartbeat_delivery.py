@@ -10,7 +10,10 @@ from __future__ import annotations
 import argparse
 import fcntl
 import json
+import math
 import os
+import re
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -24,6 +27,8 @@ FAILURE_BACKOFF_BASE_SEC = 300.0
 FAILURE_BACKOFF_MAX_SEC = 3600.0
 DEFAULT_TIMEOUT_SEC = 15.0
 MAX_DETAIL_CHARS = 300
+BOOT_ID_PATH = Path("/proc/sys/kernel/random/boot_id")
+ENV_KEY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def utc_timestamp() -> str:
@@ -44,13 +49,33 @@ def finite_number(value: Any) -> float | None:
         number = float(value)
     except (TypeError, ValueError, OverflowError):
         return None
-    if number < 0.0 or number != number or number in (float("inf"), float("-inf")):
+    if number < 0.0 or not math.isfinite(number):
         return None
     return number
 
 
+def non_negative_int(value: Any) -> int:
+    """Convert a value to a non-negative integer, or return zero."""
+    try:
+        number = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+    return max(0, number)
+
+
+def boot_identity() -> str:
+    """Return the current boot identifier when the platform exposes one."""
+    configured = os.environ.get("HEARTBEAT_BOOT_ID", "").strip()
+    if configured:
+        return configured[:128]
+    try:
+        return BOOT_ID_PATH.read_text(encoding="ascii").strip()[:128]
+    except (OSError, UnicodeError):
+        return ""
+
+
 def parse_env_file(path: Path) -> dict[str, str]:
-    """Read simple KEY=VALUE entries without executing shell content."""
+    """Read simple ASCII KEY=VALUE entries without executing shell content."""
     values: dict[str, str] = {}
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -64,7 +89,7 @@ def parse_env_file(path: Path) -> dict[str, str]:
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip()
-        if not key or not key.replace("_", "A").isalnum() or key[0].isdigit():
+        if ENV_KEY_PATTERN.fullmatch(key) is None:
             continue
         if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
             value = value[1:-1]
@@ -111,7 +136,8 @@ def build_summary(path: Path) -> str:
 
     failures = data.get("failure_reasons")
     if isinstance(failures, list) and failures:
-        parts.append("failures=" + "|".join(str(item) for item in failures[:4]))
+        summarized = [str(item)[:80] for item in failures[:4]]
+        parts.append("failures=" + "|".join(summarized))
     return " | ".join(parts)
 
 
@@ -119,12 +145,42 @@ def default_state() -> dict[str, Any]:
     """Return a new heartbeat-delivery state document."""
     return {
         "schema_version": "1.0",
+        "boot_id": "",
         "delivery_failure": False,
         "consecutive_failures": 0,
         "last_attempt_monotonic": 0.0,
         "last_success_monotonic": 0.0,
         "next_retry_monotonic": 0.0,
         "last_error": "",
+    }
+
+
+def normalize_state(data: dict[str, Any]) -> dict[str, Any]:
+    """Return a typed, internally consistent delivery-state document."""
+    last_attempt = finite_number(data.get("last_attempt_monotonic")) or 0.0
+    last_success = finite_number(data.get("last_success_monotonic")) or 0.0
+    next_retry = finite_number(data.get("next_retry_monotonic")) or 0.0
+    if last_attempt == 0.0:
+        next_retry = 0.0
+    elif next_retry < last_attempt:
+        next_retry = last_attempt
+
+    delivery_failure = data.get("delivery_failure") is True
+    consecutive_failures = non_negative_int(data.get("consecutive_failures"))
+    last_error = str(data.get("last_error") or "")[:MAX_DETAIL_CHARS]
+    if not delivery_failure:
+        consecutive_failures = 0
+        last_error = ""
+
+    return {
+        "schema_version": "1.0",
+        "boot_id": str(data.get("boot_id") or "")[:128],
+        "delivery_failure": delivery_failure,
+        "consecutive_failures": consecutive_failures,
+        "last_attempt_monotonic": last_attempt,
+        "last_success_monotonic": last_success,
+        "next_retry_monotonic": next_retry,
+        "last_error": last_error,
     }
 
 
@@ -136,21 +192,27 @@ def load_state(path: Path) -> dict[str, Any]:
         return default_state()
     if not isinstance(data, dict):
         return default_state()
-
-    state = default_state()
-    state.update(data)
-    return state
+    return normalize_state(data)
 
 
-def reset_after_reboot(state: dict[str, Any], now_monotonic: float) -> dict[str, Any]:
+def reset_after_reboot(
+    state: dict[str, Any],
+    now_monotonic: float,
+    current_boot_id: str,
+) -> dict[str, Any]:
     """Reset persisted monotonic values when a new Android boot is detected."""
-    last_attempt = finite_number(state.get("last_attempt_monotonic"))
-    next_retry = finite_number(state.get("next_retry_monotonic"))
-    if last_attempt is None or next_retry is None:
+    normalized = normalize_state(state)
+    recorded_boot_id = str(normalized.get("boot_id") or "")
+    if recorded_boot_id and current_boot_id and recorded_boot_id != current_boot_id:
         return default_state()
-    if now_monotonic < last_attempt or now_monotonic < next_retry - FAILURE_BACKOFF_MAX_SEC:
+
+    latest_recorded = max(
+        float(normalized["last_attempt_monotonic"]),
+        float(normalized["last_success_monotonic"]),
+    )
+    if now_monotonic < latest_recorded:
         return default_state()
-    return state
+    return normalized
 
 
 def retry_delay(consecutive_failures: int) -> float:
@@ -162,37 +224,54 @@ def retry_delay(consecutive_failures: int) -> float:
 
 def suppression_reason(state: dict[str, Any], now_monotonic: float) -> tuple[str, float]:
     """Return suppression reason and remaining seconds, or empty reason."""
-    next_retry = finite_number(state.get("next_retry_monotonic"))
-    if next_retry is None or now_monotonic >= next_retry:
+    normalized = normalize_state(state)
+    next_retry = float(normalized["next_retry_monotonic"])
+    if now_monotonic >= next_retry:
         return "", 0.0
     remaining = next_retry - now_monotonic
-    reason = "failure_backoff" if state.get("delivery_failure") is True else "success_interval"
+    reason = "failure_backoff" if normalized["delivery_failure"] is True else "success_interval"
     return reason, remaining
 
 
 def write_state(path: Path, state: dict[str, Any]) -> None:
-    """Atomically persist heartbeat delivery state."""
+    """Atomically persist normalized heartbeat delivery state."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    normalized = normalize_state(state)
+    temporary_path: Path | None = None
     try:
-        temporary.write_text(
-            json.dumps(state, indent=2, sort_keys=True) + "\n",
+        with tempfile.NamedTemporaryFile(
+            mode="w",
             encoding="utf-8",
-        )
-        os.replace(temporary, path)
+            dir=path.parent,
+            prefix=f"{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            json.dump(normalized, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+        temporary_path = None
     finally:
-        try:
-            temporary.unlink()
-        except FileNotFoundError:
-            pass
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
 
 
-def record_success(state: dict[str, Any], now_monotonic: float) -> dict[str, Any]:
+def record_success(
+    state: dict[str, Any],
+    now_monotonic: float,
+    current_boot_id: str,
+) -> dict[str, Any]:
     """Return state after a successful Telegram heartbeat."""
-    updated = dict(state)
+    updated = normalize_state(state)
     updated.update(
         {
-            "schema_version": "1.0",
+            "boot_id": current_boot_id,
             "delivery_failure": False,
             "consecutive_failures": 0,
             "last_attempt_monotonic": now_monotonic,
@@ -201,25 +280,22 @@ def record_success(state: dict[str, Any], now_monotonic: float) -> dict[str, Any
             "last_error": "",
         }
     )
-    return updated
+    return normalize_state(updated)
 
 
 def record_failure(
     state: dict[str, Any],
     now_monotonic: float,
+    current_boot_id: str,
     detail: str,
 ) -> dict[str, Any]:
     """Return state after a failed Telegram heartbeat."""
-    previous_failures = state.get("consecutive_failures")
-    try:
-        count = max(0, int(previous_failures)) + 1
-    except (TypeError, ValueError, OverflowError):
-        count = 1
+    updated = normalize_state(state)
+    count = int(updated["consecutive_failures"]) + 1
     delay = retry_delay(count)
-    updated = dict(state)
     updated.update(
         {
-            "schema_version": "1.0",
+            "boot_id": current_boot_id,
             "delivery_failure": True,
             "consecutive_failures": count,
             "last_attempt_monotonic": now_monotonic,
@@ -227,7 +303,7 @@ def record_failure(
             "last_error": detail[:MAX_DETAIL_CHARS],
         }
     )
-    return updated
+    return normalize_state(updated)
 
 
 def send_telegram(
@@ -304,7 +380,8 @@ def run_cycle(root: Path) -> int:
             return 0
 
         now_monotonic = time.monotonic()
-        state = reset_after_reboot(load_state(state_path), now_monotonic)
+        current_boot_id = boot_identity()
+        state = reset_after_reboot(load_state(state_path), now_monotonic, current_boot_id)
         force_send = os.environ.get("HEARTBEAT_FORCE_SEND") == "1"
         reason, remaining = suppression_reason(state, now_monotonic)
         if reason and not force_send:
@@ -319,8 +396,12 @@ def run_cycle(root: Path) -> int:
         chat_id = env_values.get("TELEGRAM_CHAT_ID", "")
         if not token or not chat_id:
             detail = "telegram_config_missing"
-            write_state(state_path, record_failure(state, now_monotonic, detail))
-            append_log(log_path, f"heartbeat failed: {detail}")
+            failed_state = record_failure(state, now_monotonic, current_boot_id, detail)
+            write_state(state_path, failed_state)
+            append_log(
+                log_path,
+                f"heartbeat failed: {detail} | next_retry_monotonic={failed_state['next_retry_monotonic']}",
+            )
             return 0
 
         api_url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -330,15 +411,14 @@ def run_cycle(root: Path) -> int:
         )
         success, detail = send_telegram(api_url, chat_id, text, timeout_from_env())
         if success:
-            write_state(state_path, record_success(state, now_monotonic))
+            write_state(state_path, record_success(state, now_monotonic, current_boot_id))
             append_log(log_path, f"heartbeat sent: {summary} | {detail}")
         else:
-            failed_state = record_failure(state, now_monotonic, detail)
+            failed_state = record_failure(state, now_monotonic, current_boot_id, detail)
             write_state(state_path, failed_state)
-            retry_at = failed_state["next_retry_monotonic"]
             append_log(
                 log_path,
-                f"heartbeat failed: {detail} | next_retry_monotonic={retry_at}",
+                f"heartbeat failed: {detail} | next_retry_monotonic={failed_state['next_retry_monotonic']}",
             )
     return 0
 
