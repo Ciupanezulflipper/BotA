@@ -51,15 +51,13 @@ def load_bundle(pair: str, timeframe: str) -> dict[str, Any] | None:
     path = CACHE_DIR / f"indicators_{pair}_{timeframe}.json"
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeError, json.JSONDecodeError):
         return None
     return data if isinstance(data, dict) else None
 
 
-def bundle_error(bundle: dict[str, Any] | None, pair: str, timeframe: str) -> str:
+def bundle_error(bundle: dict[str, Any], pair: str, timeframe: str) -> str:
     """Return an explicit fail-closed reason for an unusable bundle."""
-    if bundle is None:
-        return "missing cache"
     if str(bundle.get("pair", "")).upper() != pair:
         return "pair mismatch"
     if str(bundle.get("timeframe", "")).upper() != timeframe:
@@ -142,9 +140,13 @@ def render_pair(pair: str, label: str) -> list[str]:
 
     for timeframe in TIMEFRAMES:
         bundle = load_bundle(pair, timeframe)
+        if bundle is None:
+            lines.append(f"{timeframe}: unavailable (missing cache)")
+            continue
+
         reason = bundle_error(bundle, pair, timeframe)
-        if reason or bundle is None:
-            lines.append(f"{timeframe}: unavailable ({reason or 'missing cache'})")
+        if reason:
+            lines.append(f"{timeframe}: unavailable ({reason})")
             continue
 
         bundles[timeframe] = bundle
