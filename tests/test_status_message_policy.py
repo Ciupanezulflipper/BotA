@@ -158,9 +158,9 @@ class FormatterBehaviorTests(unittest.TestCase):
         self.assertIn("H1: STRONG SELL | RSI 0.0 | MACD falling", result.stdout)
         self.assertNotIn("H1: STRONG SELL | RSI 50.0", result.stdout)
 
-    def test_non_finite_indicator_is_rejected(self) -> None:
+    def test_invalid_numeric_indicator_is_rejected(self) -> None:
         self.seed_valid_pairs()
-        self.write_bundle("EURUSD", "H4", 1, {"rsi": float("inf")})
+        self.write_bundle("EURUSD", "H4", 1, {"rsi": "not-a-number"})
 
         result = self.run_formatter()
 
