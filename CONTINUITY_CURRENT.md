@@ -1,86 +1,59 @@
 # BotA Current Continuity State
 
-Last updated: 2026-08-02
+Last updated: 2026-08-02 23:31 UTC
 
-This file is the compact authoritative handoff. Historical detail remains in
-`CONTINUITY.md`, `ERRORS.md`, `audits/ERROR_LOG.md`,
-`audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`, and GitHub issue #9.
+This is the compact authoritative handoff. Detailed phone-deployment evidence is
+in `audits/PHONE_DEPLOYMENT_2026-08-02.md`. Historical failure detail remains in
+`audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`, `audits/ERROR_LOG.md`,
+`ERRORS.md`, and GitHub issue #9.
 
 ## Scope lock
 
-Current work is reliability, data integrity, provider-budget accounting,
-notification correctness, and repository/runtime convergence.
+Current work is runtime reliability, ownership, repository/runtime convergence,
+data integrity, provider-budget accounting, notification correctness, and
+signal-lifecycle proof.
 
 Do not change trading strategy, thresholds, configured pairs, scoring, ADX,
-H1/D1 confirmation rules, volatility or macro filters, dedup semantics, SL/TP,
-PR #7, or Supabase signal semantics merely to create more signals.
+H1/D1 confirmation, volatility or macro filters, deduplication, SL/TP, PR #7,
+or Supabase signal semantics to create more signals.
 
 No direct push to `main`.
 
-## Evidence rules
-
-Material claims must be classified as VERIFIED, ASSUMED, or UNKNOWN.
-
-- VERIFIED means proven by current GitHub state, direct Termux output, current
-  provider/server evidence, Supabase evidence, or an explicit user-provided log.
-- ASSUMED means plausible but not proven.
-- UNKNOWN means it must not drive mutation.
-
-Trusted provider/server UTC controls market semantics. Monotonic time controls
-same-boot cadence, cooldowns, and health. Android/ship wall time is display-only.
-Never depend on `/proc/uptime` on this Android build.
-
-Every Termux package must display `audits/ERROR_LOG.md`, run strict shell options
-only inside a bounded child script, preserve the interactive parent shell,
-inspect one narrow evidence domain, and end with exactly one next action.
-
-## Superseded July 26 snapshot
-
-On 2026-07-26, the native service-manager migration and watchdog finalization
-were verified at:
+## Current repository and phone state
 
 ```text
-MANAGER_COUNT=1
-OWNED=7/7
-RUNNING=7/7
-ORPHANED=0
-INVALID=0
-DUPLICATES=0
-DOWN_SERVICES=NONE
-WATCHDOG_COUNT=1
-CONTROL_PLANE_GATE=PASS
-STABILITY_CHECK=PASS
+GITHUB_MAIN=b4d961ea8e5d254c8578e2c022e1394cd134cd7e
+PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
+PHONE_HEAD=d5c765df6fee1241be21ce892fc53e9c4bdcfb8c
+PHONE_PARENT_HEAD=66fe241cc6afc8ec4fa21f805b5f52340dac3a32
+PHONE_REMOTE_PUSHED=NO
 ```
 
-That evidence remains historically valid for that timestamp. It is not the
-current production-readiness verdict because later validation exposed new
-regressions.
+Before reconciliation, the phone checkout was preserved at:
 
-## August 1 production validation: failed
+```text
+~/bota-phone-preserve-20260802T210517Z
+```
 
-The one-week production validation did not pass.
+Preservation verified zero tracked/staged changes, archived 519 untracked files,
+backed up eight local config files, active crontab, all Git refs, patches, and
+checksums.
 
-Verified during the validation period:
+## August 1 production validation
 
-- BotA remained capable of fetching data, calculating decisions, and delivering
-  at least one eligible GBPUSD M15 signal.
-- The control plane regressed to one manager with all seven required `runsv`
-  supervisors orphaned under PID 1: `owned=0/7`, `running=7/7`, `orphaned=7`.
-- A later one-shot reconciliation restored one manager, `owned=7/7`,
-  `running=7/7`, and `orphaned=0`.
-- Required service counts temporarily fell below seven.
-- The phone checkout and GitHub `main` were not synchronized.
-- Canonical crontab verification failed.
-- Runtime and repository documentation described a watchdog configuration that
-  did not match the phone.
-- The configured native service-daemon executable was unavailable on the phone.
-- A continuous `runsvdir` guard was followed by repeated Termux restarts.
-- The continuous guard and watchdog were stopped.
-- The boot launcher was replaced with a safe launcher that starts the standard
-  Termux service tree but intentionally does not start automatic topology
-  recovery.
+The one-week production validation remains **FAILED**.
 
-Final rollback verification recorded:
+Verified historical failures included:
+
+- `owned=0/7`, `running=7/7`, `orphaned=7`;
+- temporary required-service counts below seven;
+- phone/GitHub divergence;
+- canonical crontab verification failure;
+- watchdog documentation not matching the phone;
+- unavailable configured service-daemon executable;
+- repeated Termux restarts while a continuous guard was active.
+
+Recorded rollback at that timestamp:
 
 ```text
 manager_count=1
@@ -91,90 +64,155 @@ control_plane_rc=0
 automatic_recovery=disabled
 ```
 
-The full incident record is:
-`audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`.
+That rollback snapshot remains historical evidence only. It is not current
+7/7 ownership proof.
 
-## Repository containment
+## August 2 repository repairs
 
-PR #24 began as a three-file preservation PR based on an older phone checkout.
-It later drifted to seven commits and thirty-two changed files, diverged heavily
-from current `main`, became non-mergeable, and accumulated unrelated runtime,
-documentation, testing, provider, and notification changes.
+GitHub `main` now contains focused repairs for:
 
-PR #24 must not be merged or used as a deployment source. Salvageable behavior
-must be reapplied deliberately from current `main` in narrow clean branches with
-complete-file replacements and focused tests.
+- D1 timeframe mapping and validation;
+- cache-only status formatting;
+- market-gated autostatus delivery;
+- monotonic heartbeat delivery control;
+- supervisor clock observability separated from process/runtime failure.
 
-The clean containment branch is:
+PR #24 remains contaminated, superseded, and prohibited as a merge/deployment
+source.
 
-```text
-repair/production-validation-truth-20260802
-```
+## August 2 phone deployment
 
-This branch changes repository documentation only. It performs no phone,
-service, process, cron, provider, Telegram, Supabase, strategy, or runtime
-mutation.
-
-## August 2 read-only data discovery
-
-The latest provided Termux package ended with:
+Five complete repaired files were copied byte-for-byte from GitHub baseline
+`b4d961e` and committed locally on the phone:
 
 ```text
-LOCAL_STATUS_DATA_DISCOVERY_COMPLETE=YES
-RUNTIME_MUTATION_PERFORMED=NO
-GIT_CHANGED=NO
+tools/supervisor_clock_status.py
+tools/build_indicators.py
+tools/format_status.py
+tools/autostatus.sh
+tools/bota_supervisor.sh
 ```
 
-Do not repeat that broad discovery.
-
-A concrete unresolved data defect was visible in the supplied cache evidence:
+Phone deployment commit:
 
 ```text
-cache/indicators_EURUSD_D1.json
-pair=EURUSD
-timeframe=D1
-tf_ok=false
-tf_actual_min=0.0
-weak=true
-error=tf_mismatch
-ema9=0.0
-ema21=0.0
-atr=0.0
+d5c765df6fee1241be21ce892fc53e9c4bdcfb8c
 ```
 
-Weekend-stale M15/H1/H4 candles are not automatically a defect. The EURUSD D1
-`tf_mismatch` is different: it is an explicit invalid-data state and must be
-traced through the active fetch/build path before any strategy conclusion.
+No heartbeat file, pipeline-health file, service wrapper, crontab entry, strategy,
+provider, Telegram, Supabase, or remote branch was changed by that deployment.
 
-## Current verified status
+## Acceptance status
+
+```text
+P6_TARGETED_RUNTIME_ACCEPTANCE=PASS
+SUPERVISOR_ACCEPTANCE_SCENARIOS=6
+D1_TIMEFRAME_ACCEPTANCE=PASS
+FORMATTER_ACCEPTANCE=PASS
+AUTOSTATUS_ACCEPTANCE=PASS
+PROTECTED_HEARTBEAT_FILES_UNCHANGED=YES
+PIPELINE_HEALTH_UNCHANGED=YES
+```
+
+The deployed supervisor passed healthy/open, healthy/closed,
+clock-unavailable, gate-error, control-failure, and pipeline-failure scenarios in
+an isolated `BOTA_ROOT` without Telegram, provider, service, or crontab mutation.
+
+## D1 defect status
+
+Root cause:
+
+```text
+tools/build_indicators.py::tf_minutes("D1") returned 0
+```
+
+Current deployed result:
+
+```text
+tf_minutes("D1")=1440
+D1_TIMEFRAME_MAPPING=FIXED_AND_DEPLOYED
+D1_LIVE_CACHE_REGENERATION=NOT_YET_RECORDED
+```
+
+The code defect is closed. A later live updater cycle must still regenerate and
+verify the actual D1 cache artifact.
+
+## Active supervisor status
+
+Verified during P6:
+
+```text
+SUPERVISOR_SERVICE_STATUS=run
+SUPERVISOR_SERVICE_PID=10711
+ACTIVE_WRAPPER_TARGETS_DEPLOYED_SUPERVISOR=YES
+```
+
+This proves the deployed supervisor script is on the active path. It does not
+prove the complete current 7/7 ownership chain.
+
+## Critical current topology inconsistency
+
+The active phone-only file `services/bota-supervisor/run` is absent from GitHub
+`main` and contains automatic mutation:
+
+```text
+if runsvdir.*bota-sv is not found:
+    runsvdir -P "$HOME/.config/bota-sv" &
+```
+
+This conflicts with the earlier claim that automatic topology recovery is
+disabled. P6 also printed `RUNSVDIR_PROCESS_SNAPSHOT=none`; this may reflect a
+bad process match rather than true absence, creating a duplicate-manager risk.
+
+Current status:
+
+```text
+AUTOMATIC_TOPOLOGY_RECOVERY=INCONSISTENT_WITH_ACTIVE_PHONE_WRAPPER
+FULL_CURRENT_7_OF_7_OWNERSHIP=UNKNOWN
+SUPERVISOR_WRAPPER_REPAIR_REQUIRED=YES
+```
+
+## Heartbeat gap
+
+Active phone path:
+
+```text
+services/bota-heartbeat/run -> tools/bota_heartbeat_utc.sh
+```
+
+GitHub path:
+
+```text
+tools/heartbeat.sh -> tools/heartbeat_delivery.py
+```
+
+The GitHub controller provides locking and bounded retry backoff. The phone UTC
+wrapper owns deadman/recovery behavior but may retry failed Telegram delivery
+every 60 seconds. Replacement must preserve deadman semantics.
+
+Heartbeat work is second priority, after supervisor-wrapper topology is made
+non-mutating and verified.
+
+## Current status summary
 
 ```text
 PRODUCTION_VALIDATION=FAILED
-FINAL_ROLLBACK_CONTROL_PLANE=PASS_AT_RECORDED_TIMESTAMP
-AUTOMATIC_TOPOLOGY_RECOVERY=DISABLED
-CURRENT_PHONE_TOPOLOGY=UNKNOWN_UNTIL_FRESH_NARROW_PROOF
-PR24_MERGE_ALLOWED=NO
-BROAD_DATA_DISCOVERY_REPEAT_REQUIRED=NO
+PHONE_PRESERVATION=PASS
+FIVE_FILE_CORE_DEPLOYMENT=PASS
+D1_CODE_DEFECT=CLOSED
+SUPERVISOR_CORE_ACCEPTANCE=PASS
+STATUS_FORMATTER_ACCEPTANCE=PASS
+AUTOSTATUS_ACCEPTANCE=PASS
+CURRENT_FULL_CONTROL_PLANE=UNKNOWN
+ACTIVE_SUPERVISOR_WRAPPER_AUTO_MUTATION=OPEN_RISK
+HEARTBEAT_TOPOLOGY=OPEN_RISK
+AUTOMATIC_RECOVERY_REENABLE_ALLOWED=NO
 STRATEGY_MUTATION_ALLOWED=NO
 ```
 
-## Efficient repair order
-
-1. Keep repository truth and incident records synchronized.
-2. Preserve the phone worktree before any checkout, reset, merge, or overwrite.
-3. Prove one current control-plane snapshot only when a runtime mutation or live
-   diagnosis actually requires it.
-4. Diagnose the EURUSD D1 timeframe mismatch from the active updater path using
-   exact files and a bounded reproduction.
-5. Reconcile provider calls and budgets per provider.
-6. Repair Telegram status wording and market gating separately from executable
-   signal delivery.
-7. Reintroduce automatic topology recovery only after a bounded implementation
-   passes failure-injection tests and does not restart Termux.
-8. Run a new production-validation window only after the above gates pass.
-
 ## Exactly one next action
 
-Create one clean code-repair package from current `main` that reproduces and
-fixes the EURUSD D1 `tf_mismatch` without touching strategy, runtime processes,
-or the production phone checkout.
+Replace `services/bota-supervisor/run` with a non-mutating scheduler that only
+invokes `tools/bota_supervisor.sh`, then verify exactly one intended `runsvdir`,
+seven owned/running required services, zero orphans/duplicates, and no automatic
+manager creation. Heartbeat reconciliation follows after this gate passes.
