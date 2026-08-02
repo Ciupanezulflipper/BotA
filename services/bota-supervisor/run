@@ -1,0 +1,51 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# runit service: schedule BotA's read-only supervisor.
+#
+# This wrapper never starts, restarts, stops, or probes runsvdir/runsv services.
+# Control-plane mutation belongs only in a separately authorized recovery tool.
+
+set -uo pipefail
+exec 2>&1
+
+ROOT="${BOTA_ROOT:-${HOME}/BotA}"
+LOG="${ROOT}/logs/cron.supervisor.log"
+SCRIPT="${ROOT}/tools/bota_supervisor.sh"
+INTERVAL="${BOTA_SUPERVISOR_INTERVAL_SEC:-300}"
+
+case "${INTERVAL}" in
+  ''|*[!0-9]*) INTERVAL=300 ;;
+esac
+
+if (( INTERVAL < 1 )); then
+  INTERVAL=300
+fi
+
+mkdir -p "${ROOT}/logs"
+
+log() {
+  printf '[RUNIT bota-supervisor %s] %s\n' \
+    "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+    "$*" \
+    | tee -a "${LOG}"
+}
+
+terminate() {
+  log "SERVICE_STOP pid=$$"
+  exit 0
+}
+
+trap terminate HUP INT TERM
+
+log "SERVICE_START pid=$$ interval_sec=${INTERVAL} mutation=disabled"
+
+while true; do
+  if [[ -f "${SCRIPT}" ]]; then
+    BOTA_ROOT="${ROOT}" bash "${SCRIPT}" \
+      || log "supervisor_exit rc=$?"
+  else
+    log "SKIP: supervisor_script_missing path=${SCRIPT}"
+  fi
+
+  sleep "${INTERVAL}" &
+  wait $!
+done
