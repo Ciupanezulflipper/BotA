@@ -43,21 +43,14 @@ if [[ ! -f "${FORMATTER}" ]]; then
   exit 0
 fi
 
-WORKDIR=""
-cleanup() {
-  if [[ -n "${WORKDIR}" && -d "${WORKDIR}" ]]; then
-    rm -rf -- "${WORKDIR}"
-  fi
-}
-trap cleanup EXIT
-trap 'exit 129' HUP
-trap 'exit 130' INT
-trap 'exit 143' TERM
-
 if ! WORKDIR="$(mktemp -d "${TMPDIR}/autostatus.XXXXXX")"; then
   log "ERROR: temporary_workspace_creation_failed"
   exit 0
 fi
+trap 'rm -rf -- "${WORKDIR}"' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 OUT="${WORKDIR}/status.out"
 ERR="${WORKDIR}/status.err"
