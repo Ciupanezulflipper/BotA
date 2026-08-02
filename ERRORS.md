@@ -1,30 +1,158 @@
 # BotA Errors and Silent-Failure Register
 
-Last updated: 2026-08-02
+Last updated: 2026-08-02 23:31 UTC
 
 Purpose: preserve verified failure classes, current open risks, and prevention
 rules so they are not rediscovered through repeated broad audits.
 
-## Current highest-priority incident: open
+Detailed current phone evidence:
+`audits/PHONE_DEPLOYMENT_2026-08-02.md`.
 
-The one-week production validation ending 2026-08-01 failed.
+## Current production verdict
 
-The July 26 service-manager closure remains valid historical evidence, but it was
-superseded as a production-readiness verdict by later regressions.
+```text
+PRODUCTION_VALIDATION=FAILED
+PHONE_PRESERVATION=PASS
+FIVE_FILE_CORE_DEPLOYMENT=PASS
+D1_CODE_DEFECT=CLOSED
+CURRENT_FULL_CONTROL_PLANE=UNKNOWN
+ACTIVE_SUPERVISOR_WRAPPER_AUTO_MUTATION=OPEN_RISK
+HEARTBEAT_TOPOLOGY=OPEN_RISK
+AUTOMATIC_RECOVERY_REENABLE_ALLOWED=NO
+STRATEGY_MUTATION_ALLOWED=NO
+```
 
-Verified validation failures:
+The August 2 bounded phone deployment materially improved BotA but does not erase
+the August 1 failed production validation or constitute a new endurance pass.
+
+## Verified phone and repository convergence milestone
+
+GitHub repair baseline:
+
+```text
+b4d961ea8e5d254c8578e2c022e1394cd134cd7e
+```
+
+Phone deployment state:
+
+```text
+branch=deploy/repaired-core-20260802T215531Z
+head=d5c765df6fee1241be21ce892fc53e9c4bdcfb8c
+remote_push=NO
+```
+
+Five files were deployed byte-for-byte from repaired GitHub `main`:
+
+```text
+tools/supervisor_clock_status.py
+tools/build_indicators.py
+tools/format_status.py
+tools/autostatus.sh
+tools/bota_supervisor.sh
+```
+
+Acceptance passed for D1 mapping, six supervisor scenarios, cache-only formatting,
+and autostatus delivery isolation. Heartbeat, pipeline health, service wrappers,
+crontab, strategy, provider state, Telegram, Supabase, and 519 untracked files
+were preserved.
+
+## Closed defect — D1 timeframe mapping
+
+Previous invalid state:
+
+```text
+cache/indicators_EURUSD_D1.json
+error=tf_mismatch
+tf_ok=false
+tf_actual_min=0.0
+```
+
+Root cause:
+
+```text
+tools/build_indicators.py::tf_minutes("D1") returned 0
+```
+
+Current deployed mapping:
+
+```text
+tf_minutes("D1")=1440
+```
+
+The code defect is closed. The actual live D1 cache still needs regeneration and
+artifact verification during a later updater cycle.
+
+## Open risk — active supervisor wrapper can mutate topology
+
+The phone-only file `services/bota-supervisor/run` is absent from GitHub `main`.
+It does more than schedule the read-only supervisor: when its process match does
+not find `runsvdir.*bota-sv`, it starts a manager itself.
+
+This conflicts with the canonical statement that automatic topology recovery is
+disabled.
+
+P6 reported both:
+
+```text
+SUPERVISOR_SERVICE_STATUS=run
+RUNSVDIR_PROCESS_SNAPSHOT=none
+```
+
+The second result may be a process-matching defect rather than actual manager
+absence. A false negative could cause repeated manager-start attempts and
+recreate duplicate or split control-plane conditions.
+
+Prevention:
+
+- active service wrappers must be tracked in GitHub;
+- a supervisor scheduler must not create managers;
+- exact manager command, PID, parentage, cwd, service ownership, and process
+  matching must be verified together;
+- manager creation belongs only in an explicitly authorized, bounded recovery
+  tool with locking, rollback, and failure-injection proof.
+
+## Open risk — heartbeat execution paths differ
+
+Active phone path:
+
+```text
+services/bota-heartbeat/run -> tools/bota_heartbeat_utc.sh
+```
+
+GitHub repair path:
+
+```text
+tools/heartbeat.sh -> tools/heartbeat_delivery.py
+```
+
+The GitHub controller provides lock-based single execution and monotonic bounded
+retry backoff. The phone UTC wrapper provides authoritative UTC bucketing and
+also owns deadman/recovery notifications, but failed delivery may be retried by
+the 60-second service loop.
+
+Prevention:
+
+- preserve deadman/recovery semantics;
+- use one active heartbeat delivery controller;
+- use one lock and one persisted monotonic backoff state;
+- distinguish heartbeat, deadman alert, and recovery delivery state;
+- verify the exact active service wrapper before replacing any script.
+
+Topology reconciliation precedes heartbeat reconciliation.
+
+## August 1 production-validation failures retained
+
+Verified historical failures:
 
 - control-plane regression to `owned=0/7`, `running=7/7`, `orphaned=7`;
 - temporary required-service counts below seven;
 - canonical crontab verification failure;
-- phone checkout and GitHub `main` divergence;
-- repository documentation not matching the actual watchdog topology;
-- configured native service-daemon executable unavailable on the phone;
-- repeated Termux restarts while a continuous `runsvdir` guard was active;
-- production validation could not be declared complete despite valid data fetch,
-  decision calculation, and at least one eligible GBPUSD M15 signal.
+- phone/GitHub divergence;
+- documented watchdog topology not matching the phone;
+- configured service-daemon executable unavailable;
+- repeated Termux restarts while a continuous guard was active.
 
-Final rollback evidence recorded:
+Final rollback evidence at the recorded timestamp:
 
 ```text
 manager_count=1
@@ -35,138 +163,65 @@ control_plane_rc=0
 automatic_recovery=disabled
 ```
 
-The current phone topology after that timestamp is UNKNOWN until one fresh,
-narrow proof is actually required.
+That snapshot is historical and does not prove current ownership.
 
-See `audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`.
+## Repository contamination retained
 
-## Repository contamination: PR #24
+PR #24 is a historical preservation artifact, not a valid repair branch. It must
+not be merged or deployed. Its behaviors were salvaged only through focused
+branches from current `main`.
 
-PR #24 started as a three-file preservation branch from an older phone checkout.
-It later expanded to seven commits and thirty-two changed files, diverged heavily
-from current `main`, became non-mergeable, and mixed unrelated concerns.
-
-It must not be merged or deployed.
-
-Prevention:
-
-- create and verify a clean branch from current `main` before any write;
-- keep one behavior and one acceptance gate per branch;
-- never use a preservation branch as an integration branch;
-- salvage complete files deliberately rather than cherry-picking unknown scope;
-- close or mark contaminated PRs as superseded instead of repairing them in place.
-
-## Current data-integrity defect
-
-The August 2 read-only discovery ended with:
-
-```text
-LOCAL_STATUS_DATA_DISCOVERY_COMPLETE=YES
-RUNTIME_MUTATION_PERFORMED=NO
-GIT_CHANGED=NO
-```
-
-Do not repeat the broad discovery.
-
-The supplied cache evidence showed:
-
-```text
-cache/indicators_EURUSD_D1.json
-error=tf_mismatch
-tf_ok=false
-tf_actual_min=0.0
-weak=true
-ema9=0.0
-ema21=0.0
-atr=0.0
-```
-
-This is an explicit invalid-data state. It must be reproduced through the exact
-active EURUSD D1 fetch/build path before changing strategy or declaring a missed
-signal.
-
-Weekend-stale intraday candles alone are not proof of provider failure.
+No direct push to `main`.
 
 ## Runtime ownership and scheduler lessons
 
-- A manager process and matching pidfile do not prove service ownership.
-- `supervise/pid` identifies the supervised service process, not `runsv`.
-- Correct ownership proof is service PID -> PPID -> `runsv` -> supervisor
-  PPID/cwd/state/command.
-- `sv status` alone cannot prove parentage or restart capability.
-- Surviving supervisors may remain under PID 1 after manager death.
-- Starting a second manager while orphans remain can create duplicates.
-- A transient split control plane may reconverge; record both failure and
-  recovery without erasing either.
-- A stale or wiped crontab can leave Daily Proof alive while the signal factory
-  is unscheduled.
-- Detached crond and runit crond can create split-brain scheduling.
-- Multiple executable boot files can independently start the same daemon.
+- Manager existence does not prove service ownership.
+- `supervise/pid` identifies the service process, not `runsv`.
+- Prove service PID -> PPID -> `runsv` -> manager parent/cwd/command.
+- `sv status` alone does not prove parentage or restart capability.
+- PID-1 orphan supervisors can survive manager death.
+- Starting another manager while orphans remain can create duplicates.
+- A process regex can be wrong even when a component is running.
+- Service wrappers and boot launchers are executable architecture and must be
+  tracked, reviewed, and tested like application code.
+- Crontab and runit must not both own the same recurring component.
 
-## Automatic-recovery lessons
+## Time, health, and data rules
 
-- Automatic recovery is currently disabled by design after the August 1
-  rollback.
-- The configured native service-daemon executable must be verified on the phone
-  before any launcher references it.
-- A continuous recovery guard must not be deployed merely because a one-shot
-  reconciliation worked.
-- Any replacement guard requires bounded cadence, locking, backoff,
-  failure-injection tests, Termux restart observation, and a kill switch.
-- Do not re-enable a watchdog or guard from stale repository documentation.
-
-## Health and time semantics
-
-- Service presence is not useful progress.
-- Use trusted provider/server UTC for market semantics.
-- Use monotonic time for same-boot cadence, cooldowns, and health.
+- Trusted provider/server UTC controls market semantics.
+- Monotonic time controls same-boot cadence, cooldowns, backoff, and health.
 - Android/ship wall time is display-only.
-- Reject negative and future stale ages.
-- Print exact time inputs used in diagnostics.
 - Never depend on `/proc/uptime` on this Android build.
-- Changed PIDs are restart events, not failures by themselves.
+- Service presence is not useful progress.
+- Reject negative and future ages.
+- Validate pair, timeframe, granularity, ordering, timestamps, row count, and
+  closed-candle semantics before indicators.
+- Invalid cache data must fail closed and must not be treated as neutral.
 
-## Provider and data risks
+## Provider, notification, and persistence rules
 
-- Track budgets per actual provider and endpoint, not through a generic success
-  counter.
-- Formatting or status code must not make hidden unaccounted network calls.
-- Provider fallback must have explicit source conditions, caching, and quota
-  ownership.
-- Validate pair, timeframe, granularity, timestamps, ordering, row count, and
-  closed-candle semantics before indicator calculation.
-- A cache writer must fail closed on timeframe mismatch; zero indicators must not
-  be treated as neutral valid data.
-- Do not mix Yahoo, OANDA, RapidAPI, or other provider evidence without naming
-  the exact source for each artifact.
-
-## Notification and persistence risks
-
-- Telegram status messages are context, not executable trade entries.
-- Internal vote/scoring language must not be presented as an entry signal.
-- Status notifications should respect configured market-session policy.
+- Track budgets per actual provider and endpoint.
+- Status formatting must not hide provider calls.
+- Status context is not an executable trade signal.
 - Telegram delivery, Supabase persistence, provider failure, runtime failure,
-  and a valid HOLD/rejection are distinct outcomes.
-- Count only events inside a verified current-cycle boundary.
-- Confirm the full decision record is written before dedup.
+  valid HOLD/rejection, and dedup suppression are distinct outcomes.
+- Write the full decision record before dedup.
+- Count events only inside a verified current-cycle boundary.
 
-## Operational package failures
+## Operational package rules
 
-- Broad scans can enter runit FIFOs or mix active and historical evidence.
-- Generic symbol/timeframe regexes can parse arbitrary log tags as pairs.
-- Historical watcher logs must not be selected as current evidence because they
-  contain more marker strings.
-- CSV schema must be printed and verified before parsing assumptions are coded.
-- Expected zero-match commands must not abort under `pipefail`.
-- `set -Eeuo pipefail` belongs in a bounded child script, not the interactive
-  shell.
-- Top-level `exit` can close Termux.
-- Oversized pasted packages can crash Termux.
-- Read-only packages answer one narrow question.
-- Mutation requires fresh preflight, backup, rollback, authorization, and
-  independent verification.
+- Preserve phone state before Git operations.
+- One package, one evidence domain, one acceptance gate.
+- Avoid recursive scans through runit FIFOs.
+- Expected zero matches must not abort under `pipefail`.
+- Strict shell settings belong in bounded child scripts.
+- Use complete-file replacements with checksum verification.
+- Define rollback before mutation.
+- Do not repeat broad discovery when narrow evidence already exists.
+- Do not turn every acceptance check into a multi-page Termux procedure when a
+  smaller direct proof is sufficient.
 
-## Repository milestones retained
+## Repository milestones
 
 ```text
 PR #18 MERGED=ef94e4fd1c9a7a786f7514024828fbdfc1146143
@@ -176,49 +231,18 @@ PR #21 MERGED=09a1bd5b57e0bf3a39e79afc827d14e09e8b1031
 PR #22 MERGED=0694e17c09c3c8663622dce745d8b449c3cd2405
 PR #23 MERGED=95c54beff7741b32da086bcbd5e87f1c9d132cb5
 PR #25 MERGED=2f50904644d86c5564e3d6ae9d3cc777a5a29278
+PR #26 MERGED=78d9...
+PR #28 MERGED=e09662...
+PR #30 MERGED=2e7e02...
+PR #31 MERGED=bfd6f26...
+PR #32 MERGED=32de...
+PR #33 MERGED=ee332796...
+PR #34 MERGED=b4d961ea8e5d254c8578e2c022e1394cd134cd7e
 ```
 
-These merges do not authorize redeploying the failed August 1 automatic-recovery
-configuration.
+## Exactly one next repair
 
-## Efficient diagnostic order
-
-### Gate A — repository safety
-
-Before phone Git operations, preserve and classify every local change. Do not
-reset, checkout, pull, merge, or overwrite a dirty production worktree.
-
-### Gate B — current control plane
-
-When current runtime evidence is required, verify one intended manager, seven
-owned/running supervisors, zero orphans/invalid/duplicates, supervised crond,
-and the actual boot launcher. Do not assume a watchdog exists.
-
-If Gate B fails, stop. Do not inspect strategy, watcher decisions, CSV, caches,
-or Telegram history.
-
-### Gate C — one active data path
-
-After Gate B passes, reproduce one pair/timeframe through exact provider fetch,
-cache write, and indicator build. Validate granularity and timestamps first.
-
-### Gate D — decision integrity
-
-Classify one current cycle as valid HOLD/rejection, eligible signal, send failure,
-persistence failure, data failure, or infrastructure failure.
-
-### Gate E — signal lifecycle
-
-For the next ACTIVE signal, verify Telegram, Supabase, closer execution, and
-CLOSED/CANCELLED transition with result pips.
-
-### Gate F — mutation
-
-Require persistent failure, narrow cause, exact expected source state, backup,
-rollback, explicit authorization, and independent post-change verification.
-
-## Current next repair
-
-Reproduce and fix the EURUSD D1 `tf_mismatch` from current `main` on a focused
-clean branch. Do not touch strategy, notification code, automatic recovery, or
-the production phone in the same package.
+Replace the active phone-only `services/bota-supervisor/run` with a tracked,
+non-mutating scheduler, then verify one intended manager, seven owned/running
+required services, zero orphans/duplicates, and no automatic manager creation.
+Only after that passes should heartbeat topology be unified.
