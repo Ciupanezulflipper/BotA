@@ -27,6 +27,8 @@ FAILURE_BACKOFF_BASE_SEC = 300.0
 FAILURE_BACKOFF_MAX_SEC = 3600.0
 DEFAULT_TIMEOUT_SEC = 15.0
 MAX_DETAIL_CHARS = 300
+MAX_RESPONSE_BYTES = 65536
+MAX_FAILURE_COUNT = 1_000_000
 BOOT_ID_PATH = Path("/proc/sys/kernel/random/boot_id")
 ENV_KEY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -36,11 +38,16 @@ def utc_timestamp() -> str:
     return time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
 
 
+def compact_detail(value: Any) -> str:
+    """Return a single-line bounded diagnostic string."""
+    return str(value).replace("\r", " ").replace("\n", "|")[:MAX_DETAIL_CHARS]
+
+
 def append_log(path: Path, message: str) -> None:
     """Append one heartbeat log line."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
-        handle.write(f"[{utc_timestamp()}] {message}\n")
+        handle.write(f"[{utc_timestamp()}] {compact_detail(message)}\n")
 
 
 def finite_number(value: Any) -> float | None:
@@ -55,12 +62,12 @@ def finite_number(value: Any) -> float | None:
 
 
 def non_negative_int(value: Any) -> int:
-    """Convert a value to a non-negative integer, or return zero."""
+    """Convert a value to a bounded non-negative integer, or return zero."""
     try:
         number = int(value)
     except (TypeError, ValueError, OverflowError):
         return 0
-    return max(0, number)
+    return min(max(0, number), MAX_FAILURE_COUNT)
 
 
 def boot_identity() -> str:
@@ -106,17 +113,17 @@ def build_summary(path: Path) -> str:
     if not isinstance(data, dict):
         return "mode=UNKNOWN | runtime_health.json invalid"
 
-    mode = str(data.get("bot_mode") or "UNKNOWN")
-    market = str(data.get("market_state") or "unknown")
+    mode = compact_detail(data.get("bot_mode") or "UNKNOWN")
+    market = compact_detail(data.get("market_state") or "unknown")
     control_value = data.get("control_plane")
     pipeline_value = data.get("pipeline_progress")
     control = control_value if isinstance(control_value, dict) else {}
     pipeline = pipeline_value if isinstance(pipeline_value, dict) else {}
 
-    owned = control.get("owned", "?")
-    required = control.get("required", 7)
-    running = control.get("running", "?")
-    orphaned = control.get("orphaned", "?")
+    owned = compact_detail(control.get("owned", "?"))
+    required = compact_detail(control.get("required", 7))
+    running = compact_detail(control.get("running", "?"))
+    orphaned = compact_detail(control.get("orphaned", "?"))
     progress_ok = pipeline.get("healthy")
     if progress_ok is True:
         progress = "PASS"
@@ -136,7 +143,7 @@ def build_summary(path: Path) -> str:
 
     failures = data.get("failure_reasons")
     if isinstance(failures, list) and failures:
-        summarized = [str(item)[:80] for item in failures[:4]]
+        summarized = [compact_detail(item)[:80] for item in failures[:4]]
         parts.append("failures=" + "|".join(summarized))
     return " | ".join(parts)
 
@@ -167,14 +174,14 @@ def normalize_state(data: dict[str, Any]) -> dict[str, Any]:
 
     delivery_failure = data.get("delivery_failure") is True
     consecutive_failures = non_negative_int(data.get("consecutive_failures"))
-    last_error = str(data.get("last_error") or "")[:MAX_DETAIL_CHARS]
+    last_error = compact_detail(data.get("last_error") or "")
     if not delivery_failure:
         consecutive_failures = 0
         last_error = ""
 
     return {
         "schema_version": "1.0",
-        "boot_id": str(data.get("boot_id") or "")[:128],
+        "boot_id": compact_detail(data.get("boot_id") or "")[:128],
         "delivery_failure": delivery_failure,
         "consecutive_failures": consecutive_failures,
         "last_attempt_monotonic": last_attempt,
@@ -291,7 +298,7 @@ def record_failure(
 ) -> dict[str, Any]:
     """Return state after a failed Telegram heartbeat."""
     updated = normalize_state(state)
-    count = int(updated["consecutive_failures"]) + 1
+    count = min(int(updated["consecutive_failures"]) + 1, MAX_FAILURE_COUNT)
     delay = retry_delay(count)
     updated.update(
         {
@@ -300,10 +307,20 @@ def record_failure(
             "consecutive_failures": count,
             "last_attempt_monotonic": now_monotonic,
             "next_retry_monotonic": now_monotonic + delay,
-            "last_error": detail[:MAX_DETAIL_CHARS],
+            "last_error": compact_detail(detail),
         }
     )
     return normalize_state(updated)
+
+
+def read_response_body(response: Any) -> str:
+    """Read and bound a Telegram response body."""
+    raw = response.read(MAX_RESPONSE_BYTES + 1)
+    truncated = len(raw) > MAX_RESPONSE_BYTES
+    body = raw[:MAX_RESPONSE_BYTES].decode("utf-8", errors="replace")
+    if truncated:
+        body += "...[truncated]"
+    return body
 
 
 def send_telegram(
@@ -320,31 +337,36 @@ def send_telegram(
             "text": text,
         }
     ).encode("utf-8")
-    request = urllib.request.Request(api_url, data=encoded, method="POST")
+    request = urllib.request.Request(
+        api_url,
+        data=encoded,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
 
     try:
         with urllib.request.urlopen(request, timeout=timeout_sec) as response:
             status = response.getcode()
-            body = response.read().decode("utf-8", errors="replace")
+            body = read_response_body(response)
     except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        return False, f"http_error:{exc.code}:{body[:MAX_DETAIL_CHARS]}"
+        body = read_response_body(exc)
+        return False, compact_detail(f"http_error:{exc.code}:{body}")
     except urllib.error.URLError as exc:
-        return False, f"url_error:{str(exc.reason)[:MAX_DETAIL_CHARS]}"
+        return False, compact_detail(f"url_error:{exc.reason}")
     except TimeoutError:
         return False, "timeout"
     except OSError as exc:
-        return False, f"os_error:{type(exc).__name__}:{str(exc)[:MAX_DETAIL_CHARS]}"
+        return False, compact_detail(f"os_error:{type(exc).__name__}:{exc}")
 
     if status != 200:
-        return False, f"http_status:{status}:{body[:MAX_DETAIL_CHARS]}"
+        return False, compact_detail(f"http_status:{status}:{body}")
     try:
         payload = json.loads(body)
     except json.JSONDecodeError:
-        return False, f"invalid_json:{body[:MAX_DETAIL_CHARS]}"
+        return False, compact_detail(f"invalid_json:{body}")
     if isinstance(payload, dict) and payload.get("ok") is True:
         return True, f"http_status:{status}"
-    return False, f"telegram_rejected:{body[:MAX_DETAIL_CHARS]}"
+    return False, compact_detail(f"telegram_rejected:{body}")
 
 
 def timeout_from_env() -> float:
