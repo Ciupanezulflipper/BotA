@@ -21,6 +21,11 @@ class SupervisorServicePolicyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.source = SERVICE.read_text(encoding="utf-8")
+        cls.executable_source = "\n".join(
+            line
+            for line in cls.source.splitlines()
+            if not line.lstrip().startswith("#")
+        )
 
     def test_forbids_manager_and_service_mutation_commands(self) -> None:
         forbidden = (
@@ -36,12 +41,12 @@ class SupervisorServicePolicyTests(unittest.TestCase):
         )
         for token in forbidden:
             with self.subTest(token=token):
-                self.assertNotIn(token, self.source)
+                self.assertNotIn(token, self.executable_source)
 
     def test_does_not_probe_processes_to_decide_manager_creation(self) -> None:
-        self.assertNotIn("pgrep", self.source)
-        self.assertNotIn("pidof", self.source)
-        self.assertNotIn("/proc/", self.source)
+        self.assertNotIn("pgrep", self.executable_source)
+        self.assertNotIn("pidof", self.executable_source)
+        self.assertNotIn("/proc/", self.executable_source)
 
     def test_invokes_deployed_supervisor_with_bota_root(self) -> None:
         self.assertIn('SCRIPT="${ROOT}/tools/bota_supervisor.sh"', self.source)
@@ -54,7 +59,7 @@ class SupervisorServicePolicyTests(unittest.TestCase):
 
     def test_missing_supervisor_is_observable_not_repaired(self) -> None:
         self.assertIn("supervisor_script_missing", self.source)
-        self.assertNotIn("mkdir -p \"${ROOT}/tools\"", self.source)
+        self.assertNotIn("mkdir -p \"${ROOT}/tools\"", self.executable_source)
 
     def test_runtime_smoke_calls_supervisor_without_topology_tools(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
