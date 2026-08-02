@@ -43,10 +43,27 @@ if [[ ! -f "${FORMATTER}" ]]; then
   exit 0
 fi
 
-OUT="${TMPDIR}/as.out"
-ERR="${TMPDIR}/as.err"
+WORKDIR=""
+cleanup() {
+  if [[ -n "${WORKDIR}" && -d "${WORKDIR}" ]]; then
+    rm -rf -- "${WORKDIR}"
+  fi
+}
+trap cleanup EXIT HUP INT TERM
+
+if ! WORKDIR="$(mktemp -d "${TMPDIR}/autostatus.XXXXXX")"; then
+  log "ERROR: temporary_workspace_creation_failed"
+  exit 0
+fi
+
+OUT="${WORKDIR}/status.out"
+ERR="${WORKDIR}/status.err"
+RESP_FILE="${WORKDIR}/telegram.response"
+CURL_ERR="${WORKDIR}/telegram.stderr"
 : >"${OUT}"
 : >"${ERR}"
+: >"${RESP_FILE}"
+: >"${CURL_ERR}"
 
 log "Building cache-only technical trend context"
 if ! "${PYTHON_BIN}" "${FORMATTER}" >"${OUT}" 2>"${ERR}"; then
@@ -90,29 +107,30 @@ if ! command -v "${CURL_BIN}" >/dev/null 2>&1; then
 fi
 
 API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
-RESP="$(
-  "${CURL_BIN}" -sS \
-    --connect-timeout 10 \
-    --max-time 20 \
-    -w $'\nHTTP_STATUS:%{http_code}\n' \
-    -X POST "${API}" \
-    -d "chat_id=${TELEGRAM_CHAT_ID}" \
-    -d "disable_web_page_preview=true" \
-    --data-urlencode "text=${STATUS_RAW}" \
-    || true
-)"
+CURL_RC=0
+"${CURL_BIN}" -sS \
+  --connect-timeout 10 \
+  --max-time 20 \
+  -w $'\nHTTP_STATUS:%{http_code}\n' \
+  -X POST "${API}" \
+  -d "chat_id=${TELEGRAM_CHAT_ID}" \
+  -d "disable_web_page_preview=true" \
+  --data-urlencode "text=${STATUS_RAW}" \
+  >"${RESP_FILE}" 2>"${CURL_ERR}" || CURL_RC=$?
 
+RESP="$(cat "${RESP_FILE}")"
 HTTP_CODE="$(
   printf '%s' "${RESP}" \
     | sed -n 's/^HTTP_STATUS:\([0-9][0-9][0-9]\)$/\1/p' \
     | tail -n 1
 )"
 BODY="$(printf '%s' "${RESP}" | sed '/^HTTP_STATUS:[0-9][0-9][0-9]$/d')"
+CURL_DETAIL="$(tr '\n' '|' <"${CURL_ERR}")"
 
-if printf '%s' "${BODY}" | grep -q '"ok":true'; then
+if [[ "${CURL_RC}" -eq 0 ]] && printf '%s' "${BODY}" | grep -q '"ok":true'; then
   log "sendMessage OK plain_text http=${HTTP_CODE:-unknown}"
 else
-  log "ERROR: sendMessage failed http=${HTTP_CODE:-unknown} resp=$(printf '%s' "${BODY}" | tr '\n' ' ')"
+  log "ERROR: sendMessage failed curl_rc=${CURL_RC} http=${HTTP_CODE:-unknown} stderr=${CURL_DETAIL:-none} resp=$(printf '%s' "${BODY}" | tr '\n' ' ')"
 fi
 
 exit 0
