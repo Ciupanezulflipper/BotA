@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -16,6 +17,7 @@ from tools import supervisor_clock_status
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SUPERVISOR = REPOSITORY_ROOT / "tools" / "bota_supervisor.sh"
 MARKET_GATE = REPOSITORY_ROOT / "tools" / "market_open.sh"
+CLOCK_HELPER = REPOSITORY_ROOT / "tools" / "supervisor_clock_status.py"
 
 
 def write_executable(path: Path, content: str) -> None:
@@ -42,9 +44,7 @@ def prepare_runtime(base: Path) -> Path:
     )
     (tools / "bota_supervisor.sh").chmod(0o755)
     (tools / "supervisor_clock_status.py").write_text(
-        (REPOSITORY_ROOT / "tools" / "supervisor_clock_status.py").read_text(
-            encoding="utf-8"
-        ),
+        CLOCK_HELPER.read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     return root
@@ -110,15 +110,14 @@ def write_market_gate(root: Path, *, state: str) -> None:
     )
 
 
-def write_clock_status(
-    root: Path,
+def clock_payload(
     *,
     status: str,
     server_clock_ok: bool | None,
     local_clock_unsafe: bool | None,
-) -> None:
-    """Write a deterministic clock-observability document."""
-    payload = {
+) -> dict[str, object]:
+    """Build a deterministic clock-observability payload."""
+    return {
         "status": status,
         "server_clock_ok": server_clock_ok,
         "local_clock_unsafe": local_clock_unsafe,
@@ -128,6 +127,21 @@ def write_clock_status(
         ),
         "generated_utc": "2026-08-02T21:00:00Z",
     }
+
+
+def write_clock_status(
+    root: Path,
+    *,
+    status: str,
+    server_clock_ok: bool | None,
+    local_clock_unsafe: bool | None,
+) -> None:
+    """Write a deterministic clock-observability document."""
+    payload = clock_payload(
+        status=status,
+        server_clock_ok=server_clock_ok,
+        local_clock_unsafe=local_clock_unsafe,
+    )
     (root / "logs" / "clock_drift_status.json").write_text(
         json.dumps(payload),
         encoding="utf-8",
@@ -136,6 +150,9 @@ def write_clock_status(
 
 def run_supervisor(root: Path) -> subprocess.CompletedProcess[str]:
     """Run the production supervisor against the isolated BotA tree."""
+    bash_path = shutil.which("bash")
+    if bash_path is None:
+        raise RuntimeError("bash executable not found")
     environment = os.environ.copy()
     environment.update(
         {
@@ -145,7 +162,7 @@ def run_supervisor(root: Path) -> subprocess.CompletedProcess[str]:
         }
     )
     return subprocess.run(
-        ["bash", str(root / "tools" / "bota_supervisor.sh")],
+        [bash_path, str(root / "tools" / "bota_supervisor.sh")],
         cwd=root,
         env=environment,
         text=True,
@@ -155,11 +172,14 @@ def run_supervisor(root: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def load_health(root: Path) -> dict:
+def load_health(root: Path) -> dict[str, object]:
     """Load the generated runtime-health object."""
-    return json.loads(
+    data = json.loads(
         (root / "state" / "runtime_health.json").read_text(encoding="utf-8")
     )
+    if not isinstance(data, dict):
+        raise AssertionError("runtime_health.json was not an object")
+    return data
 
 
 class TradingClockSafetyTests(unittest.TestCase):
@@ -175,6 +195,30 @@ class TradingClockSafetyTests(unittest.TestCase):
         )
 
 
+class ClockHelperSourcePolicyTests(unittest.TestCase):
+    """Prevent caller-controlled filesystem paths from returning."""
+
+    def test_clock_helper_consumes_data_not_file_paths(self) -> None:
+        source = CLOCK_HELPER.read_text(encoding="utf-8")
+        for forbidden in (
+            "argparse",
+            "from pathlib import Path",
+            "--clock-file",
+            "--market-stdout-file",
+            "--market-stderr-file",
+            ".read_text(",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, source)
+        self.assertIn("SUPERVISOR_CLOCK_JSON", source)
+        self.assertIn("SUPERVISOR_MARKET_STDERR", source)
+
+    def test_environment_exit_code_is_bounded(self) -> None:
+        self.assertEqual(supervisor_clock_status.parse_exit_code("0"), 0)
+        self.assertEqual(supervisor_clock_status.parse_exit_code("999"), 255)
+        self.assertEqual(supervisor_clock_status.parse_exit_code("invalid"), 255)
+
+
 class ClockNormalizerTests(unittest.TestCase):
     """Exercise market-gate classification and non-fatal clock reporting."""
 
@@ -184,22 +228,18 @@ class ClockNormalizerTests(unittest.TestCase):
             "Closed\n",
             "server_clock_unavailable -> Closed fail_closed\n",
         )
-        with tempfile.TemporaryDirectory() as temporary:
-            clock_file = Path(temporary) / "clock.json"
-            clock_file.write_text(
-                json.dumps(
-                    {
-                        "status": "SERVER_CLOCK_UNAVAILABLE",
-                        "server_clock_ok": False,
-                        "local_clock_unsafe": None,
-                    }
-                ),
-                encoding="utf-8",
+        raw_clock_json = json.dumps(
+            clock_payload(
+                status="SERVER_CLOCK_UNAVAILABLE",
+                server_clock_ok=False,
+                local_clock_unsafe=None,
             )
-            clock = supervisor_clock_status.normalize_clock_observability(
-                clock_file,
-                gate,
-            )
+        )
+        clock = supervisor_clock_status.normalize_clock_observability(
+            raw_clock_json,
+            True,
+            gate,
+        )
 
         self.assertEqual(gate["state"], "clock_unavailable")
         self.assertFalse(gate["trusted_server_clock_available"])
@@ -214,23 +254,18 @@ class ClockNormalizerTests(unittest.TestCase):
             "Closed\n",
             "Saturday UTC -> Closed\n",
         )
-        with tempfile.TemporaryDirectory() as temporary:
-            clock_file = Path(temporary) / "clock.json"
-            clock_file.write_text(
-                json.dumps(
-                    {
-                        "status": "DRIFT_WARN",
-                        "server_clock_ok": True,
-                        "local_clock_unsafe": True,
-                        "drift_seconds": 3600,
-                    }
-                ),
-                encoding="utf-8",
+        raw_clock_json = json.dumps(
+            clock_payload(
+                status="DRIFT_WARN",
+                server_clock_ok=True,
+                local_clock_unsafe=True,
             )
-            clock = supervisor_clock_status.normalize_clock_observability(
-                clock_file,
-                gate,
-            )
+        )
+        clock = supervisor_clock_status.normalize_clock_observability(
+            raw_clock_json,
+            True,
+            gate,
+        )
 
         self.assertEqual(gate["state"], "closed")
         self.assertTrue(gate["trusted_server_clock_available"])
@@ -246,27 +281,47 @@ class ClockNormalizerTests(unittest.TestCase):
             "Closed\n",
             "Friday after 20:00 UTC -> Closed\n",
         )
-        with tempfile.TemporaryDirectory() as temporary:
-            clock_file = Path(temporary) / "clock.json"
-            clock_file.write_text(
-                json.dumps(
-                    {
-                        "status": "SERVER_CLOCK_UNAVAILABLE",
-                        "server_clock_ok": False,
-                        "local_clock_unsafe": None,
-                    }
-                ),
-                encoding="utf-8",
+        raw_clock_json = json.dumps(
+            clock_payload(
+                status="SERVER_CLOCK_UNAVAILABLE",
+                server_clock_ok=False,
+                local_clock_unsafe=None,
             )
-            clock = supervisor_clock_status.normalize_clock_observability(
-                clock_file,
-                gate,
-            )
+        )
+        clock = supervisor_clock_status.normalize_clock_observability(
+            raw_clock_json,
+            True,
+            gate,
+        )
 
         self.assertTrue(gate["trusted_server_clock_available"])
         self.assertEqual(clock["status"], "AVAILABLE")
         self.assertEqual(clock["snapshot_status"], "SERVER_CLOCK_UNAVAILABLE")
         self.assertTrue(clock["live_gate_overrode_snapshot"])
+
+    def test_missing_and_invalid_snapshots_remain_non_fatal(self) -> None:
+        gate = supervisor_clock_status.classify_market_gate(
+            1,
+            "Closed\n",
+            "Saturday UTC -> Closed\n",
+        )
+        missing = supervisor_clock_status.normalize_clock_observability(
+            "",
+            False,
+            gate,
+        )
+        invalid = supervisor_clock_status.normalize_clock_observability(
+            "not-json",
+            True,
+            gate,
+        )
+
+        self.assertEqual(missing["snapshot_status"], "MISSING")
+        self.assertEqual(invalid["snapshot_status"], "INVALID")
+        self.assertEqual(missing["status"], "AVAILABLE")
+        self.assertEqual(invalid["status"], "AVAILABLE")
+        self.assertFalse(missing["runtime_failure"])
+        self.assertFalse(invalid["runtime_failure"])
 
 
 class SupervisorBehaviorTests(unittest.TestCase):
@@ -314,11 +369,13 @@ class SupervisorBehaviorTests(unittest.TestCase):
         self.assertEqual(health["bot_mode"], "HEALTHY")
         self.assertEqual(health["failure_reasons"], [])
         self.assertEqual(health["market_state"], "clock_unavailable")
-        self.assertFalse(
-            health["market_gate"]["trusted_server_clock_available"]
-        )
-        self.assertEqual(health["clock_observability"]["status"], "UNAVAILABLE")
-        self.assertFalse(health["clock_observability"]["runtime_failure"])
+        market_gate = health["market_gate"]
+        clock = health["clock_observability"]
+        self.assertIsInstance(market_gate, dict)
+        self.assertIsInstance(clock, dict)
+        self.assertFalse(market_gate["trusted_server_clock_available"])
+        self.assertEqual(clock["status"], "UNAVAILABLE")
+        self.assertFalse(clock["runtime_failure"])
         self.assertEqual(pipeline_args, "--market-closed")
         self.assertNotIn("server_clock_unavailable", health["failure_reasons"])
 
@@ -360,7 +417,9 @@ class SupervisorBehaviorTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(health["market_state"], "open")
-        self.assertEqual(health["clock_observability"]["status"], "AVAILABLE")
+        clock = health["clock_observability"]
+        self.assertIsInstance(clock, dict)
+        self.assertEqual(clock["status"], "AVAILABLE")
         self.assertEqual(pipeline_args, "--market-open")
 
     def test_closed_market_with_drift_warning_remains_healthy(self) -> None:
@@ -379,17 +438,12 @@ class SupervisorBehaviorTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(health["bot_mode"], "HEALTHY")
         self.assertEqual(health["market_state"], "closed")
-        self.assertEqual(health["clock_observability"]["status"], "AVAILABLE")
-        self.assertEqual(
-            health["clock_observability"]["snapshot_status"],
-            "DRIFT_WARN",
-        )
-        self.assertTrue(
-            health["clock_observability"]["local_clock_warning"]
-        )
-        self.assertTrue(
-            health["clock_observability"]["trading_clock_available"]
-        )
+        clock = health["clock_observability"]
+        self.assertIsInstance(clock, dict)
+        self.assertEqual(clock["status"], "AVAILABLE")
+        self.assertEqual(clock["snapshot_status"], "DRIFT_WARN")
+        self.assertTrue(clock["local_clock_warning"])
+        self.assertTrue(clock["trading_clock_available"])
 
     def test_missing_clock_file_is_explicit_but_live_gate_stays_authoritative(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -402,15 +456,12 @@ class SupervisorBehaviorTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(health["bot_mode"], "HEALTHY")
-        self.assertEqual(health["clock_observability"]["status"], "AVAILABLE")
-        self.assertEqual(
-            health["clock_observability"]["snapshot_status"],
-            "MISSING",
-        )
-        self.assertFalse(
-            health["clock_observability"]["source_file_present"]
-        )
-        self.assertFalse(health["clock_observability"]["runtime_failure"])
+        clock = health["clock_observability"]
+        self.assertIsInstance(clock, dict)
+        self.assertEqual(clock["status"], "AVAILABLE")
+        self.assertEqual(clock["snapshot_status"], "MISSING")
+        self.assertFalse(clock["source_file_present"])
+        self.assertFalse(clock["runtime_failure"])
 
 
 if __name__ == "__main__":
