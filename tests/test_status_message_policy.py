@@ -62,10 +62,12 @@ class StatusSourcePolicyTests(unittest.TestCase):
         self.assertNotIn("Vote ", source)
         self.assertNotIn("/9", source)
 
-    def test_market_gate_runs_before_formatter(self) -> None:
+    def test_market_gate_executes_before_formatter(self) -> None:
         source = AUTOSTATUS.read_text(encoding="utf-8")
+        gate_execution = source.index('if MARKET_STATE="$(')
+        formatter_execution = source.index('"${PYTHON_BIN}" "${FORMATTER}"')
         self.assertIn("market_open.sh", source)
-        self.assertLess(source.index("MARKET_STATE="), source.index("format_status.py"))
+        self.assertLess(gate_execution, formatter_execution)
 
 
 class FormatterBehaviorTests(unittest.TestCase):
