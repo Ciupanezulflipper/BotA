@@ -2,24 +2,32 @@
 """Normalize BotA market-gate and clock observability for the supervisor.
 
 This module reports clock availability separately from control-plane and pipeline
-health. It never decides whether a trade may execute and never mutates services.
+health. It consumes bounded data supplied by the supervisor, never opens caller-
+provided paths, never decides whether a trade may execute, and never mutates
+services.
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import math
-from pathlib import Path
+import os
 from typing import Any
 
 
 MAX_DETAIL_CHARS = 240
+MAX_MARKET_TEXT_CHARS = 4096
+MAX_CLOCK_JSON_CHARS = 16384
 
 
 def compact_detail(value: Any) -> str:
     """Return a bounded single-line diagnostic."""
     return str(value).replace("\r", " ").replace("\n", "|")[:MAX_DETAIL_CHARS]
+
+
+def bounded_text(value: Any, limit: int) -> str:
+    """Return text bounded before parsing or classification."""
+    return str(value)[:limit]
 
 
 def finite_number(value: Any) -> float | None:
@@ -36,21 +44,22 @@ def optional_bool(value: Any) -> bool | None:
     return value if isinstance(value, bool) else None
 
 
-def read_text(path: Path) -> str:
-    """Read a small text file without failing the caller."""
+def parse_exit_code(value: Any) -> int:
+    """Return a bounded process exit code, defaulting to an error value."""
     try:
-        return path.read_text(encoding="utf-8", errors="replace")[:4096]
-    except OSError:
-        return ""
+        code = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return 255
+    return min(max(code, 0), 255)
 
 
-def load_clock_file(path: Path) -> tuple[dict[str, Any], bool, bool]:
-    """Load the clock status object and return data/present/valid flags."""
-    if not path.exists():
+def load_clock_payload(raw_json: str, present: bool) -> tuple[dict[str, Any], bool, bool]:
+    """Load clock JSON data and return data/present/valid flags."""
+    if not present:
         return {}, False, False
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
+        data = json.loads(bounded_text(raw_json, MAX_CLOCK_JSON_CHARS))
+    except json.JSONDecodeError:
         return {}, True, False
     if not isinstance(data, dict):
         return {}, True, False
@@ -63,8 +72,9 @@ def classify_market_gate(
     stderr: str,
 ) -> dict[str, Any]:
     """Classify the live market gate without changing its fail-closed result."""
-    output = stdout.strip()
-    diagnostic = compact_detail(stderr.strip())
+    output = bounded_text(stdout, MAX_MARKET_TEXT_CHARS).strip()
+    bounded_stderr = bounded_text(stderr, MAX_MARKET_TEXT_CHARS)
+    diagnostic = compact_detail(bounded_stderr.strip())
 
     if exit_code == 0 and output == "Open":
         return {
@@ -75,7 +85,7 @@ def classify_market_gate(
             "diagnostic": diagnostic,
         }
 
-    lowered = stderr.lower()
+    lowered = bounded_stderr.lower()
     if "server_clock_unavailable" in lowered or "clock_unavailable" in lowered:
         return {
             "state": "clock_unavailable",
@@ -165,11 +175,12 @@ def gate_overrode_snapshot(
 
 
 def normalize_clock_observability(
-    clock_path: Path,
+    raw_clock_json: str,
+    clock_present: bool,
     market_gate: dict[str, Any],
 ) -> dict[str, Any]:
     """Build the non-fatal clock observability object."""
-    data, present, valid = load_clock_file(clock_path)
+    data, present, valid = load_clock_payload(raw_clock_json, clock_present)
     values = snapshot_values(data, valid)
     server_clock_ok = values["server_clock_ok"]
     trading_clock_available = effective_clock_available(
@@ -200,46 +211,56 @@ def normalize_clock_observability(
 
 
 def build_report(
-    clock_path: Path,
+    raw_clock_json: str,
+    clock_present: bool,
     market_exit_code: int,
-    market_stdout_path: Path,
-    market_stderr_path: Path,
+    market_stdout: str,
+    market_stderr: str,
 ) -> dict[str, Any]:
-    """Build the complete supervisor clock report."""
+    """Build the complete supervisor clock report from bounded data."""
     market_gate = classify_market_gate(
         market_exit_code,
-        read_text(market_stdout_path),
-        read_text(market_stderr_path),
+        market_stdout,
+        market_stderr,
     )
     return {
         "schema_version": "1.0",
         "market_gate": market_gate,
-        "clock_observability": normalize_clock_observability(clock_path, market_gate),
+        "clock_observability": normalize_clock_observability(
+            raw_clock_json,
+            clock_present,
+            market_gate,
+        ),
         "service_mutation_performed": False,
         "strategy_changed": False,
     }
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parse command-line arguments."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--clock-file", type=Path, required=True)
-    parser.add_argument("--market-exit-code", type=int, required=True)
-    parser.add_argument("--market-stdout-file", type=Path, required=True)
-    parser.add_argument("--market-stderr-file", type=Path, required=True)
-    return parser.parse_args(argv)
-
-
-def main(argv: list[str] | None = None) -> int:
-    """Print normalized clock and market-gate observability JSON."""
-    args = parse_args(argv)
-    report = build_report(
-        args.clock_file,
-        args.market_exit_code,
-        args.market_stdout_file,
-        args.market_stderr_file,
+def report_from_environment() -> dict[str, Any]:
+    """Build a report from supervisor-owned environment values."""
+    return build_report(
+        raw_clock_json=bounded_text(
+            os.environ.get("SUPERVISOR_CLOCK_JSON", ""),
+            MAX_CLOCK_JSON_CHARS,
+        ),
+        clock_present=os.environ.get("SUPERVISOR_CLOCK_PRESENT") == "1",
+        market_exit_code=parse_exit_code(
+            os.environ.get("SUPERVISOR_MARKET_EXIT_CODE", "255")
+        ),
+        market_stdout=bounded_text(
+            os.environ.get("SUPERVISOR_MARKET_STDOUT", ""),
+            MAX_MARKET_TEXT_CHARS,
+        ),
+        market_stderr=bounded_text(
+            os.environ.get("SUPERVISOR_MARKET_STDERR", ""),
+            MAX_MARKET_TEXT_CHARS,
+        ),
     )
-    print(json.dumps(report, indent=2, sort_keys=True))
+
+
+def main() -> int:
+    """Print normalized clock and market-gate observability JSON."""
+    print(json.dumps(report_from_environment(), indent=2, sort_keys=True))
     return 0
 
 
