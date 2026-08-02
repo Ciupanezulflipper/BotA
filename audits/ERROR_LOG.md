@@ -1,350 +1,248 @@
 # BotA Runtime Error Log
 
-Last updated: 2026-08-02
+Last updated: 2026-08-02 23:31 UTC
 
-This log must be displayed before every Termux execution package.
+This is the canonical compact error and prevention index. Historical full text
+remains in Git history, `ERRORS.md`, incident records, and GitHub issue #9.
+Current deployment evidence is in `audits/PHONE_DEPLOYMENT_2026-08-02.md`.
 
-Historical evidence remains in Git history, `ERRORS.md`, incident records, and
-issue #9. This file preserves the canonical failure IDs and prevention rules.
-Unlisted numbers were never assigned.
-
-## E001 — Scope branching
-
-Repository work, runtime recovery, documentation, strategy, deployment, and
-architecture were mixed in one execution path.
-
-Prevention: one phase, one evidence domain, and one acceptance gate per package.
-
-## E002 — Uncontained production commit
-
-An operational heartbeat change was committed on the production checkout rather
-than isolated first.
-
-Prevention: verify branch and exact HEAD before mutation; never push directly to
-`main`; preserve the phone worktree before Git operations.
-
-## E003 — Duplicate execution sources
-
-BotA components appeared in cron and runit while multiple boot/daemon paths
-remained.
-
-Prevention: prove exactly one execution source for every component.
-
-## E004 — Dead manager with orphaned supervisors
-
-A manager died while child `runsv` supervisors survived under PID 1. Missing
-services could not be recreated.
-
-Prevention: verify manager existence, service parentage, and restart capability
-together.
-
-## E005 — Stale Android UID cron spool
-
-An obsolete spool file for a previous Android UID generated repeated
-`WRONG FILE OWNER` warnings.
-
-Prevention: verify current UID and preserve/quarantine stale spool state.
-
-## E006 — Multiple executable boot starters
-
-Several Termux:Boot files could independently start the same daemon.
-
-Prevention: one canonical boot launcher and one manager start path.
-
-## E007 — Recursive scan entered runit FIFOs
-
-A recursive scan traversed `supervise` directories and waited on named pipes.
-
-Prevention: scan regular files only and exclude runit supervise directories.
-
-## E008 — Incorrect crond foreground assertion
-
-A guard accepted only `crond -f`, while the installed valid service used
-`crond -n -s`.
-
-Prevention: inspect the installed implementation and accept documented
-equivalents.
-
-## E009 — `pipefail` converted a valid zero count into silent exit
-
-`pgrep` returning no matches caused a pipeline or command substitution to abort.
-
-Prevention: expected zero-match commands must explicitly tolerate no matches.
-Strict shell options belong only inside a bounded child script.
-
-## E010 — Parent manager not revalidated before mutation
-
-Child supervisors were observed, but the manager was not rechecked immediately
-before a daemon migration.
-
-Prevention: revalidate exact manager count and child parentage immediately before
-mutation.
-
-## AUTO-20260717T110144Z — Boot consolidation controlled failure
-
-A final verification found a direct daemon starter still present after mutation
-had begun.
-
-Prevention: enumerate exact active boot launchers before changing scheduler or
-manager state.
-
-## E012 — Dead-man stale while services reported running
-
-External monitoring reported prolonged staleness while service/PID checks still
-reported running.
-
-Prevention: health must prove useful forward progress, not process presence.
-
-## E014 — Broad audit included inactive historical trees
-
-A source scan included archives, backups, generated state, tests, and old logs,
-obscuring active paths.
-
-Prevention: whitelist active files and logs. Read-only packages answer one narrow
-question.
-
-## E015 — Active wall-clock dependencies
-
-Cadence, cooldown, freshness, and health depended on Android/ship wall time.
-
-Prevention: trusted provider/server UTC controls market semantics; monotonic time
-controls same-boot cadence and health; wall time is display-only.
-
-## E016 — Fixed-PID endurance criterion
-
-Healthy restart/recovery behavior was treated as failure solely because PIDs
-changed.
-
-Prevention: record PID changes as restart events. Judge ownership, running
-chains, duplicates, orphans, supervised crond, and useful progress.
-
-## E017 — Inaccessible `/proc/uptime`
-
-The Android build denied access to `/proc/uptime`.
-
-Prevention: never depend on `/proc/uptime`; use monotonic time where applicable.
-
-## E018 — Current time was misinterpreted
-
-Explicit user timing and previous sample timing were reconciled incorrectly,
-causing an unnecessary wait/recheck.
-
-Prevention: prefer direct timestamps and current runtime evidence over
-conversational elapsed-time arithmetic.
-
-## E019 — Transient crond absence escalated too early
-
-One snapshot caught a child absent while ownership remained correct; runit
-recreated it before a targeted resample.
-
-Prevention: distinguish RECOVERING, PERSISTENTLY_DOWN, and
-STRUCTURALLY_BROKEN with one bounded targeted recovery sample.
-
-## E020 — Impossible time ordering in dead-man alert
-
-An alert calculated staleness from a last-success timestamp later than its stated
-server UTC.
-
-Prevention: use one trusted time source, reject negative/future ages, and print
-exact inputs.
-
-## E021 — Continuity lagged runtime truth
-
-Canonical handoff files remained stale after a material phase or topology change.
-
-Prevention: update `CONTINUITY_CURRENT.md`, `AI_START_HERE.md`, `ERRORS.md`, this
-log, the incident record, and issue #9 immediately after a material gate.
-
-## E022 — Oversized package crashed Termux
-
-One package combined process inspection, service inspection, log selection, CSV,
-cache JSON, and Telegram counting.
-
-Prevention: keep packages bounded, avoid multi-megabyte scans, and split evidence
-domains.
-
-## E023 — Historical watcher log selected as current evidence
-
-A historical log was selected because it contained many markers, then mixed with
-newer cache evidence.
-
-Prevention: identify the active service output first and require a recent trusted
-UTC boundary.
-
-## E024 — Generic regex parsed log text as pair/timeframe
-
-A generic capital-letter regex interpreted arbitrary log tags as trading
-symbols/timeframes.
-
-Prevention: match only configured pairs and timeframes explicitly.
-
-## E025 — CSV schema assumed before inspection
-
-A package parsed `alerts.csv` against an unverified schema and produced invalid
-persistence conclusions.
-
-Prevention: print the exact header and last raw rows before implementing a schema
-parser.
-
-## E026 — Historical Telegram counters used as current behavior
-
-Unbounded historical counts were reported as present runtime behavior.
-
-Prevention: count only inside a verified current-cycle boundary.
-
-## E027 — Control-plane regression after prior closure
-
-A later snapshot found one manager owning only one of seven supervisors while all
-seven wrappers still appeared running.
-
-Prevention: Gate A ownership must pass before data or strategy analysis.
-
-## E028 — Split control plane automatically reconverged
-
-A later snapshot found one manager owning all seven supervisors without manual
-mutation.
-
-Prevention: preserve both failure and recovery evidence. Do not erase recurrence,
-but do not call a recovered topology failed solely because PIDs changed.
-
-## E029 — Manager disappeared after reconvergence
-
-A later Gate A check found no manager and surviving PID-1 orphan supervisors.
-
-Prevention: stop deeper diagnostics and take one compact control-plane resample.
-
-## E030 — Manager absence persisted and crond became unavailable
-
-The resample confirmed no manager, six orphaned BotA supervisors, and crond down.
-
-Prevention: do not start a second manager while orphans remain. Use only a
-validated, approval-gated reconciliation with rollback.
-
-## E031 — `supervise/pid` misidentified as `runsv`
-
-Ownership audits treated the service PID file as the supervisor PID.
-
-Prevention: resolve service PID -> PPID -> `runsv` and validate PPID, cwd, state,
-and command.
-
-## E032 — Manager existed while all supervisors were orphans
-
-A valid manager/pidfile existed, but all seven `runsv` supervisors remained under
-PID 1.
-
-Prevention: manager existence and service ownership are separate gates.
-
-## E033 — Migration rejected a real unsupported topology
-
-A fail-closed migration accepted only two source states and rejected the verified
-third state: one valid manager plus seven PID-1 orphan supervisors.
-
-Prevention: preflight must explicitly classify every supported source topology
-and reject all others before process mutation.
-
-## E034 — Native-manager-plus-orphans reconciliation added
-
-PR #17 added a reconciliation path for one manager plus seven orphans and merged
-as `507df7e8319bded4f34d9d80f9aa9d3ec7e501fe`.
-
-Prevention: deployment still requires exact source topology, bounded execution,
-rollback, and independent verification.
-
-## E035 — Placeholder commits created directly on `main`
-
-Three temporary placeholder files containing only `x` were created and deleted
-directly on `main` while attempting to establish a branch.
-
-Effect: no phone/runtime state changed, but repository history was polluted and
-the no-direct-main rule was violated.
-
-Prevention: create and verify the branch before any file write. Never probe branch
-creation with placeholder files.
-
-## E036 — July closure remained canonical after August regression
-
-The July 26 handoff continued to state that migration/watchdog work was closed
-after the August 1 validation proved later control-plane, recovery, scheduling,
-and repository regressions.
-
-Prevention: later verified evidence supersedes earlier production-readiness
-verdicts while preserving historical timestamps.
-
-## E037 — PR #24 scope drift and divergent integration branch
-
-PR #24 described a three-file preservation change but expanded to seven commits
-and thirty-two changed files across unrelated runtime, provider, documentation,
-notification, and test concerns. It diverged heavily from current `main` and
-became non-mergeable.
-
-Prevention: preservation branches are historical artifacts, not integration
-branches. Reapply one behavior at a time from current `main`; close contaminated
-PRs as superseded.
-
-## E038 — Incident record ended inside an unfinished heredoc
-
-The first August 1 incident file ended with a literal
-`cat >"$INCIDENT_FILE" <<'EOF'` inside an unclosed code block and omitted the
-incident conclusion and acceptance failures.
-
-Prevention: validate documentation as a complete standalone file before commit.
-Do not paste shell-construction scaffolding into the final artifact.
-
-## E039 — Continuous guard associated with repeated Termux restarts
-
-The configured native service-daemon path was unavailable. A continuous
-`runsvdir` guard was started, and repeated Termux restarts occurred while it was
-active. The guard and watchdog were stopped; automatic recovery was disabled.
-
-Interpretation: rollback was required. The exact restart mechanism remains
-unproven.
-
-Prevention: no continuous recovery loop without executable-path verification,
-locking, bounded cadence, backoff, kill switch, failure-injection tests, and
-Termux restart observation.
-
-## E040 — Broad data discovery completed but explicit D1 mismatch remained
-
-The August 2 discovery ended with:
+## Current status
 
 ```text
-LOCAL_STATUS_DATA_DISCOVERY_COMPLETE=YES
-RUNTIME_MUTATION_PERFORMED=NO
-GIT_CHANGED=NO
+PRODUCTION_VALIDATION=FAILED
+PHONE_PRESERVATION=PASS
+FIVE_FILE_CORE_DEPLOYMENT=PASS
+D1_TIMEFRAME_MAPPING=FIXED_AND_DEPLOYED
+SUPERVISOR_CORE_ACCEPTANCE=PASS
+STATUS_FORMATTER_ACCEPTANCE=PASS
+AUTOSTATUS_ACCEPTANCE=PASS
+FULL_CURRENT_CONTROL_PLANE=UNKNOWN
+ACTIVE_SUPERVISOR_WRAPPER_AUTO_MUTATION=OPEN_RISK
+HEARTBEAT_TOPOLOGY=OPEN_RISK
+AUTOMATIC_RECOVERY_REENABLE_ALLOWED=NO
 ```
 
-The evidence still showed `cache/indicators_EURUSD_D1.json` with
-`error=tf_mismatch`, `tf_ok=false`, `tf_actual_min=0.0`, and zero indicators.
+## Canonical error index
 
-Prevention: do not repeat broad discovery. Reproduce one pair/timeframe through
-the exact provider fetch, cache writer, and indicator builder.
+### E001 — Scope branching
+Repository, runtime, documentation, deployment, and strategy work were mixed.
+Prevention: one phase, evidence domain, and acceptance gate per package.
 
-## E041 — PR creation attempted before repair branch existed
+### E002 — Uncontained production commit
+Operational work was committed on the production checkout before isolation.
+Prevention: verify branch/HEAD and preserve the phone before mutation.
 
-During the August 2 repository-truth repair, PR creation was attempted before the
-new repair branch existed. GitHub rejected each attempt with validation errors;
-no PR, file, branch, or runtime mutation resulted.
+### E003 — Duplicate execution sources
+Cron, runit, boot files, and wrappers could own the same component.
+Prevention: prove one execution source for every component.
 
-Prevention: operation order is branch creation -> branch verification -> complete
-file writes -> diff verification -> PR creation.
+### E004 — Dead manager with orphaned supervisors
+A manager died while child `runsv` processes survived under PID 1.
+Prevention: verify manager, parentage, ownership, and restart capability together.
 
-## Current efficient package protocol
+### E005 — Stale Android UID cron spool
+An obsolete spool generated `WRONG FILE OWNER` warnings.
+Prevention: verify UID and quarantine stale spool state.
 
-1. Display this file.
-2. State the single evidence domain and acceptance gate.
-3. For phone Git work, preserve and classify every local modification first.
-4. For runtime work, run one compact ownership/control-plane snapshot only when
-   current evidence is necessary.
-5. Stop if control-plane ownership fails; do not inspect strategy or mixed data.
-6. For data work, reproduce one pair/timeframe through exact provider, cache, and
-   indicator paths.
-7. For mutation, revalidate targets, back up, define rollback, mutate narrowly,
-   and verify independently.
-8. End with exactly one next action.
+### E006 — Multiple executable boot starters
+More than one Termux:Boot file could start the same daemon.
+Prevention: one canonical boot launcher and manager start path.
 
-## Current next action
+### E007 — Recursive scan entered runit FIFOs
+A broad scan traversed `supervise` named pipes and hung.
+Prevention: whitelist regular files and exclude supervise directories.
 
-From current `main`, create one focused code-repair branch that reproduces and
-fixes the EURUSD D1 `tf_mismatch`. Do not touch strategy, automatic recovery,
-Telegram, Supabase signal semantics, or the production phone checkout in the
-same package.
+### E008 — Incorrect crond foreground assertion
+A valid `crond -n -s` process was rejected because only `crond -f` was accepted.
+Prevention: inspect the installed implementation and valid equivalents.
+
+### E009 — `pipefail` converted zero matches into abort
+Expected `pgrep`/`grep` zero results terminated packages.
+Prevention: explicitly tolerate expected zero matches.
+
+### E010 — Manager not revalidated before mutation
+Child state was checked without immediately rechecking the manager.
+Prevention: revalidate the exact source topology immediately before mutation.
+
+### AUTO-20260717T110144Z — Boot consolidation controlled failure
+A direct daemon starter remained after mutation began.
+Prevention: enumerate active launchers before changing scheduler/manager state.
+
+### E012 — Deadman stale while services appeared running
+PID presence was mistaken for useful progress.
+Prevention: health must prove monotonic forward progress.
+
+### E014 — Broad audit included inactive historical trees
+Archives and generated state obscured active paths.
+Prevention: inspect whitelisted active files and logs only.
+
+### E015 — Active wall-clock dependencies
+Cadence and health used Android/ship wall time.
+Prevention: server UTC for market semantics; monotonic time for cadence/health.
+
+### E016 — Fixed-PID endurance criterion
+Healthy restarts were treated as failure because PIDs changed.
+Prevention: judge ownership, duplicates, orphans, and progress—not PID identity.
+
+### E017 — Inaccessible `/proc/uptime`
+Android denied access.
+Prevention: never depend on `/proc/uptime` on this device.
+
+### E018 — Current time misinterpreted
+Conversation timing was preferred over direct timestamps.
+Prevention: use explicit current evidence and exact timestamps.
+
+### E019 — Transient crond absence escalated early
+A momentary absence recovered under runit.
+Prevention: distinguish recovering, persistently down, and structurally broken.
+
+### E020 — Impossible deadman time ordering
+A last-success timestamp was later than the stated server UTC.
+Prevention: one trusted source; reject negative/future ages.
+
+### E021 — Continuity lagged runtime truth
+Canonical files remained stale after material changes.
+Prevention: update all handoff/error/incident files and issue #9 after each gate.
+
+### E022 — Oversized package crashed or burdened Termux
+Too many evidence domains were combined.
+Prevention: bounded packages and smaller direct acceptance proofs.
+
+### E023 — Historical watcher log selected as current
+Marker-rich old logs were mixed with current caches.
+Prevention: identify active output and a trusted UTC boundary first.
+
+### E024 — Generic regex parsed arbitrary tags as pair/timeframe
+Prevention: match only configured pairs and timeframes.
+
+### E025 — CSV schema assumed before inspection
+Prevention: print and verify exact header/raw rows first.
+
+### E026 — Historical Telegram counters reported as current
+Prevention: count only inside a verified current-cycle boundary.
+
+### E027 — Control-plane regression after prior closure
+One manager owned only part of the service set.
+Prevention: ownership Gate A before deeper diagnosis.
+
+### E028 — Split control plane automatically reconverged
+A later snapshot recovered without manual mutation.
+Prevention: preserve failure and recovery evidence without erasing either.
+
+### E029 — Manager disappeared after reconvergence
+Prevention: stop deeper work and take one compact control-plane resample.
+
+### E030 — Manager absence persisted and crond became unavailable
+Prevention: do not start a second manager while orphans remain.
+
+### E031 — `supervise/pid` misidentified as `runsv`
+Prevention: service PID -> PPID -> `runsv` -> manager chain.
+
+### E032 — Manager existed while supervisors were orphans
+Prevention: manager existence and service ownership are separate gates.
+
+### E033 — Migration rejected a real source topology
+One manager plus seven PID-1 orphans was unclassified.
+Prevention: enumerate every supported source topology before mutation.
+
+### E034 — Native-manager-plus-orphans reconciliation added
+One-shot repair existed but did not justify continuous recovery.
+Prevention: exact topology, rollback, locking, and independent verification.
+
+### E035 — Placeholder commits created directly on `main`
+Temporary `x` files polluted history.
+Prevention: create and verify a branch before file writes.
+
+### E036 — July closure remained canonical after August regression
+Prevention: later evidence supersedes readiness verdicts while retaining history.
+
+### E037 — PR #24 scope drift
+A preservation PR became a divergent multi-concern integration branch.
+Prevention: salvage one behavior at a time from current `main`.
+
+### E038 — Incident record ended inside an unfinished heredoc
+Prevention: validate documentation as a standalone final artifact.
+
+### E039 — Continuous guard associated with repeated Termux restarts
+Prevention: no continuous recovery without executable-path proof, locking,
+backoff, kill switch, failure injection, and restart observation.
+
+### E040 — Broad discovery completed while D1 mismatch remained
+The explicit D1 invalid state required focused reproduction, not more discovery.
+Status: root cause fixed; deployed mapping now returns 1440 minutes.
+
+### E041 — PR creation attempted before branch content existed
+GitHub correctly rejected the PR because there were no commits. This recurred
+once during the August 2 documentation synchronization; no PR or content mutation
+resulted from the rejected call.
+Prevention: branch -> file commits -> diff verification -> PR creation.
+
+### E042 — Phone deployment completed while canonical files stayed stale
+The D1 fix and five-file phone deployment passed, but handoff files still said D1
+was unresolved and the phone was entirely unknown.
+Prevention: synchronize canonical truth immediately after deployment acceptance.
+
+### E043 — Active phone supervisor wrapper contradicts disabled-recovery policy
+`services/bota-supervisor/run` is phone-only, absent from GitHub `main`, and can
+start `runsvdir` automatically when its regex finds no match. P6 showed the
+supervisor service running while a separate regex snapshot returned no match.
+Effect: possible repeated manager-start attempts, duplicate manager risk, and
+repository/runtime divergence.
+Prevention: track service wrappers; make the supervisor scheduler non-mutating;
+verify exact command/parentage instead of relying on a regex.
+
+### E044 — Active heartbeat path bypasses repaired GitHub controller
+The phone service invokes `bota_heartbeat_utc.sh`, while GitHub repairs target
+`heartbeat.sh -> heartbeat_delivery.py`.
+Effect: active retry backoff is not reconciled; deadman/recovery behavior exists
+only in the phone wrapper.
+Prevention: preserve deadman semantics while consolidating to one locked,
+monotonic delivery controller.
+
+## Current phone preservation and deployment
+
+```text
+PRESERVE_DIR=~/bota-phone-preserve-20260802T210517Z
+PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
+PHONE_HEAD=d5c765df6fee1241be21ce892fc53e9c4bdcfb8c
+UNTRACKED_FILES_PRESERVED=519
+REMOTE_PUSH_PERFORMED=NO
+```
+
+Deployed and accepted:
+
+```text
+tools/supervisor_clock_status.py
+tools/build_indicators.py
+tools/format_status.py
+tools/autostatus.sh
+tools/bota_supervisor.sh
+```
+
+Protected and unchanged:
+
+```text
+tools/heartbeat.sh
+tools/bota_heartbeat_utc.sh
+services/bota-heartbeat/run
+tools/pipeline_health.py
+```
+
+## Current efficient protocol
+
+1. Read this file and `audits/PHONE_DEPLOYMENT_2026-08-02.md`.
+2. State one narrow evidence domain and acceptance gate.
+3. Preserve phone state before Git mutation.
+4. Verify exact paths, commands, and parentage—not broad regex assumptions.
+5. For mutation: preflight, backup, rollback, complete-file replacement,
+   checksum, exact commit scope, independent verification.
+6. Keep strategy, Supabase semantics, providers, Telegram, and topology changes
+   separated.
+7. Prefer a small direct proof over another giant copy-paste package.
+
+## Exactly one next action
+
+Replace the active phone-only `services/bota-supervisor/run` with a tracked,
+non-mutating scheduler and verify one intended manager, seven owned/running
+required services, zero orphans/duplicates, and no automatic manager creation.
+Heartbeat reconciliation follows only after that gate passes.
