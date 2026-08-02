@@ -81,12 +81,18 @@ class FormatterBehaviorTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def write_bundle(self, pair: str, timeframe: str, direction: int) -> None:
+    def write_bundle(
+        self,
+        pair: str,
+        timeframe: str,
+        direction: int,
+        overrides: dict[str, object] | None = None,
+    ) -> None:
+        bundle = indicator_bundle(pair, timeframe, direction)
+        if overrides:
+            bundle.update(overrides)
         path = self.root / "cache" / f"indicators_{pair}_{timeframe}.json"
-        path.write_text(
-            json.dumps(indicator_bundle(pair, timeframe, direction)),
-            encoding="utf-8",
-        )
+        path.write_text(json.dumps(bundle), encoding="utf-8")
 
     def run_formatter(self) -> subprocess.CompletedProcess[str]:
         environment = os.environ.copy()
@@ -101,10 +107,13 @@ class FormatterBehaviorTests(unittest.TestCase):
             timeout=30,
         )
 
-    def test_cached_bull_and_bear_context_is_clear_and_non_actionable(self) -> None:
+    def seed_valid_pairs(self) -> None:
         for timeframe in ("H1", "H4", "D1"):
             self.write_bundle("EURUSD", timeframe, 1)
             self.write_bundle("GBPUSD", timeframe, -1)
+
+    def test_cached_bull_and_bear_context_is_clear_and_non_actionable(self) -> None:
+        self.seed_valid_pairs()
 
         result = self.run_formatter()
 
@@ -120,26 +129,43 @@ class FormatterBehaviorTests(unittest.TestCase):
         self.assertNotIn(" UTC", result.stdout)
 
     def test_invalid_daily_cache_is_visible_and_fail_closed(self) -> None:
-        for timeframe in ("H1", "H4", "D1"):
-            self.write_bundle("EURUSD", timeframe, 1)
-            self.write_bundle("GBPUSD", timeframe, -1)
-
-        invalid_path = self.root / "cache" / "indicators_EURUSD_D1.json"
-        invalid = indicator_bundle("EURUSD", "D1", 1)
-        invalid.update(
+        self.seed_valid_pairs()
+        self.write_bundle(
+            "EURUSD",
+            "D1",
+            1,
             {
                 "tf_ok": False,
                 "tf_actual_min": 0.0,
                 "weak": True,
                 "error": "tf_mismatch",
-            }
+            },
         )
-        invalid_path.write_text(json.dumps(invalid), encoding="utf-8")
 
         result = self.run_formatter()
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("D1: unavailable (tf_mismatch)", result.stdout)
+        self.assertIn("Coverage: 2 of 3 timeframes", result.stdout)
+
+    def test_valid_zero_rsi_is_not_replaced_with_neutral_default(self) -> None:
+        self.seed_valid_pairs()
+        self.write_bundle("EURUSD", "H1", -1, {"rsi": 0.0})
+
+        result = self.run_formatter()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("H1: STRONG SELL | RSI 0.0 | MACD falling", result.stdout)
+        self.assertNotIn("H1: STRONG SELL | RSI 50.0", result.stdout)
+
+    def test_non_finite_indicator_is_rejected(self) -> None:
+        self.seed_valid_pairs()
+        self.write_bundle("EURUSD", "H4", 1, {"rsi": float("inf")})
+
+        result = self.run_formatter()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("H4: unavailable (invalid indicators)", result.stdout)
         self.assertIn("Coverage: 2 of 3 timeframes", result.stdout)
 
 
