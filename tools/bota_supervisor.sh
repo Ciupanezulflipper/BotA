@@ -100,15 +100,7 @@ pipeline_tmp="$(mktemp)"
 market_stdout_tmp="$(mktemp)"
 market_stderr_tmp="$(mktemp)"
 clock_tmp="$(mktemp)"
-cleanup() {
-  rm -f -- \
-    "${control_tmp}" \
-    "${pipeline_tmp}" \
-    "${market_stdout_tmp}" \
-    "${market_stderr_tmp}" \
-    "${clock_tmp}"
-}
-trap cleanup EXIT
+trap 'rm -f -- "${control_tmp}" "${pipeline_tmp}" "${market_stdout_tmp}" "${market_stderr_tmp}" "${clock_tmp}"' EXIT
 
 control_rc=0
 python3 "${TOOLS}/control_plane_status.py" >"${control_tmp}" 2>>"${LOGS}/error.log" || control_rc=$?
