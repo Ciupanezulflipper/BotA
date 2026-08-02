@@ -90,7 +90,7 @@ def classify_market_gate(
             "state": "closed",
             "reason": "market_closed",
             "exit_code": exit_code,
-            "trusted_server_clock_available": None,
+            "trusted_server_clock_available": True,
             "diagnostic": diagnostic,
         }
 
@@ -111,11 +111,11 @@ def normalize_clock_observability(
     data, present, valid = load_clock_file(clock_path)
 
     if not present:
-        status = "MISSING"
+        snapshot_status = "MISSING"
     elif not valid:
-        status = "INVALID"
+        snapshot_status = "INVALID"
     else:
-        status = compact_detail(data.get("status") or "UNKNOWN")
+        snapshot_status = compact_detail(data.get("status") or "UNKNOWN")
 
     server_clock_ok = optional_bool(data.get("server_clock_ok")) if valid else None
     local_clock_unsafe = optional_bool(data.get("local_clock_unsafe")) if valid else None
@@ -129,12 +129,27 @@ def normalize_clock_observability(
     else:
         trading_clock_available = server_clock_ok
 
+    if trading_clock_available is True:
+        status = "AVAILABLE"
+    elif trading_clock_available is False:
+        status = "UNAVAILABLE"
+    else:
+        status = "UNKNOWN"
+
+    live_gate_overrode_snapshot = (
+        isinstance(gate_clock, bool)
+        and isinstance(server_clock_ok, bool)
+        and gate_clock is not server_clock_ok
+    )
+
     return {
         "status": status,
+        "snapshot_status": snapshot_status,
         "source_file_present": present,
         "source_file_valid": valid,
         "server_clock_ok": server_clock_ok,
         "trading_clock_available": trading_clock_available,
+        "live_gate_overrode_snapshot": live_gate_overrode_snapshot,
         "local_clock_unsafe": local_clock_unsafe,
         "local_clock_warning": server_clock_ok is True and local_clock_unsafe is True,
         "drift_seconds": drift_seconds,
