@@ -203,6 +203,8 @@ class ClockNormalizerTests(unittest.TestCase):
 
         self.assertEqual(gate["state"], "clock_unavailable")
         self.assertFalse(gate["trusted_server_clock_available"])
+        self.assertEqual(clock["status"], "UNAVAILABLE")
+        self.assertEqual(clock["snapshot_status"], "SERVER_CLOCK_UNAVAILABLE")
         self.assertFalse(clock["trading_clock_available"])
         self.assertFalse(clock["runtime_failure"])
 
@@ -231,16 +233,47 @@ class ClockNormalizerTests(unittest.TestCase):
             )
 
         self.assertEqual(gate["state"], "closed")
+        self.assertTrue(gate["trusted_server_clock_available"])
+        self.assertEqual(clock["status"], "AVAILABLE")
+        self.assertEqual(clock["snapshot_status"], "DRIFT_WARN")
         self.assertTrue(clock["trading_clock_available"])
         self.assertTrue(clock["local_clock_warning"])
         self.assertFalse(clock["runtime_failure"])
+
+    def test_live_gate_overrides_stale_unavailable_snapshot(self) -> None:
+        gate = supervisor_clock_status.classify_market_gate(
+            1,
+            "Closed\n",
+            "Friday after 20:00 UTC -> Closed\n",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            clock_file = Path(temporary) / "clock.json"
+            clock_file.write_text(
+                json.dumps(
+                    {
+                        "status": "SERVER_CLOCK_UNAVAILABLE",
+                        "server_clock_ok": False,
+                        "local_clock_unsafe": None,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            clock = supervisor_clock_status.normalize_clock_observability(
+                clock_file,
+                gate,
+            )
+
+        self.assertTrue(gate["trusted_server_clock_available"])
+        self.assertEqual(clock["status"], "AVAILABLE")
+        self.assertEqual(clock["snapshot_status"], "SERVER_CLOCK_UNAVAILABLE")
+        self.assertTrue(clock["live_gate_overrode_snapshot"])
 
 
 class SupervisorBehaviorTests(unittest.TestCase):
     """Verify bot mode is driven only by process and pipeline evidence."""
 
+    @staticmethod
     def configure(
-        self,
         root: Path,
         *,
         control_healthy: bool = True,
@@ -284,6 +317,7 @@ class SupervisorBehaviorTests(unittest.TestCase):
         self.assertFalse(
             health["market_gate"]["trusted_server_clock_available"]
         )
+        self.assertEqual(health["clock_observability"]["status"], "UNAVAILABLE")
         self.assertFalse(health["clock_observability"]["runtime_failure"])
         self.assertEqual(pipeline_args, "--market-closed")
         self.assertNotIn("server_clock_unavailable", health["failure_reasons"])
@@ -326,6 +360,7 @@ class SupervisorBehaviorTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(health["market_state"], "open")
+        self.assertEqual(health["clock_observability"]["status"], "AVAILABLE")
         self.assertEqual(pipeline_args, "--market-open")
 
     def test_closed_market_with_drift_warning_remains_healthy(self) -> None:
@@ -344,6 +379,11 @@ class SupervisorBehaviorTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(health["bot_mode"], "HEALTHY")
         self.assertEqual(health["market_state"], "closed")
+        self.assertEqual(health["clock_observability"]["status"], "AVAILABLE")
+        self.assertEqual(
+            health["clock_observability"]["snapshot_status"],
+            "DRIFT_WARN",
+        )
         self.assertTrue(
             health["clock_observability"]["local_clock_warning"]
         )
@@ -351,7 +391,7 @@ class SupervisorBehaviorTests(unittest.TestCase):
             health["clock_observability"]["trading_clock_available"]
         )
 
-    def test_missing_clock_file_is_unknown_not_degraded(self) -> None:
+    def test_missing_clock_file_is_explicit_but_live_gate_stays_authoritative(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = prepare_runtime(Path(temporary))
             write_control_plane(root, healthy=True)
@@ -362,7 +402,11 @@ class SupervisorBehaviorTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(health["bot_mode"], "HEALTHY")
-        self.assertEqual(health["clock_observability"]["status"], "MISSING")
+        self.assertEqual(health["clock_observability"]["status"], "AVAILABLE")
+        self.assertEqual(
+            health["clock_observability"]["snapshot_status"],
+            "MISSING",
+        )
         self.assertFalse(
             health["clock_observability"]["source_file_present"]
         )
