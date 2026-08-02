@@ -103,58 +103,98 @@ def classify_market_gate(
     }
 
 
+def snapshot_status(present: bool, valid: bool, data: dict[str, Any]) -> str:
+    """Return the status recorded by the periodic clock snapshot."""
+    if not present:
+        return "MISSING"
+    if not valid:
+        return "INVALID"
+    return compact_detail(data.get("status") or "UNKNOWN")
+
+
+def snapshot_values(data: dict[str, Any], valid: bool) -> dict[str, Any]:
+    """Extract typed values from a valid clock snapshot."""
+    if not valid:
+        return {
+            "server_clock_ok": None,
+            "local_clock_unsafe": None,
+            "drift_seconds": None,
+            "server_reason": "",
+            "generated_utc": "",
+        }
+    return {
+        "server_clock_ok": optional_bool(data.get("server_clock_ok")),
+        "local_clock_unsafe": optional_bool(data.get("local_clock_unsafe")),
+        "drift_seconds": finite_number(data.get("drift_seconds")),
+        "server_reason": compact_detail(data.get("server_reason") or ""),
+        "generated_utc": compact_detail(data.get("generated_utc") or ""),
+    }
+
+
+def effective_clock_available(
+    market_gate: dict[str, Any],
+    server_clock_ok: bool | None,
+) -> bool | None:
+    """Prefer live market-gate clock evidence over the periodic snapshot."""
+    gate_clock = market_gate.get("trusted_server_clock_available")
+    if isinstance(gate_clock, bool):
+        return gate_clock
+    return server_clock_ok
+
+
+def availability_status(available: bool | None) -> str:
+    """Map effective clock availability to a stable status string."""
+    if available is True:
+        return "AVAILABLE"
+    if available is False:
+        return "UNAVAILABLE"
+    return "UNKNOWN"
+
+
+def gate_overrode_snapshot(
+    market_gate: dict[str, Any],
+    server_clock_ok: bool | None,
+) -> bool:
+    """Return whether current live evidence contradicts the older snapshot."""
+    gate_clock = market_gate.get("trusted_server_clock_available")
+    return (
+        isinstance(gate_clock, bool)
+        and isinstance(server_clock_ok, bool)
+        and gate_clock is not server_clock_ok
+    )
+
+
 def normalize_clock_observability(
     clock_path: Path,
     market_gate: dict[str, Any],
 ) -> dict[str, Any]:
     """Build the non-fatal clock observability object."""
     data, present, valid = load_clock_file(clock_path)
-
-    if not present:
-        snapshot_status = "MISSING"
-    elif not valid:
-        snapshot_status = "INVALID"
-    else:
-        snapshot_status = compact_detail(data.get("status") or "UNKNOWN")
-
-    server_clock_ok = optional_bool(data.get("server_clock_ok")) if valid else None
-    local_clock_unsafe = optional_bool(data.get("local_clock_unsafe")) if valid else None
-    drift_seconds = finite_number(data.get("drift_seconds")) if valid else None
-    server_reason = compact_detail(data.get("server_reason") or "") if valid else ""
-    generated_utc = compact_detail(data.get("generated_utc") or "") if valid else ""
-
-    gate_clock = market_gate.get("trusted_server_clock_available")
-    if isinstance(gate_clock, bool):
-        trading_clock_available: bool | None = gate_clock
-    else:
-        trading_clock_available = server_clock_ok
-
-    if trading_clock_available is True:
-        status = "AVAILABLE"
-    elif trading_clock_available is False:
-        status = "UNAVAILABLE"
-    else:
-        status = "UNKNOWN"
-
-    live_gate_overrode_snapshot = (
-        isinstance(gate_clock, bool)
-        and isinstance(server_clock_ok, bool)
-        and gate_clock is not server_clock_ok
+    values = snapshot_values(data, valid)
+    server_clock_ok = values["server_clock_ok"]
+    trading_clock_available = effective_clock_available(
+        market_gate,
+        server_clock_ok,
     )
 
     return {
-        "status": status,
-        "snapshot_status": snapshot_status,
+        "status": availability_status(trading_clock_available),
+        "snapshot_status": snapshot_status(present, valid, data),
         "source_file_present": present,
         "source_file_valid": valid,
         "server_clock_ok": server_clock_ok,
         "trading_clock_available": trading_clock_available,
-        "live_gate_overrode_snapshot": live_gate_overrode_snapshot,
-        "local_clock_unsafe": local_clock_unsafe,
-        "local_clock_warning": server_clock_ok is True and local_clock_unsafe is True,
-        "drift_seconds": drift_seconds,
-        "server_reason": server_reason,
-        "generated_utc": generated_utc,
+        "live_gate_overrode_snapshot": gate_overrode_snapshot(
+            market_gate,
+            server_clock_ok,
+        ),
+        "local_clock_unsafe": values["local_clock_unsafe"],
+        "local_clock_warning": (
+            server_clock_ok is True and values["local_clock_unsafe"] is True
+        ),
+        "drift_seconds": values["drift_seconds"],
+        "server_reason": values["server_reason"],
+        "generated_utc": values["generated_utc"],
         "runtime_failure": False,
     }
 
