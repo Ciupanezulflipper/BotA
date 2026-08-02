@@ -35,9 +35,15 @@ def safe_float(value: Any) -> float | None:
     """Return a finite float or ``None`` for invalid input."""
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return number if math.isfinite(number) else None
+
+
+def number_or_default(value: Any, default: float) -> float:
+    """Return a finite number without replacing valid zero values."""
+    number = safe_float(value)
+    return default if number is None else number
 
 
 def load_bundle(pair: str, timeframe: str) -> dict[str, Any] | None:
@@ -72,10 +78,10 @@ def bundle_error(bundle: dict[str, Any] | None, pair: str, timeframe: str) -> st
 
 def timeframe_score(bundle: dict[str, Any]) -> int:
     """Compute the existing three-factor technical score for display only."""
-    ema9 = safe_float(bundle.get("ema9")) or 0.0
-    ema21 = safe_float(bundle.get("ema21")) or 0.0
-    rsi = safe_float(bundle.get("rsi")) or 50.0
-    macd_hist = safe_float(bundle.get("macd_hist")) or 0.0
+    ema9 = number_or_default(bundle.get("ema9"), 0.0)
+    ema21 = number_or_default(bundle.get("ema21"), 0.0)
+    rsi = number_or_default(bundle.get("rsi"), 50.0)
+    macd_hist = number_or_default(bundle.get("macd_hist"), 0.0)
 
     score = 0
     score += 1 if ema9 > ema21 else -1 if ema9 < ema21 else 0
@@ -137,14 +143,14 @@ def render_pair(pair: str, label: str) -> list[str]:
     for timeframe in TIMEFRAMES:
         bundle = load_bundle(pair, timeframe)
         reason = bundle_error(bundle, pair, timeframe)
-        if reason:
-            lines.append(f"{timeframe}: unavailable ({reason})")
+        if reason or bundle is None:
+            lines.append(f"{timeframe}: unavailable ({reason or 'missing cache'})")
             continue
-        assert bundle is not None
+
         bundles[timeframe] = bundle
         score = timeframe_score(bundle)
         scores.append(score)
-        rsi = safe_float(bundle.get("rsi")) or 50.0
+        rsi = number_or_default(bundle.get("rsi"), 50.0)
         lines.append(
             f"{timeframe}: {timeframe_label(score)} | "
             f"RSI {rsi:.1f} | MACD {macd_direction(bundle.get('macd_hist'))}"
