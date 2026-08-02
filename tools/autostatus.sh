@@ -26,7 +26,7 @@ if [[ ! -x "${MARKET_GATE}" ]]; then
 fi
 
 MARKET_STATE=""
-if MARKET_STATE="$(${MARKET_GATE} 2>>"${LOGDIR}/cron.autostatus.log")"; then
+if MARKET_STATE="$("${MARKET_GATE}" 2>>"${LOGDIR}/cron.autostatus.log")"; then
   :
 else
   log "SKIP: market_closed_or_clock_unavailable state=${MARKET_STATE:-unknown}"
