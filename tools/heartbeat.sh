@@ -1,6 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # FILE: tools/heartbeat.sh
 # ROLE: Run one unified UTC heartbeat, deadman, and recovery cycle.
+# Transport and retry primitives remain in tools/heartbeat_delivery.py.
 
 set -euo pipefail
 
