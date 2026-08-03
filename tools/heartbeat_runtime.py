@@ -14,7 +14,7 @@ import os
 import statistics
 import tempfile
 import time
-import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -90,12 +90,25 @@ def server_timeout_seconds() -> float:
     return min(max(configured, 1.0), 15.0)
 
 
+def is_permitted_server_url(value: str) -> bool:
+    """Allow only absolute HTTPS clock endpoints."""
+    try:
+        parsed = urllib.parse.urlparse(value)
+    except ValueError:
+        return False
+    return parsed.scheme == "https" and bool(parsed.hostname)
+
+
 def configured_server_urls() -> tuple[str, ...]:
-    """Return configured authoritative-clock endpoints or safe defaults."""
+    """Return validated authoritative-clock endpoints or safe defaults."""
     raw = os.environ.get("HEARTBEAT_SERVER_URLS", "").strip()
     if not raw:
         return DEFAULT_SERVER_URLS
-    values = tuple(item.strip() for item in raw.split(",") if item.strip())
+    values = tuple(
+        item.strip()
+        for item in raw.split(",")
+        if item.strip() and is_permitted_server_url(item.strip())
+    )
     return values or DEFAULT_SERVER_URLS
 
 
@@ -108,6 +121,8 @@ def authoritative_server_epoch() -> tuple[int | None, int]:
     epochs: list[int] = []
     timeout = server_timeout_seconds()
     for url in configured_server_urls():
+        if not is_permitted_server_url(url):
+            continue
         request = urllib.request.Request(
             url,
             headers={"User-Agent": "BotA-heartbeat/1.0"},
@@ -116,7 +131,7 @@ def authoritative_server_epoch() -> tuple[int | None, int]:
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 raw_date = str(response.headers.get("Date") or "").strip()
-        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        except (OSError, ValueError):
             continue
         if not raw_date:
             continue
@@ -166,7 +181,6 @@ def failure_backoff_remaining(state: dict[str, object], now_monotonic: float) ->
 def attempt_event(
     *,
     root: Path,
-    event_name: str,
     message: str,
     state_path: Path,
     now_monotonic: float,
@@ -261,6 +275,195 @@ def last_shadow_display(path: Path) -> str:
     return value or "display timestamp unavailable"
 
 
+def handle_heartbeat(
+    *,
+    root: Path,
+    log_path: Path,
+    bucket_path: Path,
+    state_path: Path,
+    server_epoch: int,
+    source_count: int,
+    now_monotonic: float,
+    current_boot_id: str,
+    dry_run: bool,
+) -> None:
+    """Evaluate and deliver one authoritative UTC heartbeat bucket."""
+    bucket = utc_bucket(server_epoch)
+    try:
+        last_bucket = bucket_path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
+        last_bucket = ""
+    if bucket == last_bucket:
+        emit(log_path, "HB_UTC_RESULT=BUCKET_UNCHANGED")
+        return
+
+    summary = delivery.build_summary(root / "state" / "runtime_health.json")
+    message = f"💓 Heartbeat — BotA alive at {utc_display(server_epoch)}\n{summary}"
+    outcome, detail = attempt_event(
+        root=root,
+        message=message,
+        state_path=state_path,
+        now_monotonic=now_monotonic,
+        current_boot_id=current_boot_id,
+        dry_run=dry_run,
+    )
+    if outcome == "sent":
+        atomic_write_text(bucket_path, f"{bucket}\n")
+        emit(log_path, f"HB_UTC_RESULT=PASS sources={source_count}")
+    elif outcome == "dry_run":
+        emit(log_path, "HB_UTC_RESULT=DRY_RUN")
+    elif outcome == "suppressed":
+        emit(log_path, f"HB_UTC_RESULT=RETRY_SUPPRESSED {detail}")
+    else:
+        emit(log_path, f"HB_UTC_RESULT=DELIVERY_FAILED {delivery.compact_detail(detail)}")
+
+
+def emit_progress_error(log_path: Path, status: str) -> bool:
+    """Emit one progress error marker and return whether evaluation must stop."""
+    markers = {
+        "missing": "DEADMAN_UTC_RESULT=MONOTONIC_PROGRESS_MISSING",
+        "boot_changed": "DEADMAN_UTC_RESULT=BOOT_CHANGED_WAITING_FOR_PROGRESS",
+        "invalid": "DEADMAN_UTC_RESULT=MONOTONIC_PROGRESS_INVALID",
+    }
+    marker = markers.get(status)
+    if marker is None:
+        return False
+    emit(log_path, marker)
+    return True
+
+
+def handle_stale_progress(
+    *,
+    root: Path,
+    log_path: Path,
+    deadman_flag: Path,
+    deadman_state: Path,
+    server_epoch: int,
+    age_seconds: float,
+    last_display: str,
+    now_monotonic: float,
+    current_boot_id: str,
+    dry_run: bool,
+) -> None:
+    """Deliver or suppress a deadman alert for stale progress."""
+    if deadman_flag.exists():
+        emit(log_path, "DEADMAN_UTC_RESULT=ALREADY_ALERTED")
+        return
+    age_minutes = int(age_seconds // 60)
+    message = (
+        f"[BotA DEADMAN] Pipeline stale for {age_minutes}min "
+        f"(server UTC: {utc_display(server_epoch)}) — last shadow: {last_display}"
+    )
+    outcome, detail = attempt_event(
+        root=root,
+        message=message,
+        state_path=deadman_state,
+        now_monotonic=now_monotonic,
+        current_boot_id=current_boot_id,
+        dry_run=dry_run,
+    )
+    if outcome == "sent":
+        atomic_write_text(deadman_flag, f"{message}\n")
+        emit(log_path, "DEADMAN_UTC_RESULT=ALERT_SENT")
+    elif outcome == "dry_run":
+        emit(log_path, "DEADMAN_UTC_RESULT=DRY_RUN_ALERT")
+    elif outcome == "suppressed":
+        emit(log_path, f"DEADMAN_UTC_RESULT=RETRY_SUPPRESSED {detail}")
+    else:
+        emit(log_path, f"DEADMAN_UTC_RESULT=DELIVERY_FAILED {delivery.compact_detail(detail)}")
+
+
+def handle_recovery(
+    *,
+    root: Path,
+    log_path: Path,
+    deadman_flag: Path,
+    recovery_state: Path,
+    last_display: str,
+    now_monotonic: float,
+    current_boot_id: str,
+    dry_run: bool,
+) -> None:
+    """Deliver or suppress recovery after a prior deadman alert."""
+    if not deadman_flag.exists():
+        emit(log_path, "DEADMAN_UTC_RESULT=HEALTHY")
+        return
+    message = f"[BotA RECOVERY] Pipeline alive — last shadow: {last_display}"
+    outcome, detail = attempt_event(
+        root=root,
+        message=message,
+        state_path=recovery_state,
+        now_monotonic=now_monotonic,
+        current_boot_id=current_boot_id,
+        dry_run=dry_run,
+    )
+    if outcome == "sent":
+        try:
+            deadman_flag.unlink()
+        except FileNotFoundError:
+            pass
+        emit(log_path, "DEADMAN_UTC_RESULT=RECOVERY_SENT")
+    elif outcome == "dry_run":
+        emit(log_path, "DEADMAN_UTC_RESULT=DRY_RUN_RECOVERY")
+    elif outcome == "suppressed":
+        emit(log_path, f"DEADMAN_UTC_RESULT=RECOVERY_RETRY_SUPPRESSED {detail}")
+    else:
+        emit(log_path, f"DEADMAN_UTC_RESULT=RECOVERY_DELIVERY_FAILED {delivery.compact_detail(detail)}")
+
+
+def handle_deadman(
+    *,
+    root: Path,
+    log_path: Path,
+    deadman_flag: Path,
+    deadman_state: Path,
+    recovery_state: Path,
+    progress_path: Path,
+    shadow_display_path: Path,
+    server_epoch: int,
+    now_monotonic: float,
+    current_boot_id: str,
+    dry_run: bool,
+) -> None:
+    """Evaluate monotonic useful progress and dispatch deadman or recovery."""
+    status, age_seconds = progress_age_seconds(
+        progress_path,
+        current_boot_id,
+        now_monotonic,
+    )
+    if emit_progress_error(log_path, status):
+        return
+    if age_seconds is None:
+        emit(log_path, "DEADMAN_UTC_RESULT=MONOTONIC_PROGRESS_INVALID")
+        return
+
+    last_display = last_shadow_display(shadow_display_path)
+    if age_seconds > bounded_deadman_stale_seconds():
+        handle_stale_progress(
+            root=root,
+            log_path=log_path,
+            deadman_flag=deadman_flag,
+            deadman_state=deadman_state,
+            server_epoch=server_epoch,
+            age_seconds=age_seconds,
+            last_display=last_display,
+            now_monotonic=now_monotonic,
+            current_boot_id=current_boot_id,
+            dry_run=dry_run,
+        )
+        return
+    handle_recovery(
+        root=root,
+        log_path=log_path,
+        deadman_flag=deadman_flag,
+        recovery_state=recovery_state,
+        last_display=last_display,
+        now_monotonic=now_monotonic,
+        current_boot_id=current_boot_id,
+        dry_run=dry_run,
+    )
+
+
 def run_cycle(root: Path) -> int:
     """Run one locked heartbeat and deadman/recovery evaluation cycle."""
     logs = root / "logs"
@@ -268,12 +471,7 @@ def run_cycle(root: Path) -> int:
     log_path = logs / "cron.heartbeat.log"
     bucket_path = logs / "state" / "heartbeat_utc_bucket.txt"
     deadman_flag = logs / "state" / "deadman.flag"
-    progress_path = state / "shadow_progress.monotonic"
-    shadow_display_path = logs / "shadow_manager_heartbeat.txt"
     lock_path = state / "heartbeat_delivery.lock"
-    heartbeat_state = state / "heartbeat_delivery.json"
-    deadman_state = state / "deadman_delivery.json"
-    recovery_state = state / "recovery_delivery.json"
 
     state.mkdir(parents=True, exist_ok=True)
     (logs / "state").mkdir(parents=True, exist_ok=True)
@@ -294,111 +492,30 @@ def run_cycle(root: Path) -> int:
 
         now_monotonic = time.monotonic()
         current_boot_id = delivery.boot_identity()
-        summary = delivery.build_summary(state / "runtime_health.json")
-        bucket = utc_bucket(server_epoch)
-        try:
-            last_bucket = bucket_path.read_text(encoding="utf-8").strip()
-        except (OSError, UnicodeError):
-            last_bucket = ""
-
-        if bucket == last_bucket:
-            emit(log_path, "HB_UTC_RESULT=BUCKET_UNCHANGED")
-        else:
-            heartbeat_message = (
-                f"💓 Heartbeat — BotA alive at {utc_display(server_epoch)}\n"
-                f"{summary}"
-            )
-            outcome, detail = attempt_event(
-                root=root,
-                event_name="heartbeat",
-                message=heartbeat_message,
-                state_path=heartbeat_state,
-                now_monotonic=now_monotonic,
-                current_boot_id=current_boot_id,
-                dry_run=dry_run,
-            )
-            if outcome == "sent":
-                atomic_write_text(bucket_path, f"{bucket}\n")
-                emit(log_path, f"HB_UTC_RESULT=PASS sources={source_count}")
-            elif outcome == "dry_run":
-                emit(log_path, "HB_UTC_RESULT=DRY_RUN")
-            elif outcome == "suppressed":
-                emit(log_path, f"HB_UTC_RESULT=RETRY_SUPPRESSED {detail}")
-            else:
-                emit(log_path, f"HB_UTC_RESULT=DELIVERY_FAILED {delivery.compact_detail(detail)}")
-
-        progress_status, age_seconds = progress_age_seconds(
-            progress_path,
-            current_boot_id,
-            now_monotonic,
-        )
-        if progress_status == "missing":
-            emit(log_path, "DEADMAN_UTC_RESULT=MONOTONIC_PROGRESS_MISSING")
-            return 0
-        if progress_status == "boot_changed":
-            emit(log_path, "DEADMAN_UTC_RESULT=BOOT_CHANGED_WAITING_FOR_PROGRESS")
-            return 0
-        if progress_status != "valid" or age_seconds is None:
-            emit(log_path, "DEADMAN_UTC_RESULT=MONOTONIC_PROGRESS_INVALID")
-            return 0
-
-        stale = age_seconds > bounded_deadman_stale_seconds()
-        last_display = last_shadow_display(shadow_display_path)
-        if stale:
-            if deadman_flag.exists():
-                emit(log_path, "DEADMAN_UTC_RESULT=ALREADY_ALERTED")
-                return 0
-            age_minutes = int(age_seconds // 60)
-            deadman_message = (
-                f"[BotA DEADMAN] Pipeline stale for {age_minutes}min "
-                f"(server UTC: {utc_display(server_epoch)}) — last shadow: {last_display}"
-            )
-            outcome, detail = attempt_event(
-                root=root,
-                event_name="deadman",
-                message=deadman_message,
-                state_path=deadman_state,
-                now_monotonic=now_monotonic,
-                current_boot_id=current_boot_id,
-                dry_run=dry_run,
-            )
-            if outcome == "sent":
-                atomic_write_text(deadman_flag, f"{deadman_message}\n")
-                emit(log_path, "DEADMAN_UTC_RESULT=ALERT_SENT")
-            elif outcome == "dry_run":
-                emit(log_path, "DEADMAN_UTC_RESULT=DRY_RUN_ALERT")
-            elif outcome == "suppressed":
-                emit(log_path, f"DEADMAN_UTC_RESULT=RETRY_SUPPRESSED {detail}")
-            else:
-                emit(log_path, f"DEADMAN_UTC_RESULT=DELIVERY_FAILED {delivery.compact_detail(detail)}")
-            return 0
-
-        if not deadman_flag.exists():
-            emit(log_path, "DEADMAN_UTC_RESULT=HEALTHY")
-            return 0
-
-        recovery_message = f"[BotA RECOVERY] Pipeline alive — last shadow: {last_display}"
-        outcome, detail = attempt_event(
+        handle_heartbeat(
             root=root,
-            event_name="recovery",
-            message=recovery_message,
-            state_path=recovery_state,
+            log_path=log_path,
+            bucket_path=bucket_path,
+            state_path=state / "heartbeat_delivery.json",
+            server_epoch=server_epoch,
+            source_count=source_count,
             now_monotonic=now_monotonic,
             current_boot_id=current_boot_id,
             dry_run=dry_run,
         )
-        if outcome == "sent":
-            try:
-                deadman_flag.unlink()
-            except FileNotFoundError:
-                pass
-            emit(log_path, "DEADMAN_UTC_RESULT=RECOVERY_SENT")
-        elif outcome == "dry_run":
-            emit(log_path, "DEADMAN_UTC_RESULT=DRY_RUN_RECOVERY")
-        elif outcome == "suppressed":
-            emit(log_path, f"DEADMAN_UTC_RESULT=RECOVERY_RETRY_SUPPRESSED {detail}")
-        else:
-            emit(log_path, f"DEADMAN_UTC_RESULT=RECOVERY_DELIVERY_FAILED {delivery.compact_detail(detail)}")
+        handle_deadman(
+            root=root,
+            log_path=log_path,
+            deadman_flag=deadman_flag,
+            deadman_state=state / "deadman_delivery.json",
+            recovery_state=state / "recovery_delivery.json",
+            progress_path=state / "shadow_progress.monotonic",
+            shadow_display_path=logs / "shadow_manager_heartbeat.txt",
+            server_epoch=server_epoch,
+            now_monotonic=now_monotonic,
+            current_boot_id=current_boot_id,
+            dry_run=dry_run,
+        )
     return 0
 
 
