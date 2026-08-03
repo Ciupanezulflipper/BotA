@@ -2,6 +2,7 @@
 # FILE: tools/heartbeat.sh
 # ROLE: Run one unified UTC heartbeat, deadman, and recovery cycle.
 # Clock-domain adaptation is in tools/heartbeat_boottime.py.
+# Unified orchestration remains in tools/heartbeat_runtime.py.
 # Transport and retry primitives remain in tools/heartbeat_delivery.py.
 
 set -euo pipefail
