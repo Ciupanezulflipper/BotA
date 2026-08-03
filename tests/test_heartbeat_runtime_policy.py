@@ -238,12 +238,13 @@ class HeartbeatRuntimeCycleTests(unittest.TestCase):
                 result = heartbeat_runtime.run_cycle(root)
 
             flag = root / "logs" / "state" / "deadman.flag"
+            flag_exists = flag.exists()
             log = (root / "logs" / "cron.heartbeat.log").read_text(encoding="utf-8")
 
         self.assertEqual(result, 0)
         sender.assert_called_once()
         self.assertIn("DEADMAN", sender.call_args.args[2])
-        self.assertTrue(flag.exists())
+        self.assertTrue(flag_exists)
         self.assertIn("DEADMAN_UTC_RESULT=ALERT_SENT", log)
 
     def test_fresh_progress_sends_recovery_and_removes_flag(self) -> None:
@@ -276,12 +277,13 @@ class HeartbeatRuntimeCycleTests(unittest.TestCase):
             ):
                 result = heartbeat_runtime.run_cycle(root)
 
+            flag_exists = flag.exists()
             log = (root / "logs" / "cron.heartbeat.log").read_text(encoding="utf-8")
 
         self.assertEqual(result, 0)
         sender.assert_called_once()
         self.assertIn("RECOVERY", sender.call_args.args[2])
-        self.assertFalse(flag.exists())
+        self.assertFalse(flag_exists)
         self.assertIn("DEADMAN_UTC_RESULT=RECOVERY_SENT", log)
 
     def test_dry_run_never_calls_telegram_or_mutates_delivery_state(self) -> None:
