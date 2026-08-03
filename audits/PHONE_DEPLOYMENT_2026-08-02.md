@@ -1,46 +1,27 @@
 # BotA Phone Deployment State — 2026-08-02
 
-Last updated: 2026-08-02 23:31 UTC
+Last updated: 2026-08-03 00:07 UTC
 
 ## Purpose
 
 This record reconciles GitHub `main`, the preserved production-phone checkout,
-the five-file phone deployment performed on 2026-08-02, and the remaining
-runtime gaps. It supersedes earlier statements that the D1 defect was unresolved
-or that the phone state was entirely unknown.
+the bounded core deployment, the supervisor-wrapper closure, and the remaining
+heartbeat gap.
 
-## Repository state
-
-Verified GitHub repair baseline:
+## Repository and phone state
 
 ```text
-GITHUB_MAIN=b4d961ea8e5d254c8578e2c022e1394cd134cd7e
-```
-
-That baseline contains the focused repository repairs for:
-
-- D1 timeframe mapping and validation;
-- cache-only status formatting;
-- market-gated autostatus delivery;
-- monotonic heartbeat delivery control;
-- supervisor clock observability separated from runtime failure.
-
-The production phone was not reset or pulled to that commit. Its existing
-phone-only work was preserved first, then five complete repaired files were
-applied on a dedicated local branch.
-
-Verified phone state after deployment:
-
-```text
+GITHUB_MAIN=29ae5babd5a0d6fc5e65b64d3f4f2eea16eaef6d
 PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
-PHONE_HEAD=d5c765df6fee1241be21ce892fc53e9c4bdcfb8c
+PHONE_HEAD=dbdb1b1f9e2e1a6d66bb94b8eda4d1cf40617d20
 PHONE_PARENT_HEAD=66fe241cc6afc8ec4fa21f805b5f52340dac3a32
 REMOTE_PUSH_PERFORMED=NO
 ```
 
-## Preservation evidence
+The phone was not reset or pulled to GitHub `main`. Existing phone-only work was
+preserved first, then complete files were applied and committed locally.
 
-Before any phone reconciliation:
+## Preservation evidence
 
 ```text
 PRESERVE_DIR=~/bota-phone-preserve-20260802T210517Z
@@ -53,14 +34,13 @@ ACTIVE_CRONTAB_BACKED_UP=YES
 ALL_GIT_REFS_BUNDLED=YES
 ```
 
-The preservation package includes binary Git patches, untracked-file archive,
-local configuration copies, crontab snapshot, complete Git bundle, checksums,
-and later reconciliation evidence.
+The preservation package includes Git patches, untracked-file archive, config
+copies, crontab snapshot, Git bundle, checksums, and later deployment evidence.
 
-## Files deployed to the phone
+## Core files deployed
 
-The following phone files were replaced by complete-file copies verified byte-for-byte
-against GitHub baseline `b4d961e`:
+The following were deployed byte-for-byte from the repaired GitHub baseline and
+committed locally as `d5c765df6fee1241be21ce892fc53e9c4bdcfb8c`:
 
 ```text
 tools/supervisor_clock_status.py
@@ -70,19 +50,7 @@ tools/autostatus.sh
 tools/bota_supervisor.sh
 ```
 
-The deployment was committed locally as:
-
-```text
-PHONE_DEPLOYMENT_COMMIT=d5c765df6fee1241be21ce892fc53e9c4bdcfb8c
-COMMIT_SUBJECT=deploy: apply repaired non-heartbeat runtime core
-```
-
-No service restart, crontab mutation, provider call, Telegram call, Supabase
-mutation, strategy change, or remote push was performed by the deployment.
-
-## Verified acceptance results
-
-The targeted phone acceptance package passed:
+Verified acceptance:
 
 ```text
 P6_TARGETED_RUNTIME_ACCEPTANCE=PASS
@@ -92,120 +60,108 @@ FORMATTER_ACCEPTANCE=PASS
 AUTOSTATUS_ACCEPTANCE=PASS
 PROTECTED_HEARTBEAT_FILES_UNCHANGED=YES
 PIPELINE_HEALTH_UNCHANGED=YES
-LIVE_TRACKED_MUTATION=NO
 LIVE_UNTRACKED_FILES=519
-TELEGRAM_CALL_PERFORMED=NO
-PROVIDER_CALL_PERFORMED=NO
-SERVICE_RESTART_PERFORMED=NO
-CRONTAB_MUTATION_PERFORMED=NO
-REMOTE_PUSH_PERFORMED=NO
 ```
 
-The six isolated supervisor scenarios proved:
-
-- market open plus healthy runtime -> `HEALTHY`;
-- market closed plus healthy runtime -> `HEALTHY`;
-- trusted clock unavailable -> market fail-closed, clock `UNAVAILABLE`, runtime
-  not falsely degraded;
-- market-gate error -> clock `UNKNOWN`, runtime not falsely degraded;
-- control-plane failure -> `DEGRADED`;
-- pipeline failure -> `DEGRADED`.
+No Telegram, provider, Supabase, strategy, crontab, service restart, or remote
+push occurred during P6.
 
 ## D1 defect status
 
 The root defect was `tools/build_indicators.py::tf_minutes()` mapping D1 to zero.
-The deployed implementation now verifies:
+The deployed implementation verifies:
 
 ```text
 tf_minutes("D1")=1440
 tf_minutes("d1")=1440
-```
-
-Status:
-
-```text
 D1_TIMEFRAME_MAPPING=FIXED_AND_DEPLOYED
 D1_LIVE_CACHE_REGENERATION=NOT_YET_RECORDED
 ```
 
-A later live updater cycle still needs to regenerate and verify the actual D1
-cache, but the code-level zero-minute defect is closed.
+The code defect is closed. A later live updater cycle still needs to regenerate
+and verify the actual D1 cache.
 
-## Status and autostatus status
+## Status, autostatus, and supervisor core
 
 Verified deployed behavior:
 
-- formatter reads cache only;
-- formatter performs no provider calls;
-- output is explicitly technical context, not a trade entry;
+- formatter reads cache only and performs no provider calls;
+- status output is technical context, not a trade entry;
 - H1, H4, and D1 coverage is validated;
 - autostatus does not invoke the formatter or Telegram when the market gate is
-  closed or the trusted trading clock is unavailable;
-- dry-run rendering exits before Telegram delivery.
+  closed or trusted time is unavailable;
+- trusted-clock unavailability remains fail-closed for trading without falsely
+  degrading process health;
+- supervisor runtime health uses schema 2.1 and atomic writes.
 
-## Supervisor status
+## P7 supervisor-wrapper closure
 
-The active phone runit service reported:
-
-```text
-SUPERVISOR_SERVICE_STATUS=run
-SUPERVISOR_SERVICE_PID=10711
-ACTIVE_WRAPPER_TARGETS_DEPLOYED_SUPERVISOR=YES
-```
-
-The deployed `tools/bota_supervisor.sh` is therefore on the active execution
-path.
-
-This does not by itself prove all seven service ownership chains. A fresh full
-7/7 ownership proof was not part of P6.
-
-## Critical topology inconsistency discovered
-
-The active phone file `services/bota-supervisor/run` is phone-only and is not
-tracked on GitHub `main`.
-
-Its loop contains automatic manager mutation:
+GitHub added and reviewed a non-mutating executable runit wrapper at:
 
 ```text
-if no process matches runsvdir.*bota-sv:
-    runsvdir -P "$HOME/.config/bota-sv" &
+services/bota-supervisor/run
 ```
 
-That behavior conflicts with the canonical claim that automatic topology
-recovery is disabled. It also means the wrapper is not a read-only scheduler for
-`tools/bota_supervisor.sh`.
-
-P6 simultaneously recorded:
+The phone has two independent physical wrapper files:
 
 ```text
-SUPERVISOR_SERVICE_STATUS=run
-RUNSVDIR_PROCESS_SNAPSHOT=none
+ACTIVE=~/.config/bota-sv/bota-supervisor/run
+REPOSITORY=~/BotA/services/bota-supervisor/run
 ```
 
-The `none` snapshot may reflect a process-matching defect rather than true
-manager absence. Until the exact command and parentage are checked, the wrapper
-could repeatedly attempt to start managers.
-
-Status:
+P7 replaced both with the same GitHub version, committed the repository copy as:
 
 ```text
-AUTOMATIC_TOPOLOGY_RECOVERY=INCONSISTENT_WITH_PHONE_WRAPPER
-FULL_CURRENT_OWNERSHIP=UNKNOWN
-NEXT_PRIORITY=SUPERVISOR_WRAPPER_TOPOLOGY_RECONCILIATION
+PHONE_COMMIT=dbdb1b1f9e2e1a6d66bb94b8eda4d1cf40617d20
+COMMIT_SUBJECT=deploy: activate non-mutating supervisor wrapper
 ```
 
-Do not proceed to heartbeat replacement before this is resolved.
+Only `bota-supervisor` was restarted. Post-restart control-plane proof:
+
+```text
+manager_count=1
+manager_pid=10341
+required=7
+owned=7
+running=7
+orphaned=0
+duplicate_service_rows=0
+healthy=true
+control_plane_rc=0
+```
+
+The seven owned/running components were:
+
+```text
+bota-updater
+bota-watcher
+bota-closer
+bota-shadow
+bota-heartbeat
+bota-supervisor
+crond
+```
+
+The active wrapper is now identical to the repository copy and contains no
+manager or service mutation. The earlier risk that the supervisor wrapper could
+start `runsvdir` automatically is closed.
+
+P7 backup:
+
+```text
+~/bota-phone-preserve-20260802T210517Z/p7-supervisor-wrapper-20260802T230646Z
+```
 
 ## Heartbeat topology gap
 
-The active phone heartbeat path is:
+The active phone heartbeat path remains:
 
 ```text
 services/bota-heartbeat/run
   -> tools/bota_heartbeat_utc.sh
 ```
 
-GitHub `main` instead implements:
+GitHub implements:
 
 ```text
 tools/heartbeat.sh
@@ -213,24 +169,22 @@ tools/heartbeat.sh
 ```
 
 The GitHub controller provides locking and bounded monotonic retry backoff. The
-phone-only UTC wrapper also owns deadman and recovery behavior but may retry a
-failed Telegram delivery every 60 seconds. The two implementations are not
-interchangeable without preserving deadman semantics.
+active phone UTC wrapper owns authoritative UTC bucketing plus deadman and
+recovery notifications. It may retry failed delivery every 60 seconds because
+the runit service loop invokes it each minute.
 
-Status:
+Required reconciliation properties:
 
-```text
-HEARTBEAT_ACTIVE_PATH=PHONE_ONLY_UTC_WRAPPER
-HEARTBEAT_RETRY_BACKOFF_ON_ACTIVE_PATH=NOT_RECONCILED
-HEARTBEAT_DEADMAN_PRESERVATION_REQUIRED=YES
-```
+- one active heartbeat delivery controller;
+- authoritative UTC bucket behavior preserved;
+- deadman alerting preserved;
+- recovery delivery preserved;
+- separate persisted state for heartbeat, deadman, and recovery outcomes;
+- one execution lock;
+- bounded monotonic retry backoff;
+- no control-plane, crontab, strategy, provider, or Supabase changes.
 
-Heartbeat reconciliation follows only after the supervisor-wrapper topology is
-made non-mutating and verified.
-
-## Files deliberately unchanged
-
-The following were preserved exactly during the five-file deployment:
+## Files deliberately unchanged through P7
 
 ```text
 tools/heartbeat.sh
@@ -239,18 +193,16 @@ services/bota-heartbeat/run
 tools/pipeline_health.py
 ```
 
-The active crontab and all 519 untracked runtime/audit files were also preserved.
+The active crontab and 519 untracked runtime/audit files remain preserved.
 
 ## Scope lock
 
 No strategy, threshold, scoring, pair, ADX, H1/D1 confirmation, volatility,
-macro, deduplication, SL/TP, PR #7, or Supabase signal-semantic changes are
-authorized by this record.
+macro, deduplication, SL/TP, PR #7, provider, Telegram, or Supabase semantic
+changes are authorized by this record.
 
 ## Exact next action
 
-Inspect and replace `services/bota-supervisor/run` with a non-mutating scheduler
-that only invokes the deployed supervisor, then verify one intended `runsvdir`,
-seven owned/running required services, zero orphans/duplicates, and no automatic
-manager creation. Only after that gate passes should heartbeat topology be
-reconciled.
+Reconcile heartbeat topology while preserving UTC bucketing and deadman/recovery
+behavior and adding locking plus bounded monotonic retry backoff. No other
+runtime or trading behavior belongs in that package.
