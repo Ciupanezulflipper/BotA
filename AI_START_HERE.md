@@ -1,6 +1,6 @@
 # BotA AI Start Here
 
-Last updated: 2026-08-03 00:55 UTC
+Last updated: 2026-08-03 01:02 UTC
 
 Read this before proposing BotA commands, code, cron, service, strategy,
 notification, provider, Supabase, or deployment changes.
@@ -8,7 +8,8 @@ notification, provider, Supabase, or deployment changes.
 ## Current authoritative truth
 
 ```text
-GITHUB_MAIN=4b89d1e0c729b81472ca78d723316289dd4aebb1
+HEARTBEAT_CODE_BASELINE=4b89d1e0c729b81472ca78d723316289dd4aebb1
+CANONICAL_DOCS_PR=40
 PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_HEAD=dbdb1b1f9e2e1a6d66bb94b8eda4d1cf40617d20
 PHONE_REMOTE_PUSHED=NO
@@ -25,6 +26,10 @@ HEARTBEAT_PHONE=NOT_YET_DEPLOYED
 AUTOMATIC_TOPOLOGY_RECOVERY_FROM_SUPERVISOR_WRAPPER=DISABLED
 STRATEGY_MUTATION_ALLOWED=NO
 ```
+
+`HEARTBEAT_CODE_BASELINE` is the immutable merge containing the heartbeat code.
+Do not use a self-referential `GITHUB_MAIN` field in canonical docs because the
+documentation merge itself necessarily advances `main`.
 
 Read these in order:
 
@@ -72,7 +77,7 @@ locations, and cannot start `runsvdir`, restart services, or alter topology.
 
 ## Heartbeat state
 
-GitHub PR #39 merged as:
+GitHub PR #39 merged the heartbeat code as:
 
 ```text
 4b89d1e0c729b81472ca78d723316289dd4aebb1
@@ -154,8 +159,8 @@ Current preservation root:
 
 ## Exactly one next action
 
-Deploy the four merged heartbeat files from GitHub main to the phone, replace the
-separate active runit wrapper copy, restart only `bota-heartbeat`, and verify the
-control plane remains 7/7 with authoritative UTC and deadman markers present.
-No strategy, provider, Supabase, crontab, or other service change belongs in that
-package.
+Deploy the four merged heartbeat files from the immutable heartbeat code baseline
+to the phone, replace the separate active runit wrapper copy, restart only
+`bota-heartbeat`, and verify the control plane remains 7/7 with authoritative UTC
+and deadman markers present. No strategy, provider, Supabase, crontab, or other
+service change belongs in that package.
