@@ -1,6 +1,6 @@
 # BotA AI Start Here
 
-Last updated: 2026-08-03 01:02 UTC
+Last updated: 2026-08-03 01:14 UTC
 
 Read this before proposing BotA commands, code, cron, service, strategy,
 notification, provider, Supabase, or deployment changes.
@@ -9,9 +9,8 @@ notification, provider, Supabase, or deployment changes.
 
 ```text
 HEARTBEAT_CODE_BASELINE=4b89d1e0c729b81472ca78d723316289dd4aebb1
-CANONICAL_DOCS_PR=40
 PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
-PHONE_HEAD=dbdb1b1f9e2e1a6d66bb94b8eda4d1cf40617d20
+PHONE_HEAD=011baaaad7071110e33bca06903047c842e7331a
 PHONE_REMOTE_PUSHED=NO
 PHONE_PRESERVATION_COMPLETE=YES
 PHONE_UNTRACKED_FILES_PRESERVED=519
@@ -21,26 +20,24 @@ SUPERVISOR_WRAPPER=NON_MUTATING_DEPLOYED_AND_ACCEPTED
 CURRENT_CONTROL_PLANE=HEALTHY_7_OF_7
 STATUS_FORMATTER=FIXED_DEPLOYED_AND_ACCEPTED
 AUTOSTATUS=FIXED_DEPLOYED_AND_ACCEPTED
-HEARTBEAT_GITHUB=UNIFIED_MERGED_AND_TESTED
-HEARTBEAT_PHONE=NOT_YET_DEPLOYED
+HEARTBEAT_TOPOLOGY=UNIFIED_DEPLOYED
+HEARTBEAT_DELIVERY=PASS
+DEADMAN_INPUT=MONOTONIC_PROGRESS_INVALID
 AUTOMATIC_TOPOLOGY_RECOVERY_FROM_SUPERVISOR_WRAPPER=DISABLED
 STRATEGY_MUTATION_ALLOWED=NO
 ```
 
-`HEARTBEAT_CODE_BASELINE` is the immutable merge containing the heartbeat code.
-Do not use a self-referential `GITHUB_MAIN` field in canonical docs because the
-documentation merge itself necessarily advances `main`.
-
-Read these in order:
+## Evidence order
 
 1. `CONTINUITY_CURRENT.md`
-2. `audits/PHONE_DEPLOYMENT_2026-08-02.md`
-3. `audits/P7_SUPERVISOR_WRAPPER_CLOSURE_2026-08-02.md`
-4. `audits/PR39_HEARTBEAT_RECONCILIATION_2026-08-03.md`
-5. `audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`
-6. `audits/ERROR_LOG.md`
-7. `ERRORS.md`
-8. GitHub issue #9
+2. `audits/P8_HEARTBEAT_PHONE_DEPLOYMENT_2026-08-03.md`
+3. `audits/PR39_HEARTBEAT_RECONCILIATION_2026-08-03.md`
+4. `audits/P7_SUPERVISOR_WRAPPER_CLOSURE_2026-08-02.md`
+5. `audits/PHONE_DEPLOYMENT_2026-08-02.md`
+6. `audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`
+7. `audits/ERROR_LOG.md`
+8. `ERRORS.md`
+9. GitHub issue #9
 
 The August 1 one-week production validation remains failed historical evidence.
 The August 2–3 repairs prove bounded current behavior but do not yet constitute a
@@ -48,18 +45,17 @@ new endurance-validation pass.
 
 ## Verified phone state
 
-The phone currently contains repaired versions of:
+The phone now contains the repaired core, non-mutating supervisor wrapper, and
+unified heartbeat path:
 
 ```text
-tools/supervisor_clock_status.py
-tools/build_indicators.py
-tools/format_status.py
-tools/autostatus.sh
-tools/bota_supervisor.sh
-services/bota-supervisor/run
+services/bota-heartbeat/run
+  -> tools/heartbeat.sh
+  -> tools/heartbeat_runtime.py
+  -> tools/heartbeat_delivery.py
 ```
 
-P7 verified:
+P8 verified:
 
 ```text
 manager_count=1
@@ -69,63 +65,27 @@ running=7
 orphaned=0
 duplicate_service_rows=0
 healthy=true
-control_plane_rc=0
+only_heartbeat_pid_changed=true
+HB_UTC_RESULT=PASS sources=3
+DEADMAN_UTC_RESULT=MONOTONIC_PROGRESS_INVALID
 ```
 
-The active supervisor wrapper is executable, identical in both physical phone
-locations, and cannot start `runsvdir`, restart services, or alter topology.
+Heartbeat delivery, authoritative UTC lookup, active-wrapper replacement, and
+control-plane preservation passed. Deadman monitoring is not accepted because
+its live monotonic progress input was invalid.
 
-## Heartbeat state
-
-GitHub PR #39 merged the heartbeat code as:
-
-```text
-4b89d1e0c729b81472ca78d723316289dd4aebb1
-```
-
-The merged architecture is:
-
-```text
-services/bota-heartbeat/run
-  -> tools/heartbeat.sh
-  -> tools/heartbeat_runtime.py
-  -> tools/heartbeat_delivery.py
-```
-
-It preserves authoritative UTC hour buckets, monotonic deadman and recovery
-semantics, one execution lock, atomic state, bounded transport, and separate
-bounded retry state for heartbeat, deadman, and recovery delivery.
-
-Review and test evidence:
-
-```text
-DeepSource Python=PASS
-DeepSource Shell=PASS
-DeepSource Secrets=PASS
-CodeRabbit production implementation review=PASS
-Existing heartbeat delivery tests=18 PASS
-Unified heartbeat runtime tests=8 PASS
-Phone runtime mutation during tests=NO
-```
-
-The phone still runs the legacy path:
-
-```text
-services/bota-heartbeat/run
-  -> tools/bota_heartbeat_utc.sh
-```
-
-Do not describe heartbeat reconciliation as deployed until the four-file phone
-package is committed, the active wrapper copy is replaced, only
-`bota-heartbeat` is restarted, and control-plane plus heartbeat markers pass.
+The legacy `tools/bota_heartbeat_utc.sh` remains preserved unchanged until the
+new path has complete deadman acceptance.
 
 ## Scope lock
 
 Do not change strategy, thresholds, pairs, scoring, ADX, H1/D1 confirmation,
-volatility or macro filters, deduplication, SL/TP, PR #7, or Supabase signal
-semantics to manufacture signals.
+volatility or macro filters, deduplication, SL/TP, PR #7, provider semantics, or
+Supabase signal semantics during runtime-reliability work.
 
-Never push directly to `main`.
+Never push directly to `main`. Two documentation-only direct-main exceptions
+occurred while recording P8 and are documented in
+`audits/P8_DIRECT_MAIN_DOC_EXCEPTION_2026-08-03.md`; do not repeat them.
 
 ## Evidence and time rules
 
@@ -138,29 +98,10 @@ Never push directly to `main`.
 - Reject negative or future ages.
 - Do not use `/proc/uptime` on this Android build.
 
-## Phone safety rules
-
-Before phone Git mutation:
-
-1. verify branch and exact HEAD;
-2. preserve intended target files and active service copies;
-3. use complete-file replacements;
-4. define rollback before mutation;
-5. stage and commit only the intended files;
-6. keep strict shell options inside a bounded child shell;
-7. do not pull, reset, or overwrite unknown local work;
-8. do not push directly to `main`.
-
-Current preservation root:
-
-```text
-~/bota-phone-preserve-20260802T210517Z
-```
-
 ## Exactly one next action
 
-Deploy the four merged heartbeat files from the immutable heartbeat code baseline
-to the phone, replace the separate active runit wrapper copy, restart only
-`bota-heartbeat`, and verify the control plane remains 7/7 with authoritative UTC
-and deadman markers present. No strategy, provider, Supabase, crontab, or other
-service change belongs in that package.
+Inspect `state/shadow_progress.monotonic` and its producer read-only. Determine
+whether the live defect is malformed content, incompatible field format,
+future/negative monotonic age, boot-ID mismatch, or producer failure. Do not
+change heartbeat code, strategy, providers, Supabase, crontab, or service
+topology until the exact cause is proven.
