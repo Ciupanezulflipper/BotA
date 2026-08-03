@@ -106,13 +106,16 @@ class HeartbeatRuntimeValueTests(unittest.TestCase):
                 {"HEARTBEAT_SERVER_EPOCH": str(SERVER_EPOCH)},
                 clear=False,
             ),
-            patch.object(heartbeat_runtime.urllib.request, "urlopen") as opener,
+            patch.object(
+                heartbeat_runtime.http.client,
+                "HTTPSConnection",
+            ) as connection,
         ):
             value, sources = heartbeat_runtime.authoritative_server_epoch()
 
         self.assertEqual(value, SERVER_EPOCH)
         self.assertEqual(sources, 1)
-        opener.assert_not_called()
+        connection.assert_not_called()
 
     def test_progress_age_rejects_boot_change_and_future_value(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
