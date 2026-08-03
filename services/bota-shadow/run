@@ -1,0 +1,63 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# runit run script: bota-shadow
+# Cadence: every 900s (matches cron */15).
+set -uo pipefail
+exec 2>&1
+
+ROOT="${BOTA_ROOT:-${HOME}/BotA}"
+LOG="${ROOT}/logs/cron.shadow.log"
+ENV="${ROOT}/.env.runtime"
+INTERVAL=900
+SHADOW_PROGRESS="${ROOT}/state/shadow_progress.monotonic"
+
+log() {
+  printf '[RUNIT bota-shadow %s] %s\n' \
+    "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" |
+    tee -a "${LOG}"
+}
+
+mono_now() {
+  python3 -c '
+import time
+clock = getattr(time, "CLOCK_BOOTTIME", None)
+if clock is None:
+    print(time.monotonic_ns() // 1_000_000_000)
+else:
+    print(time.clock_gettime_ns(clock) // 1_000_000_000)
+'
+}
+
+mark_shadow_progress() {
+  mkdir -p "${ROOT}/state"
+  local tmp="${SHADOW_PROGRESS}.tmp.$$"
+  local boot_id
+  boot_id="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || echo unknown)"
+  printf '%s %s\n' "${boot_id}" "$(mono_now)" > "${tmp}"
+  mv "${tmp}" "${SHADOW_PROGRESS}"
+}
+
+log "SERVICE_START pid=$$"
+
+while true; do
+  CYCLE_START="$(mono_now)"
+
+  if [[ -f "${ENV}" ]]; then
+    # shellcheck source=/dev/null
+    . "${ENV}"
+    if timeout -k 30s 12m \
+      bash "${ROOT}/tools/run_shadow_manager.sh"
+    then
+      mark_shadow_progress
+    else
+      rc=$?
+      log "shadow_exit rc=${rc}"
+    fi
+  else
+    log "SKIP: env_runtime_missing"
+  fi
+
+  ELAPSED=$(( $(mono_now) - CYCLE_START ))
+  SLEEP_S=$(( INTERVAL - ELAPSED ))
+  [[ ${SLEEP_S} -lt 5 ]] && SLEEP_S=5
+  sleep "${SLEEP_S}"
+done
