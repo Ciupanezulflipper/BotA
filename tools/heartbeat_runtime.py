@@ -10,12 +10,11 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import http.client
 import os
 import statistics
 import tempfile
 import time
-import urllib.parse
-import urllib.request
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -31,10 +30,10 @@ DEFAULT_DEADMAN_STALE_SEC = 90 * 60
 MIN_DEADMAN_STALE_SEC = 60
 MAX_DEADMAN_STALE_SEC = 24 * 60 * 60
 DEFAULT_SERVER_TIMEOUT_SEC = 8.0
-DEFAULT_SERVER_URLS = (
-    "https://www.google.com",
-    "https://api-fxpractice.oanda.com",
-    "https://query1.finance.yahoo.com",
+DEFAULT_SERVER_TARGETS = (
+    ("www.google.com", "/"),
+    ("api-fxpractice.oanda.com", "/"),
+    ("query1.finance.yahoo.com", "/"),
 )
 
 EventOutcome = Literal["sent", "failed", "suppressed", "dry_run"]
@@ -90,59 +89,50 @@ def server_timeout_seconds() -> float:
     return min(max(configured, 1.0), 15.0)
 
 
-def is_permitted_server_url(value: str) -> bool:
-    """Allow only absolute HTTPS clock endpoints."""
+def _read_server_date(host: str, path: str, timeout: float) -> int | None:
+    """Read a Date header from one fixed HTTPS clock target."""
+    connection: http.client.HTTPSConnection | None = None
     try:
-        parsed = urllib.parse.urlparse(value)
-    except ValueError:
-        return False
-    return parsed.scheme == "https" and bool(parsed.hostname)
+        connection = http.client.HTTPSConnection(host, timeout=timeout)
+        connection.request(
+            "GET",
+            path,
+            headers={"User-Agent": "BotA-heartbeat/1.0"},
+        )
+        response = connection.getresponse()
+        raw_date = str(response.getheader("Date") or "").strip()
+        response.read(1)
+    except (OSError, http.client.HTTPException, ValueError):
+        return None
+    finally:
+        if connection is not None:
+            try:
+                connection.close()
+            except OSError:
+                pass
 
-
-def configured_server_urls() -> tuple[str, ...]:
-    """Return validated authoritative-clock endpoints or safe defaults."""
-    raw = os.environ.get("HEARTBEAT_SERVER_URLS", "").strip()
-    if not raw:
-        return DEFAULT_SERVER_URLS
-    values = tuple(
-        item.strip()
-        for item in raw.split(",")
-        if item.strip() and is_permitted_server_url(item.strip())
-    )
-    return values or DEFAULT_SERVER_URLS
+    if not raw_date:
+        return None
+    try:
+        parsed = parsedate_to_datetime(raw_date)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return int(parsed.astimezone(timezone.utc).timestamp())
 
 
 def authoritative_server_epoch() -> tuple[int | None, int]:
-    """Return median server UTC epoch and the number of valid endpoints."""
+    """Return median server UTC epoch and the number of valid fixed endpoints."""
     configured = delivery.finite_number(os.environ.get("HEARTBEAT_SERVER_EPOCH"))
     if configured is not None:
         return int(configured), 1
 
-    epochs: list[int] = []
-    timeout = server_timeout_seconds()
-    for url in configured_server_urls():
-        if not is_permitted_server_url(url):
-            continue
-        request = urllib.request.Request(
-            url,
-            headers={"User-Agent": "BotA-heartbeat/1.0"},
-            method="GET",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                raw_date = str(response.headers.get("Date") or "").strip()
-        except (OSError, ValueError):
-            continue
-        if not raw_date:
-            continue
-        try:
-            parsed = parsedate_to_datetime(raw_date)
-        except (TypeError, ValueError, OverflowError):
-            continue
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        epochs.append(int(parsed.astimezone(timezone.utc).timestamp()))
-
+    epochs = [
+        epoch
+        for host, path in DEFAULT_SERVER_TARGETS
+        if (epoch := _read_server_date(host, path, server_timeout_seconds())) is not None
+    ]
     if not epochs:
         return None, 0
     return int(statistics.median(epochs)), len(epochs)
