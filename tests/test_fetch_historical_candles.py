@@ -106,6 +106,43 @@ class HistoricalCandlesTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             h.reconcile_candles([first, conflicting])
 
+    def test_provider_aligned_h4_leading_candle_is_allowed(self):
+        candles = h.parse_oanda_payload(
+            oanda_body(
+                [
+                    "2026-05-31T21:00:00Z",
+                    "2026-06-01T01:00:00Z",
+                    "2026-06-01T05:00:00Z",
+                ]
+            )
+        )
+        leading = h._validate_chunk_window(
+            candles,
+            pair="EURUSD",
+            timeframe="H4",
+            window_start=z("2026-06-01T00:00:00Z"),
+            window_end=z("2026-06-01T08:00:00Z"),
+        )
+        self.assertEqual(leading, 1)
+
+    def test_provider_candle_older_than_one_timeframe_still_fails_closed(self):
+        candles = h.parse_oanda_payload(
+            oanda_body(
+                [
+                    "2026-05-31T20:00:00Z",
+                    "2026-06-01T01:00:00Z",
+                ]
+            )
+        )
+        with self.assertRaises(ValueError):
+            h._validate_chunk_window(
+                candles,
+                pair="EURUSD",
+                timeframe="H4",
+                window_start=z("2026-06-01T00:00:00Z"),
+                window_end=z("2026-06-01T08:00:00Z"),
+            )
+
     def test_preview_performs_no_network_and_creates_no_dataset(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -121,6 +158,43 @@ class HistoricalCandlesTests(unittest.TestCase):
             )
             self.assertFalse(preview["network_permitted"])
             self.assertFalse((root / "data" / "replay" / "preview-1").exists())
+
+    def test_h4_aligned_leading_candle_acquires_and_filters_dataset_boundary(self):
+        def fake_transport(base_url, path_and_query, token, timeout):
+            return h.HttpResponse(
+                200,
+                {"RequestID": "h4-alignment"},
+                oanda_body(
+                    [
+                        "2026-05-31T21:00:00Z",
+                        "2026-06-01T01:00:00Z",
+                        "2026-06-01T05:00:00Z",
+                    ]
+                ),
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = h.acquire_dataset(
+                repo_root=root,
+                dataset_id="h4-aligned",
+                pairs=["EURUSD"],
+                timeframes=["H4"],
+                start_utc=z("2026-06-01T00:00:00Z"),
+                end_utc=z("2026-06-01T08:00:00Z"),
+                base_url=h.DEFAULT_OANDA_URL,
+                token="test-token",
+                transport=fake_transport,
+                recorded_at=z("2026-08-07T20:10:49Z"),
+            )
+            stream = manifest["streams"][0]
+            self.assertEqual(stream["rows"], 2)
+            self.assertEqual(stream["first_time"], "2026-06-01T01:00:00Z")
+            self.assertEqual(stream["provider_leading_overlaps_observed"], 1)
+            csv_path = root / "data" / "replay" / "h4-aligned" / "candles" / "EURUSD_H4.csv"
+            text = csv_path.read_text(encoding="utf-8")
+            self.assertNotIn("2026-05-31 21:00:00", text)
+            self.assertIn("2026-06-01 01:00:00", text)
 
     def test_dataset_is_immutable_and_manifest_checksums_match(self):
         calls = []
