@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: 2026-08-07 17:54 UTC
+Last updated: 2026-08-07 18:09 UTC
 
 ## Authoritative identifiers
 
@@ -69,17 +69,11 @@ Retained watcher logs classify 106 accepted events:
 38 cooldown-suppressed
 6 Telegram score-gated
 1 send failure
-0 tier-gated
-0 exact delivery-deduped
-0 dry-run/disabled
-0 backoff
 ```
 
-Four of the 110 accepted CSV rows have no matched retained log evidence and remain delivery-unknown.
+Four of the 110 accepted CSV rows remain delivery-unknown.
 
 ## Cooldown semantics — verified 2026-08-07 17:54 UTC
-
-All 38 cooldown events matched a prior successful send for the same pair/timeframe:
 
 ```text
 EXACT_DUPLICATE=0
@@ -87,25 +81,13 @@ NOT_EXACT_DUPLICATE=38
 DIRECTION_CHANGED=0
 SCORE_IMPROVED_5PLUS=7
 ENTRY_CHANGED_3PLUS_PIPS=26
-UNMATCHED=0
 ```
 
-The cooldown is keyed only by pair/timeframe and runs before exact content dedup. It therefore suppresses field-level changed same-direction updates. Because direction never changed, this audit does not prove that 38 independent new trade opportunities were lost.
+All 38 were same-direction accepted updates. Cooldown is coarse but is not proven to have hidden 38 independent new trades.
 
-## Supabase delivered-signal quality cross-check
+## Recent delivered-signal quality
 
-Read-only query of `public.signals` for M15 rows whose rationale begins `BotA score=`:
-
-```text
-score <70:  n=6,  wins=1, losses=5, cancelled=0, total_pips=-45.50
-score 70-74: n=3, wins=2, losses=1, cancelled=0, total_pips=+59.60
-score 75-84: n=33, wins=12, losses=17, cancelled=4, total_pips=+56.10
-score 85+:   n=16, wins=4, losses=10, cancelled=2, total_pips=+25.10
-```
-
-The `<70` sample is small but negative, so removing the Telegram 70 floor is not currently supported.
-
-### Recent signals since 2026-06-01
+Read-only Supabase evidence for BotA M15 signals created on or after 2026-06-01:
 
 ```text
 TOTAL=13
@@ -113,25 +95,29 @@ WINS=3
 LOSSES=9
 CANCELLED=1
 TOTAL_PIPS=-71.40
+75-84_TOTAL_PIPS=-36.40
+85+_TOTAL_PIPS=-35.00
 ```
 
-By score:
+This is the highest-priority product finding. Recent high scores are not reliably separating winners from losers.
+
+## Local signal ledger inventory — verified 2026-08-07 18:09 UTC
 
 ```text
-75-84: n=11, wins=3, losses=7, cancelled=1, total_pips=-36.40
-85+:   n=2, wins=0, losses=2, cancelled=0, total_pips=-35.00
+PATH=data/ledger.csv
+LEDGER_ROWS=51
+WIN=13
+LOSS=38
+WIN_RATE=25.49%
+FIRST_TIMESTAMP=2026-03-09T21:45:07+02:00
+LAST_TIMESTAMP=2026-03-10T15:15:07+02:00
 ```
 
-This is now the highest-priority finding. Recent accepted/delivered M15 signals have poor outcomes even at high scores. Signal count alone is not the product defect; score/regime quality must be diagnosed before loosening gates.
+The ledger covers only about 17.5 hours. It is stale and narrow relative to the current June-August investigation. It may be useful for an offline component/outcome join if matching 25-column alert rows exist, but it cannot substitute for the recent Supabase outcome evidence.
 
-## Closed/non-dominant hypotheses
+## Current scoring hypotheses
 
-- zero entry: HOLD-only symptom;
-- `macro6=3`: neutral tag;
-- RR text: advisory;
-- H4+D1 opposition: rare;
-- Telegram transport: functioning;
-- cooldown: coarse, but not proven to have hidden 38 independent new trades.
+Current `scoring_engine.sh` rewards RSI distance from 50 up to +15 points, so highly oversold SELLs and highly overbought BUYs can receive maximum RSI contribution. It also describes a ±0.3 ATR pullback zone while the implementation uses a 1.0 ATR buffer. These are hypotheses requiring outcome correlation before mutation.
 
 ## Scope lock
 
@@ -139,6 +125,7 @@ Do not lower score or H1 thresholds, lower Telegram minimum, remove cooldown, or
 
 ## Evidence
 
+- `audits/LOCAL_SIGNAL_LEDGER_INVENTORY_2026-08-07.md`
 - `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
 - `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
 - `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
@@ -150,4 +137,4 @@ Do not lower score or H1 thresholds, lower Telegram minimum, remove cooldown, or
 
 ## Exactly one next action
 
-Extract the 25-column decision components for delivered M15 signals since 2026-06-01 and correlate those components with the verified Supabase outcomes. Identify which scoring component/regime is misleading the score before any signal-volume change.
+Join the 51 local ledger rows to 25-column `logs/alerts.csv` rows and report match coverage plus compact outcome splits by score bucket, RSI extremity, MACD saturation, ADX band, H1 state, pair, and direction. Keep March and recent June-August evidence separate.
