@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: 2026-08-07 17:38 UTC
+Last updated: 2026-08-07 17:54 UTC
 
 ## Authoritative identifiers
 
@@ -12,9 +12,7 @@ CURRENT_NATIVE_MANAGER_PID=31140
 CURRENT_SERVICE_DAEMON_PIDFILE=31140
 ```
 
-## Current runtime state — 2026-08-07
-
-Latest read-only control-plane observation:
+## Runtime state
 
 ```text
 manager_count=1
@@ -28,24 +26,15 @@ healthy=false
 orphan_service=crond
 ```
 
-The watcher is live and was observed through:
+The watcher is live. This ownership defect remains operationally real but does not explain signal scarcity by itself.
 
-```text
-runsv bota-watcher
-  -> tools/run_signal_watcher_with_ledger.sh
-  -> tools/signal_watcher_pro.sh --once
-```
-
-The ownership defect remains real but does not explain the current signal drought by itself because all seven required services are running and the watcher is actively recording decisions.
-
-## Current effective live strategy/delivery settings — 2026-08-07 17:38 UTC
+## Current effective settings
 
 ```text
 PAIRS=EURUSD GBPUSD
 TIMEFRAMES=M15
 FILTER_SCORE_MIN=65
 FILTER_SCORE_MIN_ALL=65
-FILTER_SCORE_MIN_M15=<unset>
 H1_TREND_MIN_SCORE=40
 H1_VETO_OVERRIDE_SCORE=75
 H1_VETO_OVERRIDE_ADX=40
@@ -57,163 +46,100 @@ DRY_RUN_MODE=0
 TELEGRAM_ENABLED=1
 ```
 
-Current pair scope is therefore only EURUSD and GBPUSD. A third live pair is not currently scanned.
+Only two pairs are live.
 
-Current layered signal policy:
-
-```text
-M15 strategy hard score floor = 65
-H1-neutral override score = 75
-Telegram hard score floor = 70
-Telegram yellow floor = 70
-Telegram green floor = 75
-Telegram cooldown = 1800 seconds = 30 minutes per pair/timeframe
-```
-
-This means a strategy-accepted H1-confirmed signal with score 65.00-69.99 can still be prevented from reaching Telegram.
-
-## Signal funnel — verified 2026-08-07
-
-Source: `logs/alerts.csv`.
-
-Observed file shape:
-
-```text
-HEADER_COLUMNS=13
-ROWS_WITH_25_COLUMNS=2509
-```
-
-Legacy header:
-
-```text
-timestamp,pair,tf,direction,score,confidence,entry,sl,tp,provider,rejected,filter_str,reasons
-```
-
-The newer watcher appends 25-column rows under this old header. The first 13 positions remain aligned for the current funnel audit, but the schema drift is an observability defect for newer named-field readers.
-
-### Valid tradeable funnel
-
-```text
-VALID_ENTRY_ROWS=1495
-BUY_SELL_VALID_ROWS=1427
-BUY_SELL_ACCEPTED=110
-BUY_SELL_REJECTED=1317
-BUY_SELL_ACCEPTANCE_RATE=7.71%
-BUY_SELL_REJECTION_RATE=92.29%
-```
-
-Direction split:
-
-```text
-BUY_ACCEPTED=61
-BUY_REJECTED=407
-SELL_ACCEPTED=49
-SELL_REJECTED=910
-```
-
-Accepted by pair across the historical corpus:
-
-```text
-EURUSD=56
-GBPUSD=53
-USDJPY=1
-```
-
-The historical USDJPY row does not mean USDJPY is currently live; the present `PAIRS` setting is only EURUSD GBPUSD.
-
-### Exact rejected-stage decomposition
-
-```text
-SCORE_GATE=903
-H1_NEUTRAL=410
-H4_D1_OPPOSE=4
-TOTAL=1317
-```
-
-Percent of rejected valid BUY/SELL rows:
-
-```text
-SCORE_GATE=68.56%
-H1_NEUTRAL=31.13%
-H4_D1_OPPOSE=0.30%
-```
-
-Current source flow makes this sequential:
+## Strategy funnel
 
 ```text
 1427 valid BUY/SELL
   -> 903 rejected by M15 score gate
-  -> 524 survive M15 score gate
+  -> 524 survive score
   -> 410 rejected by H1-neutral veto
   -> 114 survive H1
   -> 4 rejected by H4+D1 opposition
   -> 110 strategy-accepted
 ```
 
-This is the strongest direct explanation of low strategy throughput.
+## Accepted -> Telegram funnel
 
-## Accepted -> Telegram funnel — verified 2026-08-07
-
-Source: retained `logs/cron.signals.log`.
+Retained watcher logs classify 106 accepted events:
 
 ```text
-LOG_LINES=27332
-ACCEPTED_EVENTS_PARSED=106
-telegram_score_gate=6
-telegram_tier_gate=0
-telegram_cooldown=38
-delivery_dedup=0
-dry_run_or_disabled=0
-telegram_sent=61
-telegram_backoff=0
-telegram_failed=1
-accepted_no_terminal_evidence=0
+61 sent
+38 cooldown-suppressed
+6 Telegram score-gated
+1 send failure
+0 tier-gated
+0 exact delivery-deduped
+0 dry-run/disabled
+0 backoff
 ```
 
-The 106 parsed accepted events classify completely:
+Four of the 110 accepted CSV rows have no matched retained log evidence and remain delivery-unknown.
+
+## Cooldown semantics — verified 2026-08-07 17:54 UTC
+
+All 38 cooldown events matched a prior successful send for the same pair/timeframe:
 
 ```text
-sent=61              57.55%
-cooldown=38          35.85%
-Telegram score gate=6 5.66%
-send failure=1        0.94%
+EXACT_DUPLICATE=0
+NOT_EXACT_DUPLICATE=38
+DIRECTION_CHANGED=0
+SCORE_IMPROVED_5PLUS=7
+ENTRY_CHANGED_3PLUS_PIPS=26
+UNMATCHED=0
 ```
 
-The CSV contains 110 accepted BUY/SELL rows, so four accepted CSV rows do not have matched retained watcher-log evidence in this audit. Keep those four as delivery-unknown.
+The cooldown is keyed only by pair/timeframe and runs before exact content dedup. It therefore suppresses field-level changed same-direction updates. Because direction never changed, this audit does not prove that 38 independent new trade opportunities were lost.
 
-Telegram transport itself is functioning: 61 retained accepted events were sent and only one transport failure was observed. The larger post-acceptance suppressors are the 30-minute cooldown and the separate Telegram score floor.
+## Supabase delivered-signal quality cross-check
 
-## Macro, RR, and zero-entry interpretation
+Read-only query of `public.signals` for M15 rows whose rationale begins `BotA score=`:
 
-- `macro6=3` appears in accepted and rejected rows and is neutral in current fusion logic; it is not the hard reject.
-- RR text is advisory in current `quality_filter.py`; it is not the dominant hard gate.
-- All zero-entry/SL/TP rows in the audited corpus were HOLD score-0 rows; no BUY/SELL row had zero entry. Zero entry is not the current root cause.
+```text
+score <70:  n=6,  wins=1, losses=5, cancelled=0, total_pips=-45.50
+score 70-74: n=3, wins=2, losses=1, cancelled=0, total_pips=+59.60
+score 75-84: n=33, wins=12, losses=17, cancelled=4, total_pips=+56.10
+score 85+:   n=16, wins=4, losses=10, cancelled=2, total_pips=+25.10
+```
 
-## Score history warning
+The `<70` sample is small but negative, so removing the Telegram 70 floor is not currently supported.
 
-Historical rows include `score<62`, `score<65`, and `score<70`, proving prior configuration changes. Do not use aggregate historical strings to infer current values. Current effective phone values are now directly recorded above.
+### Recent signals since 2026-06-01
 
-## Practical current interpretation
+```text
+TOTAL=13
+WINS=3
+LOSSES=9
+CANCELLED=1
+TOTAL_PIPS=-71.40
+```
 
-The signal drought is not a single mysterious runtime failure. It is the cumulative effect of layered gates:
+By score:
 
-1. M15 score floor removes the majority of valid BUY/SELL candidates.
-2. H1-neutral veto removes most remaining candidates that do not reach override conditions.
-3. H4+D1 opposition removes very few.
-4. After strategy acceptance, Telegram applies another score floor at 70.
-5. A 30-minute per-pair/timeframe cooldown suppresses many retained accepted events.
-6. Only two live pairs are configured.
+```text
+75-84: n=11, wins=3, losses=7, cancelled=1, total_pips=-36.40
+85+:   n=2, wins=0, losses=2, cancelled=0, total_pips=-35.00
+```
 
-No one of these facts alone proves which setting should be loosened. Protective strategy gates must be judged against candidate outcomes before mutation.
+This is now the highest-priority finding. Recent accepted/delivered M15 signals have poor outcomes even at high scores. Signal count alone is not the product defect; score/regime quality must be diagnosed before loosening gates.
+
+## Closed/non-dominant hypotheses
+
+- zero entry: HOLD-only symptom;
+- `macro6=3`: neutral tag;
+- RR text: advisory;
+- H4+D1 opposition: rare;
+- Telegram transport: functioning;
+- cooldown: coarse, but not proven to have hidden 38 independent new trades.
 
 ## Scope lock
 
-No strategy score, H1/H4/D1, pair list, Telegram score, cooldown, provider, Supabase, dedup, or service-topology mutation is authorized yet.
-
-The first potential repair should be the least strategy-invasive one and must be supported by outcome evidence for candidates already accepted by the strategy but suppressed by delivery policy.
+Do not lower score or H1 thresholds, lower Telegram minimum, remove cooldown, or add a third pair merely to manufacture volume.
 
 ## Evidence
 
+- `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
 - `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
 - `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
 - `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
@@ -224,4 +150,4 @@ The first potential repair should be the least strategy-invasive one and must be
 
 ## Exactly one next action
 
-Classify historical outcomes for strategy-accepted candidates suppressed by Telegram score or 30-minute cooldown. Compare them with delivered-signal outcomes before changing protective strategy thresholds. Separately remember that adding a third pair would require an explicit live `PAIRS` change later.
+Extract the 25-column decision components for delivered M15 signals since 2026-06-01 and correlate those components with the verified Supabase outcomes. Identify which scoring component/regime is misleading the score before any signal-volume change.
