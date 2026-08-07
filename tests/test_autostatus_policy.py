@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavioral tests for BotA's market-gated Telegram status sender."""
+"""Behavioral tests for BotA's local-only technical context refresher."""
 
 from __future__ import annotations
 
@@ -56,42 +56,12 @@ def write_formatter(path: Path, marker: Path, *, fail: bool = False) -> None:
     path.chmod(0o755)
 
 
-def write_telegram_env(root: Path) -> None:
-    """Write non-secret test credentials."""
-    (root / "config" / "tele.env").write_text(
-        "TELEGRAM_BOT_TOKEN=unit-test-token\n"
-        "TELEGRAM_CHAT_ID=unit-test-chat\n",
-        encoding="utf-8",
-    )
-
-
-def write_fake_curl(path: Path, *, success: bool) -> None:
-    """Write a fake curl transport for success or timeout behavior."""
-    if success:
-        body = (
-            "#!/usr/bin/env bash\n"
-            "printf '%s\\n' '{\"ok\":true}'\n"
-            "printf '%s\\n' 'HTTP_STATUS:200'\n"
-            "exit 0\n"
-        )
-    else:
-        body = (
-            "#!/usr/bin/env bash\n"
-            "printf '%s\\n' 'curl: (28) Operation timed out' >&2\n"
-            "printf '%s\\n' 'HTTP_STATUS:000'\n"
-            "exit 28\n"
-        )
-    path.write_text(body, encoding="utf-8")
-    path.chmod(0o755)
-
-
 def run_autostatus(
     root: Path,
     *,
     dry_run: bool,
-    curl_bin: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run the production sender in an isolated environment."""
+    """Run the production refresher in an isolated environment."""
     environment = os.environ.copy()
     environment.update(
         {
@@ -100,8 +70,6 @@ def run_autostatus(
             "AUTOSTATUS_DRY_RUN": "1" if dry_run else "0",
         }
     )
-    if curl_bin is not None:
-        environment["CURL_BIN"] = str(curl_bin)
     return subprocess.run(
         ["bash", str(AUTOSTATUS)],
         cwd=ROOT,
@@ -119,12 +87,12 @@ def read_log(root: Path) -> str:
 
 
 def temporary_files(root: Path) -> list[Path]:
-    """Return any workspace entries left after a sender run."""
+    """Return any workspace entries left after a refresher run."""
     return list((root / "tmp").iterdir())
 
 
 class AutostatusSourcePolicyTests(unittest.TestCase):
-    """Prevent gate-order, shared-file, and transport-diagnostic regressions."""
+    """Prevent notification transport and gate-order regressions."""
 
     def test_market_gate_executes_before_formatter(self) -> None:
         source = AUTOSTATUS.read_text(encoding="utf-8")
@@ -132,24 +100,34 @@ class AutostatusSourcePolicyTests(unittest.TestCase):
         formatter_execution = source.index('"${PYTHON_BIN}" "${FORMATTER}"')
         self.assertLess(gate_execution, formatter_execution)
 
-    def test_sender_uses_isolated_non_recursive_workspace_cleanup(self) -> None:
+    def test_scheduled_context_has_no_telegram_transport(self) -> None:
+        source = AUTOSTATUS.read_text(encoding="utf-8")
+        for token in (
+            "api.telegram.org",
+            "sendMessage",
+            "TELEGRAM_BOT_TOKEN",
+            "TELEGRAM_CHAT_ID",
+            "tele.env",
+            "CURL_BIN",
+            "curl ",
+        ):
+            with self.subTest(token=token):
+                self.assertNotIn(token, source)
+        self.assertIn("TECHNICAL_CONTEXT_RESULT=LOCAL_ONLY", source)
+
+    def test_refresher_uses_isolated_non_recursive_cleanup(self) -> None:
         source = AUTOSTATUS.read_text(encoding="utf-8")
         self.assertIn('mktemp -d "${TMPDIR}/autostatus.XXXXXX"', source)
-        self.assertIn('rm -f -- "${OUT}" "${ERR}" "${RESP_FILE}" "${CURL_ERR}"', source)
+        self.assertIn(
+            'rm -f -- "${OUT}" "${ERR}" "${LATEST_TMP}"',
+            source,
+        )
         self.assertIn('rmdir -- "${WORKDIR}"', source)
         self.assertNotIn("rm -rf", source)
-        self.assertNotIn('${TMPDIR}/as.out', source)
-        self.assertNotIn('${TMPDIR}/as.err', source)
-
-    def test_sender_captures_curl_status_and_stderr(self) -> None:
-        source = AUTOSTATUS.read_text(encoding="utf-8")
-        self.assertIn('2>"${CURL_ERR}"', source)
-        self.assertIn("CURL_RC=$?", source)
-        self.assertIn("stderr=${CURL_DETAIL:-none}", source)
 
 
 class AutostatusBehaviorTests(unittest.TestCase):
-    """Exercise fail-closed gating, rendering, cleanup, and transport behavior."""
+    """Exercise fail-closed gating, local refresh, and cleanup."""
 
     def test_missing_market_gate_skips_formatter(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -182,7 +160,7 @@ class AutostatusBehaviorTests(unittest.TestCase):
         self.assertIn("market_closed_or_clock_unavailable", log)
         self.assertEqual(leftovers, [])
 
-    def test_open_market_dry_run_renders_and_cleans_workspace(self) -> None:
+    def test_open_market_dry_run_renders_without_writing_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root, gate, formatter = prepare_root(Path(temporary))
             marker = root / "formatter_called.txt"
@@ -191,12 +169,38 @@ class AutostatusBehaviorTests(unittest.TestCase):
             result = run_autostatus(root, dry_run=True)
             log = read_log(root)
             marker_called = marker.exists()
+            latest_exists = (root / "logs" / "technical_context.latest.txt").exists()
             leftovers = temporary_files(root)
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(marker_called)
         self.assertEqual(result.stdout.strip(), "cached technical context")
-        self.assertIn("DRY_RUN: status rendered; Telegram not called", log)
+        self.assertIn("Telegram disabled by policy", log)
+        self.assertFalse(latest_exists)
+        self.assertEqual(leftovers, [])
+
+    def test_open_market_refreshes_local_snapshot_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root, gate, formatter = prepare_root(Path(temporary))
+            marker = root / "formatter_called.txt"
+            write_gate(gate, "Open", 0)
+            write_formatter(formatter, marker)
+            result = run_autostatus(root, dry_run=False)
+            log = read_log(root)
+            snapshot = (root / "logs" / "technical_context.latest.txt").read_text(
+                encoding="utf-8"
+            )
+            snapshot_mode = (
+                root / "logs" / "technical_context.latest.txt"
+            ).stat().st_mode & 0o777
+            leftovers = temporary_files(root)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(snapshot.strip(), "cached technical context")
+        self.assertEqual(snapshot_mode, 0o600)
+        self.assertIn("TECHNICAL_CONTEXT_RESULT=LOCAL_ONLY", log)
+        self.assertNotIn("sendMessage", log)
         self.assertEqual(leftovers, [])
 
     def test_formatter_failure_is_logged_and_workspace_is_cleaned(self) -> None:
@@ -205,49 +209,15 @@ class AutostatusBehaviorTests(unittest.TestCase):
             marker = root / "formatter_called.txt"
             write_gate(gate, "Open", 0)
             write_formatter(formatter, marker, fail=True)
-            result = run_autostatus(root, dry_run=True)
+            result = run_autostatus(root, dry_run=False)
             log = read_log(root)
+            latest_exists = (root / "logs" / "technical_context.latest.txt").exists()
             leftovers = temporary_files(root)
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("format_status failed", log)
         self.assertIn("formatter exploded", log)
-        self.assertEqual(leftovers, [])
-
-    def test_telegram_success_is_logged_without_real_network(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root, gate, formatter = prepare_root(Path(temporary))
-            marker = root / "formatter_called.txt"
-            fake_curl = root / "tools" / "fake-curl.sh"
-            write_gate(gate, "Open", 0)
-            write_formatter(formatter, marker)
-            write_telegram_env(root)
-            write_fake_curl(fake_curl, success=True)
-            result = run_autostatus(root, dry_run=False, curl_bin=fake_curl)
-            log = read_log(root)
-            leftovers = temporary_files(root)
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("sendMessage OK plain_text http=200", log)
-        self.assertEqual(leftovers, [])
-
-    def test_telegram_timeout_retains_diagnostics_and_cleans_workspace(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root, gate, formatter = prepare_root(Path(temporary))
-            marker = root / "formatter_called.txt"
-            fake_curl = root / "tools" / "fake-curl.sh"
-            write_gate(gate, "Open", 0)
-            write_formatter(formatter, marker)
-            write_telegram_env(root)
-            write_fake_curl(fake_curl, success=False)
-            result = run_autostatus(root, dry_run=False, curl_bin=fake_curl)
-            log = read_log(root)
-            leftovers = temporary_files(root)
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("curl_rc=28", log)
-        self.assertIn("http=000", log)
-        self.assertIn("Operation timed out", log)
+        self.assertFalse(latest_exists)
         self.assertEqual(leftovers, [])
 
 
