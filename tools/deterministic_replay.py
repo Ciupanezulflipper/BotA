@@ -111,7 +111,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     evaluation_end = semantics.parse_utc(args.evaluation_end_utc)
     raw_start = semantics.parse_utc(args.raw_start_utc)
     raw_end = semantics.parse_utc(args.raw_end_utc)
-    if not evaluation_start < evaluation_end:
+    if evaluation_start >= evaluation_end:
         raise ValueError("evaluation end must be after evaluation start")
 
     dataset_id = dataset_root.name
