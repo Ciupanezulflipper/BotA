@@ -19,7 +19,8 @@ SPEC.loader.exec_module(v)
 
 
 class ReplayDatasetVerifierTests(unittest.TestCase):
-    def _make_dataset(self, root: Path) -> tuple[Path, Path]:
+    @staticmethod
+    def _make_dataset(root: Path) -> tuple[Path, Path]:
         dataset = root / "data" / "replay" / "unit-replay"
         csv_path = dataset / "candles" / "EURUSD_M15.csv"
         csv_path.parent.mkdir(parents=True)
@@ -69,7 +70,8 @@ class ReplayDatasetVerifierTests(unittest.TestCase):
         (dataset / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         return dataset, csv_path
 
-    def _verification_kwargs(self, dataset: Path, *, min_warmup_bars: int) -> dict[str, object]:
+    @staticmethod
+    def _verification_kwargs(dataset: Path, *, min_warmup_bars: int) -> dict[str, object]:
         return {
             "dataset_root": dataset,
             "expected_dataset_id": "unit-replay",
