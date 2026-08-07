@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: 2026-08-07 17:11 UTC
+Last updated: 2026-08-07 17:38 UTC
 
 ## Authoritative identifiers
 
@@ -38,6 +38,40 @@ runsv bota-watcher
 
 The ownership defect remains real but does not explain the current signal drought by itself because all seven required services are running and the watcher is actively recording decisions.
 
+## Current effective live strategy/delivery settings — 2026-08-07 17:38 UTC
+
+```text
+PAIRS=EURUSD GBPUSD
+TIMEFRAMES=M15
+FILTER_SCORE_MIN=65
+FILTER_SCORE_MIN_ALL=65
+FILTER_SCORE_MIN_M15=<unset>
+H1_TREND_MIN_SCORE=40
+H1_VETO_OVERRIDE_SCORE=75
+H1_VETO_OVERRIDE_ADX=40
+TELEGRAM_MIN_SCORE=70
+TELEGRAM_TIER_YELLOW_MIN=70
+TELEGRAM_TIER_GREEN_MIN=75
+TELEGRAM_COOLDOWN_SECONDS=1800
+DRY_RUN_MODE=0
+TELEGRAM_ENABLED=1
+```
+
+Current pair scope is therefore only EURUSD and GBPUSD. A third live pair is not currently scanned.
+
+Current layered signal policy:
+
+```text
+M15 strategy hard score floor = 65
+H1-neutral override score = 75
+Telegram hard score floor = 70
+Telegram yellow floor = 70
+Telegram green floor = 75
+Telegram cooldown = 1800 seconds = 30 minutes per pair/timeframe
+```
+
+This means a strategy-accepted H1-confirmed signal with score 65.00-69.99 can still be prevented from reaching Telegram.
+
 ## Signal funnel — verified 2026-08-07
 
 Source: `logs/alerts.csv`.
@@ -49,13 +83,13 @@ HEADER_COLUMNS=13
 ROWS_WITH_25_COLUMNS=2509
 ```
 
-The header is the legacy 13-column schema:
+Legacy header:
 
 ```text
 timestamp,pair,tf,direction,score,confidence,entry,sl,tp,provider,rejected,filter_str,reasons
 ```
 
-Current watcher rows are 25 columns. The first 13 positions remain aligned with the fields used in the signal audit, so the tradeable funnel counts are valid. The mixed schema is a separate observability defect and may cause newer ledger readers that expect `filter_rejected`/`filter_reasons` column names to misclassify historical rows.
+The newer watcher appends 25-column rows under this old header. The first 13 positions remain aligned for the current funnel audit, but the schema drift is an observability defect for newer named-field readers.
 
 ### Valid tradeable funnel
 
@@ -77,7 +111,7 @@ SELL_ACCEPTED=49
 SELL_REJECTED=910
 ```
 
-Accepted by pair:
+Accepted by pair across the historical corpus:
 
 ```text
 EURUSD=56
@@ -85,9 +119,9 @@ GBPUSD=53
 USDJPY=1
 ```
 
-### Exact rejected-stage decomposition
+The historical USDJPY row does not mean USDJPY is currently live; the present `PAIRS` setting is only EURUSD GBPUSD.
 
-The 1317 rejected valid BUY/SELL rows decompose exactly into:
+### Exact rejected-stage decomposition
 
 ```text
 SCORE_GATE=903
@@ -104,7 +138,7 @@ H1_NEUTRAL=31.13%
 H4_D1_OPPOSE=0.30%
 ```
 
-Current source flow makes this decomposition meaningful. `m15_h1_fusion.sh` returns immediately when the M15 base signal is already filter-rejected, so score-gated M15 rows do not proceed to H1. The observed funnel is therefore:
+Current source flow makes this sequential:
 
 ```text
 1427 valid BUY/SELL
@@ -113,105 +147,81 @@ Current source flow makes this decomposition meaningful. `m15_h1_fusion.sh` retu
   -> 410 rejected by H1-neutral veto
   -> 114 survive H1
   -> 4 rejected by H4+D1 opposition
-  -> 110 accepted
+  -> 110 strategy-accepted
 ```
 
-This is now the strongest direct explanation of low strategy throughput.
+This is the strongest direct explanation of low strategy throughput.
 
-## Macro and RR interpretation
+## Accepted -> Telegram funnel — verified 2026-08-07
 
-`macro6=3` appears in all 1317 rejected and all 110 accepted valid BUY/SELL rows. Current fusion code treats macro6=3 as neutral and applies a zero news adjustment, so the tag itself is not a hard rejection cause.
-
-RR text appears in 31 rejected rows and one accepted row. In current `quality_filter.py`, RR is advisory unless another hard gate rejects the row. Do not treat RR text as the primary cause of this corpus.
-
-## Score history
-
-Rejected valid BUY/SELL score buckets:
+Source: retained `logs/cron.signals.log`.
 
 ```text
-<62=740
-62-64.99=105
-65-69.99=148
-70-74.99=141
-75+=183
+LOG_LINES=27332
+ACCEPTED_EVENTS_PARSED=106
+telegram_score_gate=6
+telegram_tier_gate=0
+telegram_cooldown=38
+delivery_dedup=0
+dry_run_or_disabled=0
+telegram_sent=61
+telegram_backoff=0
+telegram_failed=1
+accepted_no_terminal_evidence=0
 ```
 
-Accepted valid BUY/SELL score buckets:
+The 106 parsed accepted events classify completely:
 
 ```text
-<62=0
-62-64.99=5
-65-69.99=13
-70-74.99=8
-75+=84
+sent=61              57.55%
+cooldown=38          35.85%
+Telegram score gate=6 5.66%
+send failure=1        0.94%
 ```
 
-Accepted score range:
+The CSV contains 110 accepted BUY/SELL rows, so four accepted CSV rows do not have matched retained watcher-log evidence in this audit. Keep those four as delivery-unknown.
 
-```text
-MIN=62.80
-MEDIAN=80.05
-MAX=98.60
-```
+Telegram transport itself is functioning: 61 retained accepted events were sent and only one transport failure was observed. The larger post-acceptance suppressors are the 30-minute cooldown and the separate Telegram score floor.
 
-The corpus spans historical threshold changes, proven by `score<62`, `score<65`, and `score<70` strings. Do not infer the current effective phone threshold from the aggregate corpus. Read the current phone configuration/environment directly before any strategy mutation.
+## Macro, RR, and zero-entry interpretation
 
-## Zero entry / SL / TP classification — closed hypothesis
+- `macro6=3` appears in accepted and rejected rows and is neutral in current fusion logic; it is not the hard reject.
+- RR text is advisory in current `quality_filter.py`; it is not the dominant hard gate.
+- All zero-entry/SL/TP rows in the audited corpus were HOLD score-0 rows; no BUY/SELL row had zero entry. Zero entry is not the current root cause.
 
-Previous direct pass:
+## Score history warning
 
-```text
-ALL_ZERO_ENTRY_SL_TP_ROWS=1014
-MIXED_ENTRY_SL_TP_ROWS=0
-ZERO_ROWS_DIRECTION=HOLD_ONLY
-ZERO_ROWS_SCORE=0.00_ONLY
-ZERO_ENTRY_BUY_SELL_ROWS=0
-```
+Historical rows include `score<62`, `score<65`, and `score<70`, proving prior configuration changes. Do not use aggregate historical strings to infer current values. Current effective phone values are now directly recorded above.
 
-Therefore:
+## Practical current interpretation
 
-```text
-ZERO_ENTRY_VERDICT=HOLD_SYMPTOM_NOT_ROOT_CAUSE
-```
+The signal drought is not a single mysterious runtime failure. It is the cumulative effect of layered gates:
 
-Do not spend further time treating zero entry as the root defect unless new BUY/SELL evidence contradicts this classification.
+1. M15 score floor removes the majority of valid BUY/SELL candidates.
+2. H1-neutral veto removes most remaining candidates that do not reach override conditions.
+3. H4+D1 opposition removes very few.
+4. After strategy acceptance, Telegram applies another score floor at 70.
+5. A 30-minute per-pair/timeframe cooldown suppresses many retained accepted events.
+6. Only two live pairs are configured.
 
-## Telegram delivery remains unproven
-
-The 110 accepted rows are filter survivors, not proof of user-visible signals. Current watcher code applies additional gates after acceptance:
-
-```text
-TELEGRAM_MIN_SCORE
-TELEGRAM_TIER_YELLOW_MIN
-TELEGRAM_COOLDOWN_SECONDS
-delivery dedup
-Telegram transport
-```
-
-The next proof must establish current effective threshold values and classify accepted rows against retained Telegram gate/send evidence.
-
-## Historical runtime incident — retained
-
-Earlier on 2026-08-07 two `runsvdir` managers existed. PID 16360 (`runsvdir -P`) owned the BotA supervisors while native Termux `service-daemon` manager PID 31140 initially owned none and its pidfile pointed to 31140. PID 16360 later died and the native manager progressively reacquired supervisors. Exact executor attribution remains unproven.
-
-Do not restart broad provenance archaeology unless runtime safety requires it.
+No one of these facts alone proves which setting should be loosened. Protective strategy gates must be judged against candidate outcomes before mutation.
 
 ## Scope lock
 
-No strategy threshold, H1/H4/D1, macro, RR, SL/TP, provider, Telegram, Supabase, dedup, or service-topology mutation is authorized yet.
+No strategy score, H1/H4/D1, pair list, Telegram score, cooldown, provider, Supabase, dedup, or service-topology mutation is authorized yet.
 
-The first potential strategy change must be based on current effective settings plus delivery evidence, not aggregate historical thresholds or frustration with signal frequency.
+The first potential repair should be the least strategy-invasive one and must be supported by outcome evidence for candidates already accepted by the strategy but suppressed by delivery policy.
 
 ## Evidence
 
-- `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
+- `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
 - `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
+- `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
 - `AI_START_HERE.md`
 - `CHAT_HANDOFF_BOTA.md`
 - `audits/ERROR_LOG.md`
 - `ERRORS.md`
-- historical runtime/deployment records dated 2026-08-01 through 2026-08-07
 
 ## Exactly one next action
 
-Read only the current phone values for score/H1/Telegram thresholds and inspect retained watcher logs for accepted -> score/tier/cooldown/dedup/send outcomes. Do not change code or thresholds before that evidence is complete.
+Classify historical outcomes for strategy-accepted candidates suppressed by Telegram score or 30-minute cooldown. Compare them with delivered-signal outcomes before changing protective strategy thresholds. Separately remember that adding a third pair would require an explicit live `PAIRS` change later.

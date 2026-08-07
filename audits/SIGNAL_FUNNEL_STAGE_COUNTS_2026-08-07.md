@@ -1,12 +1,12 @@
 # BotA Signal Funnel Stage Counts — 2026-08-07
 
-Recorded: 2026-08-07 17:11:13 UTC
+Recorded: 2026-08-07 17:38:40 UTC
 
-Purpose: preserve the exact valid-tradeable funnel counts from the live Termux phone after correcting the CSV schema and closing the zero-entry hypothesis.
+Purpose: preserve the exact valid-tradeable strategy funnel plus the current accepted-to-Telegram delivery funnel measured from the live Termux phone.
 
 ## Source and shape
 
-Source: `logs/alerts.csv`.
+Primary decision source: `logs/alerts.csv`.
 
 Observed legacy header:
 
@@ -21,9 +21,32 @@ HEADER_COLUMNS=13
 ROWS_WITH_25_COLUMNS=2509
 ```
 
-The current watcher appends a newer 25-column row format under the old 13-column header. The first 13 positions still align with the legacy semantic fields used in this audit, so direction, score, entry/SL/TP, `rejected`, `filter_str`, and `reasons` remain classifiable. This schema drift is an observability defect and should be repaired separately; it is not evidence that the watcher decision path itself is broken.
+The current watcher appends a newer 25-column row format under the old 13-column header. The first 13 positions still align with the semantic fields used in this audit, so direction, score, entry/SL/TP, `rejected`, `filter_str`, and `reasons` remain classifiable. This schema drift is an observability defect and should be repaired separately.
 
-## Valid tradeable funnel
+## Current effective live settings
+
+Verified at 2026-08-07 17:38:40 UTC:
+
+```text
+PAIRS=EURUSD GBPUSD
+TIMEFRAMES=M15
+FILTER_SCORE_MIN=65
+FILTER_SCORE_MIN_ALL=65
+FILTER_SCORE_MIN_M15=<unset>
+H1_TREND_MIN_SCORE=40
+H1_VETO_OVERRIDE_SCORE=75
+H1_VETO_OVERRIDE_ADX=40
+TELEGRAM_MIN_SCORE=70
+TELEGRAM_TIER_YELLOW_MIN=70
+TELEGRAM_TIER_GREEN_MIN=75
+TELEGRAM_COOLDOWN_SECONDS=1800
+DRY_RUN_MODE=0
+TELEGRAM_ENABLED=1
+```
+
+The live watcher currently scans only EURUSD and GBPUSD. A third pair is not currently in scope.
+
+## Valid tradeable strategy funnel
 
 ```text
 VALID_ENTRY_ROWS=1495
@@ -53,13 +76,15 @@ SELL_ACCEPTED=49
 SELL_REJECTED=910
 ```
 
-Accepted by pair:
+Historical accepted by pair:
 
 ```text
 EURUSD=56
 GBPUSD=53
 USDJPY=1
 ```
+
+The one historical USDJPY row does not reflect current live scope; current `PAIRS` is only EURUSD GBPUSD.
 
 ## Exact rejected-stage decomposition
 
@@ -80,11 +105,9 @@ H1_NEUTRAL=31.13%
 H4_D1_OPPOSE=0.30%
 ```
 
-The counts sum exactly to the 1317 rejected valid BUY/SELL rows.
+Current source flow makes this a meaningful sequential decomposition: `m15_h1_fusion.sh` returns immediately when the base M15 signal is already rejected, so score-gated M15 rows do not proceed into H1 fusion. Rows that pass the M15 filter can then be vetoed by H1, followed by the rare H4+D1 opposition veto.
 
-Current source flow explains why this decomposition is meaningful: `m15_h1_fusion.sh` returns immediately when the base M15 signal is already rejected, so score-gated M15 rows do not proceed into H1 fusion. Rows that pass the M15 filter can then be vetoed by H1, followed by the rare H4+D1 opposition veto.
-
-Therefore the live historical funnel is approximately:
+Historical strategy funnel:
 
 ```text
 1427 valid BUY/SELL
@@ -93,7 +116,7 @@ Therefore the live historical funnel is approximately:
   -> 410 rejected by H1-neutral veto
   -> 114 survive H1 veto
   -> 4 rejected by H4+D1 opposition
-  -> 110 accepted
+  -> 110 strategy-accepted
 ```
 
 ## Exact filter strings among rejected BUY/SELL
@@ -112,7 +135,7 @@ Therefore the live historical funnel is approximately:
 
 RR text is advisory in `quality_filter.py`; it co-occurs with score/H1 classifications and is not the hard-reject cause in these rows.
 
-`macro6=3` appears in every rejected and every accepted valid BUY/SELL row in this corpus. Current `m15_h1_fusion.sh` appends `macro6=3` as a neutral tag and applies a score adjustment of zero for neutral macro. Therefore `macro6=3` is not a hard-rejection cause here.
+`macro6=3` appears in every rejected and every accepted valid BUY/SELL row in this corpus. Current `m15_h1_fusion.sh` treats macro6=3 as neutral and applies a zero score adjustment. Therefore `macro6=3` is not a hard-rejection cause here.
 
 ## Score distribution
 
@@ -144,11 +167,21 @@ MEDIAN=80.05
 MAX=98.60
 ```
 
-The corpus spans historical configuration changes, proven by the presence of `score<62`, `score<65`, and `score<70` rejection strings. Do not infer the current effective threshold from the whole historical corpus. Current phone configuration/environment must be read directly before any strategy change.
+The corpus spans historical configuration changes, proven by `score<62`, `score<65`, and `score<70` strings. Current phone configuration is now directly verified above; use current values for present-policy conclusions.
 
-## H1 interpretation
+## Current H1 interpretation
 
-Tag counts:
+Current values:
+
+```text
+H1_TREND_MIN_SCORE=40
+H1_VETO_OVERRIDE_SCORE=75
+H1_VETO_OVERRIDE_ADX=40
+```
+
+Current fusion behavior means a neutral-H1 M15 candidate below score 75 will generally be vetoed unless another code path changes classification; at score >=75, neutral H1 may be overridden when H4 is not opposing.
+
+Historical tag counts:
 
 ```text
 H1_NEUTRAL: REJECTED=410 ACCEPTED=94
@@ -156,21 +189,94 @@ H1_CONFIRMED: REJECTED=0 ACCEPTED=16
 H1_OPPOSITE: REJECTED=0 ACCEPTED=0
 ```
 
-The `H1_NEUTRAL` string match also catches historical `H1_trend_neutral_overridden` rows. Do not equate all 94 accepted matches with raw neutral vetoes without exact accepted-filter classification. The corpus spans multiple historical settings.
+The H1-neutral string match includes `H1_trend_neutral_overridden`, so accepted neutral-tag matches are not raw veto passes.
 
-## Delivery remains unproven
+## Accepted -> Telegram delivery funnel
 
-The 110 accepted rows are strategy/filter survivors, not proof of Telegram delivery. Current watcher code still applies, in order:
+Delivery source: retained `logs/cron.signals.log`.
 
 ```text
-TELEGRAM_MIN_SCORE
-TELEGRAM_TIER_YELLOW_MIN
-TELEGRAM_COOLDOWN_SECONDS
-delivery dedup
-Telegram transport
+LOG_LINES=27332
+ACCEPTED_EVENTS_PARSED=106
+telegram_score_gate=6
+telegram_tier_gate=0
+telegram_cooldown=38
+delivery_dedup=0
+dry_run_or_disabled=0
+telegram_sent=61
+telegram_backoff=0
+telegram_failed=1
+accepted_no_terminal_evidence=0
 ```
 
-The next proof must establish current effective thresholds and classify the 110 accepted rows against Telegram gate/delivery evidence before changing strategy.
+The 106 parsed accepted events classify completely:
+
+```text
+TELEGRAM_SENT=61       57.55%
+TELEGRAM_COOLDOWN=38   35.85%
+TELEGRAM_SCORE_GATE=6   5.66%
+TELEGRAM_FAILED=1       0.94%
+```
+
+There were no parsed accepted events lost to tier gate, delivery dedup, dry-run/disabled mode, backoff, or missing terminal evidence.
+
+The CSV contains 110 accepted BUY/SELL rows while the retained log parser matched 106 accepted events:
+
+```text
+CSV_ACCEPTED_BUY_SELL_TOTAL=110
+MATCHED_ACCEPTED_LOG_EVENTS=106
+UNMATCHED_ACCEPTED_ROWS=4
+```
+
+Those four remain delivery-unknown.
+
+Relative to all 110 accepted CSV rows:
+
+```text
+KNOWN_SENT=61       55.45%
+KNOWN_COOLDOWN=38   34.55%
+KNOWN_SCORE_GATE=6   5.45%
+KNOWN_FAILED=1       0.91%
+UNMATCHED_LOG=4      3.64%
+```
+
+## Current layered policy implication
+
+Current score floors are not identical:
+
+```text
+FILTER_SCORE_MIN_ALL=65
+TELEGRAM_MIN_SCORE=70
+TELEGRAM_TIER_YELLOW_MIN=70
+TELEGRAM_TIER_GREEN_MIN=75
+```
+
+Therefore an H1-confirmed strategy-accepted signal with score 65.00-69.99 can still be suppressed by Telegram. Retained logs prove this happened six times among the 106 matched accepted events.
+
+Current cooldown:
+
+```text
+TELEGRAM_COOLDOWN_SECONDS=1800
+```
+
+Thirty-eight of 106 matched accepted events were suppressed by this 30-minute pair/timeframe cooldown. That is a major post-acceptance throughput gate, but its trading quality effect is not yet proven.
+
+## Full current interpretation
+
+Low user-visible signal count is now explained as a layered funnel:
+
+```text
+RAW BUY/SELL CANDIDATES
+  -> strategy M15 score floor
+  -> H1-neutral veto / override logic
+  -> rare H4+D1 opposition
+  -> strategy accepted
+  -> Telegram score floor
+  -> 30-minute per-pair/timeframe cooldown
+  -> delivery transport
+```
+
+Telegram transport is not the dominant failure: 61 retained accepted events were sent successfully and only one send failure was observed.
 
 ## Safety
 
@@ -184,3 +290,7 @@ TELEGRAM_CALL_PERFORMED=NO
 PHONE_GIT_MUTATION_PERFORMED=NO
 STRATEGY_CHANGED=NO
 ```
+
+## Next exact proof
+
+Before weakening protective strategy gates, classify historical outcomes for strategy-accepted candidates suppressed by the Telegram score gate or cooldown. Compare them with delivered-signal outcomes. If those suppressed candidates are acceptable, delivery-policy alignment is the least strategy-invasive route to increasing user-visible signals.
