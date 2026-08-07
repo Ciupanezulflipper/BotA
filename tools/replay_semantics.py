@@ -381,25 +381,40 @@ def _adx_component(adx: float) -> float:
     return 10.0
 
 
+def _bb_touch_component(
+    direction: str, price: float, upper: float, lower: float
+) -> tuple[float, str] | None:
+    if direction == "SELL" and price >= upper * 0.9998:
+        return 8.0, "bb_upper_sell"
+    if direction == "BUY" and price <= lower * 1.0002:
+        return 8.0, "bb_lower_buy"
+    return None
+
+
+def _bb_mid_component(
+    direction: str, price: float, middle: float
+) -> tuple[float, str]:
+    if direction == "SELL" and price > middle:
+        return 3.0, "bb_above_mid_sell"
+    if direction == "BUY" and price < middle:
+        return 3.0, "bb_below_mid_buy"
+    return -5.0, "bb_counter"
+
+
 def _bb_component(
     bundle: Mapping[str, Any], direction: str, price: float
 ) -> tuple[float, str]:
     upper = float(bundle.get("bb_upper", 0.0) or 0.0)
     middle = float(bundle.get("bb_middle", 0.0) or 0.0)
     lower = float(bundle.get("bb_lower", 0.0) or 0.0)
-    if upper <= 0 or lower <= 0 or middle <= 0:
+    if min(upper, middle, lower) <= 0:
         return 0.0, "bb_neutral"
     if bool(bundle.get("bb_squeeze", False)):
         return -3.0, "bb_squeeze"
-    if direction == "SELL" and price >= upper * 0.9998:
-        return 8.0, "bb_upper_sell"
-    if direction == "BUY" and price <= lower * 1.0002:
-        return 8.0, "bb_lower_buy"
-    if direction == "SELL" and price > middle:
-        return 3.0, "bb_above_mid_sell"
-    if direction == "BUY" and price < middle:
-        return 3.0, "bb_below_mid_buy"
-    return -5.0, "bb_counter"
+    touch = _bb_touch_component(direction, price, upper, lower)
+    if touch is not None:
+        return touch
+    return _bb_mid_component(direction, price, middle)
 
 
 def _component_scores(
@@ -658,6 +673,8 @@ def score_bundle(
             f"adx_regime_block|adx={adx:.1f}|ranging_market",
             price=0.0,
             atr=0.0,
+            # Production scoring_engine.sh emits numeric 0.0 here. Preserve
+            # that mixed-type quirk instead of silently normalizing replay data.
             volatility=0.0,
             filter_reasons=["adx_regime"],
             extra={
@@ -912,13 +929,23 @@ def _base_event(
 
 
 def _closed_event(base: Mapping[str, Any]) -> dict[str, Any]:
+    pair = str(base["pair"])
     event = {
         **base,
-        "direction": "HOLD",
-        "score": 0.0,
-        "filter_rejected": True,
-        "filter_reasons": ["market_phase_Closed"],
-        "reject_stage": "MARKET_ALLOWED",
+        **_hold(
+            pair,
+            "M15",
+            "market_phase_Closed",
+            price=0.0,
+            atr=0.0,
+            filter_reasons=["market_phase_Closed"],
+        ),
+        "sr_comp": 0,
+        "h1_trend": "not_evaluated",
+        "h4_direction": "HOLD",
+        "h4_vote": 0,
+        "d1_vote": 0,
+        "reject_stage": "MARKET_CLOSED",
     }
     event.update(policy_flags(event))
     return event
