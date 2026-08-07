@@ -8,9 +8,9 @@
 #   3. canonical schedule verification
 #   4. provider-specific usage from state/provider_usage.json
 #
-# Routine job-log age is display evidence only and cannot override healthy live
-# runtime truth. The historical logs/api_credits.json counter is intentionally
-# ignored because it mixed OANDA/Yahoo requests with Twelve Data credits.
+# Routine job-log age cannot override healthy live runtime truth. The historical
+# logs/api_credits.json counter is intentionally ignored because it mixed
+# OANDA/Yahoo requests with Twelve Data credits.
 
 set -euo pipefail
 
@@ -125,19 +125,6 @@ RUNTIME_HEALTH = STATE / "runtime_health.json"
 PROVIDER_USAGE = STATE / "provider_usage.json"
 VERIFY_CANONICAL = ROOT / "tools" / "verify_canonical_crontab.sh"
 
-TELEGRAM_MIN_SCORE = float(os.environ.get("TELEGRAM_MIN_SCORE", "70"))
-RUNTIME_HEALTH_FRESH_MAX_MIN = int(os.environ.get("RUNTIME_HEALTH_FRESH_MAX_MIN", "10"))
-TWELVE_DATA_DAILY_LIMIT = max(0, int(os.environ.get("TWELVE_DATA_DAILY_LIMIT", "800")))
-TWELVE_DATA_RESERVE = max(0, int(os.environ.get("TWELVE_DATA_RESERVE_CREDITS", "100")))
-
-
-def load_json(path: Path, default: Any) -> Any:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError):
-        return default
-    return data
-
 
 def safe_int(value: Any, default: int = 0) -> int:
     try:
@@ -153,14 +140,39 @@ def safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+TELEGRAM_MIN_SCORE = safe_float(os.environ.get("TELEGRAM_MIN_SCORE", "70"), 70.0)
+RUNTIME_HEALTH_FRESH_MAX_MIN = safe_int(
+    os.environ.get("RUNTIME_HEALTH_FRESH_MAX_MIN", "10"),
+    10,
+)
+TWELVE_DATA_DAILY_LIMIT = max(
+    0,
+    safe_int(os.environ.get("TWELVE_DATA_DAILY_LIMIT", "800"), 800),
+)
+TWELVE_DATA_RESERVE = max(
+    0,
+    safe_int(os.environ.get("TWELVE_DATA_RESERVE_CREDITS", "100"), 100),
+)
+
+
+def load_json(path: Path, default: Any) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        return default
+
+
 def parse_utc(value: Any) -> datetime | None:
     text = str(value or "").strip()
     if not text:
         return None
     try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(timezone.utc)
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except (TypeError, ValueError, OverflowError):
         return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def age_minutes_from_timestamp(value: Any) -> int | None:
@@ -172,7 +184,8 @@ def age_minutes_from_timestamp(value: Any) -> int | None:
 
 def file_age_minutes(path: Path) -> int | None:
     try:
-        return max(0, int((datetime.now(timezone.utc).timestamp() - path.stat().st_mtime) // 60))
+        age = int((datetime.now(timezone.utc).timestamp() - path.stat().st_mtime) // 60)
+        return max(0, age)
     except OSError:
         return None
 
@@ -292,33 +305,62 @@ def runtime_truth() -> dict[str, Any]:
 
 
 def canonical_truth() -> dict[str, str]:
+    unknown = {
+        "status": "UNKNOWN",
+        "hash": "UNKNOWN",
+        "source": "unknown",
+        "reason": "canonical verifier missing",
+    }
     if not VERIFY_CANONICAL.exists():
-        return {"status": "UNKNOWN", "hash": "UNKNOWN", "reason": "canonical verifier missing"}
+        return unknown
+
+    environment = os.environ.copy()
+    if environment.get("DAILY_SUMMARY_ALLOW_CRONTAB_SOURCE_FILE") != "1":
+        environment.pop("CRONTAB_SOURCE_FILE", None)
+
     try:
         result = subprocess.run(
             ["bash", str(VERIFY_CANONICAL)],
             cwd=str(ROOT),
+            env=environment,
             text=True,
             capture_output=True,
             timeout=10,
             check=False,
         )
     except subprocess.TimeoutExpired:
-        return {"status": "UNKNOWN", "hash": "UNKNOWN", "reason": "canonical verifier timeout"}
+        return {**unknown, "reason": "canonical verifier timeout"}
     except OSError as exc:
-        return {"status": "UNKNOWN", "hash": "UNKNOWN", "reason": f"canonical verifier error:{type(exc).__name__}"}
+        return {**unknown, "reason": f"canonical verifier error:{type(exc).__name__}"}
 
-    output = ((result.stdout or "") + "\n" + (result.stderr or ""))[:16000]
+    output = ((result.stdout or "") + "\n" + (result.stderr or ""))[-16000:]
+    source = (
+        "file"
+        if "CRONTAB_READ_SOURCE=file" in output
+        else "live"
+        if "CRONTAB_READ_SOURCE=live" in output
+        else "unknown"
+    )
     pass_yes = "PHASE2_VERIFY_PASS=YES" in output
     pass_no = "PHASE2_VERIFY_PASS=NO" in output
     hash_yes = "BOTA_BLOCK_HASH_MATCH=YES" in output
     hash_no = "BOTA_BLOCK_HASH_MATCH=NO" in output
 
     if pass_yes and hash_yes:
-        return {"status": "PASS", "hash": "YES", "reason": "none"}
+        return {"status": "PASS", "hash": "YES", "source": source, "reason": "none"}
     if pass_no or hash_no:
-        return {"status": "FAIL", "hash": "NO" if hash_no else "UNKNOWN", "reason": "canonical verification failed"}
-    return {"status": "UNKNOWN", "hash": "UNKNOWN", "reason": f"canonical verifier rc={result.returncode}"}
+        return {
+            "status": "FAIL",
+            "hash": "NO" if hash_no else "UNKNOWN",
+            "source": source,
+            "reason": "canonical verification failed",
+        }
+    return {
+        "status": "UNKNOWN",
+        "hash": "UNKNOWN",
+        "source": source,
+        "reason": f"canonical verifier rc={result.returncode}",
+    }
 
 
 def provider_truth() -> dict[str, Any]:
@@ -382,7 +424,7 @@ def alert_rows() -> list[dict[str, Any]]:
                     }
                 )
     except (OSError, UnicodeError, csv.Error):
-        return []
+        return rows
     return rows
 
 
@@ -417,6 +459,16 @@ def component_line(runtime: dict[str, Any]) -> str:
     return "Pipeline jobs: " + " | ".join(rendered[:8])
 
 
+def best_line(row: dict[str, Any] | None) -> str:
+    if row is None:
+        return "none"
+    state = "filter-rejected" if row["rejected"] else "filter-accepted"
+    return (
+        f"{row['pair']} {row['direction']} score={row['score']:.2f} "
+        f"{state} filters={row['filters']}"
+    )
+
+
 runtime = runtime_truth()
 canonical = canonical_truth()
 provider = provider_truth()
@@ -428,70 +480,74 @@ accepted = [row for row in tradeable if not row["rejected"]]
 eligible = [row for row in accepted if row["score"] >= TELEGRAM_MIN_SCORE]
 best = max(tradeable, key=lambda row: row["score"], default=None)
 
-runtime_icon = {"HEALTHY": "✅", "DEGRADED": "⚠️", "UNKNOWN": "❓"}.get(runtime["effective"], "❓")
-schedule_icon = "✅" if canonical["status"] == "PASS" and canonical["hash"] == "YES" else "⚠️"
-pipeline_label = "PASS" if runtime["pipeline_healthy"] is True else "FAIL"
+runtime_icon = {"HEALTHY": "✅", "DEGRADED": "⚠️", "UNKNOWN": "❓"}.get(
+    runtime["effective"],
+    "❓",
+)
+schedule_icon = (
+    "✅"
+    if canonical["status"] == "PASS" and canonical["hash"] == "YES"
+    else "⚠️"
+)
+pipeline_label = (
+    "PASS"
+    if runtime["pipeline_healthy"] is True
+    else "FAIL"
+    if runtime["pipeline_healthy"] is False
+    else "UNKNOWN"
+)
 
 clock = load_json(CLOCK_STATE, {})
 if not isinstance(clock, dict):
     clock = {}
 
+reasons = list(runtime["reasons"])
+if canonical["status"] != "PASS" or canonical["hash"] != "YES":
+    reasons.append(canonical["reason"])
+
 lines: list[str] = [
-    f"✅ BotA Daily Proof — {TODAY}",
+    f"{runtime_icon} BotA Daily Proof — {TODAY}",
     f"Generated: {NOW_UTC}",
     "",
     (
         f"Runtime: {runtime_icon} {runtime['effective']} | reported={runtime['reported']} | "
-        f"control={runtime['control_owned']}/{runtime['control_required']} | pipeline={pipeline_label}"
+        f"control={runtime['control_owned']}/{runtime['control_required']} | "
+        f"pipeline={pipeline_label}"
     ),
     (
-        f"Supervisor: {fmt_age(runtime['supervisor_age'])} ago | health file: "
-        f"{fmt_age(runtime['health_age'])} ago"
+        f"Supervisor: {fmt_age(runtime['supervisor_age'])} ago | "
+        f"health file: {fmt_age(runtime['health_age'])} ago"
     ),
-    (
-        f"Market: {runtime['market_state']} | reason={runtime['market_reason']}"
-    ),
+    f"Market: {runtime['market_state']} | reason={runtime['market_reason']}",
     component_line(runtime),
     (
         f"Runtime schedule: {schedule_icon} {canonical['status']} | "
-        f"hash={canonical['hash']} | crond={crond_status()}"
+        f"hash={canonical['hash']} | source={canonical['source']} | "
+        f"crond={crond_status()}"
     ),
     "",
     (
         f"Scans: {len(rows)} | actionable BUY/SELL: {len(tradeable)} | "
         f"HOLD/no-trade: {len(holds)} | Telegram eligible: {len(eligible)}"
     ),
+    f"Best candidate: {best_line(best)}",
+    "",
+    (
+        f"Provider usage: OANDA {provider['oanda_requests']} req | "
+        f"Yahoo {provider['yahoo_requests']} req | "
+        f"Twelve Data {provider['twelve_credits']}/{TWELVE_DATA_DAILY_LIMIT} credits "
+        f"({provider['twelve_requests']} req; reserve {TWELVE_DATA_RESERVE})"
+    ),
+    (
+        f"Clock: {clock.get('status', 'UNKNOWN')} | "
+        f"drift={clock.get('drift_seconds', 'UNKNOWN')}s | "
+        f"server_ok={str(clock.get('server_clock_ok', 'UNKNOWN')).lower()} | "
+        f"local_unsafe={str(clock.get('local_clock_unsafe', 'UNKNOWN')).lower()}"
+    ),
+    f"Reasons: {compact_reasons(reasons)}",
+    "",
+    "Strategy unchanged | thresholds unchanged | production trading behavior unchanged",
 ]
-
-if best is None:
-    lines.append("Best candidate: none")
-else:
-    disposition = "filter-rejected" if best["rejected"] else "accepted"
-    lines.append(
-        f"Best candidate: {best['pair']} {best['timeframe']} {best['direction']} "
-        f"score={best['score']:.2f} | {disposition} | {best['filters']}"
-    )
-
-provider_suffix = "" if provider["current"] else f" | state_date={provider['state_day']} (stale; excluded)"
-lines.extend(
-    [
-        "",
-        (
-            f"Provider usage: OANDA {provider['oanda_requests']} req | "
-            f"Yahoo {provider['yahoo_requests']} req | "
-            f"Twelve Data {provider['twelve_credits']}/{TWELVE_DATA_DAILY_LIMIT} credits "
-            f"({provider['twelve_requests']} req; reserve {TWELVE_DATA_RESERVE}){provider_suffix}"
-        ),
-        (
-            f"Clock: {clock.get('status', 'UNKNOWN')} | drift={clock.get('drift_seconds', 'UNKNOWN')}s | "
-            f"server_ok={str(clock.get('server_clock_ok', 'UNKNOWN')).lower()} | "
-            f"local_unsafe={str(clock.get('local_clock_unsafe', 'UNKNOWN')).lower()}"
-        ),
-        f"Reasons: {compact_reasons(runtime['reasons'] + ([] if canonical['reason'] == 'none' else [canonical['reason']]))}",
-        "",
-        "Strategy unchanged | thresholds unchanged | production trading behavior unchanged",
-    ]
-)
 
 print("\n".join(lines))
 PY
