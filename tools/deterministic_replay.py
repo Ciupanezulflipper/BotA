@@ -22,6 +22,30 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _git_blob_sha1(path: Path) -> str:
+    raw = path.read_bytes()
+    header = f"blob {len(raw)}\0".encode("utf-8")
+    return hashlib.sha1(header + raw).hexdigest()
+
+
+def _verify_production_sources(source_root: Path) -> dict[str, str]:
+    observed: dict[str, str] = {}
+    mismatches: list[str] = []
+    for relative, expected in semantics.PRODUCTION_SOURCE_BLOBS.items():
+        path = source_root / relative
+        if not path.is_file():
+            raise FileNotFoundError(f"pinned production source missing: {relative}")
+        actual = _git_blob_sha1(path)
+        observed[relative] = actual
+        if actual != expected:
+            mismatches.append(f"{relative}:{actual}!={expected}")
+    if mismatches:
+        raise ValueError(
+            "pinned production source mismatch: " + ";".join(mismatches)
+        )
+    return observed
+
+
 def _load_series(
     dataset_root: Path, pairs: list[str]
 ) -> dict[tuple[str, str], semantics.HistoricalSeries]:
@@ -53,11 +77,18 @@ def _summary(
     *,
     source_commit: str,
     dataset_id: str,
+    dataset_manifest_sha256: str,
+    observed_source_blobs: dict[str, str],
     config: semantics.ReplayConfig,
 ) -> dict[str, Any]:
-    rejection_counts = Counter(str(event.get("reject_stage", "")) for event in events)
+    rejection_counts = Counter(
+        str(event.get("reject_stage", "")) for event in events
+    )
     accepted = [event for event in events if event.get("policy_a_current")]
-    policy_b = [event for event in events if event.get("policy_b_score70_adx_lt30")]
+    policy_b = [
+        event for event in events
+        if event.get("policy_b_score70_adx_lt30")
+    ]
     policy_c = [
         event for event in events
         if event.get("policy_c_score70_adx_lt30_no_extreme")
@@ -67,8 +98,11 @@ def _summary(
         "status": "COMPLETE",
         "replay_grade": "DETERMINISTIC_PRODUCTION_RULES_WITH_PROVIDER_SUBSTITUTION",
         "source_commit": source_commit,
+        "production_source_hash_algorithm": "git_blob_sha1",
         "production_source_blobs": semantics.PRODUCTION_SOURCE_BLOBS,
+        "observed_production_source_blobs": observed_source_blobs,
         "dataset_id": dataset_id,
+        "dataset_manifest_sha256": dataset_manifest_sha256,
         "config": {
             "filter_score_min": config.filter_score_min,
             "h1_trend_min_score": config.h1_trend_min_score,
@@ -101,12 +135,15 @@ def _summary(
         "accepted_policy_b": len(policy_b),
         "accepted_policy_c": len(policy_c),
         "rejection_stages": dict(sorted(rejection_counts.items())),
-        "pairs": dict(sorted(Counter(str(e["pair"]) for e in events).items())),
+        "pairs": dict(
+            sorted(Counter(str(event["pair"]) for event in events).items())
+        ),
     }
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
     dataset_root = Path(args.dataset_root).resolve()
+    source_root = Path(args.source_root).resolve()
     evaluation_start = semantics.parse_utc(args.evaluation_start_utc)
     evaluation_end = semantics.parse_utc(args.evaluation_end_utc)
     raw_start = semantics.parse_utc(args.raw_start_utc)
@@ -114,6 +151,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     if evaluation_start >= evaluation_end:
         raise ValueError("evaluation end must be after evaluation start")
 
+    observed_source_blobs = _verify_production_sources(source_root)
     dataset_id = dataset_root.name
     verifier.verify_dataset(
         dataset_root=dataset_root,
@@ -125,6 +163,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         timeframes=["M15", "H1", "H4", "D1"],
         min_warmup_bars=args.min_warmup_bars,
     )
+    dataset_manifest_sha256 = _sha256(dataset_root / "manifest.json")
 
     config = semantics.ReplayConfig(
         filter_score_min=args.filter_score_min,
@@ -175,6 +214,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         events,
         source_commit=args.source_commit,
         dataset_id=dataset_id,
+        dataset_manifest_sha256=dataset_manifest_sha256,
+        observed_source_blobs=observed_source_blobs,
         config=config,
     )
     summary["evaluation_start_utc"] = semantics.iso_z(evaluation_start)
@@ -193,6 +234,11 @@ def _parser() -> argparse.ArgumentParser:
         description="Deterministic BotA production-rule historical replay"
     )
     parser.add_argument("--dataset-root", required=True)
+    parser.add_argument(
+        "--source-root",
+        default=str(Path(__file__).resolve().parents[1]),
+        help="source tree whose pinned production Git blobs must match",
+    )
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--raw-start-utc", required=True)
     parser.add_argument("--raw-end-utc", required=True)
@@ -211,7 +257,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-sl-pips", type=float, default=30.0)
     parser.add_argument("--max-tp-pips", type=float, default=60.0)
     parser.add_argument("--macro6", type=int, choices=range(0, 7), default=3)
-    parser.add_argument("--d1-filter-mode", choices=["ANY", "EMA"], default="ANY")
+    parser.add_argument(
+        "--d1-filter-mode", choices=["ANY", "EMA"], default="ANY"
+    )
     return parser
 
 
