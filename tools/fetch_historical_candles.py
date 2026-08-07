@@ -434,14 +434,39 @@ def _validate_chunk_window(
     timeframe: str,
     window_start: datetime,
     window_end: datetime,
-) -> None:
-    """Reject provider candles that fall outside their explicit request window."""
-    outside = [candle for candle in candles if candle.time < window_start or candle.time > window_end]
-    if outside:
+) -> int:
+    """Validate provider-aligned candle starts around one explicit request window.
+
+    OANDA may return one complete candle whose start precedes ``from`` when the
+    requested timestamp falls inside an H4/D1 provider-aligned candle. That
+    candle is valid evidence and can overlap the requested start, but it must
+    be no older than one timeframe and there must never be more than one such
+    leading candle. Candles after ``to`` remain fail-closed errors.
+    """
+    tf = normalize_tf(timeframe)
+    duration = timedelta(seconds=TF_SECONDS[tf])
+    leading = [candle for candle in candles if candle.time < window_start]
+    trailing = [candle for candle in candles if candle.time > window_end]
+
+    if trailing:
         raise ValueError(
-            f"OANDA returned candle outside requested chunk for {pair} {timeframe}: "
-            f"{iso_z(outside[0].time)}"
+            f"OANDA returned candle outside requested chunk for {pair} {tf}: "
+            f"{iso_z(trailing[0].time)}"
         )
+
+    invalid_leading = [
+        candle
+        for candle in leading
+        if candle.time + duration <= window_start
+    ]
+    if len(leading) > 1 or invalid_leading:
+        offending = invalid_leading[0] if invalid_leading else leading[0]
+        raise ValueError(
+            f"OANDA returned candle outside requested chunk for {pair} {tf}: "
+            f"{iso_z(offending.time)}"
+        )
+
+    return len(leading)
 
 
 def acquire_stream(
@@ -464,6 +489,7 @@ def acquire_stream(
     windows = plan_windows(start_utc, end_utc, tf, max_candles_per_request)
     parsed_chunks: list[list[Candle]] = []
     http_attempts = 0
+    provider_leading_overlaps = 0
 
     for index, (window_start, window_end) in enumerate(windows):
         path_and_query = request_path(normalized_pair, tf, window_start, window_end)
@@ -480,7 +506,7 @@ def acquire_stream(
             sleep_fn=sleep_fn,
         )
         http_attempts += attempts
-        _validate_chunk_window(
+        provider_leading_overlaps += _validate_chunk_window(
             parsed,
             pair=normalized_pair,
             timeframe=tf,
@@ -509,6 +535,7 @@ def acquire_stream(
         "first_time": iso_z(filtered[0].time),
         "last_time": iso_z(filtered[-1].time),
         "boundary_duplicates_removed": duplicate_count,
+        "provider_leading_overlaps_observed": provider_leading_overlaps,
         "spacing_gaps": gaps,
         "max_gap_seconds": max_gap,
         "csv": csv_path.relative_to(dataset_root).as_posix(),
