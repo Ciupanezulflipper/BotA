@@ -47,8 +47,11 @@ RECENT_CANCELLED=1
 RECENT_TOTAL_PIPS=-71.40
 LOCAL_LEDGER_ROWS=51
 LOCAL_LEDGER_JOINED_COMPONENT_ROWS=51
+LOCAL_LEDGER_JOIN_RATE=100_PERCENT
 MARCH_TOTAL_PIPS=-264.1
 MARCH_ADX_LT30_PIPS=+98.0
+MARCH_SCORE70_ADX_LT30_PIPS=+174.2
+MARCH_SCORE70_ADX_LT30_WR=75.0_PERCENT
 TEMPORAL_MATCHED=9_OF_13
 TEMPORAL_MATCH_RATE=69.2_PERCENT
 TEMPORAL_MATCHED_BASELINE_PIPS=-70.2
@@ -61,13 +64,16 @@ STRATEGY_MUTATION_ALLOWED=NO_PENDING_UNMATCHED_RECOVERY_OR_TRUE_REPLAY
 ## Canonical error index
 
 ### E001 — Scope branching
-Repository, runtime, documentation, deployment, and strategy work were mixed. Prevention: one phase and acceptance gate per package.
+Repository, runtime, documentation, deployment, and strategy work were mixed.
+Prevention: one phase, evidence domain, and acceptance gate per package.
 
 ### E003 — Duplicate execution sources
-Cron, runit, boot files, and wrappers could own the same component. Prevention: prove one execution source for every component.
+Cron, runit, boot files, and wrappers could own the same component.
+Prevention: prove one execution source for every component.
 
 ### E004 — Dead manager with orphaned supervisors
-A manager died while child `runsv` processes survived under PID 1. Prevention: verify manager, parentage, ownership, and restart capability together.
+A manager died while child `runsv` processes survived under PID 1.
+Prevention: verify manager, parentage, ownership, and restart capability together.
 
 ### E007 — Recursive scan entered runit FIFOs
 Prevention: whitelist regular files and exclude supervise directories.
@@ -103,7 +109,7 @@ Prevention: manager existence and service ownership are separate gates.
 Prevention: no continuous recovery without executable-path proof, locking, backoff, kill switch, failure injection, and restart observation.
 
 ### E040 — D1 mismatch survived broad discovery
-Status: CLOSED. `tf_minutes("D1")` returns 1440 on the phone.
+Status: CLOSED. `tf_minutes("D1")` now returns 1440 on the phone.
 
 ### E043 — Supervisor wrapper contradicted disabled-recovery policy
 Status: CLOSED for that wrapper path.
@@ -114,87 +120,205 @@ Prevention: strict mode only inside a bounded child process.
 ### E046 — Active service path assumed to be repository path
 Prevention: compare realpath, mode, and checksum before deployment.
 
-### E047 — Runtime work obscured signal-throughput acceptance
-Recorded: 2026-08-07. 1427 valid BUY/SELL -> 903 score rejects -> 410 H1-neutral rejects -> 4 H4+D1 rejects -> 110 accepted.
+### E047 — Runtime work obscured the signal-throughput acceptance criterion
+Recorded: 2026-08-07.
+
+```text
+1427 valid BUY/SELL
+903 rejected by M15 score gate
+410 rejected by H1-neutral veto
+4 rejected by H4+D1 opposition
+110 strategy-accepted
+```
 
 ### E048 — Zero-entry symptom almost promoted to root cause
-Recorded: 2026-08-07. `zero_entry_buy_sell_rows=0`. Zero entry is a HOLD symptom.
+Recorded: 2026-08-07.
+
+```text
+zero_entry_buy_sell_rows=0
+```
+
+Verdict: zero entry is a HOLD symptom, not the root cause of lost BUY/SELL signals.
 
 ### E049 — Ad-hoc CSV audit used the wrong field name
-Recorded: 2026-08-07. Prevention: validate required headers and fail closed.
+Recorded: 2026-08-07.
+Prevention: validate required headers and fail closed.
 
 ### E050 — Pager captured a large Git forensic command
-Recorded: 2026-08-07. Prevention: disable pagers and keep output bounded.
+Recorded: 2026-08-07.
+Prevention: disable pagers and keep output bounded.
 
 ### E051 — Legacy alerts header with newer 25-column rows
-Recorded: 2026-08-07. Prevention: explicit schema/version migration or a versioned decision ledger.
+Recorded: 2026-08-07.
+Prevention: explicit schema/version migration or a versioned decision ledger.
 
 ### E052 — Documentation connector direct-main process violation
-Recorded: 2026-08-07. Prevention: always create/verify branch before write; never use `main` as fallback.
+Recorded: 2026-08-07.
+Prevention: always create/verify branch before write; never use `main` as fallback.
 
 ### E053 — Strategy and Telegram use different score floors
-Recorded: 2026-08-07. `FILTER_SCORE_MIN_ALL=65`, `TELEGRAM_MIN_SCORE=70`. Historical delivered `<70` evidence is poor, so lowering Telegram is not supported.
+Recorded: 2026-08-07.
+
+```text
+FILTER_SCORE_MIN_ALL=65
+TELEGRAM_MIN_SCORE=70
+```
+
+Historical delivered `<70` evidence is poor, so lowering the Telegram floor is not supported.
 
 ### E054 — Thirty-minute Telegram cooldown suppresses accepted events
-Recorded: 2026-08-07. `38/106` matched accepted events were cooldown-suppressed.
+Recorded: 2026-08-07.
+
+```text
+TELEGRAM_COOLDOWN_SECONDS=1800
+TELEGRAM_COOLDOWN_EVENTS=38_OF_106_MATCHED_ACCEPTED
+```
 
 ### E055 — Live pair universe contains only two pairs
-Recorded: 2026-08-07. `PAIRS=EURUSD GBPUSD`.
+Recorded: 2026-08-07.
 
-### E056 — Accepted CSV count exceeds retained matched delivery count
-Recorded: 2026-08-07. 110 accepted CSV rows vs 106 retained matched log events; four delivery outcomes remain unknown.
+```text
+PAIRS=EURUSD GBPUSD
+TIMEFRAMES=M15
+```
+
+### E056 — Accepted CSV count exceeds matched retained delivery-log count
+Recorded: 2026-08-07.
+
+```text
+CSV_ACCEPTED_BUY_SELL_TOTAL=110
+MATCHED_ACCEPTED_LOG_EVENTS=106
+UNMATCHED_ACCEPTED_ROWS=4
+```
 
 ### E057 — Cooldown non-equality almost promoted to proof of new trades
-Recorded: 2026-08-07 17:54 UTC. All 38 cooldown rows remained the same direction as the preceding sent event.
+Recorded: 2026-08-07 17:54 UTC.
+
+```text
+COOLDOWN_TOTAL=38
+EXACT_DUPLICATE=0
+NOT_EXACT_DUPLICATE=38
+DIRECTION_CHANGED=0
+```
+
+All 38 remained the same direction as the preceding sent event.
 
 ### E058 — Recent high scores do not imply recent positive edge
-Recorded: 2026-08-07. 13 recent BotA M15 outcomes = 3W/9L/1C, -71.40 pips.
+Recorded: 2026-08-07.
+
+```text
+TOTAL=13
+WINS=3
+LOSSES=9
+CANCELLED=1
+TOTAL_PIPS=-71.40
+75-84_TOTAL_PIPS=-36.40
+85+_TOTAL_PIPS=-35.00
+```
 
 ### E059 — Local signal ledger is stale and narrow
-Recorded: 2026-08-07 18:09 UTC. 51 rows from 2026-03-09 through 2026-03-10 only.
+Recorded: 2026-08-07 18:09 UTC.
 
-### E060 — Score magnitude is not calibrated in the March component sample
-Recorded: 2026-08-07 18:15 UTC. `85+` = 17.6% WR, -137.9 pips.
+```text
+LEDGER_ROWS=51
+WIN=13
+LOSS=38
+FIRST=2026-03-09T21:45:07+02:00
+LAST=2026-03-10T15:15:07+02:00
+```
+
+Prevention: always report first/last timestamps and coverage span before using a local outcome ledger.
+
+### E060 — Score magnitude is inversely calibrated in the March component sample
+Recorded: 2026-08-07 18:15 UTC.
+
+```text
+<70:   WR=18.2% PIPS=-83.5
+70-74: WR=50.0% PIPS=+2.1
+75-84: WR=31.6% PIPS=-44.8
+85+:   WR=17.6% PIPS=-137.9
+```
+
+Prevention: never assume a higher handcrafted score is better until score buckets are calibrated against realized outcomes.
 
 ### E061 — ADX reward appears directionally wrong in the March sample
-Recorded: 2026-08-07 18:15 UTC. ADX 20-29 = +98.0 pips; ADX 30-39 = -319.1 pips.
+Recorded: 2026-08-07 18:15 UTC.
+
+```text
+ADX_20_29: n=17 WR=52.9% PIPS=+98.0
+ADX_30_39: n=26 WR=7.7% PIPS=-319.1
+ADX_40_PLUS: n=8 WR=25.0% PIPS=-43.0
+```
+
+Current scoring awards maximum ADX contribution for ADX >=30. Prevention: treat trend-strength scoring as potentially non-linear and validate against realized outcomes.
 
 ### E062 — RSI extremity reward conflicts with March outcomes
-Recorded: 2026-08-07 18:15 UTC. Extreme RSI = -229.2 pips; stretched RSI = +69.4 pips.
+Recorded: 2026-08-07 18:15 UTC.
+
+```text
+RSI_EXTREME: n=18 WR=11.1% PIPS=-229.2
+RSI_STRETCHED: n=11 WR=45.5% PIPS=+69.4
+RSI_MODERATE: n=22 WR=27.3% PIPS=-104.3
+```
+
+Prevention: separate momentum strength from entry quality; do not monotonically reward overextension without outcome calibration.
 
 ### E063 — In-sample counterfactual can look perfect without proving edge
-Recorded: 2026-08-07 18:38 UTC. A 7/7 subset was discovered and evaluated on the same data; it is not production validation.
+Recorded: 2026-08-07 18:38 UTC.
+
+The same 51-row March sample used to discover the ADX/RSI relationship produced:
+
+```text
+BASELINE: N=51 W=13 L=38 WR=25.5% PIPS=-264.1
+ADX<30: N=17 W=9 L=8 WR=52.9% PIPS=+98.0
+SCORE>=70 + ADX<30: N=12 W=9 L=3 WR=75.0% PIPS=+174.2
+SCORE>=70 + ADX<30 + NO_EXTREME: N=7 W=7 L=0 WR=100.0% PIPS=+171.0
+```
+
+The 7/7 subset is not production validation. It is a small in-sample subset chosen after observing the same data.
+
+Prevention: freeze candidate rules and validate on a separate unseen historical period before mutation.
 
 ### E064 — ADX 30-39 failure persists across RSI states in March sample
-Recorded: 2026-08-07 18:38 UTC. The 30-39 band was poor in moderate, stretched, and extreme RSI subgroups.
+Recorded: 2026-08-07 18:38 UTC.
 
-### E065 — Later-period ADX cross-check is directionally positive but incomplete
+```text
+30-39/MODERATE: n=8 W=0 L=8 PIPS=-122.4
+30-39/STRETCHED: n=8 W=2 L=6 PIPS=-14.4
+30-39/EXTREME: n=10 W=0 L=10 PIPS=-182.3
+```
+
+This strengthens the directional ADX concern because poor results are not confined to one RSI subgroup. It still does not establish a final production threshold.
+
+### E065 — Later-period ADX cross-check supports the same direction but coverage is incomplete
 Recorded: 2026-08-07 18:46 UTC.
 
 ```text
 PUBLISHED=13
 MATCHED=9
+UNMATCHED=4
 MATCH_RATE=69.2%
-MATCHED_BASELINE: 2W/7L, -70.2 pips
-SCORE>=70 + ADX<30: 2W/3L, +13.1 pips
-SCORE>=70 + ADX<30 + NO_EXTREME: 2W/2L, +28.9 pips
-ADX>=30 matched rows: 0W/4L, -83.3 pips
+MATCHED_BASELINE: N=9 W=2 L=7 PIPS=-70.2
+SCORE>=70 + ADX<30: N=5 W=2 L=3 PIPS=+13.1
+SCORE>=70 + ADX<30 + NO_EXTREME: N=4 W=2 L=2 PIPS=+28.9
+ADX_30_39: N=3 W=0 L=3 PIPS=-57.4
+ADX_40_PLUS: N=1 W=0 L=1 PIPS=-25.9
 ```
 
-Interpretation: this later subset supports the March ADX concern but does not satisfy full out-of-sample validation because four published signals lack matched retained local component rows.
+All four matched ADX >=30 rows lost, totaling -83.3 pips. The later subset independently points in the same direction as March, but 9/13 coverage is insufficient to approve a production rule.
 
-Prevention: do not approve a production threshold from partial later-period coverage.
+Prevention: resolve unmatched component rows or record the retention gap before claiming out-of-sample validation.
 
-### E066 — Supabase `created_at` is not proven to be BotA decision time
+### E066 — Supabase `created_at` is not proven to equal BotA decision time
 Recorded: 2026-08-07.
 
-Exact read-only Supabase rows were re-queried. Several signals already matched by pair/entry/score have `created_at` timestamps that do not equal the local watcher decision timestamps.
+Exact read-only Supabase rows were re-queried. Several already-matched signals have `created_at` values that do not equal the local watcher decision timestamps.
 
-Prevention: treat Supabase `created_at` as publication/storage timing until semantics are proven; never use it as the sole signal join key.
+Prevention: treat Supabase `created_at` as publication/storage timing until its semantics are proven; never use it as the sole join key.
 
-## Current exact evidence
+## Current exact funnel
 
-Strategy funnel:
+Strategy:
 
 ```text
 SCORE_GATE=903
@@ -210,6 +334,16 @@ TELEGRAM_SENT=61
 TELEGRAM_COOLDOWN=38
 TELEGRAM_SCORE_GATE=6
 TELEGRAM_FAILED=1
+```
+
+Recent outcome quality:
+
+```text
+13 BotA M15 signals since 2026-06-01
+3 wins
+9 losses
+1 cancelled
+-71.40 pips
 ```
 
 Cross-period ADX evidence:
@@ -233,9 +367,9 @@ June-July matched ADX>=30=0W/4L, -83.3 pips
 7. Full-file replacement for approved mutation.
 8. Date every material finding in UTC.
 9. Branch -> verified diff -> PR; never direct-main fallback.
-10. Freeze candidate rules before later-period testing.
-11. Resolve unmatched records before claiming out-of-sample validation.
+10. Freeze candidate rules before out-of-sample testing.
+11. Resolve unmatched records before claiming temporal validation.
 
 ## Exactly one next action
 
-Resolve the four unmatched June 23-26 published signals against retained local alerts with relaxed matching. If the rows are absent, record the retention gap and proceed to a true historical replay using raw candles and the live scoring path. No production strategy mutation until then.
+Resolve the four unmatched June 23-26 published signals against retained local alerts with relaxed matching. If the component rows are absent, record the retention gap and proceed to a true historical replay using raw candles and the live scoring path. No production strategy mutation until this validation is complete.
