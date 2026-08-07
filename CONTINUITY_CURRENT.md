@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: **2026-08-07 23:05 UTC**
+Last updated: **2026-08-07 23:26 UTC**
 
 ## Authoritative identifiers
 
@@ -8,14 +8,29 @@ Last updated: **2026-08-07 23:05 UTC**
 RECORDED_DATE=2026-08-07
 PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_HEAD=73b2306b5843f3396823ce815e96051abf78cf50
-GITHUB_MAIN_BASE=22a6238c40a6dbbb65c15c42b908c5df5753a288
-REPLAY_BRANCH=feat/deterministic-production-replay-20260807
-REPLAY_PR=64
+GITHUB_MAIN=6b437179cc58021aa358b1d0b04c121d9304c660
+PHASE1_PR=64
+PHASE1_FINAL_HEAD=ff77b2cc05b4c0bffe0ac13893ae6431264e08d8
+PHASE1_MERGE=6b437179cc58021aa358b1d0b04c121d9304c660
 CURRENT_NATIVE_MANAGER_PID=31140
 CURRENT_SERVICE_DAEMON_PIDFILE=31140
 ```
 
+## Current investigation state
+
+```text
+HISTORICAL_DATA_PHASE=CLOSED_PASS
+DETERMINISTIC_REPLAY_HARNESS_PHASE=CLOSED_PASS
+FULL_JUNE_JULY_REPLAY_PHASE=NEXT
+ROBUSTNESS_FINAL_VERDICT_PHASE=PENDING
+PRODUCTION_STRATEGY_MUTATION_ALLOWED=NO
+```
+
+BotA can emit signals. The current investigation is signal quality/calibration, not basic Telegram transport or historical-data availability.
+
 ## Runtime and live scope
+
+Latest verified effective settings:
 
 ```text
 manager_count=1
@@ -37,7 +52,7 @@ DRY_RUN_MODE=0
 TELEGRAM_ENABLED=1
 ```
 
-Runtime ownership remains degraded, but the watcher is producing decisions and Telegram transport is proven to work. Only two pairs are live. Runtime ownership is not the current signal-quality bottleneck.
+Runtime ownership remains degraded, but it is not the current signal-quality bottleneck. Only two pairs are live.
 
 ## Proven signal funnel
 
@@ -58,9 +73,9 @@ Retained accepted-to-Telegram outcomes:
 1 send failure
 ```
 
-BotA can emit signals. The investigation is signal quality/calibration, not basic Telegram transport.
+Cooldown audit showed all 38 retained cooldown blocks were non-exact updates; this does not prove they were independent trades and does not justify removing cooldown wholesale.
 
-## Outcome evidence
+## Outcome evidence motivating replay
 
 Supabase BotA M15 published outcomes on/after 2026-06-01:
 
@@ -78,7 +93,10 @@ March local ledger joined 51/51 to score components:
 BASELINE: N=51 W=13 L=38 PIPS=-264.1
 ADX<30: N=17 W=9 L=8 PIPS=+98.0
 SCORE>=70 + ADX<30: N=12 W=9 L=3 PIPS=+174.2
+SCORE>=70 + ADX<30 + NO_EXTREME: N=7 W=7 L=0 PIPS=+171.0
 ```
+
+The 7/7 March subgroup is explicitly treated as overfit-risk, not as a 100%-win strategy claim.
 
 Later June-July component cross-check recovered 9/13 published signals:
 
@@ -87,124 +105,55 @@ MATCHED_BASELINE: N=9 W=2 L=7 PIPS=-70.2
 SCORE>=70 + ADX<30: N=5 W=2 L=3 PIPS=+13.1
 SCORE>=70 + ADX<30 + NO_EXTREME: N=4 W=2 L=2 PIPS=+28.9
 ADX>=30 within matched sample: 0W / 4L / -83.3 pips
+MATCH_RATE=69.2%
 ```
 
-These observations justify testing ADX/RSI calibration. They are not production approval.
+This is enough to justify replay-testing ADX/RSI calibration but not enough for production approval.
 
-## Local retention gap — closed by immutable acquisition
+## Frozen candidate policies
 
-The four unmatched June 23-26 published outcomes could not be reconstructed from retained `logs/alerts.csv`.
-
-Verified rolling live candle coverage on 2026-08-07 19:10:26 UTC for both pairs was insufficient for a full June-July replay:
+These were fixed before observing full June-July replay results:
 
 ```text
-M15: 499 rows, 2026-07-31 15:00 UTC -> 2026-08-07 19:30 UTC
-H1 : 499 rows, 2026-07-10 00:00 UTC -> 2026-08-07 18:00 UTC
-H4 : 499 rows, 2026-04-14 13:00 UTC -> 2026-08-07 13:00 UTC
-D1 : 499 rows, 2024-09-02 21:00 UTC -> 2026-08-05 21:00 UTC
+A = current production acceptance
+B = A AND score >=70 AND ADX <30
+C = B AND no extreme RSI
+
+SELL extreme RSI <=30
+BUY  extreme RSI >=70
 ```
 
-Standalone M15 files contain only 2026-02-27 through 2026-03-06. This local-retention limitation is now superseded for replay purposes by the verified immutable r3 dataset below.
+Do not move these thresholds after seeing replay results and then describe the result as the original test.
 
-## Historical acquisition package
+## Historical-data phase — closed PASS
 
-Canonical acquisition/verifier paths:
+Retained rolling live data was insufficient for full June-July replay. The immutable acquisition package was built and verified through PRs #57, #59, #60, #61 and #62.
+
+Relevant later merge identifiers:
 
 ```text
-tools/fetch_historical_candles.py
-tools/verify_replay_dataset.py
-tests/test_fetch_historical_candles.py
-tests/test_verify_replay_dataset.py
-.github/workflows/historical-candle-acquisition.yml
+PR #60 provider-aligned leading candle fix=8e746e554b1d754f9e427a80eab3cc694871dc08
+PR #61 transient transport retry fix=ce7d2bc097f2130f663193d49e5e97c62bcf2095
+PR #62 reusable replay dataset verifier=be8ab1cc903f8c8b88c1c6fa7a358348f5786c1b
 ```
 
-Collector contract after PR #61:
+Two failed immutable roots remain forensic evidence:
 
 ```text
-DEFAULT_MODE=PREVIEW_NO_NETWORK
-EXECUTION_REQUIRES=--execute
-OUTPUT_NAMESPACE=data/replay/<dataset-id>
-OUTPUT_IMMUTABLE=YES
-PRODUCTION_CACHE_TOUCHED=NO
-OANDA_PRICE=M
-PAIRS=EURUSD GBPUSD
-TIMEFRAMES=M15 H1 H4 D1
-RAW_RESPONSES_PRESERVED=YES
-RETRYABLE_HTTP=429_AND_5XX
-RETRYABLE_TRANSPORT=OSError_AND_HTTPException
-MAX_HTTP_ATTEMPTS=3
-RETRY_BACKOFF_SECONDS=0.5
-MANIFEST_SHA256=YES
-PROVIDER_ALIGNED_LEADING_CANDLE=ONE_OVERLAPPING_ALLOWED
+data/replay/oanda-20260601-20260801-20260807/
+data/replay/oanda-warmup-20240101-20260801-20260807-r2/
 ```
 
-Key merges:
+Canonical successful replay input:
 
 ```text
-PR #60 alignment fix: 8e746e554b1d754f9e427a80eab3cc694871dc08
-PR #61 transport retry: ce7d2bc097f2130f663193d49e5e97c62bcf2095
-PR #62 replay verifier: be8ab1cc903f8c8b88c1c6fa7a358348f5786c1b
+DATASET_ID=oanda-warmup-20240101-20260801-20260807-r3
+RAW_RANGE=[2024-01-01T00:00:00Z,2026-08-01T00:00:00Z)
+EVALUATION_RANGE=[2026-06-01T00:00:00Z,2026-08-01T00:00:00Z)
+REPLAY_DATASET_ELIGIBLE=YES
 ```
 
-## Historical dataset attempt 1 — boundary failure preserved
-
-Recorded: **2026-08-07 20:10:49 UTC**.
-
-```text
-dataset=data/replay/oanda-20260601-20260801-20260807/
-COLLECTOR_EXECUTION=FAIL
-ERROR_TYPE=ValueError
-ERROR=OANDA returned candle outside requested chunk for EURUSD H4: 2026-05-31T21:00:00Z
-FAILED_EVIDENCE_PRESERVED=YES
-```
-
-Classification: provider-aligned H4 leading candle overlapped request start. Fixed by PR #60 without weakening other boundary checks.
-
-## Replay warm-up requirement
-
-`tools/build_indicators.py` uses:
-
-```text
-SAFE_WINDOW=500
-validate_tf_window=200
-min_bars=60
-EMA9 EMA21 RSI14 MACD12/26/9 ADX14 ATR14 BB20
-```
-
-A raw dataset beginning exactly on 2026-06-01 would therefore be under-warmed for early-June decisions.
-
-Selected raw/evaluation ranges:
-
-```text
-raw_range=[2024-01-01T00:00:00Z, 2026-08-01T00:00:00Z)
-replay_evaluation=[2026-06-01T00:00:00Z, 2026-08-01T00:00:00Z)
-```
-
-No-network warm-up preview passed at **2026-08-07 20:25:37 UTC** with 8 streams and 60 planned requests.
-
-## Historical dataset attempt 2 — transient TLS failure preserved
-
-Recorded start: **2026-08-07 20:29:19 UTC**.
-
-```text
-dataset=data/replay/oanda-warmup-20240101-20260801-20260807-r2/
-COLLECTOR_EXECUTION=FAIL
-FAILED_EVIDENCE_PRESERVED=YES
-ERROR_TYPE=SSLEOFError
-ERROR=[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1032)
-PRODUCTION_CACHE_UNCHANGED=YES
-ACQUISITION_STATUS=FAIL
-```
-
-Classification: transient transport-resilience gap. Fixed by PR #61 with bounded retry and immutable transport-error metadata.
-
-The earlier wrapper printed `GIT_WORKTREE_STATUS_UNCHANGED=NO` because it compared untracked replay artifacts as well as tracked files; the production candle-cache SHA-256 remained identical. Later wrappers corrected this by comparing tracked diffs separately.
-
-## Historical dataset attempt 3 — PASS / replay eligible
-
-Pinned-source acquisition used exact PR #62 merge code over HTTPS after a non-mutating phone Git SSH fetch attempt was aborted by a transient `Connection closed ... port 443` error.
-
-Pinned source proof:
+Pinned acquisition-source proof:
 
 ```text
 SOURCE_COMMIT=be8ab1cc903f8c8b88c1c6fa7a358348f5786c1b
@@ -215,13 +164,7 @@ VERIFIER_ACTUAL_BLOB=04dff84cbbd1a86a5508282f09b12726744778eb
 SOURCE_INTEGRITY=PASS
 ```
 
-Dataset:
-
-```text
-data/replay/oanda-warmup-20240101-20260801-20260807-r3/
-```
-
-Final acquisition/integrity verdict:
+Final r3 integrity verdict:
 
 ```text
 COLLECTOR_EXECUTION=PASS
@@ -237,7 +180,7 @@ ACQUISITION_STATUS=PASS
 REPLAY_DATASET_ELIGIBLE=YES
 ```
 
-Verified stream coverage:
+Per-stream coverage:
 
 ```text
 EURUSD D1  rows=670   warmup=626   evaluation=44   requests=1  attempts=1
@@ -250,29 +193,11 @@ GBPUSD H4  rows=4020  warmup=3751  evaluation=269  requests=2  attempts=2
 GBPUSD M15 rows=64306 warmup=59998 evaluation=4308 requests=21 attempts=21
 ```
 
-Every successful r3 provider request completed on its first HTTP attempt. Historical-data acquisition/integrity is now **closed**; do not reacquire another dataset for this June-July replay unless r3 itself is later proven corrupt.
+All r3 provider requests completed on their first HTTP attempt. Do not reacquire another June-July dataset unless r3 itself is later proven corrupt.
 
-## Failed dataset disposition
+## Deterministic replay harness — Phase 1 closed PASS
 
-Both failed roots remain immutable forensic evidence and are not replay inputs:
-
-```text
-data/replay/oanda-20260601-20260801-20260807/
-data/replay/oanda-warmup-20240101-20260801-20260807-r2/
-```
-
-The successful r3 root is the canonical replay input.
-
-## Deterministic production-rule replay — Phase 1 in progress
-
-PR #64:
-
-```text
-branch=feat/deterministic-production-replay-20260807
-base=22a6238c40a6dbbb65c15c42b908c5df5753a288
-```
-
-Harness paths:
+PR #64 introduced:
 
 ```text
 tools/replay_semantics.py
@@ -281,57 +206,114 @@ tests/test_deterministic_replay.py
 audits/DETERMINISTIC_REPLAY_HARNESS_2026-08-07.md
 ```
 
-The harness is read-only with respect to production state. It uses completed candles only, reuses production Python indicator/quality/SR math, reconstructs historical market/session semantics, and freezes candidate policies before observing full June-July replay outcomes:
+Final immutable proof:
 
 ```text
-A = current production acceptance
-B = A AND score >=70 AND ADX <30
-C = B AND no extreme RSI
+PR=64
+FINAL_PR_HEAD=ff77b2cc05b4c0bffe0ac13893ae6431264e08d8
+MERGE_COMMIT=6b437179cc58021aa358b1d0b04c121d9304c660
+MAIN_AFTER_MERGE=6b437179cc58021aa358b1d0b04c121d9304c660
+CHANGED_FILES=7
+BEHIND_MAIN_BEFORE_MERGE=0
 ```
 
-Extreme RSI remains frozen as:
+Exact final-head gates:
 
 ```text
-SELL extreme: RSI <=30
-BUY extreme: RSI >=70
+HISTORICAL_AND_REPLAY_CI=PASS
+CI_RUN_NUMBER=39
+CI_RUN_ID=31226834369
+
+SECURITY_SCAN=PASS
+SECURITY_RUN_NUMBER=1065
+SECURITY_RUN_ID=31226834370
+
+DEEPSOURCE_PYTHON=PASS
+DEEPSOURCE_SHELL=PASS
+DEEPSOURCE_SECRETS=PASS
+CODERABBIT=SUCCESS
+
+SONAR_CHECK_ID=93022819471
+SONAR_QUALITY_GATE=PASS
+SONAR_NEW_ISSUES=0
+SONAR_SECURITY_HOTSPOTS=0
 ```
 
-Replay grade is intentionally declared as:
+All final review threads were resolved before merge. The merge was executed with `expected_head_sha=ff77b2cc05b4c0bffe0ac13893ae6431264e08d8`.
+
+Detailed immutable proof:
+
+```text
+audits/DETERMINISTIC_REPLAY_PHASE1_PROOF_2026-08-07.md
+```
+
+## Replay fidelity contract
+
+Replay grade:
 
 ```text
 DETERMINISTIC_PRODUCTION_RULES_WITH_PROVIDER_SUBSTITUTION
 ```
 
-because historical `emit_snapshot.py` H4/D1 provider responses from TwelveData/Yahoo cannot be recreated byte-for-byte. The exact vote formula is applied to the verified historical OANDA H4/D1 bundles instead.
+The harness:
 
-The historical writer/values for runtime `cache/d1_trend_<PAIR>.json` are not established in tracked evidence. Baseline replay therefore uses the scoring engine's fail-open `ANY` behavior; EMA is available only as a separate sensitivity mode.
+- uses completed candles only; no future H1/H4/D1 candle is exposed to an earlier M15 decision;
+- reuses production `build_indicators.py`, `quality_filter.py` and `sr_score.py` math;
+- reconstructs historical UTC market-hours and session-score semantics;
+- reproduces current 1.0 ATR pullback buffer;
+- reproduces ADX<20 hard HOLD and current scoring components;
+- preserves the production ADX-block numeric `volatility=0.0` quirk;
+- reproduces H1 neutral/opposite logic and H4+D1 veto structure;
+- performs no provider, Telegram, Supabase, service, cron, cooldown, production-cache or strategy mutation.
 
-## New Phase-1 code finding — H1 opposite override cannot use raw ADX as written
+Exact historical `emit_snapshot.py` TwelveData/Yahoo responses were not retained. Replay therefore applies the same vote formula to verified OANDA H4/D1 bundles and declares that provider substitution explicitly.
 
-Current `m15_h1_fusion.sh` consumes:
+Historical `cache/d1_trend_<PAIR>.json` values/writer are not established in tracked evidence. Baseline replay uses the scoring engine's fail-open `ANY`; EMA is sensitivity-only.
+
+## Pinned production-source provenance
+
+Replay verifies these source Git object IDs before executing:
+
+```text
+tools/scoring_engine.sh      09c42362a5c3c679696e86d4131ce5dfabd86608
+tools/m15_h1_fusion.sh       c1de0312ed928f870b9a45df109b730d30888ee7
+tools/quality_filter.py       18b76f908652d483c115c930373972836cea81dc
+tools/build_indicators.py     2abce4a325d6d9da8bb0958b97a651d4288e1792
+tools/sr_score.py             616b996a8ce439a19483762645a2247ca96fd066
+tools/market_open.sh          a73ca97f3a63c3245311585e231e5e69eaffc506
+tools/emit_snapshot.py        425c9adace57956981cf7e3111fd5df504c4f1ca
+```
+
+`tools/deterministic_replay.py` resolves Git to an absolute executable and uses `git hash-object --no-filters` to compare the actual source files against this map before replay. It also re-runs the canonical dataset verifier and records SHA-256 of the exact r3 `manifest.json` bytes.
+
+## New live-code finding from Phase 1
+
+Current `m15_h1_fusion.sh` reads top-level:
 
 ```text
 .adx // 0
 ```
 
-for its H1-opposite override, while current `scoring_engine.sh` does not emit a top-level `adx` field. It embeds ADX in reasons; later observability fields expose raw ADX, but the JSON field read by this override is absent.
+for the H1-opposite override. Current `scoring_engine.sh` does not emit a top-level `adx` field. Therefore the intended `ADX>=40` opposite-trend override receives `0` and cannot activate as written under the inspected production contract.
 
-Under the inspected production contract, this particular override therefore receives `0` and cannot activate via the intended `ADX>=40` condition. The replay deliberately reproduces that behavior. No production fix is included in Phase 1.
+Replay reproduces this behavior. Production is **not** changed yet.
 
-## PR #64 proof status
+## Scope lock
 
-On intermediate head `d83700d84f8be666a6a3a050d7c9f682c830bf91`:
+Until replay + robustness evidence completes:
 
 ```text
-HISTORICAL_ACQUISITION_AND_REPLAY_CI=PASS
-SECURITY_SCAN=PASS
-DEEPSOURCE_SHELL=PASS
-DEEPSOURCE_SECRETS=PASS
-DEEPSOURCE_PYTHON=FAIL
-SONAR_QUALITY_GATE=PASS_BUT_10_NEW_MAINTAINABILITY_ISSUES
+DO_NOT_LOWER_SCORE_FLOOR=YES
+DO_NOT_LOWER_H1_FLOOR=YES
+DO_NOT_CHANGE_TELEGRAM_FLOORS=YES
+DO_NOT_REMOVE_COOLDOWN=YES
+DO_NOT_ADD_THIRD_PAIR=YES
+DO_NOT_MUTATE_ADX_RULE=YES
+DO_NOT_MUTATE_RSI_RULE=YES
+DO_NOT_FIX_H1_ADX_OVERRIDE_IN_PRODUCTION_YET=YES
 ```
 
-The branch was **not merged** at that state. The Python findings were complexity/style findings in replay-only code, not production mutations. Refactoring is in progress and all final gate claims must be made only against the exact later PR head.
+`tools/backtest_bota.py` remains unsuitable as production-rule validation because its strategy/scoring path differs from the live watcher.
 
 ## Efficiency operating model
 
@@ -343,39 +325,37 @@ Supabase connector -> published signal/outcome truth
 Phone/Termux       -> runtime-only state, credentials, local-only evidence
 ```
 
-Do not issue ad-hoc phone probes for information available through connectors. Reusable tools replace disposable shell/Python probes.
+Do not re-probe facts already captured in canonical audits. Reusable tools replace disposable shell/Python probes.
 
-## Scope lock
+## Key evidence
 
-Do not lower score/H1/Telegram floors, remove cooldown, add a third pair, or mutate ADX/RSI scoring yet.
-
-Do not use `tools/backtest_bota.py` as production-rule validation because its strategy/scoring path differs from the live watcher.
-
-Never push directly to `main`; use branch -> complete-file writes -> verified diff -> PR.
-
-## Evidence
-
+- `audits/DETERMINISTIC_REPLAY_PHASE1_PROOF_2026-08-07.md`
 - `audits/DETERMINISTIC_REPLAY_HARNESS_2026-08-07.md`
+- `audits/HISTORICAL_CANDLE_ACQUISITION_2026-08-07.md`
 - `audits/REPLAY_DATASET_VERIFIER_2026-08-07.md`
 - `audits/HISTORICAL_ACQUISITION_TRANSPORT_FAILURE_2026-08-07.md`
 - `audits/HISTORICAL_ACQUISITION_RUNTIME_EDGE_2026-08-07.md`
-- `audits/HISTORICAL_CANDLE_ACQUISITION_2026-08-07.md`
 - `audits/HISTORICAL_ACQUISITION_RECONCILIATION_2026-08-07.md`
 - `audits/RAW_CANDLE_REPLAY_GAP_2026-08-07.md`
-- `docs/FORENSIC_OPERATING_MODEL.md`
 - `audits/LOCAL_RETENTION_GAP_2026-08-07.md`
 - `audits/JUNE_JULY_ADX_RSI_TEMPORAL_CROSSCHECK_2026-08-07.md`
 - `audits/ADX_RSI_COUNTERFACTUAL_2026-08-07.md`
 - `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
-- `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
-- `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
-- `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
-- `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
+- `docs/FORENSIC_OPERATING_MODEL.md`
 
-## Exactly one next action
+## Exactly one next action — Phase 2 deterministic execution gate
 
-Finish PR #64 refactoring and require the exact final head to pass replay/acquisition CI, Security Scan, DeepSource Python/Shell/Secrets, and Sonar with zero new material issues before merge.
+Run the exact merged replay harness **twice** against canonical r3 for the frozen June-July interval and require identical event bytes before interpreting strategy performance:
 
-After Phase 1 merges, run the deterministic harness **twice** against r3 and require identical event SHA-256 output before using the replay for the Phase-2 A/B/C outcome comparison.
+```text
+RUN1_EVENTS_SHA256 == RUN2_EVENTS_SHA256
+RUN1_SUMMARY_CORE == RUN2_SUMMARY_CORE
+EXPECTED_PRODUCTION_SOURCE_BLOBS == OBSERVED_PRODUCTION_SOURCE_BLOBS
+DATASET_MANIFEST_SHA256_PRESENT=YES
+PRODUCTION_CACHE_UNCHANGED=YES
+TRACKED_WORKTREE_UNCHANGED=YES
+```
 
-No production strategy mutation before Phase 2 and robustness validation.
+If determinism passes, compare replay reconstruction to known published signal evidence and evaluate A/B/C outcomes. That is Phase 2.
+
+No production strategy mutation before Phase 2 and the robustness/final-verdict phase.
