@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: 2026-08-07 18:46 UTC
+Last updated: 2026-08-07 18:58 UTC
 
 ## Authoritative identifiers
 
@@ -101,9 +101,7 @@ SCORE>=70 + ADX<30: N=12 W=9 L=3 PIPS=+174.2
 
 The March 7/7 no-extreme subset remains high overfit risk and is not production proof.
 
-## June-July temporal cross-check — 2026-08-07 18:46 UTC
-
-Frozen candidate rules were checked against a later production outcome period:
+## June-July temporal cross-check
 
 ```text
 PUBLISHED=13
@@ -117,18 +115,37 @@ ADX_30_39: N=3 W=0 L=3 PIPS=-57.4
 ADX_40_PLUS: N=1 W=0 L=1 PIPS=-25.9
 ```
 
-The later matched subset supports the same ADX concern as March: all matched ADX >=30 signals lost. But 9/13 coverage is insufficient for production approval.
+The later matched subset supports the same ADX concern as March, but 9/13 coverage is insufficient for production approval.
+
+## Local retention gap — verified 2026-08-07 18:58 UTC
+
+A wider local search was run for the four unmatched June 23-26 published outcomes:
+
+```text
+TARGETS_TOTAL=4
+TARGETS_WITH_NEARBY_ROWS=1
+TARGETS_WITH_RELAXED_MATCH=0
+TARGETS_WITH_RELAXED_COMPONENT_MATCH=0
+VERDICT=LOCAL_RETENTION_GAP_CONFIRMED
+```
+
+Three targets had no same-pair/same-direction M15 rows within +/-2 days. The only target with nearby rows had no plausible identity match. The missing component rows therefore cannot be recovered from the current retained `alerts.csv`.
+
+This closes the local-reconstruction branch of the investigation. The 9/13 June-July result remains directional evidence only.
 
 ## Supabase timestamp semantics caution
 
-Exact `created_at` values in `public.signals` were re-read on 2026-08-07. Several already-matched signals have Supabase creation times that do not equal local watcher decision timestamps. Treat `created_at` as publication/storage timing until proven otherwise; do not use it as the sole join key.
+`public.signals.created_at` is publication/storage timing unless proven otherwise. It does not reliably equal watcher decision time and must not be used as the sole join key.
 
 ## Scope lock
 
 Do not lower score/H1/Telegram thresholds, remove cooldown, add a third pair, or mutate ADX/RSI scoring yet.
 
+Do not use `tools/backtest_bota.py` as production-rule validation because its strategy/scoring path differs from the live watcher.
+
 ## Evidence
 
+- `audits/LOCAL_RETENTION_GAP_2026-08-07.md`
 - `audits/JUNE_JULY_ADX_RSI_TEMPORAL_CROSSCHECK_2026-08-07.md`
 - `audits/ADX_RSI_COUNTERFACTUAL_2026-08-07.md`
 - `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
@@ -144,4 +161,12 @@ Do not lower score/H1/Telegram thresholds, remove cooldown, add a third pair, or
 
 ## Exactly one next action
 
-Resolve the four unmatched June 23-26 published outcomes against retained local alert rows using relaxed matching. If those rows are absent, record the retention gap and move to a true historical replay using raw candles and the live scoring path.
+Run a true historical replay from raw candles through the live production scoring/fusion semantics with frozen candidates:
+
+```text
+A: current baseline
+B: score >=70 AND ADX <30
+C: score >=70 AND ADX <30 AND no extreme RSI
+```
+
+Compare retained signal count, win/loss, total pips, and preferably MAE/MFE. No production strategy mutation until this validation is complete.
