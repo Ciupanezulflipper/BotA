@@ -3,7 +3,7 @@ name: Historical candle acquisition
 on:
   push:
     branches:
-      - feat/historical-candle-acquisition-20260807
+      - main
     paths:
       - "tools/fetch_historical_candles.py"
       - "tests/test_fetch_historical_candles.py"
@@ -29,6 +29,8 @@ jobs:
       SUPABASE_SERVICE_KEY: ""
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
