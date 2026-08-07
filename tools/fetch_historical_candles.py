@@ -18,8 +18,10 @@ import math
 import os
 import re
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from itertools import pairwise
 from pathlib import Path
 from typing import Callable, Iterable, Mapping
 from urllib.parse import urlencode, urlsplit
@@ -32,6 +34,8 @@ DEFAULT_OANDA_URL = "https://api-fxpractice.oanda.com"
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 DATASET_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 DOTENV_KEYS = {"OANDA_API_TOKEN", "OANDA_API_URL"}
+MAX_HTTP_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = 0.5
 
 
 @dataclass(frozen=True)
@@ -56,6 +60,7 @@ class HttpResponse:
 
 
 Transport = Callable[[str, str, str, float], HttpResponse]
+SleepFn = Callable[[float], None]
 
 
 def utc_now() -> datetime:
@@ -152,17 +157,22 @@ def validate_base_url(base_url: str) -> str:
     return parsed.hostname
 
 
-def dataset_path_preview(repo_root: Path, dataset_id: str) -> Path:
-    """Validate a dataset id/path without creating directories."""
+def validate_dataset_id(dataset_id: str) -> str:
+    """Validate a dataset id without touching the filesystem."""
     if not DATASET_ID_RE.fullmatch(dataset_id):
         raise ValueError("dataset-id must match [A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+    return dataset_id
+
+
+def dataset_path_preview(repo_root: Path, dataset_id: str) -> Path:
+    """Validate a dataset id/path without creating directories."""
+    validate_dataset_id(dataset_id)
     return repo_root.resolve() / "data" / "replay" / dataset_id
 
 
 def dataset_path(repo_root: Path, dataset_id: str) -> Path:
     """Return a contained immutable dataset path below data/replay."""
-    if not DATASET_ID_RE.fullmatch(dataset_id):
-        raise ValueError("dataset-id must match [A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+    validate_dataset_id(dataset_id)
     root = repo_root.resolve()
     replay_root = root / "data" / "replay"
     replay_root.mkdir(parents=True, exist_ok=True)
@@ -347,11 +357,11 @@ def write_csv(path: Path, candles: list[Candle]) -> None:
 def gap_stats(candles: list[Candle], timeframe: str) -> tuple[int, int]:
     """Count spacing gaps without treating normal market closures as corruption."""
     expected = TF_SECONDS[normalize_tf(timeframe)]
-    gaps = [
-        int((right.time - left.time).total_seconds())
-        for left, right in zip(candles, candles[1:])
-        if int((right.time - left.time).total_seconds()) > expected
-    ]
+    gaps: list[int] = []
+    for left, right in pairwise(candles):
+        delta = int((right.time - left.time).total_seconds())
+        if delta > expected:
+            gaps.append(delta)
     return len(gaps), max(gaps, default=0)
 
 
@@ -363,6 +373,11 @@ def file_record(dataset_root: Path, path: Path) -> dict[str, object]:
         "bytes": len(data),
         "sha256": hashlib.sha256(data).hexdigest(),
     }
+
+
+def _retryable_status(status: int) -> bool:
+    """Return whether a bounded retry is appropriate for this HTTP status."""
+    return status == 429 or 500 <= status <= 599
 
 
 def acquire_stream(
@@ -377,33 +392,54 @@ def acquire_stream(
     timeout_seconds: float,
     max_candles_per_request: int,
     transport: Transport = https_transport,
+    sleep_fn: SleepFn = time.sleep,
 ) -> dict[str, object]:
     """Acquire and persist one pair/timeframe stream."""
     normalized_pair = normalize_pair(pair)
     tf = normalize_tf(timeframe)
     windows = plan_windows(start_utc, end_utc, tf, max_candles_per_request)
     parsed_chunks: list[list[Candle]] = []
+    http_attempts = 0
 
     for index, (window_start, window_end) in enumerate(windows):
         path_and_query = request_path(normalized_pair, tf, window_start, window_end)
-        response = transport(base_url, path_and_query, token, timeout_seconds)
-        raw_path = dataset_root / "raw" / normalized_pair / tf / f"chunk-{index:04d}.json"
-        metadata_path = dataset_root / "metadata" / normalized_pair / tf / f"chunk-{index:04d}.json"
-        write_once(raw_path, response.body)
-        atomic_json_once(
-            metadata_path,
-            {
-                "request": {
-                    "method": "GET",
-                    "path_and_query": path_and_query,
-                    "authorization_redacted": True,
+        parsed: list[Candle] | None = None
+
+        for attempt in range(1, MAX_HTTP_ATTEMPTS + 1):
+            http_attempts += 1
+            response = transport(base_url, path_and_query, token, timeout_seconds)
+            stem = f"chunk-{index:04d}-attempt-{attempt:02d}"
+            raw_path = dataset_root / "raw" / normalized_pair / tf / f"{stem}.json"
+            metadata_path = dataset_root / "metadata" / normalized_pair / tf / f"{stem}.json"
+            write_once(raw_path, response.body)
+            atomic_json_once(
+                metadata_path,
+                {
+                    "request": {
+                        "method": "GET",
+                        "path_and_query": path_and_query,
+                        "authorization_redacted": True,
+                        "attempt": attempt,
+                    },
+                    "response": response_metadata(response),
                 },
-                "response": response_metadata(response),
-            },
-        )
-        if response.status < 200 or response.status >= 300:
-            raise RuntimeError(f"OANDA HTTP {response.status} for {normalized_pair} {tf} chunk {index}")
-        parsed = parse_oanda_payload(response.body)
+            )
+
+            if 200 <= response.status < 300:
+                parsed = parse_oanda_payload(response.body)
+                break
+
+            if not _retryable_status(response.status) or attempt == MAX_HTTP_ATTEMPTS:
+                raise RuntimeError(
+                    f"OANDA HTTP {response.status} for {normalized_pair} {tf} "
+                    f"chunk {index} attempt {attempt}"
+                )
+
+            sleep_fn(RETRY_BACKOFF_SECONDS * (2 ** (attempt - 1)))
+
+        if parsed is None:
+            raise RuntimeError(f"no successful response for {normalized_pair} {tf} chunk {index}")
+
         outside = [candle for candle in parsed if candle.time < window_start or candle.time > window_end]
         if outside:
             raise ValueError(
@@ -416,7 +452,7 @@ def acquire_stream(
     filtered = [c for c in reconciled if start_utc <= c.time < end_utc]
     if not filtered:
         raise ValueError(f"no complete candles returned for {normalized_pair} {tf}")
-    if any(left.time >= right.time for left, right in zip(filtered, filtered[1:])):
+    if any(left.time >= right.time for left, right in pairwise(filtered)):
         raise ValueError("candle timestamps are not strictly increasing")
 
     csv_path = dataset_root / "candles" / f"{normalized_pair}_{tf}.csv"
@@ -427,6 +463,7 @@ def acquire_stream(
         "timeframe": tf,
         "provider_granularity": TF_TO_GRANULARITY[tf],
         "request_count": len(windows),
+        "http_attempts": http_attempts,
         "rows": len(filtered),
         "first_time": iso_z(filtered[0].time),
         "last_time": iso_z(filtered[-1].time),
@@ -473,6 +510,83 @@ def build_preview(
     }
 
 
+def _normalize_scope(pairs: list[str], timeframes: list[str]) -> tuple[list[str], list[str]]:
+    """Normalize pair/timeframe scope and require both dimensions."""
+    normalized_pairs = list(dict.fromkeys(normalize_pair(pair) for pair in pairs))
+    normalized_tfs = list(dict.fromkeys(normalize_tf(tf) for tf in timeframes))
+    if not normalized_pairs or not normalized_tfs:
+        raise ValueError("at least one pair and timeframe are required")
+    return normalized_pairs, normalized_tfs
+
+
+def _acquire_all_streams(
+    *,
+    target: Path,
+    pairs: list[str],
+    timeframes: list[str],
+    start_utc: datetime,
+    end_utc: datetime,
+    base_url: str,
+    token: str,
+    timeout_seconds: float,
+    max_candles_per_request: int,
+    transport: Transport,
+    sleep_fn: SleepFn,
+) -> list[dict[str, object]]:
+    """Acquire every requested pair/timeframe stream into one dataset root."""
+    streams: list[dict[str, object]] = []
+    for pair in pairs:
+        for timeframe in timeframes:
+            streams.append(
+                acquire_stream(
+                    dataset_root=target,
+                    pair=pair,
+                    timeframe=timeframe,
+                    start_utc=start_utc,
+                    end_utc=end_utc,
+                    base_url=base_url,
+                    token=token,
+                    timeout_seconds=timeout_seconds,
+                    max_candles_per_request=max_candles_per_request,
+                    transport=transport,
+                    sleep_fn=sleep_fn,
+                )
+            )
+    return streams
+
+
+def _dataset_artifacts(target: Path) -> list[dict[str, object]]:
+    """Checksum all persisted data artifacts except terminal status documents."""
+    return [
+        file_record(target, path)
+        for path in sorted(target.rglob("*"))
+        if path.is_file() and path.name not in {"manifest.json", "FAILED.json"}
+    ]
+
+
+def _write_failure_marker(target: Path, dataset_id: str, exc: Exception, recorded_at: datetime | None) -> None:
+    """Best-effort immutable failure marker without masking the original error."""
+    failure = {
+        "schema_version": 1,
+        "dataset_id": dataset_id,
+        "status": "FAILED",
+        "recorded_at_utc": iso_z(recorded_at or utc_now()),
+        "error_type": type(exc).__name__,
+        "error": str(exc)[:500],
+        "production_cache_touched": False,
+    }
+    try:
+        atomic_json_once(target / "FAILED.json", failure)
+    except OSError as write_error:
+        print(
+            json.dumps(
+                {"status": "FAILURE_RECORD_UNWRITTEN", "error": str(write_error)[:200]},
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+
+
 def acquire_dataset(
     *,
     repo_root: Path,
@@ -486,16 +600,14 @@ def acquire_dataset(
     timeout_seconds: float = 30.0,
     max_candles_per_request: int = 4500,
     transport: Transport = https_transport,
+    sleep_fn: SleepFn = time.sleep,
     recorded_at: datetime | None = None,
 ) -> dict[str, object]:
     """Acquire a complete immutable replay dataset and checksum manifest."""
     if not token.strip():
         raise PermissionError("OANDA_API_TOKEN is missing")
     validate_base_url(base_url)
-    normalized_pairs = list(dict.fromkeys(normalize_pair(pair) for pair in pairs))
-    normalized_tfs = list(dict.fromkeys(normalize_tf(tf) for tf in timeframes))
-    if not normalized_pairs or not normalized_tfs:
-        raise ValueError("at least one pair and timeframe are required")
+    normalized_pairs, normalized_tfs = _normalize_scope(pairs, timeframes)
     start = start_utc.astimezone(timezone.utc)
     end = end_utc.astimezone(timezone.utc)
     if end <= start:
@@ -503,29 +615,20 @@ def acquire_dataset(
 
     target = dataset_path(repo_root, dataset_id)
     target.mkdir(parents=False, exist_ok=False)
-    streams: list[dict[str, object]] = []
     try:
-        for pair in normalized_pairs:
-            for tf in normalized_tfs:
-                streams.append(
-                    acquire_stream(
-                        dataset_root=target,
-                        pair=pair,
-                        timeframe=tf,
-                        start_utc=start,
-                        end_utc=end,
-                        base_url=base_url,
-                        token=token,
-                        timeout_seconds=timeout_seconds,
-                        max_candles_per_request=max_candles_per_request,
-                        transport=transport,
-                    )
-                )
-        artifacts = [
-            file_record(target, path)
-            for path in sorted(target.rglob("*"))
-            if path.is_file() and path.name not in {"manifest.json", "FAILED.json"}
-        ]
+        streams = _acquire_all_streams(
+            target=target,
+            pairs=normalized_pairs,
+            timeframes=normalized_tfs,
+            start_utc=start,
+            end_utc=end,
+            base_url=base_url,
+            token=token,
+            timeout_seconds=timeout_seconds,
+            max_candles_per_request=max_candles_per_request,
+            transport=transport,
+            sleep_fn=sleep_fn,
+        )
         manifest = {
             "schema_version": 1,
             "dataset_id": dataset_id,
@@ -539,24 +642,12 @@ def acquire_dataset(
             "timeframes": normalized_tfs,
             "production_cache_touched": False,
             "streams": streams,
-            "artifacts": artifacts,
+            "artifacts": _dataset_artifacts(target),
         }
         atomic_json_once(target / "manifest.json", manifest)
         return manifest
     except Exception as exc:
-        failure = {
-            "schema_version": 1,
-            "dataset_id": dataset_id,
-            "status": "FAILED",
-            "recorded_at_utc": iso_z(recorded_at or utc_now()),
-            "error_type": type(exc).__name__,
-            "error": str(exc)[:500],
-            "production_cache_touched": False,
-        }
-        try:
-            atomic_json_once(target / "FAILED.json", failure)
-        except Exception:
-            pass
+        _write_failure_marker(target, dataset_id, exc, recorded_at)
         raise
 
 
@@ -619,6 +710,7 @@ def main(argv: list[str] | None = None) -> int:
                             "timeframe": stream["timeframe"],
                             "rows": stream["rows"],
                             "requests": stream["request_count"],
+                            "http_attempts": stream["http_attempts"],
                         }
                         for stream in manifest["streams"]
                     ],
