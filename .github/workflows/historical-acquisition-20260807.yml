@@ -27,7 +27,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install pytest
+      - run: python -m pip install pytest==8.3.5
       - name: Compile acquisition module
         run: python -m py_compile audit/historical_acquisition_20260807/acquire.py
       - name: Run focused offline tests
