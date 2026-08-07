@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -16,6 +17,38 @@ ROOT = Path(__file__).resolve().parents[1]
 DAILY_SUMMARY = ROOT / "tools" / "daily_summary.sh"
 VERIFY_CRON = ROOT / "tools" / "verify_canonical_crontab.sh"
 CANONICAL_CRON = ROOT / "ops" / "bota_crontab.canonical"
+
+
+def runtime_health_payload() -> dict[str, object]:
+    """Return a current authoritative healthy runtime document."""
+    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    return {
+        "schema_version": "2.1",
+        "bot_mode": "HEALTHY",
+        "last_supervisor_run_utc": now,
+        "failure_reasons": [],
+        "market_state": "closed",
+        "market_gate": {
+            "state": "closed",
+            "reason": "market_closed",
+        },
+        "control_plane": {
+            "healthy": True,
+            "owned": 7,
+            "required": 7,
+        },
+        "pipeline_progress": {
+            "healthy": True,
+            "market_open": False,
+            "failure_reasons": [],
+            "components": {
+                "market": {
+                    "healthy": True,
+                    "status": "closed",
+                }
+            },
+        },
+    }
 
 
 def prepare_runtime(base: Path) -> Path:
@@ -34,37 +67,7 @@ def prepare_runtime(base: Path) -> Path:
     shutil.copy2(CANONICAL_CRON, root / "ops" / "bota_crontab.canonical")
 
     (root / "state" / "runtime_health.json").write_text(
-        json.dumps(
-            {
-                "schema_version": "2.1",
-                "bot_mode": "HEALTHY",
-                "last_supervisor_run_utc": "2026-08-06T20:00:00+00:00",
-                "failure_reasons": [],
-                "market_state": "closed",
-                "market_gate": {
-                    "state": "closed",
-                    "reason": "market_closed",
-                },
-                "control_plane": {
-                    "healthy": True,
-                    "owned": 7,
-                    "required": 7,
-                },
-                "pipeline_progress": {
-                    "healthy": True,
-                    "market_open": False,
-                    "failure_reasons": [],
-                    "components": {
-                        "market": {
-                            "healthy": True,
-                            "status": "closed",
-                        }
-                    },
-                },
-            },
-            indent=2,
-        )
-        + "\n",
+        json.dumps(runtime_health_payload(), indent=2) + "\n",
         encoding="utf-8",
     )
 
@@ -116,7 +119,11 @@ def prepare_runtime(base: Path) -> Path:
     return root
 
 
-def run_daily_summary(root: Path, cron_source: Path) -> subprocess.CompletedProcess[str]:
+def run_daily_summary(
+    root: Path,
+    cron_source: Path,
+    extra_env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     """Run the production summary without Telegram or provider calls."""
     environment = os.environ.copy()
     environment.update(
@@ -124,10 +131,13 @@ def run_daily_summary(root: Path, cron_source: Path) -> subprocess.CompletedProc
             "BOTA_ROOT": str(root),
             "SUMMARY_DATE": "2026-08-06",
             "DAILY_SUMMARY_SEND": "0",
+            "DAILY_SUMMARY_ALLOW_CRONTAB_SOURCE_FILE": "1",
             "CRONTAB_SOURCE_FILE": str(cron_source),
             "RUNTIME_HEALTH_FRESH_MAX_MIN": "9999999",
         }
     )
+    if extra_env:
+        environment.update(extra_env)
     return subprocess.run(
         ["bash", str(DAILY_SUMMARY)],
         cwd=ROOT,
@@ -175,6 +185,11 @@ class ReportingTruthSourceTests(unittest.TestCase):
                 self.assertEqual(len(matching), 1)
                 self.assertTrue(matching[0].startswith("#MIGRATED_TO_RUNIT "))
 
+    def test_verifier_uses_direct_cleanup_trap(self) -> None:
+        source = VERIFY_CRON.read_text(encoding="utf-8")
+        self.assertNotIn("cleanup()", source)
+        self.assertIn("trap 'rm -f", source)
+
 
 class ReportingTruthBehaviorTests(unittest.TestCase):
     """Exercise the exact false-degraded and false-quota production cases."""
@@ -190,12 +205,16 @@ class ReportingTruthBehaviorTests(unittest.TestCase):
             result = run_daily_summary(root, cron_source)
 
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("✅ BotA Daily Proof", result.stdout)
         self.assertIn("Runtime: ✅ HEALTHY | reported=HEALTHY", result.stdout)
         self.assertIn(
             "Pipeline jobs: market closed — freshness checks correctly suspended",
             result.stdout,
         )
-        self.assertIn("Runtime schedule: ✅ PASS | hash=YES", result.stdout)
+        self.assertIn(
+            "Runtime schedule: ✅ PASS | hash=YES | source=file",
+            result.stdout,
+        )
         self.assertIn("Reasons: none", result.stdout)
         self.assertNotIn("closer stale", result.stdout)
         self.assertNotIn("shadow stale", result.stdout)
@@ -204,7 +223,10 @@ class ReportingTruthBehaviorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = prepare_runtime(Path(temporary))
             cron_source = root / "live.crontab"
-            cron_source.write_text(CANONICAL_CRON.read_text(encoding="utf-8"), encoding="utf-8")
+            cron_source.write_text(
+                CANONICAL_CRON.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
             result = run_daily_summary(root, cron_source)
 
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -215,22 +237,99 @@ class ReportingTruthBehaviorTests(unittest.TestCase):
         self.assertNotIn("10/800", result.stdout)
         self.assertNotIn("12/800", result.stdout)
 
+    def test_invalid_tuning_environment_falls_back_safely(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = prepare_runtime(Path(temporary))
+            cron_source = root / "live.crontab"
+            cron_source.write_text(
+                CANONICAL_CRON.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            result = run_daily_summary(
+                root,
+                cron_source,
+                {
+                    "TELEGRAM_MIN_SCORE": "high",
+                    "TWELVE_DATA_DAILY_LIMIT": "invalid",
+                    "TWELVE_DATA_RESERVE_CREDITS": "",
+                },
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Twelve Data 0/800 credits (0 req; reserve 100)", result.stdout)
+        self.assertIn("SEND_SKIPPED DAILY_SUMMARY_SEND=0", result.stdout)
+
+    def test_naive_supervisor_timestamp_is_treated_as_utc(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = prepare_runtime(Path(temporary))
+            health_path = root / "state" / "runtime_health.json"
+            health = json.loads(health_path.read_text(encoding="utf-8"))
+            health["last_supervisor_run_utc"] = (
+                datetime.now(timezone.utc)
+                .replace(microsecond=0, tzinfo=None)
+                .isoformat()
+            )
+            health_path.write_text(
+                json.dumps(health, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            cron_source = root / "live.crontab"
+            cron_source.write_text(
+                CANONICAL_CRON.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            result = run_daily_summary(
+                root,
+                cron_source,
+                {"TZ": "America/New_York"},
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Runtime: ✅ HEALTHY", result.stdout)
+        self.assertNotIn("supervisor timestamp future", result.stdout)
+        self.assertNotIn("supervisor stale", result.stdout)
+
+    def test_degraded_runtime_uses_degraded_title_icon(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = prepare_runtime(Path(temporary))
+            health_path = root / "state" / "runtime_health.json"
+            health = json.loads(health_path.read_text(encoding="utf-8"))
+            health["bot_mode"] = "DEGRADED"
+            health["failure_reasons"] = ["test_failure"]
+            health_path.write_text(
+                json.dumps(health, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            cron_source = root / "live.crontab"
+            cron_source.write_text(
+                CANONICAL_CRON.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            result = run_daily_summary(root, cron_source)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("⚠️ BotA Daily Proof", result.stdout)
+        self.assertIn("Runtime: ⚠️ DEGRADED", result.stdout)
+
     def test_verifier_rejects_active_duplicate_of_migrated_job(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = prepare_runtime(Path(temporary))
             cron_source = root / "live.crontab"
             canonical = CANONICAL_CRON.read_text(encoding="utf-8")
-            duplicate = next(
-                line.removeprefix("#MIGRATED_TO_RUNIT ")
+            matching = [
+                line
                 for line in canonical.splitlines()
                 if "signal_watcher_pro.sh" in line
+            ]
+            self.assertEqual(len(matching), 1)
+            duplicate = matching[0].removeprefix("#MIGRATED_TO_RUNIT ")
+            cron_source.write_text(
+                canonical.replace(
+                    "# BotA runtime END",
+                    duplicate + "\n# BotA runtime END",
+                ),
+                encoding="utf-8",
             )
-            mutated = canonical.replace(
-                "# BotA runtime END\n",
-                duplicate + "\n# BotA runtime END\n",
-                1,
-            )
-            cron_source.write_text(mutated, encoding="utf-8")
 
             environment = os.environ.copy()
             environment.update(
@@ -249,7 +348,10 @@ class ReportingTruthBehaviorTests(unittest.TestCase):
             )
 
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("signal_watcher_pro.sh MIGRATED_COUNT=1 ACTIVE_COUNT=1", result.stdout)
+        self.assertIn(
+            "signal_watcher_pro.sh MIGRATED_COUNT=1 ACTIVE_COUNT=1",
+            result.stdout,
+        )
         self.assertIn("PHASE2_VERIFY_PASS=NO", result.stdout)
 
 
