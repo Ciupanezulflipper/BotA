@@ -1,17 +1,17 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # FILE: tools/autostatus.sh
-# ROLE: Send cache-only technical trend context during the configured FX session.
+# ROLE: Refresh cache-only technical context locally during the FX session.
+# POLICY: This scheduled context is informational and must never send Telegram.
 
 set -euo pipefail
 
 ROOT="${BOTA_ROOT:-${HOME}/BotA}"
 TMPDIR="${ROOT}/tmp"
 LOGDIR="${ROOT}/logs"
-TELE="${ROOT}/config/tele.env"
 MARKET_GATE="${BOTA_MARKET_GATE:-${ROOT}/tools/market_open.sh}"
 FORMATTER="${BOTA_STATUS_FORMATTER:-${ROOT}/tools/format_status.py}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-CURL_BIN="${CURL_BIN:-curl}"
+LATEST="${LOGDIR}/technical_context.latest.txt"
 
 mkdir -p "${TMPDIR}" "${LOGDIR}"
 
@@ -50,17 +50,14 @@ fi
 
 OUT="${WORKDIR}/status.out"
 ERR="${WORKDIR}/status.err"
-RESP_FILE="${WORKDIR}/telegram.response"
-CURL_ERR="${WORKDIR}/telegram.stderr"
-trap 'rm -f -- "${OUT}" "${ERR}" "${RESP_FILE}" "${CURL_ERR}"; rmdir -- "${WORKDIR}" 2>/dev/null || true' EXIT
+LATEST_TMP="${WORKDIR}/technical_context.latest.txt"
+trap 'rm -f -- "${OUT}" "${ERR}" "${LATEST_TMP}"; rmdir -- "${WORKDIR}" 2>/dev/null || true' EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
 : >"${OUT}"
 : >"${ERR}"
-: >"${RESP_FILE}"
-: >"${CURL_ERR}"
 
 log "Building cache-only technical trend context"
 if ! "${PYTHON_BIN}" "${FORMATTER}" >"${OUT}" 2>"${ERR}"; then
@@ -73,61 +70,15 @@ if [[ ! -s "${OUT}" ]]; then
   exit 0
 fi
 
-STATUS_RAW="$(cat "${OUT}")"
-if [[ -z "${STATUS_RAW}" ]]; then
-  log "ERROR: empty status output"
-  exit 0
-fi
-
 if [[ "${AUTOSTATUS_DRY_RUN:-0}" = "1" ]]; then
-  printf '%s\n' "${STATUS_RAW}"
-  log "DRY_RUN: status rendered; Telegram not called"
+  cat "${OUT}"
+  log "DRY_RUN: status rendered locally; Telegram disabled by policy"
   exit 0
 fi
 
-if [[ ! -f "${TELE}" ]]; then
-  log "ERROR: tele.env missing"
-  exit 0
-fi
+cp "${OUT}" "${LATEST_TMP}"
+chmod 600 "${LATEST_TMP}"
+mv -f "${LATEST_TMP}" "${LATEST}"
 
-# shellcheck disable=SC1090
-source "${TELE}"
-
-if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
-  log "ERROR: TELEGRAM_* vars missing"
-  exit 0
-fi
-
-if ! command -v "${CURL_BIN}" >/dev/null 2>&1; then
-  log "ERROR: curl unavailable command=${CURL_BIN}"
-  exit 0
-fi
-
-API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
-CURL_RC=0
-"${CURL_BIN}" -sS \
-  --connect-timeout 10 \
-  --max-time 20 \
-  -w $'\nHTTP_STATUS:%{http_code}\n' \
-  -X POST "${API}" \
-  -d "chat_id=${TELEGRAM_CHAT_ID}" \
-  -d "disable_web_page_preview=true" \
-  --data-urlencode "text=${STATUS_RAW}" \
-  >"${RESP_FILE}" 2>"${CURL_ERR}" || CURL_RC=$?
-
-RESP="$(cat "${RESP_FILE}")"
-HTTP_CODE="$(
-  printf '%s' "${RESP}" \
-    | sed -n 's/^HTTP_STATUS:\([0-9][0-9][0-9]\)$/\1/p' \
-    | tail -n 1
-)"
-BODY="$(printf '%s' "${RESP}" | sed '/^HTTP_STATUS:[0-9][0-9][0-9]$/d')"
-CURL_DETAIL="$(tr '\n' '|' <"${CURL_ERR}")"
-
-if [[ "${CURL_RC}" -eq 0 ]] && printf '%s' "${BODY}" | grep -q '"ok":true'; then
-  log "sendMessage OK plain_text http=${HTTP_CODE:-unknown}"
-else
-  log "ERROR: sendMessage failed curl_rc=${CURL_RC} http=${HTTP_CODE:-unknown} stderr=${CURL_DETAIL:-none} resp=$(printf '%s' "${BODY}" | tr '\n' ' ')"
-fi
-
+log "TECHNICAL_CONTEXT_RESULT=LOCAL_ONLY path=${LATEST}"
 exit 0
