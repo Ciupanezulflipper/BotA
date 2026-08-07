@@ -1,6 +1,6 @@
 # BotA Chat Handoff
 
-Last updated: 2026-08-07 17:54 UTC
+Last updated: 2026-08-07 18:09 UTC
 
 Read this first in any new AI chat before proposing BotA changes.
 
@@ -43,8 +43,6 @@ Only EURUSD and GBPUSD are live. A third pair is not currently scanned.
   -> 110 strategy-accepted
 ```
 
-The dominant strategy suppressors are score and H1-neutral protection.
-
 ## Accepted -> Telegram funnel
 
 Retained logs classify 106 strategy-accepted events:
@@ -54,17 +52,11 @@ Retained logs classify 106 strategy-accepted events:
 38 cooldown-suppressed
 6 Telegram score-gated
 1 send failure
-0 tier-gated
-0 delivery-deduped
 ```
 
 Four accepted CSV rows have no matched retained log event.
 
-Telegram transport works. The delivery layer is not the only reason for low signal count.
-
 ## Cooldown audit — 2026-08-07 17:54 UTC
-
-The 38 cooldown-suppressed accepted events were compared with the previous successful send for the same pair/timeframe:
 
 ```text
 EXACT_DUPLICATE=0
@@ -74,22 +66,11 @@ SCORE_IMPROVED_5PLUS=7
 ENTRY_CHANGED_3PLUS_PIPS=26
 ```
 
-All 38 were same-direction updates. Therefore the previous shorthand `38 distinct signals` is too strong. The cooldown is coarse because it ignores score/entry/SL/TP and runs before exact content dedup, but it is also clearly suppressing repeated same-direction alert updates. Do not remove it blindly.
+All 38 were same-direction updates. The cooldown is coarse, but 38 independent new trades were not proven.
 
-## Signal quality cross-check — highest priority
+## Recent signal quality — highest priority
 
-Read-only Supabase outcome data for historical BotA M15 rows with rationale `BotA score=`:
-
-```text
-score <70:   n=6,  wins=1, losses=5, cancelled=0, total_pips=-45.50
-score 70-74: n=3,  wins=2, losses=1, cancelled=0, total_pips=+59.60
-score 75-84: n=33, wins=12, losses=17, cancelled=4, total_pips=+56.10
-score 85+:   n=16, wins=4, losses=10, cancelled=2, total_pips=+25.10
-```
-
-The `<70` sample is small but poor, so lowering Telegram's score floor from 70 is not currently supported.
-
-More important, signals created since 2026-06-01 are:
+Read-only Supabase outcome data for BotA M15 signals created on or after 2026-06-01:
 
 ```text
 TOTAL=13
@@ -97,16 +78,30 @@ WINS=3
 LOSSES=9
 CANCELLED=1
 TOTAL_PIPS=-71.40
+75-84_TOTAL_PIPS=-36.40
+85+_TOTAL_PIPS=-35.00
 ```
 
-Recent score buckets:
+High score has not protected recent signals from poor outcomes.
+
+## Local ledger inventory — 2026-08-07 18:09 UTC
+
+The phone has `data/ledger.csv`:
 
 ```text
-75-84: n=11, wins=3, losses=7, cancelled=1, total_pips=-36.40
-85+:   n=2, wins=0, losses=2, total_pips=-35.00
+LEDGER_ROWS=51
+WIN=13
+LOSS=38
+WIN_RATE=25.49%
+FIRST_TIMESTAMP=2026-03-09T21:45:07+02:00
+LAST_TIMESTAMP=2026-03-10T15:15:07+02:00
 ```
 
-This means high BotA score has not protected recent delivered signals from poor results. Before increasing frequency, identify which score component or market regime is producing false confidence.
+This ledger is real but stale and narrow: only about 17.5 hours of March data. It cannot be treated as current strategy evidence. Its best use is an offline join to matching 25-column alert rows to test whether score components behaved differently on its 13 wins versus 38 losses.
+
+## Scoring hypotheses under test
+
+Current `scoring_engine.sh` gives RSI up to +15 points based on absolute distance from 50. Thus more oversold SELLs and more overbought BUYs can score higher even if entry quality is deteriorating. Current code also uses a 1.0 ATR pullback buffer despite a comment describing ±0.3 ATR. Neither is approved for mutation until outcome correlation is measured.
 
 ## Closed/non-dominant causes
 
@@ -114,22 +109,8 @@ This means high BotA score has not protected recent delivered signals from poor 
 - `macro6=3`: neutral;
 - RR text: advisory;
 - H4+D1: only four tradeable rejects;
-- Telegram transport: 61 successful retained sends versus one failure;
-- cooldown: coarse, but no direction-reversal suppression was observed in the 38-event sample.
-
-## Runtime context
-
-```text
-manager_count=1
-manager_pid=31140
-owned=6/7
-orphaned=1
-running=7/7
-duplicates=0
-orphan=crond
-```
-
-Keep this separate from strategy-quality work unless watcher execution is actually interrupted.
+- Telegram transport: functioning;
+- cooldown: coarse but no direction-reversal suppression observed.
 
 ## No-change rules
 
@@ -143,27 +124,11 @@ PROVIDER_CHANGED=NO
 SUPABASE_CHANGED=NO
 ```
 
-Do not manufacture more signals while recent delivered signals are negative.
+Do not manufacture more signals while recent delivered quality is negative.
 
 ## Exactly one next proof
 
-For delivered signals since 2026-06-01, extract and join the 25-column decision components:
-
-```text
-ema_comp
-rsi_comp
-macd_comp
-adx_comp
-adx_raw
-rsi_raw
-macd_hist_raw
-h1_trend
-tier
-session
-adx_regime
-```
-
-Compare them with verified Supabase outcomes and identify the component/regime common to recent losers. That is now the shortest path to a useful BotA rather than merely a noisy one.
+Join `data/ledger.csv` to `logs/alerts.csv` and report how many of the 51 March outcomes have extended score components. Then compare WIN versus LOSS by score bucket, RSI extremity, MACD saturation, ADX band, H1 state, pair, and direction. Keep March evidence separate from the recent June-August Supabase evidence.
 
 ## Working discipline
 
