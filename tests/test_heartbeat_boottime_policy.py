@@ -193,13 +193,15 @@ class SignalFirstHeartbeatBehaviorTests(unittest.TestCase):
             log = (root / "logs" / "cron.heartbeat.log").read_text(
                 encoding="utf-8"
             )
-            heartbeat_state = root / "state" / "heartbeat_delivery.json"
+            heartbeat_state_exists = (
+                root / "state" / "heartbeat_delivery.json"
+            ).exists()
 
         self.assertEqual(first, 0)
         self.assertEqual(second, 0)
         self.assertEqual(bucket, heartbeat_runtime.utc_bucket(SERVER_EPOCH))
         sender.assert_not_called()
-        self.assertFalse(heartbeat_state.exists())
+        self.assertFalse(heartbeat_state_exists)
         self.assertIn("HB_UTC_RESULT=LOG_ONLY sources=3", log)
         self.assertIn("HB_UTC_RESULT=BUCKET_UNCHANGED", log)
         self.assertIn("DEADMAN_UTC_RESULT=HEALTHY", log)
@@ -234,7 +236,7 @@ class SignalFirstHeartbeatBehaviorTests(unittest.TestCase):
             ):
                 result = heartbeat_boottime.run(root)
 
-            flag = root / "logs" / "state" / "deadman.flag"
+            flag_exists = (root / "logs" / "state" / "deadman.flag").exists()
             state = json.loads(
                 (root / "state" / "deadman_delivery.json").read_text(
                     encoding="utf-8"
@@ -247,7 +249,7 @@ class SignalFirstHeartbeatBehaviorTests(unittest.TestCase):
         self.assertEqual(result, 0)
         sender.assert_called_once()
         self.assertIn("DEADMAN", sender.call_args.args[2])
-        self.assertTrue(flag.exists())
+        self.assertTrue(flag_exists)
         self.assertFalse(state["delivery_failure"])
         self.assertIn("HB_UTC_RESULT=LOG_ONLY", log)
         self.assertIn("DEADMAN_UTC_RESULT=ALERT_SENT", log)
