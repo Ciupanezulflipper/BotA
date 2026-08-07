@@ -1,46 +1,109 @@
 # BotA Errors and Silent-Failure Register
 
-Last updated: 2026-08-03 00:07 UTC
+Last updated: 2026-08-07 17:01 UTC
 
 Purpose: preserve verified failure classes, current open risks, and prevention
-rules without repeating broad audits. Detailed current evidence is in:
+rules without repeating broad audits. Detailed current signal evidence is in:
 
-- `audits/PHONE_DEPLOYMENT_2026-08-02.md`
-- `audits/P7_SUPERVISOR_WRAPPER_CLOSURE_2026-08-02.md`
-- `audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`
+- `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
+- `CONTINUITY_CURRENT.md`
+- `CHAT_HANDOFF_BOTA.md`
 - `audits/ERROR_LOG.md`
 
-## Current verdict
+## Current verdict — 2026-08-07
 
 ```text
 PRODUCTION_VALIDATION=FAILED_HISTORICAL
-PHONE_PRESERVATION=PASS
-CORE_DEPLOYMENT=PASS
-D1_CODE_DEFECT=CLOSED
-SUPERVISOR_CORE_ACCEPTANCE=PASS
-SUPERVISOR_WRAPPER_ACCEPTANCE=PASS
-CURRENT_CONTROL_PLANE=HEALTHY_7_OF_7
-ACTIVE_SUPERVISOR_WRAPPER_AUTO_MUTATION=CLOSED
-HEARTBEAT_TOPOLOGY=OPEN_RISK
+CURRENT_NATIVE_MANAGER_PID=31140
+CURRENT_CONTROL_PLANE=DEGRADED_6_OWNED_1_ORPHAN
+CURRENT_REQUIRED_RUNNING=7_OF_7
+CURRENT_ORPHAN_SERVICE=crond
+LIVE_WATCHER=RUNNING
+SIGNAL_DECISION_ROWS=2507
+SIGNAL_BUY_ROWS=466
+SIGNAL_SELL_ROWS=959
+SIGNAL_HOLD_ROWS=1082
+SIGNAL_ACCEPTED_ROWS=110
+SIGNAL_REJECTED_ROWS=2397
+SIGNAL_REJECTION_RATE≈95.61_PERCENT
+ZERO_ENTRY_ROOT_CAUSE=REJECTED_HYPOTHESIS
+STRATEGY_MUTATION_ALLOWED=NO_PENDING_FUNNEL_CLASSIFICATION
 AUTOMATIC_RECOVERY_REENABLE_ALLOWED=NO
-STRATEGY_MUTATION_ALLOWED=NO
 ```
 
-The August 1 endurance validation remains failed historical evidence. The
-August 2–3 repairs establish a verified current bounded state but do not yet
-constitute a new endurance pass.
+The current signal drought cannot be attributed simply to a dead direction
+engine. The live corpus contains 1425 BUY/SELL rows. The high-value problem is
+now to identify which downstream gates reject valid-entry BUY/SELL candidates
+and whether accepted rows reach Telegram delivery.
 
 ## Current repository and phone state
 
 ```text
-GITHUB_MAIN=29ae5babd5a0d6fc5e65b64d3f4f2eea16eaef6d
+GITHUB_MAIN=5e28afafde80c29f57a9be762388dccd91de4734
 PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
-PHONE_HEAD=dbdb1b1f9e2e1a6d66bb94b8eda4d1cf40617d20
-PHONE_REMOTE_PUSHED=NO
-UNTRACKED_FILES_PRESERVED=519
+PHONE_HEAD=73b2306b5843f3396823ce815e96051abf78cf50
 ```
 
-## Closed defect — D1 timeframe mapping
+## Signal-throughput finding — 2026-08-07
+
+Verified `logs/alerts.csv` schema:
+
+```text
+timestamp,pair,tf,direction,score,confidence,entry,sl,tp,provider,rejected,filter_str,reasons
+```
+
+Verified decision counts:
+
+```text
+TOTAL=2507
+HOLD=1082
+SELL=959
+BUY=466
+ACCEPTED=110
+REJECTED=2397
+```
+
+Frequent filter strings include score thresholds, direction-not-tradeable,
+H1-neutral tags, RR text, and `macro6=3`. `H4_D1_oppose` is rare in the current
+corpus. `macro6=3` is not yet proven to be a hard reject rather than a tag.
+
+## Closed hypothesis — zero entry caused lost tradeable signals
+
+Direct classification:
+
+```text
+ALL_ZERO_ENTRY_SL_TP_ROWS=1014
+ALL_VALID_ENTRY_SL_TP_ROWS=1493
+MIXED_ROWS=0
+ZERO_ROWS_DIRECTION=HOLD_ONLY
+ZERO_ROWS_SCORE=0.00_ONLY
+ZERO_ENTRY_BUY_SELL_ROWS=0
+```
+
+Verdict:
+
+```text
+ZERO_ENTRY_IS_HOLD_SYMPTOM_NOT_ROOT_CAUSE
+```
+
+Do not trace `entry=0` further as the primary signal defect unless new BUY/SELL
+evidence contradicts this result.
+
+## Audit-script schema mistake — 2026-08-07
+
+An exploratory DictReader audit looked up `filter_rejected`, but the actual CSV
+field is `rejected`. This caused empty filter-status output in that one audit.
+The direction/entry classification from the same audit remains valid, and the
+earlier acceptance/rejection counts based on column 11 remain valid.
+
+Prevention:
+
+- print and verify the exact header before writing field-based audits;
+- fail if a required CSV field is absent instead of silently using empty values;
+- do not promote convenience-script output to evidence until schema validation
+  passes.
+
+## Historical closed defect — D1 timeframe mapping
 
 Previous state:
 
@@ -63,155 +126,77 @@ Current deployed mapping:
 tf_minutes("D1")=1440
 ```
 
-The code defect is closed. Live D1 cache regeneration and artifact verification
-remain a later operational check.
+## Runtime ownership incident — 2026-08-07
+
+Earlier in the incident two managers existed:
+
+```text
+PID 16360 = runsvdir -P .../var/service
+PID 31140 = native Termux service-daemon runsvdir .../var/service
+service-daemon.pid = 31140
+```
+
+PID 16360 initially owned all required BotA supervisors while PID 31140 owned
+none. PID 16360 later died, leaving PID-1 orphan supervisors, and PID 31140
+progressively reacquired them. Latest observed state is six manager-owned and
+one PID-1 orphan (`crond`), with all seven required services running.
+
+Exact caller attribution for the native manager start and exact executor
+attribution for PID 16360 termination remain unproven. Do not claim otherwise.
 
 ## Closed risk — supervisor wrapper could mutate topology
 
-Previous active behavior:
+The active wrapper previously could create `runsvdir` based on a broad process
+regex. P7 replaced it with a tracked non-mutating scheduler. The later 2026-08-07
+manager incident proves that control-plane safety still requires process-level
+ownership verification even after that specific wrapper defect was closed.
 
-```text
-if runsvdir.*bota-sv is not found:
-    runsvdir -P "$HOME/.config/bota-sv" &
-```
+## Historical failure classes retained
 
-The active runit wrapper and repository copy were separate physical files, and
-both differed from the reviewed GitHub version.
+- control-plane regression to orphaned supervisors;
+- duplicate execution ownership between cron/runit/boot paths;
+- canonical documentation lagging phone truth;
+- strict shell mode terminating the interactive Termux parent;
+- recursive scans entering runit FIFOs;
+- expected zero matches aborting under `pipefail`;
+- wall-clock/monotonic confusion;
+- `/proc/uptime` being inaccessible on this Android build;
+- service presence being mistaken for useful progress;
+- D1 timeframe mismatch;
+- active service path being assumed to be the repository path;
+- broad runtime work obscuring the actual signal-throughput question;
+- oversized terminal evidence packages causing pager/output-loss problems.
 
-P7 replaced both copies with the tracked executable non-mutating scheduler and
-restarted only `bota-supervisor`.
-
-Current proof:
-
-```text
-ACTIVE_EQUALS_REPOSITORY=YES
-SUPERVISOR_WRAPPER_MUTATION_DISABLED=YES
-manager_count=1
-required=7
-owned=7
-running=7
-orphaned=0
-duplicate_service_rows=0
-healthy=true
-control_plane_rc=0
-```
-
-Prevention:
-
-- service wrappers are executable architecture and must be tracked and tested;
-- scheduler wrappers must not create managers or restart services;
-- active service paths and repository paths must both be identified;
-- strict process ownership must be verified by parentage, not broad regex;
-- recovery belongs only in a separately authorized tool with locking, rollback,
-  bounded backoff, and failure-injection proof.
-
-## Open risk — heartbeat execution paths differ
-
-Active phone path:
-
-```text
-services/bota-heartbeat/run -> tools/bota_heartbeat_utc.sh
-```
-
-GitHub repair path:
-
-```text
-tools/heartbeat.sh -> tools/heartbeat_delivery.py
-```
-
-The GitHub controller provides lock-based single execution and bounded monotonic
-retry backoff. The phone UTC wrapper provides authoritative UTC bucketing plus
-deadman and recovery notifications, but the 60-second service loop may retry a
-failed delivery every minute.
-
-Required prevention and acceptance:
-
-- preserve UTC hour-bucket semantics;
-- preserve deadman and recovery notifications;
-- consolidate to one active delivery controller;
-- use one lock and bounded monotonic retry backoff;
-- persist heartbeat, deadman, and recovery delivery outcomes separately;
-- do not alter strategy, providers, Supabase semantics, crontab, or control-plane
-  topology.
-
-## Historical August 1 failures retained
-
-- control-plane regression to `owned=0/7`, `running=7/7`, `orphaned=7`;
-- temporary required-service counts below seven;
-- canonical crontab verification failure;
-- phone/GitHub divergence;
-- watchdog documentation not matching the phone;
-- configured service-daemon executable unavailable;
-- repeated Termux restarts while a continuous guard was active.
-
-The later P7 control-plane proof does not erase these failure records; it proves
-the current repaired state.
-
-## Repository contamination retained
-
-PR #24 remains a historical preservation artifact, not a repair or deployment
-source. Behaviors must be salvaged only through focused branches from current
-`main`.
-
-Never push directly to `main`.
-
-## Runtime and ownership lessons
+## Runtime and signal lessons
 
 - Manager existence does not prove service ownership.
-- `supervise/pid` identifies the service process, not `runsv`.
-- Prove service PID -> `runsv` -> intended manager parentage.
 - `sv status` alone does not prove ownership or restart safety.
 - PID-1 orphan supervisors can survive manager death.
-- Starting another manager while orphans remain can create duplicates.
-- A process regex can be wrong even when a component is running.
-- Active service and repository directories may contain separate files.
-- Crontab and runit must not both own the same recurring component.
-
-## Time, health, data, and delivery rules
-
-- Trusted provider/server UTC controls market semantics.
-- Monotonic time controls same-boot cadence, cooldowns, backoff, and health.
-- Android/ship wall time is display-only.
-- Never depend on `/proc/uptime` on this device.
-- Service presence is not useful progress.
-- Reject negative and future ages.
-- Invalid cache data must fail closed.
-- Status context is not an executable trade signal.
-- Telegram delivery, Supabase persistence, provider failure, runtime failure,
-  valid HOLD, and dedup suppression are distinct outcomes.
-- Write the full decision record before dedup.
+- A running watcher does not prove acceptable signal throughput.
+- A BUY/SELL direction does not prove an accepted or delivered signal.
+- A HOLD row may legitimately have entry/SL/TP all zero.
+- Filter reason text can contain informational tags; presence alone does not prove
+  causal rejection.
+- Telegram delivery, dedup, cooldown, Supabase persistence, strategy rejection,
+  provider failure, runtime failure, and valid HOLD are distinct outcomes.
+- Always verify CSV/schema names before using ad-hoc forensic scripts.
 
 ## Operational package rules
 
-- Keep strict shell settings inside a bounded child shell; never leave them in
-  the interactive Termux parent.
-- Preserve phone state before Git operations.
+- Keep strict shell settings inside a bounded child shell.
+- Prefer small pager-proof evidence packages.
+- Preserve phone state before Git mutation.
 - One package, one evidence domain, one acceptance gate.
 - Avoid recursive scans through runit FIFOs.
 - Expected zero matches must not abort under `pipefail`.
-- Use complete-file replacements and checksum verification.
+- Use complete-file replacements for approved code mutations.
 - Define rollback before mutation.
-- Prefer a small direct proof over a giant copy-paste package.
-- Update canonical documentation and issue #9 after each material gate.
+- Update canonical documentation with explicit UTC date after each material gate.
+- Never push directly to `main`; use branch -> content -> diff -> PR.
 
-## Repository milestones
+## Exactly one next repair/investigation
 
-```text
-PR #24 CLOSED_SUPERSEDED
-PR #26 MERGED=78d9...
-PR #28 MERGED=e09662...
-PR #30 MERGED=2e7e02...
-PR #31 MERGED=bfd6f26...
-PR #32 MERGED=32de...
-PR #33 MERGED=ee332796...
-PR #34 MERGED=b4d961ea8e5d254c8578e2c022e1394cd134cd7e
-PR #35 MERGED=2c4a2008a2f8e740bab3d3d166d90e73d6624def
-PR #36 MERGED=4f03a1f272a260bb793909c07198b22c26d2c87f
-PR #37 MERGED=29ae5babd5a0d6fc5e65b64d3f4f2eea16eaef6d
-```
-
-## Exactly one next repair
-
-Unify heartbeat delivery while preserving authoritative UTC bucketing,
-deadman/recovery behavior, and adding one lock plus bounded monotonic retry
-backoff. No other runtime or trading behavior belongs in that package.
+Do not repair code yet. First classify the 1493 valid-entry rows by `rejected`,
+pair, direction, score bucket, and exact `filter_str`, then inspect the 110
+accepted rows for Telegram eligibility/delivery. Only the first proven
+throughput bottleneck should be changed.
