@@ -380,6 +380,70 @@ def _retryable_status(status: int) -> bool:
     return status == 429 or 500 <= status <= 599
 
 
+def _fetch_chunk_with_retries(
+    *,
+    dataset_root: Path,
+    pair: str,
+    timeframe: str,
+    chunk_index: int,
+    path_and_query: str,
+    base_url: str,
+    token: str,
+    timeout_seconds: float,
+    transport: Transport,
+    sleep_fn: SleepFn,
+) -> tuple[list[Candle], int]:
+    """Fetch one chunk with bounded retry/backoff while preserving every response."""
+    for attempt in range(1, MAX_HTTP_ATTEMPTS + 1):
+        response = transport(base_url, path_and_query, token, timeout_seconds)
+        stem = f"chunk-{chunk_index:04d}-attempt-{attempt:02d}"
+        raw_path = dataset_root / "raw" / pair / timeframe / f"{stem}.json"
+        metadata_path = dataset_root / "metadata" / pair / timeframe / f"{stem}.json"
+        write_once(raw_path, response.body)
+        atomic_json_once(
+            metadata_path,
+            {
+                "request": {
+                    "method": "GET",
+                    "path_and_query": path_and_query,
+                    "authorization_redacted": True,
+                    "attempt": attempt,
+                },
+                "response": response_metadata(response),
+            },
+        )
+
+        if 200 <= response.status < 300:
+            return parse_oanda_payload(response.body), attempt
+
+        if not _retryable_status(response.status) or attempt == MAX_HTTP_ATTEMPTS:
+            raise RuntimeError(
+                f"OANDA HTTP {response.status} for {pair} {timeframe} "
+                f"chunk {chunk_index} attempt {attempt}"
+            )
+
+        sleep_fn(RETRY_BACKOFF_SECONDS * (2 ** (attempt - 1)))
+
+    raise RuntimeError(f"no successful response for {pair} {timeframe} chunk {chunk_index}")
+
+
+def _validate_chunk_window(
+    candles: list[Candle],
+    *,
+    pair: str,
+    timeframe: str,
+    window_start: datetime,
+    window_end: datetime,
+) -> None:
+    """Reject provider candles that fall outside their explicit request window."""
+    outside = [candle for candle in candles if candle.time < window_start or candle.time > window_end]
+    if outside:
+        raise ValueError(
+            f"OANDA returned candle outside requested chunk for {pair} {timeframe}: "
+            f"{iso_z(outside[0].time)}"
+        )
+
+
 def acquire_stream(
     *,
     dataset_root: Path,
@@ -403,49 +467,26 @@ def acquire_stream(
 
     for index, (window_start, window_end) in enumerate(windows):
         path_and_query = request_path(normalized_pair, tf, window_start, window_end)
-        parsed: list[Candle] | None = None
-
-        for attempt in range(1, MAX_HTTP_ATTEMPTS + 1):
-            http_attempts += 1
-            response = transport(base_url, path_and_query, token, timeout_seconds)
-            stem = f"chunk-{index:04d}-attempt-{attempt:02d}"
-            raw_path = dataset_root / "raw" / normalized_pair / tf / f"{stem}.json"
-            metadata_path = dataset_root / "metadata" / normalized_pair / tf / f"{stem}.json"
-            write_once(raw_path, response.body)
-            atomic_json_once(
-                metadata_path,
-                {
-                    "request": {
-                        "method": "GET",
-                        "path_and_query": path_and_query,
-                        "authorization_redacted": True,
-                        "attempt": attempt,
-                    },
-                    "response": response_metadata(response),
-                },
-            )
-
-            if 200 <= response.status < 300:
-                parsed = parse_oanda_payload(response.body)
-                break
-
-            if not _retryable_status(response.status) or attempt == MAX_HTTP_ATTEMPTS:
-                raise RuntimeError(
-                    f"OANDA HTTP {response.status} for {normalized_pair} {tf} "
-                    f"chunk {index} attempt {attempt}"
-                )
-
-            sleep_fn(RETRY_BACKOFF_SECONDS * (2 ** (attempt - 1)))
-
-        if parsed is None:
-            raise RuntimeError(f"no successful response for {normalized_pair} {tf} chunk {index}")
-
-        outside = [candle for candle in parsed if candle.time < window_start or candle.time > window_end]
-        if outside:
-            raise ValueError(
-                f"OANDA returned candle outside requested chunk for {normalized_pair} {tf}: "
-                f"{iso_z(outside[0].time)}"
-            )
+        parsed, attempts = _fetch_chunk_with_retries(
+            dataset_root=dataset_root,
+            pair=normalized_pair,
+            timeframe=tf,
+            chunk_index=index,
+            path_and_query=path_and_query,
+            base_url=base_url,
+            token=token,
+            timeout_seconds=timeout_seconds,
+            transport=transport,
+            sleep_fn=sleep_fn,
+        )
+        http_attempts += attempts
+        _validate_chunk_window(
+            parsed,
+            pair=normalized_pair,
+            timeframe=tf,
+            window_start=window_start,
+            window_end=window_end,
+        )
         parsed_chunks.append(parsed)
 
     reconciled, duplicate_count = reconcile_candles(parsed_chunks)
