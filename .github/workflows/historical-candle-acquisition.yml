@@ -7,15 +7,21 @@ on:
     paths:
       - "tools/fetch_historical_candles.py"
       - "tools/verify_replay_dataset.py"
+      - "tools/replay_semantics.py"
+      - "tools/deterministic_replay.py"
       - "tests/test_fetch_historical_candles.py"
       - "tests/test_verify_replay_dataset.py"
+      - "tests/test_deterministic_replay.py"
       - ".github/workflows/historical-candle-acquisition.yml"
   pull_request:
     paths:
       - "tools/fetch_historical_candles.py"
       - "tools/verify_replay_dataset.py"
+      - "tools/replay_semantics.py"
+      - "tools/deterministic_replay.py"
       - "tests/test_fetch_historical_candles.py"
       - "tests/test_verify_replay_dataset.py"
+      - "tests/test_deterministic_replay.py"
       - ".github/workflows/historical-candle-acquisition.yml"
 
 permissions:
@@ -38,18 +44,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Compile acquisition tools and tests
+      - name: Compile acquisition and replay tools
         run: |
           python -m py_compile \
             tools/fetch_historical_candles.py \
             tools/verify_replay_dataset.py \
+            tools/replay_semantics.py \
+            tools/deterministic_replay.py \
             tests/test_fetch_historical_candles.py \
-            tests/test_verify_replay_dataset.py
+            tests/test_verify_replay_dataset.py \
+            tests/test_deterministic_replay.py
       - name: Run focused offline tests
         run: |
           python -m unittest -v \
             tests/test_fetch_historical_candles.py \
-            tests/test_verify_replay_dataset.py
+            tests/test_verify_replay_dataset.py \
+            tests/test_deterministic_replay.py
       - name: Prove preview is no-network and non-mutating
         run: |
           python tools/fetch_historical_candles.py \
