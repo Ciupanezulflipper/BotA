@@ -297,6 +297,8 @@ def _response_metadata(response: TransportResponse) -> bytes:
 
 
 def _finite_price(value: object) -> float:
+    if not isinstance(value, (str, int, float)):
+        raise ValueError("invalid candle price")
     number = float(value)
     if not math.isfinite(number) or number <= 0:
         raise ValueError("invalid candle price")
