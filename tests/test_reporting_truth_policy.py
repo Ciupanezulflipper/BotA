@@ -225,7 +225,12 @@ class ReportingTruthBehaviorTests(unittest.TestCase):
                 for line in canonical.splitlines()
                 if "signal_watcher_pro.sh" in line
             )
-            cron_source.write_text(canonical + duplicate + "\n", encoding="utf-8")
+            mutated = canonical.replace(
+                "# BotA runtime END\n",
+                duplicate + "\n# BotA runtime END\n",
+                1,
+            )
+            cron_source.write_text(mutated, encoding="utf-8")
 
             environment = os.environ.copy()
             environment.update(
