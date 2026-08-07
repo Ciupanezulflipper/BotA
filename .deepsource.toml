@@ -1,0 +1,26 @@
+version = 1
+
+# Tests are excluded from documentation coverage and analysis quality metrics.
+test_patterns = ["tests/**"]
+
+# Archive and generated output directories are excluded entirely.
+exclude_patterns = [
+    "archive/**",
+    "**/__pycache__/**",
+    "**/*.egg-info/**",
+]
+
+[[analyzers]]
+name = "python"
+enabled = true
+
+  [analyzers.meta]
+  runtime_version = "3.x.x"
+
+[[analyzers]]
+name = "shell"
+enabled = true
+
+[[analyzers]]
+name = "secrets"
+enabled = true

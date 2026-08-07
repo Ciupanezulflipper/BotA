@@ -5,9 +5,9 @@
     "repo": "Ciupanezulflipper/BotA_Prod_2025_11",
     "supabase_project": "ozgkeslgjqbqfewojnmr",
     "runtime": "Termux Android arm64",
-    "last_updated": "2026-05-27T11:17:02Z",
-    "updated_by": "claude-sonnet-4-6",
-    "session_id": "2026-05-27 Step 6 daily pulse wrapper + first private live send + layout cleanup"
+    "last_updated": "2026-07-14T00:30:00Z",
+    "updated_by": "claude-code-assisted",
+    "session_id": "2026-07-14 signal lifecycle v3.1 local implementation and adversarial proof"
   },
   "git": {
     "current_branch": "main",
@@ -197,6 +197,36 @@
     "supervisor_tick_utc": "2026-04-24T05:45:02Z"
   },
   "open_issues": [
+    {
+      "id": "signal-lifecycle-rollout-pending",
+      "title": "Signal lifecycle v3.1 is locally verified but not pushed, merged, deployed, or proven on a real signal",
+      "status": "open",
+      "facts": [
+        "Implementation commit be8c6ef on branch fix/signal-lifecycle-market-hours-20260713",
+        "119 tests pass, 0 failures, PYTHONHASHSEED 0/1/17/99991 all pass",
+        "7 root-cause defects fixed including wall-clock expiry, TP-deferral, same-candle ambiguity, coverage check, microsecond truncation, sparse S5, and partial-start M15-boundary DATA_UNAVAILABLE",
+        "Branch has NOT been pushed to origin",
+        "Production main branch is UNCHANGED",
+        "Live BotA runtime is UNCHANGED",
+        "Telegram closure notifications are NOT implemented",
+        "No real signal has been resolved through the new lifecycle code"
+      ],
+      "remaining_gates": [
+        "documentation review",
+        "documentation commit",
+        "push isolated branch to origin",
+        "open draft PR",
+        "CI and source review",
+        "historical read-only dry-run validation",
+        "separately approved production rollout",
+        "first real-signal proof"
+      ],
+      "do_not": [
+        "do not merge to main without completing all gates",
+        "do not deploy without explicit production approval",
+        "do not mark rollout as resolved until first real-signal proof is recorded"
+      ]
+    },
     {
       "id": "news-on-disabled",
       "title": "NEWS_ON unset - fusion macro path short-circuits to macro6=3/provider=off",
@@ -451,6 +481,44 @@
     "pat_revoked": "UNPROVEN",
     "migrated_at": "2026-04-26",
     "note": "BotA remote now uses SSH for normal git pull/push. Global credential.helper=store still exists, but BotA remote is SSH. PAT is no longer the primary git path for BotA."
+  },
+  "signal_lifecycle_v31": {
+    "marker": "BOTA_SIGNAL_LIFECYCLE_V31_2026_07_14",
+    "implementation_commit": "be8c6efc8eab43c3e9b99c995787a825d3c3b8f5",
+    "parent_commit": "fa289ad3f7b6ff430f13609950e5af341aee2e9d",
+    "branch": "fix/signal-lifecycle-market-hours-20260713",
+    "local_verified": true,
+    "pushed": false,
+    "merged": false,
+    "deployed": false,
+    "tests_run": 119,
+    "tests_passed": 119,
+    "tests_failed": 0,
+    "tests_errored": 0,
+    "hash_seed_failures": 0,
+    "hash_seeds_tested": [0, 1, 17, 99991],
+    "py_compile_pass": true,
+    "bash_syntax_pass": true,
+    "diff_check_pass": true,
+    "changed_files": [
+      "tools/signal_closer.py",
+      "tools/run_signal_closer_live.sh",
+      "tests/test_signal_closer_lifecycle.py"
+    ],
+    "normal_hold_market_hours": 24,
+    "normal_hold_m15_candles": 96,
+    "m15_candle_seconds": 900,
+    "hard_age_hours": 168,
+    "ambiguity_policy": "AMBIGUOUS_S5_STOP_FIRST",
+    "normal_expiry_outcome": "TIME_EXIT",
+    "unresolved_expiry_outcome": "CANCELLED",
+    "telegram_closure_notification_implemented": false,
+    "adversarial_sections": ["A", "B", "C", "D", "E", "F", "G"],
+    "adversarial_tests_added": 45,
+    "defects_fixed": 7,
+    "defect_7_found_by_adversarial_expansion": true,
+    "defect_7_description": "partial-start + threshold-at-M15-boundary incorrectly required S5 data despite authoritative M15 H/L",
+    "next_gate": "documentation review then remote branch push and draft PR"
   },
   "observability_v4_2026_07_10": {
     "claim_status": "proven",

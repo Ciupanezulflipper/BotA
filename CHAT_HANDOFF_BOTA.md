@@ -1,8 +1,47 @@
 # BotA Chat Handoff
 
-Last updated: 2026-05-15
+Last updated: 2026-07-14
 
 Read this first in any new AI chat before proposing BotA changes.
+
+<!-- BOTA_SIGNAL_LIFECYCLE_V31_2026_07_14 -->
+
+## Latest Status — 2026-07-14
+
+**Signal lifecycle v3.1 is locally verified. It is NOT pushed and NOT in production.**
+
+- Implementation commit: `be8c6ef` on branch `fix/signal-lifecycle-market-hours-20260713`
+- Branch has NOT been pushed to origin.
+- Production `main` branch and live BotA runtime are UNCHANGED.
+- 119 tests pass, 0 failures, across PYTHONHASHSEED 0 / 1 / 17 / 99991.
+
+**Canonical read order for every new AI session:**
+
+1. `CHAT_HANDOFF_BOTA.md` — this file, latest status first
+2. `DECISIONS.md` — locked engineering contracts
+3. `RESOLVED.md` — closed engineering issues
+4. `CONTINUITY.md` — full running session log
+5. `state/STATE.json` — machine-readable current state
+6. Relevant runtime logs in `/data/data/com.termux/files/home/BotA/logs/`
+
+**Log discipline:**
+
+- `logs/error.log` is a live runtime stream. It is NOT the permanent lessons ledger.
+- Permanent lessons belong in `RESOLVED.md`, `DECISIONS.md`, `CONTINUITY.md`, and regression tests.
+- Do not cite `logs/error.log` as proof of a resolved engineering decision.
+
+**Next gate:**
+
+1. Documentation review (current step)
+2. Separate documentation commit
+3. Push `fix/signal-lifecycle-market-hours-20260713` to origin as an isolated branch
+4. Open a draft PR for review
+5. CI and source review
+6. Historical / read-only dry-run validation on the live BotA worktree
+7. Separately approved production rollout
+8. First real-signal proof
+
+**Do NOT merge or deploy directly.** Every gate above must be completed and recorded before production deployment.
 
 ## Current situation
 
