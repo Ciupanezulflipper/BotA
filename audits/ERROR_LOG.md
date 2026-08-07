@@ -1,11 +1,12 @@
 # BotA Runtime Error Log
 
-Last updated: 2026-08-07 18:09 UTC
+Last updated: 2026-08-07 18:15 UTC
 
 This is the canonical compact error and prevention index. Historical full text remains in Git history, `ERRORS.md`, dated audit records, and GitHub issue/PR history.
 
 Current signal evidence:
 
+- `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
 - `audits/LOCAL_SIGNAL_LEDGER_INVENTORY_2026-08-07.md`
 - `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
 - `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
@@ -43,10 +44,15 @@ RECENT_LOSSES=9
 RECENT_CANCELLED=1
 RECENT_TOTAL_PIPS=-71.40
 LOCAL_LEDGER_ROWS=51
-LOCAL_LEDGER_WINS=13
-LOCAL_LEDGER_LOSSES=38
-LOCAL_LEDGER_CURRENTNESS=STALE_NARROW
-STRATEGY_MUTATION_ALLOWED=NO_PENDING_COMPONENT_OUTCOME_AUDIT
+LOCAL_LEDGER_JOINED_COMPONENT_ROWS=51
+LOCAL_LEDGER_JOIN_RATE=100_PERCENT
+MARCH_TOTAL_PIPS=-264.1
+MARCH_ADX_20_29_PIPS=+98.0
+MARCH_ADX_30_39_PIPS=-319.1
+MARCH_RSI_EXTREME_PIPS=-229.2
+MARCH_RSI_STRETCHED_PIPS=+69.4
+MARCH_SCORE_85PLUS_PIPS=-137.9
+STRATEGY_MUTATION_ALLOWED=NO_PENDING_COUNTERFACTUAL_AUDIT
 ```
 
 ## Canonical error index
@@ -119,14 +125,10 @@ Recorded: 2026-08-07.
 110 strategy-accepted
 ```
 
-Prevention: separate runtime health, raw directions, strategy filtering, delivery, and realized outcomes.
-
 ### E048 — Zero-entry symptom almost promoted to root cause
 Recorded: 2026-08-07.
 
 ```text
-all_zero_entry_sl_tp=1014
-all_zero_rows_direction=HOLD
 zero_entry_buy_sell_rows=0
 ```
 
@@ -145,7 +147,7 @@ Recorded: 2026-08-07.
 
 ```text
 HEADER_COLUMNS=13
-ROWS_WITH_25_COLUMNS=2509
+ROWS_WITH_25_COLUMNS>0
 ```
 
 Prevention: explicit schema/version migration or a versioned decision ledger.
@@ -162,7 +164,7 @@ FILTER_SCORE_MIN_ALL=65
 TELEGRAM_MIN_SCORE=70
 ```
 
-Six retained accepted events were blocked by Telegram score. Historical delivered `<70` rows were 1 win / 5 losses / -45.50 pips, so lowering the Telegram floor is not supported by current evidence.
+Historical delivered `<70` evidence is poor, so lowering the Telegram floor is not supported.
 
 ### E054 — Thirty-minute Telegram cooldown suppresses accepted events
 Recorded: 2026-08-07.
@@ -189,8 +191,6 @@ MATCHED_ACCEPTED_LOG_EVENTS=106
 UNMATCHED_ACCEPTED_ROWS=4
 ```
 
-Keep four delivery outcomes UNKNOWN.
-
 ### E057 — Cooldown non-equality almost promoted to proof of new trades
 Recorded: 2026-08-07 17:54 UTC.
 
@@ -199,11 +199,9 @@ COOLDOWN_TOTAL=38
 EXACT_DUPLICATE=0
 NOT_EXACT_DUPLICATE=38
 DIRECTION_CHANGED=0
-SCORE_IMPROVED_5PLUS=7
-ENTRY_CHANGED_3PLUS_PIPS=26
 ```
 
-All 38 remained the same direction as the preceding sent event. Distinguish changed updates from independent new trades.
+All 38 remained the same direction as the preceding sent event.
 
 ### E058 — Recent high scores do not imply recent positive edge
 Recorded: 2026-08-07.
@@ -218,26 +216,58 @@ TOTAL_PIPS=-71.40
 85+_TOTAL_PIPS=-35.00
 ```
 
-Score calibration and component/regime outcome analysis must precede threshold loosening or pair expansion.
-
 ### E059 — Local signal ledger is stale and narrow
 Recorded: 2026-08-07 18:09 UTC.
 
-Verified phone inventory:
-
 ```text
-PATH=data/ledger.csv
 LEDGER_ROWS=51
 WIN=13
 LOSS=38
-WIN_RATE=25.49%
-FIRST_TIMESTAMP=2026-03-09T21:45:07+02:00
-LAST_TIMESTAMP=2026-03-10T15:15:07+02:00
+FIRST=2026-03-09T21:45:07+02:00
+LAST=2026-03-10T15:15:07+02:00
 ```
 
-The ledger covers only about 17.5 hours. It cannot be treated as current June-August strategy evidence.
+Prevention: always report first/last timestamps and coverage span before using a local outcome ledger.
 
-Prevention: always report first/last timestamps and coverage span before using a local outcome ledger. Separate historical component diagnostics from current production outcome validation.
+### E060 — Score magnitude is inversely calibrated in the March component sample
+Recorded: 2026-08-07 18:15 UTC.
+
+The 51 ledger rows joined 100% to extended score-component rows.
+
+```text
+<70:   WR=18.2% PIPS=-83.5
+70-74: WR=50.0% PIPS=+2.1
+75-84: WR=31.6% PIPS=-44.8
+85+:   WR=17.6% PIPS=-137.9
+```
+
+The highest score bucket was the worst-performing bucket. Prevention: never assume a higher handcrafted score is better until score buckets are calibrated against realized outcomes.
+
+### E061 — ADX reward appears directionally wrong in the March sample
+Recorded: 2026-08-07 18:15 UTC.
+
+```text
+ADX_20_29: n=17 WR=52.9% PIPS=+98.0
+ADX_30_39: n=26 WR=7.7%  PIPS=-319.1
+ADX_40_PLUS: n=8 WR=25.0% PIPS=-43.0
+```
+
+Current scoring awards the maximum ADX component for ADX >=30. In this sample the 30-39 band was catastrophically worse than 20-29.
+
+Prevention: treat trend-strength scoring as potentially non-linear; test counterfactual calibration before production change.
+
+### E062 — RSI extremity reward conflicts with March outcomes
+Recorded: 2026-08-07 18:15 UTC.
+
+```text
+RSI_EXTREME:   n=18 WR=11.1% PIPS=-229.2
+RSI_STRETCHED: n=11 WR=45.5% PIPS=+69.4
+RSI_MODERATE:  n=22 WR=27.3% PIPS=-104.3
+```
+
+Current scoring rewards absolute RSI distance from 50. The intermediate stretched group was the only positive group while extreme RSI was the worst.
+
+Prevention: separate momentum strength from entry quality; do not monotonically reward overextension without outcome calibration.
 
 ## Current exact funnel
 
@@ -250,7 +280,7 @@ H4_D1_OPPOSE=4
 TOTAL_REJECTED_VALID_BUY_SELL=1317
 ```
 
-Delivery, matched accepted events:
+Delivery:
 
 ```text
 TELEGRAM_SENT=61
@@ -269,12 +299,13 @@ Recent outcome quality:
 -71.40 pips
 ```
 
-Historical local ledger:
+March component sample:
 
 ```text
-51 rows from 2026-03-09 through 2026-03-10
+51 joined rows
 13 wins
 38 losses
+-264.1 pips
 ```
 
 ## Efficient protocol
@@ -291,4 +322,4 @@ Historical local ledger:
 
 ## Exactly one next action
 
-Join the 51 local March ledger rows to matching 25-column alert rows. Report match coverage first. If coverage is sufficient, compare WIN/LOSS by score bucket, RSI extremity, MACD saturation, ADX band, H1 state, pair, and direction. Keep this historical analysis separate from recent Supabase outcomes.
+Run a read-only counterfactual on the joined March rows and recent component-matched published outcomes. Compare simple ADX/RSI candidate corrections and report retained signal count, win rate, and pips before any production strategy mutation.
