@@ -79,7 +79,17 @@ class HistoricalCandlesTests(unittest.TestCase):
     def test_reconciliation_deduplicates_identical_boundary_and_rejects_conflict(self):
         first = h.parse_oanda_payload(oanda_body(["2026-06-01T00:00:00Z", "2026-06-01T00:15:00Z"]))
         second = h.parse_oanda_payload(oanda_body(["2026-06-01T00:15:00Z", "2026-06-01T00:30:00Z"]))
-        second[0] = first[1]
+        # Make the shared boundary equal by value but independently instantiated.
+        second[0] = h.Candle(
+            time=first[1].time,
+            open=first[1].open,
+            high=first[1].high,
+            low=first[1].low,
+            close=first[1].close,
+            volume=first[1].volume,
+        )
+        self.assertIsNot(second[0], first[1])
+        self.assertEqual(second[0], first[1])
         rows, duplicates = h.reconcile_candles([first, second])
         self.assertEqual(len(rows), 3)
         self.assertEqual(duplicates, 1)
@@ -163,6 +173,7 @@ class HistoricalCandlesTests(unittest.TestCase):
                 path = dataset / record["path"]
                 self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), record["sha256"])
 
+            manifest_before = (dataset / "manifest.json").read_bytes()
             with self.assertRaises(FileExistsError):
                 h.acquire_dataset(
                     repo_root=root,
@@ -175,10 +186,11 @@ class HistoricalCandlesTests(unittest.TestCase):
                     token="test-token",
                     transport=fake_transport,
                 )
+            self.assertEqual(manifest_before, (dataset / "manifest.json").read_bytes())
 
     def test_failed_http_preserves_raw_evidence_and_failure_marker(self):
         def failing_transport(base_url, path_and_query, token, timeout):
-            return h.HttpResponse(429, {"RequestID": "rate"}, b'{"errorMessage":"rate"}')
+            return h.HttpResponse(400, {"RequestID": "bad"}, b'{"errorMessage":"bad request"}')
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -196,10 +208,62 @@ class HistoricalCandlesTests(unittest.TestCase):
                     recorded_at=z("2026-08-07T20:00:00Z"),
                 )
             dataset = root / "data" / "replay" / "failed-dataset"
-            self.assertTrue((dataset / "raw" / "EURUSD" / "M15" / "chunk-0000.json").is_file())
+            self.assertTrue(
+                (dataset / "raw" / "EURUSD" / "M15" / "chunk-0000-attempt-01.json").is_file()
+            )
             failure = json.loads((dataset / "FAILED.json").read_text(encoding="utf-8"))
             self.assertEqual(failure["status"], "FAILED")
             self.assertFalse(failure["production_cache_touched"])
+
+    def test_retryable_http_preserves_each_attempt_and_succeeds(self):
+        statuses = [503, 429, 200]
+        calls = []
+        sleeps = []
+
+        def flaky_transport(base_url, path_and_query, token, timeout):
+            status = statuses[len(calls)]
+            calls.append(status)
+            if status != 200:
+                return h.HttpResponse(
+                    status,
+                    {"RequestID": f"attempt-{len(calls)}"},
+                    json.dumps({"errorMessage": f"status {status}"}).encode("utf-8"),
+                )
+            body = oanda_body(
+                [
+                    "2026-06-01T00:00:00Z",
+                    "2026-06-01T00:15:00Z",
+                    "2026-06-01T00:30:00Z",
+                    "2026-06-01T00:45:00Z",
+                    "2026-06-01T01:00:00Z",
+                ]
+            )
+            return h.HttpResponse(200, {"RequestID": "attempt-3"}, body)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = h.acquire_dataset(
+                repo_root=root,
+                dataset_id="retry-dataset",
+                pairs=["EURUSD"],
+                timeframes=["M15"],
+                start_utc=z("2026-06-01T00:00:00Z"),
+                end_utc=z("2026-06-01T01:00:00Z"),
+                base_url=h.DEFAULT_OANDA_URL,
+                token="test-token",
+                transport=flaky_transport,
+                sleep_fn=sleeps.append,
+                recorded_at=z("2026-08-07T20:00:00Z"),
+            )
+            dataset = root / "data" / "replay" / "retry-dataset"
+            self.assertEqual(calls, [503, 429, 200])
+            self.assertEqual(sleeps, [0.5, 1.0])
+            self.assertEqual(manifest["streams"][0]["request_count"], 1)
+            self.assertEqual(manifest["streams"][0]["http_attempts"], 3)
+            for attempt in range(1, 4):
+                stem = f"chunk-0000-attempt-{attempt:02d}.json"
+                self.assertTrue((dataset / "raw" / "EURUSD" / "M15" / stem).is_file())
+                self.assertTrue((dataset / "metadata" / "EURUSD" / "M15" / stem).is_file())
 
     def test_dotenv_is_read_as_data_and_environment_wins(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -227,6 +291,7 @@ class HistoricalCandlesTests(unittest.TestCase):
             "https://api-fxpractice.oanda.com.evil.example",
             "https://user:pass@api-fxpractice.oanda.com",
             "https://api-fxpractice.oanda.com/path",
+            "https://api-fxpractice.oanda.com:8443",
         ):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 h.validate_base_url(bad)
@@ -234,7 +299,7 @@ class HistoricalCandlesTests(unittest.TestCase):
     def test_dataset_id_cannot_escape_replay_root(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            for bad in ("../escape", "/absolute", "a/b", "", "."):
+            for bad in ("../escape", "/absolute", "a/b", "", ".", "a" * 65):
                 with self.subTest(bad=bad), self.assertRaises(ValueError):
                     h.dataset_path_preview(root, bad)
 
