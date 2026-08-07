@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: 2026-08-07 18:38 UTC
+Last updated: 2026-08-07 18:46 UTC
 
 ## Authoritative identifiers
 
@@ -87,9 +87,7 @@ TOTAL_PIPS=-71.40
 
 Recent high scores are not reliably separating winners from losers.
 
-## March component/outcome sample
-
-The 51 local March outcomes joined 100% to extended alert components:
+## March component/outcome evidence
 
 ```text
 LEDGER_ROWS=51
@@ -97,44 +95,41 @@ JOINED=51
 WINS=13
 LOSSES=38
 TOTAL_PIPS=-264.1
+ADX<30: N=17 W=9 L=8 PIPS=+98.0
+SCORE>=70 + ADX<30: N=12 W=9 L=3 PIPS=+174.2
 ```
 
-Key component splits:
+The March 7/7 no-extreme subset remains high overfit risk and is not production proof.
+
+## June-July temporal cross-check — 2026-08-07 18:46 UTC
+
+Frozen candidate rules were checked against a later production outcome period:
 
 ```text
-ADX 20-29: n=17 WR=52.9% PIPS=+98.0
-ADX 30-39: n=26 WR=7.7% PIPS=-319.1
-ADX 40+:   n=8  WR=25.0% PIPS=-43.0
-
-RSI EXTREME:   n=18 WR=11.1% PIPS=-229.2
-RSI STRETCHED: n=11 WR=45.5% PIPS=+69.4
-RSI MODERATE:  n=22 WR=27.3% PIPS=-104.3
-
-score 85+: n=17 WR=17.6% PIPS=-137.9
+PUBLISHED=13
+MATCHED=9
+UNMATCHED=4
+MATCH_RATE=69.2%
+MATCHED_BASELINE: N=9 W=2 L=7 PIPS=-70.2
+SCORE>=70 + ADX<30: N=5 W=2 L=3 PIPS=+13.1
+SCORE>=70 + ADX<30 + NO_EXTREME: N=4 W=2 L=2 PIPS=+28.9
+ADX_30_39: N=3 W=0 L=3 PIPS=-57.4
+ADX_40_PLUS: N=1 W=0 L=1 PIPS=-25.9
 ```
 
-## ADX / RSI counterfactual — 2026-08-07 18:38 UTC
+The later matched subset supports the same ADX concern as March: all matched ADX >=30 signals lost. But 9/13 coverage is insufficient for production approval.
 
-```text
-BASELINE: N=51 W=13 L=38 WR=25.5% PIPS=-264.1
-SCORE>=70: N=40 W=11 L=29 WR=27.5% PIPS=-180.6
-NO_EXTREME_RSI: N=33 W=11 L=22 WR=33.3% PIPS=-34.9
-ADX<30: N=17 W=9 L=8 WR=52.9% PIPS=+98.0
-ADX<30 + NO_EXTREME: N=12 W=7 L=5 WR=58.3% PIPS=+94.8
-SCORE>=70 + ADX<30: N=12 W=9 L=3 WR=75.0% PIPS=+174.2
-SCORE>=70 + ADX<30 + NO_EXTREME: N=7 W=7 L=0 WR=100.0% PIPS=+171.0
-```
+## Supabase timestamp semantics caution
 
-The last subset is not production proof. It is only seven trades and was selected on the same data used to discover the rule. Treat it as high overfit risk.
-
-The broad evidence supports a simpler diagnosis: current scoring over-rewards trend intensity and under-prices late-entry/exhaustion risk. ADX >=30 is the strongest historical warning; extreme RSI is a secondary warning.
+Exact `created_at` values in `public.signals` were re-read on 2026-08-07. Several already-matched signals have Supabase creation times that do not equal local watcher decision timestamps. Treat `created_at` as publication/storage timing until proven otherwise; do not use it as the sole join key.
 
 ## Scope lock
 
-Do not lower score/H1/Telegram thresholds, remove cooldown, add a third pair, or mutate ADX/RSI scoring from this in-sample result.
+Do not lower score/H1/Telegram thresholds, remove cooldown, add a third pair, or mutate ADX/RSI scoring yet.
 
 ## Evidence
 
+- `audits/JUNE_JULY_ADX_RSI_TEMPORAL_CROSSCHECK_2026-08-07.md`
 - `audits/ADX_RSI_COUNTERFACTUAL_2026-08-07.md`
 - `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
 - `audits/LOCAL_SIGNAL_LEDGER_INVENTORY_2026-08-07.md`
@@ -149,12 +144,4 @@ Do not lower score/H1/Telegram thresholds, remove cooldown, add a third pair, or
 
 ## Exactly one next action
 
-Run a separate out-of-sample replay with candidate policies frozen before outcomes are examined:
-
-```text
-A: current baseline
-B: score >=70 AND ADX <30
-C: score >=70 AND ADX <30 AND no extreme RSI
-```
-
-Compare retained signal count, win/loss, total pips, and preferably MAE/MFE. Only an out-of-sample improvement can justify a production strategy mutation.
+Resolve the four unmatched June 23-26 published outcomes against retained local alert rows using relaxed matching. If those rows are absent, record the retention gap and move to a true historical replay using raw candles and the live scoring path.

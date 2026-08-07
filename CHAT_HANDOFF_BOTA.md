@@ -1,17 +1,17 @@
 # BotA Chat Handoff
 
-Last updated: 2026-08-07 18:38 UTC
+Last updated: 2026-08-07 18:46 UTC
 
 Read this first in any new AI chat before proposing BotA changes.
 
 ## Current grounded answer
 
-BotA is not failing because it cannot generate BUY/SELL directions. The investigation has separated four layers:
+BotA is not failing because it cannot generate BUY/SELL directions. The investigation now separates four layers:
 
 1. strategy throughput is low because score and H1 gates reject most tradeable candidates;
 2. delivery policy suppresses additional strategy-accepted candidates;
-3. recent delivered M15 signal quality is poor, so sending more signals is not a valid repair;
-4. historical component/outcome evidence indicates the score likely over-rewards trend intensity and under-prices late-entry/exhaustion risk.
+3. recent delivered M15 signal quality is poor, so simply sending more signals is not a valid repair;
+4. both March component/outcome evidence and a later June-July matched subset point to ADX/late-entry score calibration as the strongest strategy concern.
 
 ## Current live configuration
 
@@ -21,6 +21,7 @@ TIMEFRAMES=M15
 FILTER_SCORE_MIN_ALL=65
 H1_TREND_MIN_SCORE=40
 H1_VETO_OVERRIDE_SCORE=75
+H1_VETO_OVERRIDE_ADX=40
 TELEGRAM_MIN_SCORE=70
 TELEGRAM_TIER_YELLOW_MIN=70
 TELEGRAM_TIER_GREEN_MIN=75
@@ -52,7 +53,7 @@ Only EURUSD and GBPUSD are live. A third pair is not currently scanned.
 1 send failure
 ```
 
-Telegram transport works. The delivery layer is not the only reason for low signal count.
+Telegram transport works. Delivery is not the primary strategy-quality problem.
 
 ## Recent signal quality
 
@@ -75,46 +76,46 @@ High score has not protected recent signals from poor outcomes.
 The 51 local March outcomes joined 100% to extended score-component rows:
 
 ```text
-51 rows
-13 wins
-38 losses
--264.1 pips
+BASELINE: N=51 W=13 L=38 PIPS=-264.1
+ADX<30: N=17 W=9 L=8 PIPS=+98.0
+SCORE>=70 + ADX<30: N=12 W=9 L=3 PIPS=+174.2
+SCORE>=70 + ADX<30 + NO_EXTREME: N=7 W=7 L=0 PIPS=+171.0
 ```
 
-Key splits:
+The 7/7 result is in-sample and high-overfit risk. Do not treat it as a 100% strategy.
+
+## June-July temporal cross-check — 2026-08-07 18:46 UTC
+
+The March-derived rules were frozen and applied to a later published-outcome set. Nine of 13 outcomes matched retained local component rows:
 
 ```text
-ADX 20-29: +98.0 pips, 52.9% WR
-ADX 30-39: -319.1 pips, 7.7% WR
-ADX 40+: -43.0 pips, 25.0% WR
-RSI extreme: -229.2 pips, 11.1% WR
-RSI stretched: +69.4 pips, 45.5% WR
-score 85+: -137.9 pips, 17.6% WR
+PUBLISHED=13
+MATCHED=9
+UNMATCHED=4
+MATCH_RATE=69.2%
+A_CURRENT_MATCHED_BASELINE: N=9 W=2 L=7 PIPS=-70.2
+B_SCORE70_ADX_LT30: N=5 W=2 L=3 PIPS=+13.1
+C_SCORE70_ADX_LT30_NO_EXTREME: N=4 W=2 L=2 PIPS=+28.9
+ADX_30_39: N=3 W=0 L=3 PIPS=-57.4
+ADX_40_PLUS: N=1 W=0 L=1 PIPS=-25.9
 ```
 
-## Counterfactual — 2026-08-07 18:38 UTC
+This later subset points in the same direction as March: all matched ADX >=30 signals lost. However, the match rate is only 69.2%, so this is not enough to change production.
+
+## Four unmatched published outcomes
 
 ```text
-BASELINE: N=51 W=13 L=38 WR=25.5% PIPS=-264.1
-SCORE>=70: N=40 W=11 L=29 WR=27.5% PIPS=-180.6
-NO_EXTREME_RSI: N=33 W=11 L=22 WR=33.3% PIPS=-34.9
-ADX<30: N=17 W=9 L=8 WR=52.9% PIPS=+98.0
-ADX<30 + NO_EXTREME: N=12 W=7 L=5 WR=58.3% PIPS=+94.8
-SCORE>=70 + ADX<30: N=12 W=9 L=3 WR=75.0% PIPS=+174.2
-SCORE>=70 + ADX<30 + NO_EXTREME: N=7 W=7 L=0 WR=100.0% PIPS=+171.0
+2026-06-23 GBPUSD SELL score=79 entry=1.32179 WIN +33.1
+2026-06-23 EURUSD SELL score=78 entry=1.13862 LOSS -13.3
+2026-06-24 GBPUSD SELL score=77 entry=1.31448 LOSS -21.0
+2026-06-26 EURUSD SELL score=75 entry=1.13892 CANCELLED 0.0
 ```
 
-Do not call the final 7/7 subset a 100% strategy. It was found and measured on the same narrow sample and is highly vulnerable to overfitting.
+The next investigation must determine whether their local component rows are retained but outside the tight match tolerances, or absent from current local retention.
 
-The broad result is more important: `ADX<30` alone changes the 51-row sample from -264.1 to +98.0 pips while retaining 17 trades. ADX 30-39 is poor across all RSI states. Removing extreme RSI helps materially but is not sufficient by itself.
+## Supabase timestamp caution
 
-## What is not proven
-
-- `ADX<30` is not yet an approved production gate.
-- The 7/7 subset is not proof of perfect accuracy.
-- Do not tune more thresholds on these same 51 rows.
-- H1 effects cannot be learned from this March sample because all 51 rows were H1 neutral.
-- Pair expansion and cooldown changes remain out of scope until signal quality is validated.
+Exact Supabase `created_at` values were re-read on 2026-08-07 and do not directly equal several known local watcher decision timestamps. Do not join by Supabase `created_at` alone until publication/storage semantics are proven.
 
 ## No-change rules
 
@@ -132,15 +133,7 @@ SUPABASE_CHANGED=NO
 
 ## Exactly one next proof
 
-Use a separate historical period not used to discover the candidate rule. Freeze these policies before examining outcomes:
-
-```text
-A: current production baseline
-B: score >=70 AND ADX <30
-C: score >=70 AND ADX <30 AND no extreme RSI
-```
-
-Run an out-of-sample replay and compare retained signal count, wins/losses, pips, and preferably MAE/MFE. Only then consider a live strategy change.
+Inspect the nearest local `alerts.csv` candidates for the four unmatched June 23-26 published outcomes using relaxed matching and bounded output. If they cannot be recovered, record a retention gap and proceed to a true historical replay using raw candles and the live scoring path.
 
 ## Working discipline
 

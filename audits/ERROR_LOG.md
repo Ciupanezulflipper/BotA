@@ -1,11 +1,12 @@
 # BotA Runtime Error Log
 
-Last updated: 2026-08-07 18:38 UTC
+Last updated: 2026-08-07 18:46 UTC
 
 This is the canonical compact error and prevention index. Historical full text remains in Git history, `ERRORS.md`, dated audit records, and GitHub issue/PR history.
 
 Current signal evidence:
 
+- `audits/JUNE_JULY_ADX_RSI_TEMPORAL_CROSSCHECK_2026-08-07.md`
 - `audits/ADX_RSI_COUNTERFACTUAL_2026-08-07.md`
 - `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
 - `audits/LOCAL_SIGNAL_LEDGER_INVENTORY_2026-08-07.md`
@@ -51,7 +52,13 @@ MARCH_TOTAL_PIPS=-264.1
 MARCH_ADX_LT30_PIPS=+98.0
 MARCH_SCORE70_ADX_LT30_PIPS=+174.2
 MARCH_SCORE70_ADX_LT30_WR=75.0_PERCENT
-STRATEGY_MUTATION_ALLOWED=NO_PENDING_OUT_OF_SAMPLE_REPLAY
+TEMPORAL_MATCHED=9_OF_13
+TEMPORAL_MATCH_RATE=69.2_PERCENT
+TEMPORAL_MATCHED_BASELINE_PIPS=-70.2
+TEMPORAL_ADX_LT30_PIPS=+13.1
+TEMPORAL_ADX_LT30_NO_EXTREME_PIPS=+28.9
+TEMPORAL_ADX_GTE30=0W_4L_MINUS83.3_PIPS
+STRATEGY_MUTATION_ALLOWED=NO_PENDING_UNMATCHED_RECOVERY_OR_TRUE_REPLAY
 ```
 
 ## Canonical error index
@@ -283,6 +290,32 @@ Recorded: 2026-08-07 18:38 UTC.
 
 This strengthens the directional ADX concern because poor results are not confined to one RSI subgroup. It still does not establish a final production threshold.
 
+### E065 — Later-period ADX cross-check supports the same direction but coverage is incomplete
+Recorded: 2026-08-07 18:46 UTC.
+
+```text
+PUBLISHED=13
+MATCHED=9
+UNMATCHED=4
+MATCH_RATE=69.2%
+MATCHED_BASELINE: N=9 W=2 L=7 PIPS=-70.2
+SCORE>=70 + ADX<30: N=5 W=2 L=3 PIPS=+13.1
+SCORE>=70 + ADX<30 + NO_EXTREME: N=4 W=2 L=2 PIPS=+28.9
+ADX_30_39: N=3 W=0 L=3 PIPS=-57.4
+ADX_40_PLUS: N=1 W=0 L=1 PIPS=-25.9
+```
+
+All four matched ADX >=30 rows lost, totaling -83.3 pips. The later subset independently points in the same direction as March, but 9/13 coverage is insufficient to approve a production rule.
+
+Prevention: resolve unmatched component rows or record the retention gap before claiming out-of-sample validation.
+
+### E066 — Supabase `created_at` is not proven to equal BotA decision time
+Recorded: 2026-08-07.
+
+Exact read-only Supabase rows were re-queried. Several already-matched signals have `created_at` values that do not equal the local watcher decision timestamps.
+
+Prevention: treat Supabase `created_at` as publication/storage timing until its semantics are proven; never use it as the sole join key.
+
 ## Current exact funnel
 
 Strategy:
@@ -313,12 +346,14 @@ Recent outcome quality:
 -71.40 pips
 ```
 
-March counterfactual:
+Cross-period ADX evidence:
 
 ```text
-51 baseline rows: -264.1 pips
-ADX<30: +98.0 pips on 17 rows
-score>=70 + ADX<30: +174.2 pips on 12 rows
+March baseline=-264.1 pips
+March ADX<30=+98.0 pips
+June-July matched baseline=-70.2 pips
+June-July matched ADX<30=+13.1 pips
+June-July matched ADX>=30=0W/4L, -83.3 pips
 ```
 
 ## Efficient protocol
@@ -333,15 +368,8 @@ score>=70 + ADX<30: +174.2 pips on 12 rows
 8. Date every material finding in UTC.
 9. Branch -> verified diff -> PR; never direct-main fallback.
 10. Freeze candidate rules before out-of-sample testing.
+11. Resolve unmatched records before claiming temporal validation.
 
 ## Exactly one next action
 
-Run an out-of-sample replay over a separate historical period with candidates fixed in advance:
-
-```text
-A: current baseline
-B: score >=70 AND ADX <30
-C: score >=70 AND ADX <30 AND no extreme RSI
-```
-
-Compare retained signal count, win/loss, total pips, and preferably MAE/MFE. No production strategy mutation until this validation is complete.
+Resolve the four unmatched June 23-26 published signals against retained local alerts with relaxed matching. If the component rows are absent, record the retention gap and proceed to a true historical replay using raw candles and the live scoring path. No production strategy mutation until this validation is complete.
