@@ -1,118 +1,150 @@
 # BotA Current Continuity State
 
-Last updated: 2026-08-03 01:14 UTC
+Last updated: 2026-08-07 17:01 UTC
 
 ## Authoritative identifiers
 
 ```text
-HEARTBEAT_CODE_BASELINE=4b89d1e0c729b81472ca78d723316289dd4aebb1
+RECORDED_DATE=2026-08-07
 PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
-PHONE_HEAD=011baaaad7071110e33bca06903047c842e7331a
-PHONE_REMOTE_PUSHED=NO
-PHONE_PRESERVATION_ROOT=~/bota-phone-preserve-20260802T210517Z
-PHONE_UNTRACKED_FILES_PRESERVED=519
-P8_BACKUP=~/bota-phone-preserve-20260802T210517Z/p8-unified-heartbeat-20260803T001345Z
+PHONE_HEAD=73b2306b5843f3396823ce815e96051abf78cf50
+CURRENT_NATIVE_MANAGER_PID=31140
+CURRENT_SERVICE_DAEMON_PIDFILE=31140
 ```
+
+## Current runtime state — 2026-08-07
+
+Latest read-only control-plane observation:
+
+```text
+manager_count=1
+manager_pid=31140
+required=7
+owned=6
+running=7
+orphaned=1
+duplicate_service_rows=0
+healthy=false
+orphan_service=crond
+```
+
+The watcher is live and was observed through:
+
+```text
+runsv bota-watcher
+  -> tools/run_signal_watcher_with_ledger.sh
+  -> tools/signal_watcher_pro.sh --once
+```
+
+The current control-plane defect remains real, but it is not sufficient to
+explain the signal drought because all seven required services are running and
+the watcher is actively recording decisions.
+
+## Signal funnel — verified 2026-08-07
+
+Source:
+
+```text
+logs/alerts.csv
+```
+
+Verified CSV schema:
+
+```text
+timestamp,pair,tf,direction,score,confidence,entry,sl,tp,provider,rejected,filter_str,reasons
+```
+
+Decision corpus:
+
+```text
+TOTAL_ROWS=2507
+HOLD=1082
+SELL=959
+BUY=466
+ACCEPTED=110
+REJECTED=2397
+ACCEPTANCE_RATE≈4.39%
+REJECTION_RATE≈95.61%
+```
+
+This proves the direction engine produces BUY and SELL decisions. The current
+highest-value bottleneck is downstream filtering/eligibility, not absence of
+raw trade directions.
+
+Frequent filter strings include score thresholds (`score<62`, `score<65`,
+`score<70`), `direction_not_tradeable`, H1 neutral tags, RR text, and
+`macro6=3`. `H4_D1_oppose` was rare in the inspected corpus.
+
+## Zero entry / SL / TP classification
+
+A direct read-only pass over all 2507 rows found:
+
+```text
+ALL_VALID_ENTRY_SL_TP_ROWS=1493
+ALL_ZERO_ENTRY_SL_TP_ROWS=1014
+MIXED_ENTRY_SL_TP_ROWS=0
+```
+
+All 1014 zero rows were:
+
+```text
+DIRECTION=HOLD
+SCORE=0.00
+TIMEFRAME=M15
+GBPUSD=519
+EURUSD=490
+USDJPY=5
+ZERO_ENTRY_BUY_SELL_ROWS=0
+```
+
+Therefore:
+
+```text
+ZERO_ENTRY_VERDICT=HOLD_SYMPTOM_NOT_ROOT_CAUSE
+```
+
+Do not spend further time treating `entry=0` as the root defect unless new
+BUY/SELL evidence contradicts this classification.
+
+## Audit correction
+
+One exploratory Python snippet attempted to read a non-existent
+`filter_rejected` CSV key and therefore printed empty filter-status values. The
+correct field is `rejected`. The earlier acceptance/rejection totals based on
+CSV column 11 remain valid.
+
+## Historical runtime incident — retained
+
+Earlier on 2026-08-07 two `runsvdir` managers existed. PID 16360 (`runsvdir -P`)
+owned the BotA supervisors while native Termux `service-daemon` manager PID
+31140 owned none and its pidfile pointed to 31140. PID 16360 later died and the
+native manager progressively reacquired supervisors. Exact executor attribution
+for the native-manager start and detached-manager termination remains unproven.
+
+Do not restart that broad provenance hunt unless it becomes necessary for
+runtime safety.
 
 ## Scope lock
 
-Do not change strategy, thresholds, pairs, scoring, ADX, H1/D1 confirmation,
-volatility or macro filters, deduplication, SL/TP, PR #7, provider semantics, or
-Supabase signal semantics during runtime-reliability work.
+No strategy, threshold, H1/H4/D1, macro, RR, SL/TP, provider, Telegram,
+Supabase, dedup, or service-topology mutation is authorized by the signal audit
+alone.
 
-## Deployed and accepted
-
-```text
-D1 mapping=1440
-supervisor core=PASS
-supervisor wrapper=non-mutating PASS
-status formatter=PASS
-autostatus=PASS
-unified heartbeat topology=DEPLOYED
-heartbeat delivery=PASS
-manager_count=1
-required=7
-owned=7
-running=7
-orphaned=0
-duplicate_service_rows=0
-healthy=true
-```
-
-Phone deployment commits:
-
-```text
-d5c765df6fee1241be21ce892fc53e9c4bdcfb8c
-  deploy: apply repaired non-heartbeat runtime core
-
-dbdb1b1f9e2e1a6d66bb94b8eda4d1cf40617d20
-  deploy: activate non-mutating supervisor wrapper
-
-011baaaad7071110e33bca06903047c842e7331a
-  deploy: activate unified heartbeat runtime
-```
-
-## P8 heartbeat deployment
-
-The active path is now:
-
-```text
-services/bota-heartbeat/run
-  -> tools/heartbeat.sh
-  -> tools/heartbeat_runtime.py
-  -> tools/heartbeat_delivery.py
-```
-
-P8 replaced the four repository files plus the separate active wrapper,
-restarted only `bota-heartbeat`, and verified that only the heartbeat wrapper PID
-changed. The legacy `tools/bota_heartbeat_utc.sh` was preserved unchanged.
-
-Fresh markers:
-
-```text
-[RUNIT bota-heartbeat 2026-08-03T00:13:49Z] SERVICE_START pid=7453 interval_sec=60 mutation=disabled
-[2026-08-03 00:13:59 UTC] HB_UTC_RESULT=PASS sources=3
-[2026-08-03 00:13:59 UTC] DEADMAN_UTC_RESULT=MONOTONIC_PROGRESS_INVALID
-```
-
-Precise verdict:
-
-```text
-P8_UNIFIED_HEARTBEAT_DEPLOYMENT=PASS
-HEARTBEAT_TOPOLOGY=DEPLOYED
-HEARTBEAT_DELIVERY=PASS
-AUTHORITATIVE_UTC=PASS_3_SOURCES
-CONTROL_PLANE=HEALTHY_7_OF_7
-DEADMAN_INPUT_ACCEPTANCE=FAIL
-```
-
-The deadman defect is now narrower than the original heartbeat topology issue.
-The unified controller is active, but it rejected the current
-`state/shadow_progress.monotonic` input. Do not describe deadman monitoring as
-healthy until that input and its producer are proven valid.
-
-## Historical status
-
-The August 1 endurance validation remains failed historical evidence. A new
-endurance-validation pass has not yet been completed.
-
-Two documentation-only direct-main commits occurred while recording P8. They are
-recorded in `audits/P8_DIRECT_MAIN_DOC_EXCEPTION_2026-08-03.md`. No runtime code
-or phone state was changed by those documentation commits, but the process rule
-was violated and must not be repeated.
+The next strategy decision must be evidence-driven from the valid-entry funnel,
+not from frustration with signal frequency.
 
 ## Evidence
 
-- `audits/P8_HEARTBEAT_PHONE_DEPLOYMENT_2026-08-03.md`
-- `audits/PR39_HEARTBEAT_RECONCILIATION_2026-08-03.md`
-- `audits/P7_SUPERVISOR_WRAPPER_CLOSURE_2026-08-02.md`
-- `audits/PHONE_DEPLOYMENT_2026-08-02.md`
-- `audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`
+- `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
+- `AI_START_HERE.md`
+- `CHAT_HANDOFF_BOTA.md`
 - `audits/ERROR_LOG.md`
 - `ERRORS.md`
-- GitHub issue #9
+- open PR #46 for duplicate-manager provenance work
+- historical deployment/heartbeat records dated 2026-08-01 through 2026-08-03
 
 ## Exactly one next action
 
-Inspect the live monotonic progress file and its producer read-only. Prove the
-exact cause of `MONOTONIC_PROGRESS_INVALID` before changing any file or service.
+Classify the 1493 valid-entry rows by `rejected`, pair, direction, score bucket,
+and exact `filter_str`, then inspect the 110 accepted rows for Telegram
+eligibility/delivery. Do not change code before that evidence is complete.
