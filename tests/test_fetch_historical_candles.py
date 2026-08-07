@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import ssl
 import sys
 import tempfile
 import unittest
@@ -79,7 +80,6 @@ class HistoricalCandlesTests(unittest.TestCase):
     def test_reconciliation_deduplicates_identical_boundary_and_rejects_conflict(self):
         first = h.parse_oanda_payload(oanda_body(["2026-06-01T00:00:00Z", "2026-06-01T00:15:00Z"]))
         second = h.parse_oanda_payload(oanda_body(["2026-06-01T00:15:00Z", "2026-06-01T00:30:00Z"]))
-        # Make the shared boundary equal by value but independently instantiated.
         second[0] = h.Candle(
             time=first[1].time,
             open=first[1].open,
@@ -340,6 +340,59 @@ class HistoricalCandlesTests(unittest.TestCase):
                 stem = f"chunk-0000-attempt-{attempt:02d}.json"
                 self.assertTrue((dataset / "raw" / "EURUSD" / "M15" / stem).is_file())
                 self.assertTrue((dataset / "metadata" / "EURUSD" / "M15" / stem).is_file())
+
+    def test_transient_ssl_eof_retries_preserves_metadata_and_succeeds(self):
+        calls = []
+        sleeps = []
+
+        def flaky_transport(base_url, path_and_query, token, timeout):
+            calls.append(len(calls) + 1)
+            if len(calls) < 3:
+                raise ssl.SSLEOFError(8, "simulated unexpected EOF")
+            return h.HttpResponse(
+                200,
+                {"RequestID": "ssl-recovered"},
+                oanda_body(
+                    [
+                        "2026-06-01T00:00:00Z",
+                        "2026-06-01T00:15:00Z",
+                        "2026-06-01T00:30:00Z",
+                        "2026-06-01T00:45:00Z",
+                    ]
+                ),
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = h.acquire_dataset(
+                repo_root=root,
+                dataset_id="ssl-retry-dataset",
+                pairs=["EURUSD"],
+                timeframes=["M15"],
+                start_utc=z("2026-06-01T00:00:00Z"),
+                end_utc=z("2026-06-01T01:00:00Z"),
+                base_url=h.DEFAULT_OANDA_URL,
+                token="test-token",
+                transport=flaky_transport,
+                sleep_fn=sleeps.append,
+                recorded_at=z("2026-08-07T20:29:19Z"),
+            )
+            dataset = root / "data" / "replay" / "ssl-retry-dataset"
+            self.assertEqual(calls, [1, 2, 3])
+            self.assertEqual(sleeps, [0.5, 1.0])
+            self.assertEqual(manifest["streams"][0]["http_attempts"], 3)
+
+            for attempt in (1, 2):
+                stem = f"chunk-0000-attempt-{attempt:02d}.json"
+                meta_path = dataset / "metadata" / "EURUSD" / "M15" / stem
+                raw_path = dataset / "raw" / "EURUSD" / "M15" / stem
+                metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+                self.assertEqual(metadata["transport_error"]["type"], "SSLEOFError")
+                self.assertFalse(raw_path.exists())
+
+            success_stem = "chunk-0000-attempt-03.json"
+            self.assertTrue((dataset / "raw" / "EURUSD" / "M15" / success_stem).is_file())
+            self.assertTrue((dataset / "metadata" / "EURUSD" / "M15" / success_stem).is_file())
 
     def test_dotenv_is_read_as_data_and_environment_wins(self):
         with tempfile.TemporaryDirectory() as tmp:
