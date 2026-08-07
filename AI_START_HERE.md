@@ -1,6 +1,6 @@
 # BotA AI Start Here
 
-Last updated: 2026-08-07 17:54 UTC
+Last updated: 2026-08-07 18:09 UTC
 
 Read this before proposing BotA commands, code, cron, service, strategy,
 notification, provider, Supabase, or deployment changes.
@@ -50,19 +50,26 @@ RECENT_WINS=3
 RECENT_LOSSES=9
 RECENT_CANCELLED=1
 RECENT_TOTAL_PIPS=-71.40
+LOCAL_LEDGER_ROWS=51
+LOCAL_LEDGER_WINS=13
+LOCAL_LEDGER_LOSSES=38
+LOCAL_LEDGER_FIRST=2026-03-09T21:45:07+02:00
+LOCAL_LEDGER_LAST=2026-03-10T15:15:07+02:00
+LOCAL_LEDGER_CURRENTNESS=STALE_NARROW
 STRATEGY_MUTATION_ALLOWED=NO_PENDING_COMPONENT_OUTCOME_AUDIT
 ```
 
 ## Evidence order
 
-1. `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
-2. `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
-3. `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
-4. `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
-5. `CONTINUITY_CURRENT.md`
-6. `CHAT_HANDOFF_BOTA.md`
-7. `audits/ERROR_LOG.md`
-8. `ERRORS.md`
+1. `audits/LOCAL_SIGNAL_LEDGER_INVENTORY_2026-08-07.md`
+2. `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
+3. `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
+4. `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
+5. `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
+6. `CONTINUITY_CURRENT.md`
+7. `CHAT_HANDOFF_BOTA.md`
+8. `audits/ERROR_LOG.md`
+9. `ERRORS.md`
 
 ## Current signal funnel
 
@@ -88,9 +95,7 @@ Retained accepted-to-Telegram evidence:
 
 Telegram transport is not the dominant failure. The watcher and send path work.
 
-## Cooldown interpretation — corrected 2026-08-07 17:54 UTC
-
-The 38 cooldown-suppressed accepted events were compared with the last sent event for the same pair/timeframe:
+## Cooldown interpretation — 2026-08-07 17:54 UTC
 
 ```text
 EXACT_DUPLICATE=0
@@ -100,20 +105,11 @@ SCORE_IMPROVED_5PLUS=7
 ENTRY_CHANGED_3PLUS_PIPS=26
 ```
 
-Do not call these 38 `new trades`. They are field-level different but all remain the same direction as the preceding sent signal. The current 30-minute cooldown is coarse and keyed only by pair/timeframe, while exact content dedup runs later. It may suppress meaningful updates, but it also clearly acts as repeat-alert suppression. Do not remove it blindly.
+The 38 rows are non-identical same-direction accepted updates, not proven independent new trades. Do not remove cooldown blindly.
 
-## Signal quality cross-check — new highest priority
+## Signal quality cross-check — highest priority
 
-Read-only Supabase outcome data for BotA M15 rows with rationale `BotA score=` shows:
-
-```text
-historical score <70: n=6, wins=1, losses=5, total_pips=-45.50
-historical 70-74:    n=3, wins=2, losses=1, total_pips=+59.60
-historical 75-84:   n=33, wins=12, losses=17, cancelled=4, total_pips=+56.10
-historical 85+:     n=16, wins=4, losses=10, cancelled=2, total_pips=+25.10
-```
-
-Most important: delivered BotA M15 signals created on or after 2026-06-01 are currently:
+Read-only Supabase outcome data for BotA M15 rows with rationale `BotA score=` shows recent signals created on or after 2026-06-01:
 
 ```text
 TOTAL=13
@@ -121,48 +117,43 @@ WINS=3
 LOSSES=9
 CANCELLED=1
 TOTAL_PIPS=-71.40
-```
-
-Recent higher scores did not solve this:
-
-```text
 75-84: n=11, wins=3, losses=7, cancelled=1, total_pips=-36.40
 85+:   n=2, wins=0, losses=2, total_pips=-35.00
 ```
 
-Therefore the current problem is not merely `too few messages`. Recent accepted/delivered signal edge is poor. Increasing signal volume before diagnosing score-component/regime quality would be the wrong repair.
+High score is not currently demonstrating reliable recent calibration.
 
-## Current live configuration
+## Local signal ledger inventory — 2026-08-07 18:09 UTC
+
+The phone already has `data/ledger.csv`, but its coverage is narrow and stale:
 
 ```text
-PAIRS=EURUSD GBPUSD
-TIMEFRAMES=M15
-FILTER_SCORE_MIN_ALL=65
-H1_VETO_OVERRIDE_SCORE=75
-TELEGRAM_MIN_SCORE=70
-TELEGRAM_TIER_YELLOW_MIN=70
-TELEGRAM_TIER_GREEN_MIN=75
-TELEGRAM_COOLDOWN_SECONDS=1800
+LEDGER_ROWS=51
+WIN=13
+LOSS=38
+WIN_RATE=25.49%
+FIRST_TIMESTAMP=2026-03-09T21:45:07+02:00
+LAST_TIMESTAMP=2026-03-10T15:15:07+02:00
 ```
 
-Only two pairs are live. A third pair requires explicit validation and configuration later.
+This is only about 17.5 hours of March data. It is useful as a historical component/outcome sample if it joins cleanly to the 25-column alert rows, but it must not be treated as current June-August strategy performance.
 
-## Closed/non-dominant causes
+## Scoring-engine warning under investigation
 
-- Zero entry/SL/TP: HOLD symptom only; no BUY/SELL zero-entry rows.
-- `macro6=3`: neutral in current fusion code.
-- RR text: advisory in current quality filter.
-- H4+D1 opposition: only four valid BUY/SELL rejects.
-- Telegram transport: 61 successful retained sends versus one failure.
+Current source computes RSI contribution as:
+
+```text
+rsi_comp = min(15.0, abs(rsi - 50.0) * 0.6)
+```
+
+This rewards RSI extremity in either direction. Current source also comments on a ±0.3 ATR pullback zone while using a 1.0 ATR buffer. These are hypotheses for false confidence, not yet approved defects.
 
 ## Scope lock
 
 Do not lower score/H1/Telegram floors, remove cooldown, or add a third pair merely to increase signal count.
 
-Keep current protections until recent delivered losers are joined to their 25-column decision components and the misleading component/regime is identified.
-
 Never push directly to `main`. Use branch -> complete content -> verified diff -> PR.
 
 ## Exactly one next action
 
-For delivered M15 signals since 2026-06-01, extract the alert-row components (`ema_comp`, `rsi_comp`, `macd_comp`, `adx_comp`, raw ADX/RSI/MACD, H1 trend, tier, session, ADX regime) and compare them with verified Supabase outcomes. Identify the first component or regime that explains the recent losses before changing signal volume policy.
+Join the 51 local ledger outcomes to matching 25-column `logs/alerts.csv` rows. Report match coverage and compact WIN/LOSS splits by score bucket, RSI extremity, MACD saturation, ADX band, H1 state, pair, and direction. Keep March findings separate from the newer Supabase outcome evidence.
