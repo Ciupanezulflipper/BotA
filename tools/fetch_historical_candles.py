@@ -380,6 +380,16 @@ def _retryable_status(status: int) -> bool:
     return status == 429 or 500 <= status <= 599
 
 
+def _request_metadata(path_and_query: str, attempt: int) -> dict[str, object]:
+    """Return redacted metadata common to response and transport-error attempts."""
+    return {
+        "method": "GET",
+        "path_and_query": path_and_query,
+        "authorization_redacted": True,
+        "attempt": attempt,
+    }
+
+
 def _fetch_chunk_with_retries(
     *,
     dataset_root: Path,
@@ -393,22 +403,38 @@ def _fetch_chunk_with_retries(
     transport: Transport,
     sleep_fn: SleepFn,
 ) -> tuple[list[Candle], int]:
-    """Fetch one chunk with bounded retry/backoff while preserving every response."""
+    """Fetch one chunk with bounded retry/backoff and immutable attempt evidence."""
     for attempt in range(1, MAX_HTTP_ATTEMPTS + 1):
-        response = transport(base_url, path_and_query, token, timeout_seconds)
         stem = f"chunk-{chunk_index:04d}-attempt-{attempt:02d}"
         raw_path = dataset_root / "raw" / pair / timeframe / f"{stem}.json"
         metadata_path = dataset_root / "metadata" / pair / timeframe / f"{stem}.json"
+
+        try:
+            response = transport(base_url, path_and_query, token, timeout_seconds)
+        except (OSError, http.client.HTTPException) as exc:
+            atomic_json_once(
+                metadata_path,
+                {
+                    "request": _request_metadata(path_and_query, attempt),
+                    "transport_error": {
+                        "type": type(exc).__name__,
+                        "message": str(exc)[:300],
+                    },
+                },
+            )
+            if attempt == MAX_HTTP_ATTEMPTS:
+                raise RuntimeError(
+                    f"OANDA transport failed for {pair} {timeframe} chunk {chunk_index} "
+                    f"after {attempt} attempts: {type(exc).__name__}"
+                ) from exc
+            sleep_fn(RETRY_BACKOFF_SECONDS * (2 ** (attempt - 1)))
+            continue
+
         write_once(raw_path, response.body)
         atomic_json_once(
             metadata_path,
             {
-                "request": {
-                    "method": "GET",
-                    "path_and_query": path_and_query,
-                    "authorization_redacted": True,
-                    "attempt": attempt,
-                },
+                "request": _request_metadata(path_and_query, attempt),
                 "response": response_metadata(response),
             },
         )
