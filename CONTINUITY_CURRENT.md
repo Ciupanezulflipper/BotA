@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: **2026-08-07 20:45 UTC**
+Last updated: **2026-08-07 20:10 UTC**
 
 ## Authoritative identifiers
 
@@ -103,7 +103,7 @@ Standalone `data/EURUSD_M15.csv` and `data/GBPUSD_M15.csv` contain only 2026-02-
 
 ## Historical acquisition package — 2026-08-07
 
-Current clean package:
+Canonical path after PR #57 / PR #59 reconciliation:
 
 ```text
 tools/fetch_historical_candles.py
@@ -130,29 +130,85 @@ RETRY_ATTEMPTS_PRESERVED=YES
 MANIFEST_SHA256=YES
 ```
 
-Focused offline validation after external-review fixes:
+The no-network preview passed on phone before acquisition:
 
 ```text
-TESTS=11
-PASSED=11
-FAILED=0
-PYTHON_COMPILE=PASS
+PREVIEW_STATUS=PASS
+MODE=preview
+NETWORK_PERMITTED=False
+PRODUCTION_CACHE_TOUCHED=False
+STREAM_COUNT=8
+TOTAL_PLANNED_REQUESTS=10
 ```
 
-The retry test proves a simulated `503 -> 429 -> 200` sequence, backoff values `0.5 -> 1.0`, preservation of all three raw/metadata attempts, and successful completion. No real provider, Telegram, or Supabase call was made during repository implementation.
+## First real historical acquisition attempt — failed closed
 
-## External review status
+Recorded phone evidence: **2026-08-07 20:10:49 UTC**.
 
-PR #57 was reviewed by GitHub CI, DeepSource, and CodeRabbit.
+Dataset:
 
-- DeepSource's initial type/import/style findings were corrected; those major threads became outdated.
-- CodeRabbit identified missing bounded retry handling for 429/5xx. The collector now retries at most three times with bounded exponential backoff and preserves every response attempt.
-- CodeRabbit's valid CI/test hygiene findings were incorporated: no persisted checkout credentials, workflow runs on `main`, stronger path/port/immutability/value-equality tests, and an exact operator command.
-- Exact final PR-head CI/security status must be green before merge.
+```text
+data/replay/oanda-20260601-20260801-20260807/
+```
+
+Result:
+
+```text
+COLLECTOR_EXECUTION=FAIL
+FAILED_EVIDENCE_PRESERVED=YES
+ERROR_TYPE=ValueError
+ERROR=OANDA returned candle outside requested chunk for EURUSD H4: 2026-05-31T21:00:00Z
+```
+
+Classification: OANDA returned one provider-aligned H4 candle beginning before the literal `from` timestamp but overlapping it. The original validator rejected any earlier candle start. This is a collector boundary-validation defect, not an auth/network or strategy failure.
+
+The failed immutable dataset must remain preserved and must not be reused or deleted.
+
+## Alignment fix in progress
+
+Branch:
+
+```text
+fix/oanda-aligned-leading-candle-20260807
+```
+
+Fix contract:
+
+- permit at most one provider-aligned leading candle only when its interval overlaps request `from`;
+- still reject more than one leading candle;
+- still reject a candle whose interval ends at or before `from`;
+- still reject any candle starting after request `to`;
+- retain raw provider evidence;
+- final dataset remains filtered to the requested half-open range;
+- manifest records `provider_leading_overlaps_observed`;
+- regression tests reproduce the exact EURUSD H4 `2026-05-31T21:00:00Z` observation and retain fail-closed behavior for older candles.
+
+## Warm-up correction caught before rerun
+
+A raw dataset beginning exactly on 2026-06-01 is not sufficient for deterministic production-semantics replay at the start of June.
+
+`tools/build_indicators.py` uses:
+
+```text
+SAFE_WINDOW=500
+validate_tf_window=200
+min_bars=60
+EMA9 EMA21 RSI14 MACD12/26/9 ADX14 ATR14 BB20
+```
+
+Therefore the next acquisition must include pre-June warm-up history. The simple uniform acquisition range is:
+
+```text
+raw_range=[2024-01-01T00:00:00Z, 2026-08-01T00:00:00Z)
+replay_evaluation=[2026-06-01T00:00:00Z, 2026-08-01T00:00:00Z)
+dataset-id=oanda-warmup-20240101-20260801-20260807-r2
+```
+
+This intentionally acquires more raw candles instead of using fragile per-timeframe warm-up arithmetic.
 
 ## PR #6 historical sidecar disposition
 
-Draft PR #6 is useful as design/history evidence only. GitHub reports 129 changed files, including out-of-scope canonical/runtime paths. Do not merge or cherry-pick PR #6 wholesale.
+PR #6 is closed as superseded. It remains design/history evidence only and must not be revived or merged wholesale.
 
 ## Efficiency operating model
 
@@ -176,7 +232,9 @@ Never push directly to `main`; use branch -> complete-file writes -> verified di
 
 ## Evidence
 
+- `audits/HISTORICAL_ACQUISITION_RUNTIME_EDGE_2026-08-07.md`
 - `audits/HISTORICAL_CANDLE_ACQUISITION_2026-08-07.md`
+- `audits/HISTORICAL_ACQUISITION_RECONCILIATION_2026-08-07.md`
 - `audits/RAW_CANDLE_REPLAY_GAP_2026-08-07.md`
 - `docs/FORENSIC_OPERATING_MODEL.md`
 - `audits/LOCAL_RETENTION_GAP_2026-08-07.md`
@@ -188,18 +246,11 @@ Never push directly to `main`; use branch -> complete-file writes -> verified di
 - `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
 - `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
 
-## Exactly one next action after merge
+## Exactly one next action
 
-Acquire and integrity-verify one immutable OANDA dataset on the phone:
+Merge the alignment regression fix only after CI/static-analysis gates pass. Then preview the new warm-up dataset range without network access. Only if that preview passes should one new immutable OANDA acquisition be executed.
 
-```text
-dataset-id=oanda-20260601-20260801-20260807
-range=[2026-06-01T00:00:00Z, 2026-08-01T00:00:00Z)
-pairs=EURUSD GBPUSD
-timeframes=M15 H1 H4 D1
-```
-
-After that dataset is verified, build/run the deterministic production-semantics replay:
+After dataset integrity passes, build/run the deterministic production-semantics replay:
 
 ```text
 A = current production baseline
