@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: 2026-08-07 18:09 UTC
+Last updated: 2026-08-07 18:15 UTC
 
 ## Authoritative identifiers
 
@@ -26,7 +26,7 @@ healthy=false
 orphan_service=crond
 ```
 
-The watcher is live. This ownership defect remains operationally real but does not explain signal scarcity by itself.
+The watcher is live. This ownership defect remains real but does not explain signal scarcity by itself.
 
 ## Current effective settings
 
@@ -62,8 +62,6 @@ Only two pairs are live.
 
 ## Accepted -> Telegram funnel
 
-Retained watcher logs classify 106 accepted events:
-
 ```text
 61 sent
 38 cooldown-suppressed
@@ -72,18 +70,6 @@ Retained watcher logs classify 106 accepted events:
 ```
 
 Four of the 110 accepted CSV rows remain delivery-unknown.
-
-## Cooldown semantics — verified 2026-08-07 17:54 UTC
-
-```text
-EXACT_DUPLICATE=0
-NOT_EXACT_DUPLICATE=38
-DIRECTION_CHANGED=0
-SCORE_IMPROVED_5PLUS=7
-ENTRY_CHANGED_3PLUS_PIPS=26
-```
-
-All 38 were same-direction accepted updates. Cooldown is coarse but is not proven to have hidden 38 independent new trades.
 
 ## Recent delivered-signal quality
 
@@ -99,32 +85,63 @@ TOTAL_PIPS=-71.40
 85+_TOTAL_PIPS=-35.00
 ```
 
-This is the highest-priority product finding. Recent high scores are not reliably separating winners from losers.
+Recent high scores are not reliably separating winners from losers.
 
-## Local signal ledger inventory — verified 2026-08-07 18:09 UTC
+## Local March component/outcome audit — verified 2026-08-07 18:15 UTC
+
+The stale/narrow 51-row local ledger nevertheless joined completely to extended alert components:
 
 ```text
-PATH=data/ledger.csv
 LEDGER_ROWS=51
-WIN=13
-LOSS=38
-WIN_RATE=25.49%
-FIRST_TIMESTAMP=2026-03-09T21:45:07+02:00
-LAST_TIMESTAMP=2026-03-10T15:15:07+02:00
+JOINED=51
+UNMATCHED=0
+JOIN_RATE=100.00%
+JOINED_WITH_COMPONENTS=51
+WINS=13
+LOSSES=38
+TOTAL_PIPS=-264.1
 ```
 
-The ledger covers only about 17.5 hours. It is stale and narrow relative to the current June-August investigation. It may be useful for an offline component/outcome join if matching 25-column alert rows exist, but it cannot substitute for the recent Supabase outcome evidence.
+Score calibration:
 
-## Current scoring hypotheses
+```text
+<70:   n=11 WR=18.2% PIPS=-83.5
+70-74: n=4  WR=50.0% PIPS=+2.1
+75-84: n=19 WR=31.6% PIPS=-44.8
+85+:   n=17 WR=17.6% PIPS=-137.9
+```
 
-Current `scoring_engine.sh` rewards RSI distance from 50 up to +15 points, so highly oversold SELLs and highly overbought BUYs can receive maximum RSI contribution. It also describes a ±0.3 ATR pullback zone while the implementation uses a 1.0 ATR buffer. These are hypotheses requiring outcome correlation before mutation.
+RSI state:
+
+```text
+EXTREME:   n=18 WR=11.1% PIPS=-229.2
+STRETCHED: n=11 WR=45.5% PIPS=+69.4
+MODERATE:  n=22 WR=27.3% PIPS=-104.3
+```
+
+ADX band:
+
+```text
+20-29: n=17 WR=52.9% PIPS=+98.0
+30-39: n=26 WR=7.7%  PIPS=-319.1
+40+:   n=8  WR=25.0% PIPS=-43.0
+```
+
+This is the strongest component-level evidence so far. Current scoring awards maximum ADX contribution for ADX >=30, while the March 30-39 band was the worst-performing group. Current RSI scoring also rewards increasing distance from 50, while extreme RSI was dramatically worse than the intermediate stretched zone.
+
+## Interpretation
+
+The scoring model appears to reward trend intensity beyond the point where entry quality deteriorates. The likely calibration problem is non-linearity/late-entry risk rather than simple lack of signal generation.
+
+The March sample is only about 17.5 hours, so it cannot by itself define a production replacement formula. It is historical diagnostic evidence, not current validation.
 
 ## Scope lock
 
-Do not lower score or H1 thresholds, lower Telegram minimum, remove cooldown, or add a third pair merely to manufacture volume.
+Do not lower score or H1 thresholds, lower Telegram minimum, remove cooldown, add a third pair, or mutate ADX/RSI scoring yet.
 
 ## Evidence
 
+- `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
 - `audits/LOCAL_SIGNAL_LEDGER_INVENTORY_2026-08-07.md`
 - `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
 - `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
@@ -137,4 +154,4 @@ Do not lower score or H1 thresholds, lower Telegram minimum, remove cooldown, or
 
 ## Exactly one next action
 
-Join the 51 local ledger rows to 25-column `logs/alerts.csv` rows and report match coverage plus compact outcome splits by score bucket, RSI extremity, MACD saturation, ADX band, H1 state, pair, and direction. Keep March and recent June-August evidence separate.
+Run a read-only counterfactual on the joined March rows and recent component-matched published outcomes. Test simple ADX/RSI candidate corrections and compare retained count, win rate, and total pips before any live strategy mutation.
