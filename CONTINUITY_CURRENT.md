@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: 2026-08-07 18:15 UTC
+Last updated: 2026-08-07 18:38 UTC
 
 ## Authoritative identifiers
 
@@ -26,7 +26,7 @@ healthy=false
 orphan_service=crond
 ```
 
-The watcher is live. This ownership defect remains real but does not explain signal scarcity by itself.
+The watcher is live. Runtime ownership remains degraded but is not the current signal-quality root cause.
 
 ## Current effective settings
 
@@ -87,60 +87,55 @@ TOTAL_PIPS=-71.40
 
 Recent high scores are not reliably separating winners from losers.
 
-## Local March component/outcome audit — verified 2026-08-07 18:15 UTC
+## March component/outcome sample
 
-The stale/narrow 51-row local ledger nevertheless joined completely to extended alert components:
+The 51 local March outcomes joined 100% to extended alert components:
 
 ```text
 LEDGER_ROWS=51
 JOINED=51
-UNMATCHED=0
-JOIN_RATE=100.00%
-JOINED_WITH_COMPONENTS=51
 WINS=13
 LOSSES=38
 TOTAL_PIPS=-264.1
 ```
 
-Score calibration:
+Key component splits:
 
 ```text
-<70:   n=11 WR=18.2% PIPS=-83.5
-70-74: n=4  WR=50.0% PIPS=+2.1
-75-84: n=19 WR=31.6% PIPS=-44.8
-85+:   n=17 WR=17.6% PIPS=-137.9
+ADX 20-29: n=17 WR=52.9% PIPS=+98.0
+ADX 30-39: n=26 WR=7.7% PIPS=-319.1
+ADX 40+:   n=8  WR=25.0% PIPS=-43.0
+
+RSI EXTREME:   n=18 WR=11.1% PIPS=-229.2
+RSI STRETCHED: n=11 WR=45.5% PIPS=+69.4
+RSI MODERATE:  n=22 WR=27.3% PIPS=-104.3
+
+score 85+: n=17 WR=17.6% PIPS=-137.9
 ```
 
-RSI state:
+## ADX / RSI counterfactual — 2026-08-07 18:38 UTC
 
 ```text
-EXTREME:   n=18 WR=11.1% PIPS=-229.2
-STRETCHED: n=11 WR=45.5% PIPS=+69.4
-MODERATE:  n=22 WR=27.3% PIPS=-104.3
+BASELINE: N=51 W=13 L=38 WR=25.5% PIPS=-264.1
+SCORE>=70: N=40 W=11 L=29 WR=27.5% PIPS=-180.6
+NO_EXTREME_RSI: N=33 W=11 L=22 WR=33.3% PIPS=-34.9
+ADX<30: N=17 W=9 L=8 WR=52.9% PIPS=+98.0
+ADX<30 + NO_EXTREME: N=12 W=7 L=5 WR=58.3% PIPS=+94.8
+SCORE>=70 + ADX<30: N=12 W=9 L=3 WR=75.0% PIPS=+174.2
+SCORE>=70 + ADX<30 + NO_EXTREME: N=7 W=7 L=0 WR=100.0% PIPS=+171.0
 ```
 
-ADX band:
+The last subset is not production proof. It is only seven trades and was selected on the same data used to discover the rule. Treat it as high overfit risk.
 
-```text
-20-29: n=17 WR=52.9% PIPS=+98.0
-30-39: n=26 WR=7.7%  PIPS=-319.1
-40+:   n=8  WR=25.0% PIPS=-43.0
-```
-
-This is the strongest component-level evidence so far. Current scoring awards maximum ADX contribution for ADX >=30, while the March 30-39 band was the worst-performing group. Current RSI scoring also rewards increasing distance from 50, while extreme RSI was dramatically worse than the intermediate stretched zone.
-
-## Interpretation
-
-The scoring model appears to reward trend intensity beyond the point where entry quality deteriorates. The likely calibration problem is non-linearity/late-entry risk rather than simple lack of signal generation.
-
-The March sample is only about 17.5 hours, so it cannot by itself define a production replacement formula. It is historical diagnostic evidence, not current validation.
+The broad evidence supports a simpler diagnosis: current scoring over-rewards trend intensity and under-prices late-entry/exhaustion risk. ADX >=30 is the strongest historical warning; extreme RSI is a secondary warning.
 
 ## Scope lock
 
-Do not lower score or H1 thresholds, lower Telegram minimum, remove cooldown, add a third pair, or mutate ADX/RSI scoring yet.
+Do not lower score/H1/Telegram thresholds, remove cooldown, add a third pair, or mutate ADX/RSI scoring from this in-sample result.
 
 ## Evidence
 
+- `audits/ADX_RSI_COUNTERFACTUAL_2026-08-07.md`
 - `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
 - `audits/LOCAL_SIGNAL_LEDGER_INVENTORY_2026-08-07.md`
 - `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
@@ -154,4 +149,12 @@ Do not lower score or H1 thresholds, lower Telegram minimum, remove cooldown, ad
 
 ## Exactly one next action
 
-Run a read-only counterfactual on the joined March rows and recent component-matched published outcomes. Test simple ADX/RSI candidate corrections and compare retained count, win rate, and total pips before any live strategy mutation.
+Run a separate out-of-sample replay with candidate policies frozen before outcomes are examined:
+
+```text
+A: current baseline
+B: score >=70 AND ADX <30
+C: score >=70 AND ADX <30 AND no extreme RSI
+```
+
+Compare retained signal count, win/loss, total pips, and preferably MAE/MFE. Only an out-of-sample improvement can justify a production strategy mutation.

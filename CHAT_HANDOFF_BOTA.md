@@ -1,6 +1,6 @@
 # BotA Chat Handoff
 
-Last updated: 2026-08-07 18:15 UTC
+Last updated: 2026-08-07 18:38 UTC
 
 Read this first in any new AI chat before proposing BotA changes.
 
@@ -11,7 +11,7 @@ BotA is not failing because it cannot generate BUY/SELL directions. The investig
 1. strategy throughput is low because score and H1 gates reject most tradeable candidates;
 2. delivery policy suppresses additional strategy-accepted candidates;
 3. recent delivered M15 signal quality is poor, so sending more signals is not a valid repair;
-4. historical component/outcome evidence now points to score calibration that may reward late/exhausted trend entries.
+4. historical component/outcome evidence indicates the score likely over-rewards trend intensity and under-prices late-entry/exhaustion risk.
 
 ## Current live configuration
 
@@ -70,67 +70,51 @@ TOTAL_PIPS=-71.40
 
 High score has not protected recent signals from poor outcomes.
 
-## March ledger x component audit — 2026-08-07 18:15 UTC
+## March component evidence
 
 The 51 local March outcomes joined 100% to extended score-component rows:
 
 ```text
-LEDGER_ROWS=51
-JOINED=51
-UNMATCHED=0
-JOINED_WITH_COMPONENTS=51
-WINS=13
-LOSSES=38
-TOTAL_PIPS=-264.1
+51 rows
+13 wins
+38 losses
+-264.1 pips
 ```
 
-Score bucket:
+Key splits:
 
 ```text
-<70:   WR=18.2% PIPS=-83.5
-70-74: WR=50.0% PIPS=+2.1
-75-84: WR=31.6% PIPS=-44.8
-85+:   WR=17.6% PIPS=-137.9
+ADX 20-29: +98.0 pips, 52.9% WR
+ADX 30-39: -319.1 pips, 7.7% WR
+ADX 40+: -43.0 pips, 25.0% WR
+RSI extreme: -229.2 pips, 11.1% WR
+RSI stretched: +69.4 pips, 45.5% WR
+score 85+: -137.9 pips, 17.6% WR
 ```
 
-The highest score bucket was the worst.
-
-RSI entry state:
+## Counterfactual — 2026-08-07 18:38 UTC
 
 ```text
-EXTREME:   n=18 WR=11.1% PIPS=-229.2
-STRETCHED: n=11 WR=45.5% PIPS=+69.4
-MODERATE:  n=22 WR=27.3% PIPS=-104.3
+BASELINE: N=51 W=13 L=38 WR=25.5% PIPS=-264.1
+SCORE>=70: N=40 W=11 L=29 WR=27.5% PIPS=-180.6
+NO_EXTREME_RSI: N=33 W=11 L=22 WR=33.3% PIPS=-34.9
+ADX<30: N=17 W=9 L=8 WR=52.9% PIPS=+98.0
+ADX<30 + NO_EXTREME: N=12 W=7 L=5 WR=58.3% PIPS=+94.8
+SCORE>=70 + ADX<30: N=12 W=9 L=3 WR=75.0% PIPS=+174.2
+SCORE>=70 + ADX<30 + NO_EXTREME: N=7 W=7 L=0 WR=100.0% PIPS=+171.0
 ```
 
-ADX band:
+Do not call the final 7/7 subset a 100% strategy. It was found and measured on the same narrow sample and is highly vulnerable to overfitting.
 
-```text
-20-29: n=17 WR=52.9% PIPS=+98.0
-30-39: n=26 WR=7.7%  PIPS=-319.1
-40+:   n=8  WR=25.0% PIPS=-43.0
-```
-
-This is the strongest score-component evidence so far. Current scoring gives maximum ADX points at >=30 even though ADX 30-39 was the worst historical band in this sample. Current RSI scoring rewards greater distance from 50 even though extreme RSI was far worse than the intermediate stretched zone.
-
-The evidence supports a non-linear entry-quality problem: stronger trend intensity does not necessarily mean a better M15 entry and may indicate late/exhausted entry timing.
+The broad result is more important: `ADX<30` alone changes the 51-row sample from -264.1 to +98.0 pips while retaining 17 trades. ADX 30-39 is poor across all RSI states. Removing extreme RSI helps materially but is not sufficient by itself.
 
 ## What is not proven
 
-- Do not infer an exact new ADX threshold from only 17.5 hours of March data.
-- Do not hard-reject every ADX >=30 yet.
-- Do not change current H1 policy from this sample because all 51 March rows had H1 neutral.
-- MACD saturation was not the dominant discriminator.
-- Pair-specific changes are not supported; both EURUSD and GBPUSD were poor.
-
-## Closed/non-dominant causes
-
-- zero entry/SL/TP: HOLD-only symptom;
-- `macro6=3`: neutral;
-- RR text: advisory;
-- H4+D1 opposition: rare;
-- Telegram transport: functioning;
-- cooldown: coarse but no direction-reversal suppression observed.
+- `ADX<30` is not yet an approved production gate.
+- The 7/7 subset is not proof of perfect accuracy.
+- Do not tune more thresholds on these same 51 rows.
+- H1 effects cannot be learned from this March sample because all 51 rows were H1 neutral.
+- Pair expansion and cooldown changes remain out of scope until signal quality is validated.
 
 ## No-change rules
 
@@ -148,7 +132,15 @@ SUPABASE_CHANGED=NO
 
 ## Exactly one next proof
 
-Run an offline/read-only counterfactual on the 51 joined March rows and the recent component-matched published outcomes. Compare minimal candidate changes such as penalizing extreme RSI, reducing/reversing the ADX bonus above 30, and combining both. Report retained signal count, win rate, and pips before any production mutation.
+Use a separate historical period not used to discover the candidate rule. Freeze these policies before examining outcomes:
+
+```text
+A: current production baseline
+B: score >=70 AND ADX <30
+C: score >=70 AND ADX <30 AND no extreme RSI
+```
+
+Run an out-of-sample replay and compare retained signal count, wins/losses, pips, and preferably MAE/MFE. Only then consider a live strategy change.
 
 ## Working discipline
 

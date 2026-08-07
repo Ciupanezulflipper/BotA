@@ -1,11 +1,12 @@
 # BotA Runtime Error Log
 
-Last updated: 2026-08-07 18:15 UTC
+Last updated: 2026-08-07 18:38 UTC
 
 This is the canonical compact error and prevention index. Historical full text remains in Git history, `ERRORS.md`, dated audit records, and GitHub issue/PR history.
 
 Current signal evidence:
 
+- `audits/ADX_RSI_COUNTERFACTUAL_2026-08-07.md`
 - `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
 - `audits/LOCAL_SIGNAL_LEDGER_INVENTORY_2026-08-07.md`
 - `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
@@ -47,12 +48,10 @@ LOCAL_LEDGER_ROWS=51
 LOCAL_LEDGER_JOINED_COMPONENT_ROWS=51
 LOCAL_LEDGER_JOIN_RATE=100_PERCENT
 MARCH_TOTAL_PIPS=-264.1
-MARCH_ADX_20_29_PIPS=+98.0
-MARCH_ADX_30_39_PIPS=-319.1
-MARCH_RSI_EXTREME_PIPS=-229.2
-MARCH_RSI_STRETCHED_PIPS=+69.4
-MARCH_SCORE_85PLUS_PIPS=-137.9
-STRATEGY_MUTATION_ALLOWED=NO_PENDING_COUNTERFACTUAL_AUDIT
+MARCH_ADX_LT30_PIPS=+98.0
+MARCH_SCORE70_ADX_LT30_PIPS=+174.2
+MARCH_SCORE70_ADX_LT30_WR=75.0_PERCENT
+STRATEGY_MUTATION_ALLOWED=NO_PENDING_OUT_OF_SAMPLE_REPLAY
 ```
 
 ## Canonical error index
@@ -144,12 +143,6 @@ Prevention: disable pagers and keep output bounded.
 
 ### E051 — Legacy alerts header with newer 25-column rows
 Recorded: 2026-08-07.
-
-```text
-HEADER_COLUMNS=13
-ROWS_WITH_25_COLUMNS>0
-```
-
 Prevention: explicit schema/version migration or a versioned decision ledger.
 
 ### E052 — Documentation connector direct-main process violation
@@ -232,8 +225,6 @@ Prevention: always report first/last timestamps and coverage span before using a
 ### E060 — Score magnitude is inversely calibrated in the March component sample
 Recorded: 2026-08-07 18:15 UTC.
 
-The 51 ledger rows joined 100% to extended score-component rows.
-
 ```text
 <70:   WR=18.2% PIPS=-83.5
 70-74: WR=50.0% PIPS=+2.1
@@ -241,33 +232,56 @@ The 51 ledger rows joined 100% to extended score-component rows.
 85+:   WR=17.6% PIPS=-137.9
 ```
 
-The highest score bucket was the worst-performing bucket. Prevention: never assume a higher handcrafted score is better until score buckets are calibrated against realized outcomes.
+Prevention: never assume a higher handcrafted score is better until score buckets are calibrated against realized outcomes.
 
 ### E061 — ADX reward appears directionally wrong in the March sample
 Recorded: 2026-08-07 18:15 UTC.
 
 ```text
 ADX_20_29: n=17 WR=52.9% PIPS=+98.0
-ADX_30_39: n=26 WR=7.7%  PIPS=-319.1
+ADX_30_39: n=26 WR=7.7% PIPS=-319.1
 ADX_40_PLUS: n=8 WR=25.0% PIPS=-43.0
 ```
 
-Current scoring awards the maximum ADX component for ADX >=30. In this sample the 30-39 band was catastrophically worse than 20-29.
-
-Prevention: treat trend-strength scoring as potentially non-linear; test counterfactual calibration before production change.
+Current scoring awards maximum ADX contribution for ADX >=30. Prevention: treat trend-strength scoring as potentially non-linear and validate against realized outcomes.
 
 ### E062 — RSI extremity reward conflicts with March outcomes
 Recorded: 2026-08-07 18:15 UTC.
 
 ```text
-RSI_EXTREME:   n=18 WR=11.1% PIPS=-229.2
+RSI_EXTREME: n=18 WR=11.1% PIPS=-229.2
 RSI_STRETCHED: n=11 WR=45.5% PIPS=+69.4
-RSI_MODERATE:  n=22 WR=27.3% PIPS=-104.3
+RSI_MODERATE: n=22 WR=27.3% PIPS=-104.3
 ```
 
-Current scoring rewards absolute RSI distance from 50. The intermediate stretched group was the only positive group while extreme RSI was the worst.
-
 Prevention: separate momentum strength from entry quality; do not monotonically reward overextension without outcome calibration.
+
+### E063 — In-sample counterfactual can look perfect without proving edge
+Recorded: 2026-08-07 18:38 UTC.
+
+The same 51-row March sample used to discover the ADX/RSI relationship produced:
+
+```text
+BASELINE: N=51 W=13 L=38 WR=25.5% PIPS=-264.1
+ADX<30: N=17 W=9 L=8 WR=52.9% PIPS=+98.0
+SCORE>=70 + ADX<30: N=12 W=9 L=3 WR=75.0% PIPS=+174.2
+SCORE>=70 + ADX<30 + NO_EXTREME: N=7 W=7 L=0 WR=100.0% PIPS=+171.0
+```
+
+The 7/7 subset is not production validation. It is a small in-sample subset chosen after observing the same data.
+
+Prevention: freeze candidate rules and validate on a separate unseen historical period before mutation.
+
+### E064 — ADX 30-39 failure persists across RSI states in March sample
+Recorded: 2026-08-07 18:38 UTC.
+
+```text
+30-39/MODERATE: n=8 W=0 L=8 PIPS=-122.4
+30-39/STRETCHED: n=8 W=2 L=6 PIPS=-14.4
+30-39/EXTREME: n=10 W=0 L=10 PIPS=-182.3
+```
+
+This strengthens the directional ADX concern because poor results are not confined to one RSI subgroup. It still does not establish a final production threshold.
 
 ## Current exact funnel
 
@@ -299,13 +313,12 @@ Recent outcome quality:
 -71.40 pips
 ```
 
-March component sample:
+March counterfactual:
 
 ```text
-51 joined rows
-13 wins
-38 losses
--264.1 pips
+51 baseline rows: -264.1 pips
+ADX<30: +98.0 pips on 17 rows
+score>=70 + ADX<30: +174.2 pips on 12 rows
 ```
 
 ## Efficient protocol
@@ -319,7 +332,16 @@ March component sample:
 7. Full-file replacement for approved mutation.
 8. Date every material finding in UTC.
 9. Branch -> verified diff -> PR; never direct-main fallback.
+10. Freeze candidate rules before out-of-sample testing.
 
 ## Exactly one next action
 
-Run a read-only counterfactual on the joined March rows and recent component-matched published outcomes. Compare simple ADX/RSI candidate corrections and report retained signal count, win rate, and pips before any production strategy mutation.
+Run an out-of-sample replay over a separate historical period with candidates fixed in advance:
+
+```text
+A: current baseline
+B: score >=70 AND ADX <30
+C: score >=70 AND ADX <30 AND no extreme RSI
+```
+
+Compare retained signal count, win/loss, total pips, and preferably MAE/MFE. No production strategy mutation until this validation is complete.
