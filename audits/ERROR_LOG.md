@@ -1,11 +1,12 @@
 # BotA Runtime Error Log
 
-Last updated: 2026-08-07 17:54 UTC
+Last updated: 2026-08-07 18:09 UTC
 
 This is the canonical compact error and prevention index. Historical full text remains in Git history, `ERRORS.md`, dated audit records, and GitHub issue/PR history.
 
 Current signal evidence:
 
+- `audits/LOCAL_SIGNAL_LEDGER_INVENTORY_2026-08-07.md`
 - `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
 - `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
 - `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
@@ -36,13 +37,15 @@ TELEGRAM_SENT=61
 TELEGRAM_COOLDOWN=38
 TELEGRAM_SCORE_GATE=6
 TELEGRAM_FAILED=1
-COOLDOWN_EXACT_DUPLICATES=0
-COOLDOWN_DIRECTION_REVERSALS=0
 RECENT_DELIVERED_SINCE_2026_06_01=13
 RECENT_WINS=3
 RECENT_LOSSES=9
 RECENT_CANCELLED=1
 RECENT_TOTAL_PIPS=-71.40
+LOCAL_LEDGER_ROWS=51
+LOCAL_LEDGER_WINS=13
+LOCAL_LEDGER_LOSSES=38
+LOCAL_LEDGER_CURRENTNESS=STALE_NARROW
 STRATEGY_MUTATION_ALLOWED=NO_PENDING_COMPONENT_OUTCOME_AUDIT
 ```
 
@@ -131,8 +134,6 @@ Verdict: zero entry is a HOLD symptom, not the root cause of lost BUY/SELL signa
 
 ### E049 — Ad-hoc CSV audit used the wrong field name
 Recorded: 2026-08-07.
-
-Legacy header uses `rejected` and `filter_str`; an exploratory script used `filter_rejected`.
 Prevention: validate required headers and fail closed.
 
 ### E050 — Pager captured a large Git forensic command
@@ -149,42 +150,38 @@ ROWS_WITH_25_COLUMNS=2509
 
 Prevention: explicit schema/version migration or a versioned decision ledger.
 
-### E052 — Documentation connector wrote a placeholder directly to main
+### E052 — Documentation connector direct-main process violation
 Recorded: 2026-08-07.
-Prevention: after branch-not-found, create/verify branch before any retry; never use `main` as fallback.
+Prevention: always create/verify branch before write; never use `main` as fallback.
 
-### E053 — Strategy acceptance and Telegram eligibility use different score floors
-Recorded: 2026-08-07 17:38 UTC.
+### E053 — Strategy and Telegram use different score floors
+Recorded: 2026-08-07.
 
 ```text
 FILTER_SCORE_MIN_ALL=65
 TELEGRAM_MIN_SCORE=70
 ```
 
-Six retained strategy-accepted events were blocked by Telegram score. Historical delivered `<70` BotA M15 rows later cross-checked as 1 win, 5 losses, total -45.50 pips, so lowering the Telegram floor is not supported by current evidence.
+Six retained accepted events were blocked by Telegram score. Historical delivered `<70` rows were 1 win / 5 losses / -45.50 pips, so lowering the Telegram floor is not supported by current evidence.
 
 ### E054 — Thirty-minute Telegram cooldown suppresses accepted events
-Recorded: 2026-08-07 17:38 UTC.
+Recorded: 2026-08-07.
 
 ```text
 TELEGRAM_COOLDOWN_SECONDS=1800
 TELEGRAM_COOLDOWN_EVENTS=38_OF_106_MATCHED_ACCEPTED
 ```
 
-The cooldown is a major post-acceptance throughput gate.
-
 ### E055 — Live pair universe contains only two pairs
-Recorded: 2026-08-07 17:38 UTC.
+Recorded: 2026-08-07.
 
 ```text
 PAIRS=EURUSD GBPUSD
 TIMEFRAMES=M15
 ```
 
-A third live pair is not currently scanned.
-
 ### E056 — Accepted CSV count exceeds matched retained delivery-log count
-Recorded: 2026-08-07 17:38 UTC.
+Recorded: 2026-08-07.
 
 ```text
 CSV_ACCEPTED_BUY_SELL_TOTAL=110
@@ -197,8 +194,6 @@ Keep four delivery outcomes UNKNOWN.
 ### E057 — Cooldown non-equality almost promoted to proof of new trades
 Recorded: 2026-08-07 17:54 UTC.
 
-Cooldown quality audit:
-
 ```text
 COOLDOWN_TOTAL=38
 EXACT_DUPLICATE=0
@@ -208,14 +203,10 @@ SCORE_IMPROVED_5PLUS=7
 ENTRY_CHANGED_3PLUS_PIPS=26
 ```
 
-The 38 rows are not exact field duplicates, but every one remained the same direction as the preceding sent signal. Therefore `38 independent new trades were blocked` is unproven.
-
-Prevention: distinguish field-level change, same-opportunity update, and genuinely new trade intent. Lifecycle semantics are required before removing repeat-alert controls.
+All 38 remained the same direction as the preceding sent event. Distinguish changed updates from independent new trades.
 
 ### E058 — Recent high scores do not imply recent positive edge
 Recorded: 2026-08-07.
-
-Read-only Supabase M15 BotA outcome cross-check for signals created since 2026-06-01:
 
 ```text
 TOTAL=13
@@ -227,9 +218,26 @@ TOTAL_PIPS=-71.40
 85+_TOTAL_PIPS=-35.00
 ```
 
-This is direct evidence that increasing signal volume is not sufficient. Recent accepted high-score signals are not demonstrating reliable edge.
+Score calibration and component/regime outcome analysis must precede threshold loosening or pair expansion.
 
-Prevention: score calibration and regime/component outcome analysis must precede threshold loosening or pair expansion.
+### E059 — Local signal ledger is stale and narrow
+Recorded: 2026-08-07 18:09 UTC.
+
+Verified phone inventory:
+
+```text
+PATH=data/ledger.csv
+LEDGER_ROWS=51
+WIN=13
+LOSS=38
+WIN_RATE=25.49%
+FIRST_TIMESTAMP=2026-03-09T21:45:07+02:00
+LAST_TIMESTAMP=2026-03-10T15:15:07+02:00
+```
+
+The ledger covers only about 17.5 hours. It cannot be treated as current June-August strategy evidence.
+
+Prevention: always report first/last timestamps and coverage span before using a local outcome ledger. Separate historical component diagnostics from current production outcome validation.
 
 ## Current exact funnel
 
@@ -251,35 +259,30 @@ TELEGRAM_SCORE_GATE=6
 TELEGRAM_FAILED=1
 ```
 
-Outcome quality since 2026-06-01:
+Recent outcome quality:
 
 ```text
-13 delivered BotA M15
+13 BotA M15 signals since 2026-06-01
 3 wins
 9 losses
 1 cancelled
 -71.40 pips
 ```
 
-## Current control-plane note
+Historical local ledger:
 
 ```text
-manager_count=1
-owned=6
-orphaned=1
-running=7
-duplicates=0
-orphan=crond
+51 rows from 2026-03-09 through 2026-03-10
+13 wins
+38 losses
 ```
-
-Keep runtime ownership separate from strategy-quality analysis unless watcher execution becomes impaired.
 
 ## Efficient protocol
 
 1. Read dated current handoff/audits first.
 2. One narrow evidence question per package.
 3. Small pager-proof commands only.
-4. Validate schemas before field analysis.
+4. Validate schemas and time coverage before field analysis.
 5. Separate runtime, strategy, delivery, and realized outcomes.
 6. Preserve phone state before mutation.
 7. Full-file replacement for approved mutation.
@@ -288,4 +291,4 @@ Keep runtime ownership separate from strategy-quality analysis unless watcher ex
 
 ## Exactly one next action
 
-Join recent delivered M15 signals to their 25-column decision components and compare those fields with Supabase outcomes. Identify which scoring component or market regime is associated with recent losing high-score signals before changing any threshold, cooldown, or pair universe.
+Join the 51 local March ledger rows to matching 25-column alert rows. Report match coverage first. If coverage is sufficient, compare WIN/LOSS by score bucket, RSI extremity, MACD saturation, ADX band, H1 state, pair, and direction. Keep this historical analysis separate from recent Supabase outcomes.
