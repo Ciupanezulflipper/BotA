@@ -1,11 +1,12 @@
 # BotA Errors and Silent-Failure Register
 
-Last updated: 2026-08-07 18:09 UTC
+Last updated: 2026-08-07 18:15 UTC
 
 Purpose: preserve verified failure classes, current open risks, and prevention rules without repeating broad audits.
 
 Current signal evidence:
 
+- `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
 - `audits/LOCAL_SIGNAL_LEDGER_INVENTORY_2026-08-07.md`
 - `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
 - `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
@@ -45,10 +46,14 @@ RECENT_LOSSES=9
 RECENT_CANCELLED=1
 RECENT_TOTAL_PIPS=-71.40
 LOCAL_LEDGER_ROWS=51
-LOCAL_LEDGER_WINS=13
-LOCAL_LEDGER_LOSSES=38
-LOCAL_LEDGER_CURRENTNESS=STALE_NARROW
-STRATEGY_MUTATION_ALLOWED=NO_PENDING_COMPONENT_OUTCOME_AUDIT
+LOCAL_LEDGER_JOIN_RATE=100_PERCENT
+MARCH_TOTAL_PIPS=-264.1
+MARCH_ADX_20_29_PIPS=+98.0
+MARCH_ADX_30_39_PIPS=-319.1
+MARCH_RSI_EXTREME_PIPS=-229.2
+MARCH_RSI_STRETCHED_PIPS=+69.4
+MARCH_SCORE_85PLUS_PIPS=-137.9
+STRATEGY_MUTATION_ALLOWED=NO_PENDING_COUNTERFACTUAL_AUDIT
 ```
 
 ## Current throughput finding
@@ -70,7 +75,7 @@ Retained delivery evidence for 106 matched accepted events:
 1 send failure
 ```
 
-## Signal outcome quality risk
+## Recent outcome quality risk
 
 Read-only Supabase evidence for BotA M15 signals created on or after 2026-06-01:
 
@@ -84,57 +89,50 @@ TOTAL_PIPS=-71.40
 85+_TOTAL_PIPS=-35.00
 ```
 
-Recent high scores are not showing reliable calibration. Increasing signal count is not a sufficient repair.
+Recent high scores are not showing reliable calibration.
 
-## Local ledger limitation — 2026-08-07 18:09 UTC
+## March component calibration finding — 2026-08-07 18:15 UTC
 
-Verified phone inventory:
-
-```text
-PATH=data/ledger.csv
-LEDGER_ROWS=51
-WIN=13
-LOSS=38
-WIN_RATE=25.49%
-FIRST_TIMESTAMP=2026-03-09T21:45:07+02:00
-LAST_TIMESTAMP=2026-03-10T15:15:07+02:00
-```
-
-The ledger is stale and narrow: approximately 17.5 hours of March data. It must not be silently treated as current June-August performance. Its valid use is a bounded historical component/outcome join if extended alert rows match.
-
-## Current scoring concerns under investigation
-
-- RSI contribution is based on absolute distance from 50 and can reward extreme oversold SELL or overbought BUY conditions up to +15 points.
-- Pullback code comments describe a ±0.3 ATR zone while the implementation uses a 1.0 ATR buffer.
-- These are hypotheses, not approved code changes.
-
-## Closed/non-dominant hypotheses
-
-- zero entry/SL/TP: HOLD-only symptom;
-- `macro6=3`: neutral;
-- RR text: advisory;
-- H4+D1 opposition: rare;
-- Telegram transport: functional;
-- cooldown: coarse, but not proven to hide 38 independent trades.
-
-## CSV schema drift
-
-The current alert file has a 13-column legacy header with newer 25-column rows. First 13 positions align for existing funnel audits, but named-field consumers can misclassify extended fields.
-
-## Runtime ownership incident
-
-Latest observed topology:
+The 51-row local March ledger joined 100% to extended alert components:
 
 ```text
-manager_count=1
-owned=6
-orphaned=1
-running=7
-duplicates=0
-orphan=crond
+JOINED=51
+UNMATCHED=0
+WINS=13
+LOSSES=38
+TOTAL_PIPS=-264.1
 ```
 
-Keep this separate from signal-quality work unless watcher execution is interrupted.
+Score outcome:
+
+```text
+<70:   WR=18.2% PIPS=-83.5
+70-74: WR=50.0% PIPS=+2.1
+75-84: WR=31.6% PIPS=-44.8
+85+:   WR=17.6% PIPS=-137.9
+```
+
+The highest score bucket was the worst-performing bucket.
+
+RSI entry-state outcome:
+
+```text
+EXTREME:   n=18 WR=11.1% PIPS=-229.2
+STRETCHED: n=11 WR=45.5% PIPS=+69.4
+MODERATE:  n=22 WR=27.3% PIPS=-104.3
+```
+
+ADX outcome:
+
+```text
+20-29: n=17 WR=52.9% PIPS=+98.0
+30-39: n=26 WR=7.7%  PIPS=-319.1
+40+:   n=8  WR=25.0% PIPS=-43.0
+```
+
+Current code awards maximum ADX contribution at ADX >=30. In this March sample, that mapping is directionally opposite to realized outcome quality. Current RSI scoring also rewards greater distance from 50 while the extreme group was dramatically worse than the intermediate stretched group.
+
+The working diagnosis is now that the score over-rewards trend intensity and under-prices late-entry/exhaustion risk.
 
 ## Historical failure classes retained
 
@@ -153,19 +151,20 @@ Keep this separate from signal-quality work unless watcher execution is interrup
 - CSV field-name mismatch;
 - 13-column header with 25-column rows;
 - direct-main connector fallback violation;
-- stale narrow ledger almost mistaken for current performance evidence.
+- stale narrow ledger almost mistaken for current performance evidence;
+- monotonic score-strength mapping almost mistaken for calibrated entry quality.
 
 ## Current prevention rules
 
 - Do not equate more Telegram messages with a repaired trading system.
 - Do not lower score/H1/Telegram thresholds before outcome calibration.
-- Do not call same-direction changed rows independent trades without lifecycle evidence.
-- Do not treat narrow historical ledger coverage as current-strategy evidence.
-- Separate March local-ledger evidence from recent June-August Supabase outcomes.
+- Do not treat stronger ADX or more extreme RSI as automatically better entries.
+- Do not derive an exact production threshold from one narrow historical window.
+- Keep March local-ledger evidence separate from recent June-August Supabase outcomes.
 - Keep evidence packages small and dated.
 - Full-file replacement only for approved mutations.
 - Branch -> verified diff -> PR; never direct-main fallback.
 
 ## Exactly one next investigation
 
-Join the 51 March ledger outcomes to matching extended alert rows and compare WIN/LOSS by score bucket, RSI extremity, MACD saturation, ADX band, H1 state, pair, and direction. First report match coverage; if coverage is poor, stop rather than infer.
+Run a read-only counterfactual using the 51 joined March rows and the recent component-matched published outcomes. Compare simple ADX/RSI candidate corrections and report retained signal count, win rate, and pips before any production strategy mutation.
