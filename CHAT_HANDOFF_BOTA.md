@@ -1,6 +1,6 @@
 # BotA Chat Handoff
 
-Last updated: 2026-08-07 17:11 UTC
+Last updated: 2026-08-07 17:38 UTC
 
 Read this first in any new AI chat before proposing BotA changes.
 
@@ -10,119 +10,130 @@ Why does BotA produce very few user-visible trade signals despite a live watcher
 
 ## Current grounded answer — 2026-08-07
 
-The direction engine is not dead. The valid BUY/SELL funnel is now measured:
+The bot does generate BUY/SELL decisions. The low user-visible throughput is caused by a layered funnel, not one mysterious runtime failure.
 
-```text
-VALID_ENTRY_ROWS=1495
-BUY_SELL_VALID_ROWS=1427
-BUY_SELL_ACCEPTED=110
-BUY_SELL_REJECTED=1317
-BUY_SELL_ACCEPTANCE_RATE=7.71%
-BUY_SELL_REJECTION_RATE=92.29%
-```
-
-Exact rejected-stage decomposition:
-
-```text
-SCORE_GATE=903       68.56% of rejected valid BUY/SELL
-H1_NEUTRAL=410       31.13%
-H4_D1_OPPOSE=4        0.30%
-TOTAL=1317
-```
-
-Current source flow means these are sequential stages, not merely overlapping labels:
+Historical valid-tradeable strategy funnel:
 
 ```text
 1427 valid BUY/SELL
   -> 903 rejected by M15 score gate
-  -> 524 survive score gate
+  -> 524 survive M15 score gate
   -> 410 rejected by H1-neutral veto
   -> 114 survive H1
   -> 4 rejected by H4+D1 opposition
-  -> 110 accepted
+  -> 110 strategy-accepted
 ```
 
-The simple current explanation is therefore that score gating and H1-neutral gating remove nearly all valid tradeable candidates before Telegram is considered.
+Rejected-stage percentages:
+
+```text
+M15 score gate=68.56%
+H1 neutral=31.13%
+H4+D1 opposition=0.30%
+```
+
+The strongest strategy bottlenecks are therefore the score floor and H1-neutral veto.
+
+## Current live configuration — verified 2026-08-07 17:38 UTC
+
+```text
+PAIRS=EURUSD GBPUSD
+TIMEFRAMES=M15
+FILTER_SCORE_MIN=65
+FILTER_SCORE_MIN_ALL=65
+FILTER_SCORE_MIN_M15=<unset>
+H1_TREND_MIN_SCORE=40
+H1_VETO_OVERRIDE_SCORE=75
+H1_VETO_OVERRIDE_ADX=40
+TELEGRAM_MIN_SCORE=70
+TELEGRAM_TIER_YELLOW_MIN=70
+TELEGRAM_TIER_GREEN_MIN=75
+TELEGRAM_COOLDOWN_SECONDS=1800
+DRY_RUN_MODE=0
+TELEGRAM_ENABLED=1
+```
+
+Important: the current watcher scans only EURUSD and GBPUSD. A third live pair is not configured.
+
+Current layered policy:
+
+```text
+strategy score floor=65
+H1-neutral override score=75
+Telegram score floor=70
+Telegram yellow floor=70
+Telegram green floor=75
+cooldown=30 minutes per pair/timeframe
+```
+
+A strategy-accepted H1-confirmed signal with score 65.00-69.99 can therefore be suppressed before Telegram delivery.
+
+## Accepted -> Telegram evidence
+
+Retained watcher log:
+
+```text
+ACCEPTED_EVENTS_PARSED=106
+telegram_sent=61
+telegram_cooldown=38
+telegram_score_gate=6
+telegram_failed=1
+telegram_tier_gate=0
+delivery_dedup=0
+dry_run_or_disabled=0
+telegram_backoff=0
+accepted_no_terminal_evidence=0
+```
+
+Percent of parsed accepted events:
+
+```text
+sent=57.55%
+cooldown=35.85%
+Telegram score gate=5.66%
+send failure=0.94%
+```
+
+The CSV contains 110 strategy-accepted BUY/SELL rows. Four have no matched retained watcher-log event in this audit and remain delivery-unknown.
+
+Telegram transport itself is not the main problem: 61 retained accepted events were sent successfully and only one transport failure was observed. Post-acceptance suppression is dominated by the 30-minute cooldown, with a smaller second score gate at 70.
 
 ## Direction and pair evidence
 
+Historical strategy-accepted split:
+
 ```text
 BUY_ACCEPTED=61
-BUY_REJECTED=407
 SELL_ACCEPTED=49
-SELL_REJECTED=910
+EURUSD_ACCEPTED=56
+GBPUSD_ACCEPTED=53
+USDJPY_ACCEPTED=1
 ```
 
-Accepted by pair:
+The historical USDJPY row reflects an older pair configuration. The current live `PAIRS` setting excludes USDJPY.
 
-```text
-EURUSD=56
-GBPUSD=53
-USDJPY=1
-```
+## Key non-causes now closed
 
-The engine demonstrably produces and accepts tradeable directions. The next unresolved question is why those 110 accepted rows did or did not become Telegram signals.
+### Zero entry
 
-## Score evidence
-
-Rejected valid BUY/SELL:
-
-```text
-<62=740
-62-64.99=105
-65-69.99=148
-70-74.99=141
-75+=183
-```
-
-Accepted valid BUY/SELL:
-
-```text
-<62=0
-62-64.99=5
-65-69.99=13
-70-74.99=8
-75+=84
-```
-
-Accepted score range:
-
-```text
-MIN=62.80
-MEDIAN=80.05
-MAX=98.60
-```
-
-The corpus spans historical configuration changes because rejection strings include `score<62`, `score<65`, and `score<70`. Do not infer today's effective score threshold from historical aggregate data.
-
-## H1 evidence
-
-```text
-H1_NEUTRAL: REJECTED=410 ACCEPTED=94
-H1_CONFIRMED: REJECTED=0 ACCEPTED=16
-H1_OPPOSITE: REJECTED=0 ACCEPTED=0
-```
-
-The H1-neutral string match includes `H1_trend_neutral_overridden`; historical rows span different settings. Do not claim all 94 accepted neutral matches were raw neutral passes without exact filter-string proof.
-
-The older May rejected-shadow evidence remains valid: a small sample of H1-blocked candidates later hit SL. That is still a reason not to remove H1 protection blindly. The new whole-corpus data, however, proves the current throughput split quantitatively.
-
-## Macro and RR interpretation
-
-`macro6=3` occurs in every rejected and accepted valid BUY/SELL row in the current corpus. Current fusion code treats macro6=3 as neutral and applies zero news score adjustment. It is not a hard rejection cause.
-
-RR text occurs in some rows but current `quality_filter.py` treats RR as advisory unless another hard gate rejects the row. Do not tune RR based on these counts.
-
-## Zero-entry hypothesis closed
-
-All-zero entry/SL/TP rows were HOLD score-0 rows. No BUY/SELL row had zero entry/SL/TP.
+All zero entry/SL/TP rows in the audited corpus were HOLD score-0 rows. No BUY/SELL row had zero entry/SL/TP.
 
 ```text
 ZERO_ENTRY_BUY_SELL_ROWS=0
 ZERO_ENTRY_ROOT_CAUSE=NO
 ```
 
-Do not trace zero entry further unless new evidence contradicts this.
+### macro6=3
+
+`macro6=3` appears in accepted and rejected valid BUY/SELL rows. Current fusion code treats it as neutral and applies no score adjustment. It is not the hard rejection cause.
+
+### RR text
+
+RR strings are advisory in current `quality_filter.py`; they are not the dominant hard-reject cause.
+
+### H4+D1
+
+Only four valid BUY/SELL rows were rejected by H4+D1 opposition in this corpus. It is not the throughput bottleneck.
 
 ## CSV observability defect
 
@@ -139,23 +150,9 @@ Legacy header:
 timestamp,pair,tf,direction,score,confidence,entry,sl,tp,provider,rejected,filter_str,reasons
 ```
 
-The current watcher appends newer 25-column rows under the old header. The first 13 positions still align, so the current funnel audit is valid. Newer ledger code that expects `filter_rejected`/`filter_reasons` header names may misclassify rows. This is a reporting/observability defect, not evidence that signal decisions themselves are broken.
+The current watcher appends newer 25-column rows under the old header. The first 13 positions remain aligned for the current funnel audit, but newer named-field readers can misclassify rows. Treat this as a separate reporting/observability defect.
 
-## Telegram remains unproven
-
-After strategy acceptance, current watcher code still applies:
-
-```text
-TELEGRAM_MIN_SCORE
-TELEGRAM_TIER_YELLOW_MIN
-TELEGRAM_COOLDOWN_SECONDS
-delivery dedup
-Telegram send
-```
-
-The 110 accepted rows are not proof of 110 Telegram deliveries.
-
-## Current runtime context
+## Runtime context
 
 Latest observed topology:
 
@@ -169,37 +166,49 @@ duplicates=0
 orphan=crond
 ```
 
-The watcher was live and recording decisions. Keep runtime ownership work separate from strategy/delivery diagnosis unless it actually interrupts the watcher.
+The watcher was live and recording decisions. Keep runtime ownership work separate from signal-throughput work unless it actually interrupts the watcher.
 
-## No-change rules
+## Practical interpretation
+
+BotA currently has several stacked suppressors:
+
+1. M15 score <65: strategy reject.
+2. H1 neutral below override conditions: strategy reject.
+3. H4+D1 opposition: rare strategy reject.
+4. Strategy-accepted score <70: Telegram reject.
+5. Same pair/timeframe within 30 minutes of a prior successful send: cooldown reject.
+6. Only two live pairs are scanned.
+
+This is substantially simpler than the previous broad infrastructure diagnosis.
+
+## No-change rules until outcome proof
 
 ```text
 STRATEGY_CHANGED=NO
 FILTER_SCORE_CHANGED=NO
 H1_THRESHOLD_CHANGED=NO
 H4_D1_CHANGED=NO
-MACRO_CHANGED=NO
-RR_CHANGED=NO
-TELEGRAM_ELIGIBILITY_CHANGED=NO
-DEDUP_CHANGED=NO
+PAIR_LIST_CHANGED=NO
+TELEGRAM_SCORE_CHANGED=NO
+COOLDOWN_CHANGED=NO
 PROVIDER_CHANGED=NO
 SUPABASE_CHANGED=NO
 ```
 
+Do not remove protective H1 or score gates just to manufacture signal volume. First test whether already strategy-accepted signals suppressed only by Telegram score/cooldown were good or bad trades.
+
 ## Next exact proof
 
-Read only the current phone values for score, H1 override, Telegram score/tier, cooldown, dry-run, and Telegram enabled state. Then inspect retained watcher logs and classify accepted rows into:
+Classify historical outcomes of:
 
 ```text
-telegram score gate
-tier gate
-cooldown
-delivery dedup
-sent
-send failed
+strategy-accepted but Telegram-score-blocked signals
+strategy-accepted but cooldown-blocked signals
 ```
 
-Only after that should any code or threshold change be proposed.
+Compare those outcomes with delivered signals. This is the least strategy-invasive place to look for a safe throughput improvement.
+
+If a third pair is later required, treat that as a separate explicit pair-universe change after selecting and validating the pair.
 
 ## Working discipline
 
@@ -210,3 +219,4 @@ Only after that should any code or threshold change be proposed.
 5. Record every material finding with explicit UTC date.
 6. Full-file replacement only for approved code mutations.
 7. Never lower thresholds merely to force signal volume.
+8. Use branch -> complete content -> verified diff -> PR; never direct-main fallback.
