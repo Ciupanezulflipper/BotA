@@ -134,13 +134,15 @@ class HistoricalCandlesTests(unittest.TestCase):
                 ]
             )
         )
+        window_start = z("2026-06-01T00:00:00Z")
+        window_end = z("2026-06-01T08:00:00Z")
         with self.assertRaises(ValueError):
             h._validate_chunk_window(
                 candles,
                 pair="EURUSD",
                 timeframe="H4",
-                window_start=z("2026-06-01T00:00:00Z"),
-                window_end=z("2026-06-01T08:00:00Z"),
+                window_start=window_start,
+                window_end=window_end,
             )
 
     def test_preview_performs_no_network_and_creates_no_dataset(self):
