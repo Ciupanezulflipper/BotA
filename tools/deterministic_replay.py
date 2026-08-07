@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import subprocess
 from collections import Counter
 from pathlib import Path
@@ -23,10 +24,21 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _git_executable() -> str:
+    """Resolve Git to one absolute executable path before subprocess use."""
+    found = shutil.which("git")
+    if not found:
+        raise FileNotFoundError("git executable not found")
+    path = Path(found).resolve()
+    if not path.is_absolute() or not path.is_file():
+        raise FileNotFoundError("git executable path is not an absolute file")
+    return str(path)
+
+
 def _git_blob_sha1(path: Path) -> str:
     """Return Git's blob object ID without using SHA-1 as a security primitive."""
     completed = subprocess.run(
-        ["git", "hash-object", "--no-filters", str(path)],
+        [_git_executable(), "hash-object", "--no-filters", str(path)],
         check=True,
         capture_output=True,
         text=True,
