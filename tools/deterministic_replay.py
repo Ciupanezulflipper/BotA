@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -23,9 +24,22 @@ def _sha256(path: Path) -> str:
 
 
 def _git_blob_sha1(path: Path) -> str:
-    raw = path.read_bytes()
-    header = f"blob {len(raw)}\0".encode("utf-8")
-    return hashlib.sha1(header + raw).hexdigest()
+    """Return Git's blob object ID without using SHA-1 as a security primitive."""
+    completed = subprocess.run(
+        ["git", "hash-object", "--no-filters", str(path)],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    value = completed.stdout.strip().lower()
+    if len(value) != 40:
+        raise ValueError(f"invalid git blob object id for {path}")
+    try:
+        bytes.fromhex(value)
+    except ValueError as exc:
+        raise ValueError(f"invalid git blob object id for {path}") from exc
+    return value
 
 
 def _verify_production_sources(source_root: Path) -> dict[str, str]:
@@ -98,7 +112,7 @@ def _summary(
         "status": "COMPLETE",
         "replay_grade": "DETERMINISTIC_PRODUCTION_RULES_WITH_PROVIDER_SUBSTITUTION",
         "source_commit": source_commit,
-        "production_source_hash_algorithm": "git_blob_sha1",
+        "production_source_hash_algorithm": "git_blob_sha1_via_git_hash_object",
         "production_source_blobs": semantics.PRODUCTION_SOURCE_BLOBS,
         "observed_production_source_blobs": observed_source_blobs,
         "dataset_id": dataset_id,
