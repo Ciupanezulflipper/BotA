@@ -25,10 +25,7 @@ BLOCK="${TMPDIR}/crontab.current_bota_block.verify.$$"
 ACTIVE="${TMPDIR}/crontab.current_active.verify.$$"
 MIGRATED="${TMPDIR}/crontab.current_migrated.verify.$$"
 
-cleanup() {
-  rm -f "$CUR" "$BLOCK" "$ACTIVE" "$MIGRATED"
-}
-trap cleanup EXIT HUP INT TERM
+trap 'rm -f "$CUR" "$BLOCK" "$ACTIVE" "$MIGRATED"' EXIT HUP INT TERM
 
 if [ -n "$CRONTAB_SOURCE_FILE" ]; then
   cat "$CRONTAB_SOURCE_FILE" > "$CUR" 2>/dev/null
