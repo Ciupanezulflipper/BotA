@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: **2026-08-07 20:10 UTC**
+Last updated: **2026-08-07 21:33 UTC**
 
 ## Authoritative identifiers
 
@@ -8,6 +8,7 @@ Last updated: **2026-08-07 20:10 UTC**
 RECORDED_DATE=2026-08-07
 PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_HEAD=73b2306b5843f3396823ce815e96051abf78cf50
+GITHUB_MAIN=8e746e554b1d754f9e427a80eab3cc694871dc08
 CURRENT_NATIVE_MANAGER_PID=31140
 CURRENT_SERVICE_DAEMON_PIDFILE=31140
 ```
@@ -90,7 +91,7 @@ This supports replay-testing ADX calibration but is not production approval.
 
 The four unmatched June 23-26 published outcomes cannot be reconstructed from retained `logs/alerts.csv`.
 
-Verified candle coverage at 2026-08-07 19:10:26 UTC for both pairs:
+Verified live candle coverage at 2026-08-07 19:10:26 UTC for both pairs:
 
 ```text
 M15: 499 rows, 2026-07-31 15:00 UTC -> 2026-08-07 19:30 UTC
@@ -99,20 +100,19 @@ H4 : 499 rows, 2026-04-14 13:00 UTC -> 2026-08-07 13:00 UTC
 D1 : 499 rows, 2024-09-02 21:00 UTC -> 2026-08-05 21:00 UTC
 ```
 
-Standalone `data/EURUSD_M15.csv` and `data/GBPUSD_M15.csv` contain only 2026-02-27 through 2026-03-06. The live fetcher uses `count=500` and writes production cache paths, so it is not a historical replay source.
+Standalone `data/EURUSD_M15.csv` and `data/GBPUSD_M15.csv` contain only 2026-02-27 through 2026-03-06. The live fetcher uses a rolling `count=500`, so it is not a complete replay source.
 
-## Historical acquisition package — 2026-08-07
+## Historical acquisition package
 
-Canonical path after PR #57 / PR #59 reconciliation:
+Canonical path:
 
 ```text
 tools/fetch_historical_candles.py
 tests/test_fetch_historical_candles.py
 .github/workflows/historical-candle-acquisition.yml
-audits/HISTORICAL_CANDLE_ACQUISITION_2026-08-07.md
 ```
 
-Collector contract:
+Collector contract after PR #60:
 
 ```text
 DEFAULT_MODE=PREVIEW_NO_NETWORK
@@ -126,66 +126,33 @@ TIMEFRAMES=M15 H1 H4 D1
 RAW_RESPONSES_PRESERVED=YES
 RETRYABLE_HTTP=429_AND_5XX
 MAX_HTTP_ATTEMPTS=3
-RETRY_ATTEMPTS_PRESERVED=YES
 MANIFEST_SHA256=YES
+PROVIDER_ALIGNED_LEADING_CANDLE=ONE_OVERLAPPING_ALLOWED
 ```
 
-The no-network preview passed on phone before acquisition:
+PR #60 merged at:
 
 ```text
-PREVIEW_STATUS=PASS
-MODE=preview
-NETWORK_PERMITTED=False
-PRODUCTION_CACHE_TOUCHED=False
-STREAM_COUNT=8
-TOTAL_PLANNED_REQUESTS=10
+8e746e554b1d754f9e427a80eab3cc694871dc08
 ```
 
-## First real historical acquisition attempt — failed closed
+Its exact head passed historical-acquisition CI, Security Scan, DeepSource Python/Shell/Secrets, and Sonar with 0 new issues and 0 security hotspots.
 
-Recorded phone evidence: **2026-08-07 20:10:49 UTC**.
+## Historical dataset attempt 1 — boundary failure preserved
 
-Dataset:
-
-```text
-data/replay/oanda-20260601-20260801-20260807/
-```
-
-Result:
+Recorded: **2026-08-07 20:10:49 UTC**.
 
 ```text
+dataset=data/replay/oanda-20260601-20260801-20260807/
 COLLECTOR_EXECUTION=FAIL
-FAILED_EVIDENCE_PRESERVED=YES
 ERROR_TYPE=ValueError
 ERROR=OANDA returned candle outside requested chunk for EURUSD H4: 2026-05-31T21:00:00Z
+FAILED_EVIDENCE_PRESERVED=YES
 ```
 
-Classification: OANDA returned one provider-aligned H4 candle beginning before the literal `from` timestamp but overlapping it. The original validator rejected any earlier candle start. This is a collector boundary-validation defect, not an auth/network or strategy failure.
+Classification: provider-aligned H4 leading candle overlapped request start. Fixed by PR #60 without weakening other boundary checks.
 
-The failed immutable dataset must remain preserved and must not be reused or deleted.
-
-## Alignment fix in progress
-
-Branch:
-
-```text
-fix/oanda-aligned-leading-candle-20260807
-```
-
-Fix contract:
-
-- permit at most one provider-aligned leading candle only when its interval overlaps request `from`;
-- still reject more than one leading candle;
-- still reject a candle whose interval ends at or before `from`;
-- still reject any candle starting after request `to`;
-- retain raw provider evidence;
-- final dataset remains filtered to the requested half-open range;
-- manifest records `provider_leading_overlaps_observed`;
-- regression tests reproduce the exact EURUSD H4 `2026-05-31T21:00:00Z` observation and retain fail-closed behavior for older candles.
-
-## Warm-up correction caught before rerun
-
-A raw dataset beginning exactly on 2026-06-01 is not sufficient for deterministic production-semantics replay at the start of June.
+## Replay warm-up requirement
 
 `tools/build_indicators.py` uses:
 
@@ -196,19 +163,95 @@ min_bars=60
 EMA9 EMA21 RSI14 MACD12/26/9 ADX14 ATR14 BB20
 ```
 
-Therefore the next acquisition must include pre-June warm-up history. The simple uniform acquisition range is:
+Therefore a replay dataset beginning exactly at 2026-06-01 is under-warmed for early-June decisions.
+
+The selected raw range remains:
 
 ```text
 raw_range=[2024-01-01T00:00:00Z, 2026-08-01T00:00:00Z)
 replay_evaluation=[2026-06-01T00:00:00Z, 2026-08-01T00:00:00Z)
-dataset-id=oanda-warmup-20240101-20260801-20260807-r2
 ```
 
-This intentionally acquires more raw candles instead of using fragile per-timeframe warm-up arithmetic.
+The no-network warm-up preview passed at **2026-08-07 20:25:37 UTC**:
 
-## PR #6 historical sidecar disposition
+```text
+PREVIEW_STATUS=PASS
+STREAM_COUNT=8
+TOTAL_PLANNED_REQUESTS=60
+NETWORK_PERMITTED=False
+PRODUCTION_CACHE_TOUCHED=False
+FAILED_DATASET_PRESERVED=YES
+```
 
-PR #6 is closed as superseded. It remains design/history evidence only and must not be revived or merged wholesale.
+## Historical dataset attempt 2 — transient TLS failure preserved
+
+Recorded start: **2026-08-07 20:29:19 UTC**.
+
+Dataset:
+
+```text
+data/replay/oanda-warmup-20240101-20260801-20260807-r2/
+```
+
+Live progress at **2026-08-07 20:31:12 UTC** proved active acquisition:
+
+```text
+RAW_RESPONSES=45
+METADATA_FILES=45
+COMPLETED_STREAM_CSVS=4
+LATEST_ARTIFACT_AGE_SEC=1
+MATCHING_PROCESS_COUNT=1
+```
+
+Terminal result:
+
+```text
+COLLECTOR_EXECUTION=FAIL
+FAILED_EVIDENCE_PRESERVED=YES
+ERROR_TYPE=SSLEOFError
+ERROR=[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1032)
+PRODUCTION_CACHE_UNCHANGED=YES
+ACQUISITION_STATUS=FAIL
+```
+
+Classification: transient transport-resilience gap. The collector retried HTTP 429/5xx but did not retry TLS/socket exceptions.
+
+`GIT_WORKTREE_STATUS_UNCHANGED=NO` is not by itself evidence of tracked production mutation because that wrapper compared untracked files as well; replay artifacts under `data/replay/` can change that result on the older phone checkout. The production candle-cache hash remained identical.
+
+## Transport resilience fix in progress
+
+Branch:
+
+```text
+fix/historical-acquisition-resilience-20260807
+```
+
+Fix scope:
+
+- retry transient `OSError` / `http.client.HTTPException` transport failures under the existing maximum of three attempts;
+- preserve redacted immutable metadata for each transport-error attempt;
+- do not fabricate raw response bodies when no response was received;
+- retain existing HTTP 429/5xx retry behavior;
+- retain fail-closed behavior after retry exhaustion;
+- regression-test the exact class of observed failure with `SSLEOFError -> SSLEOFError -> 200`;
+- no production cache, strategy, threshold, pair, Telegram, Supabase, cron, or service changes.
+
+Audit:
+
+```text
+audits/HISTORICAL_ACQUISITION_TRANSPORT_FAILURE_2026-08-07.md
+```
+
+## Dataset disposition
+
+Both failed datasets remain immutable forensic evidence and are not replay inputs:
+
+```text
+data/replay/oanda-20260601-20260801-20260807/
+data/replay/oanda-warmup-20240101-20260801-20260807-r2/
+```
+
+A successful retry must use a new dataset ID after the transport fix is merged.
 
 ## Efficiency operating model
 
@@ -232,6 +275,7 @@ Never push directly to `main`; use branch -> complete-file writes -> verified di
 
 ## Evidence
 
+- `audits/HISTORICAL_ACQUISITION_TRANSPORT_FAILURE_2026-08-07.md`
 - `audits/HISTORICAL_ACQUISITION_RUNTIME_EDGE_2026-08-07.md`
 - `audits/HISTORICAL_CANDLE_ACQUISITION_2026-08-07.md`
 - `audits/HISTORICAL_ACQUISITION_RECONCILIATION_2026-08-07.md`
@@ -248,7 +292,7 @@ Never push directly to `main`; use branch -> complete-file writes -> verified di
 
 ## Exactly one next action
 
-Merge the alignment regression fix only after CI/static-analysis gates pass. Then preview the new warm-up dataset range without network access. Only if that preview passes should one new immutable OANDA acquisition be executed.
+Complete review/CI for the transport-resilience branch. If all material gates pass, merge it and execute one new immutable warm-up acquisition with a new dataset ID.
 
 After dataset integrity passes, build/run the deterministic production-semantics replay:
 
