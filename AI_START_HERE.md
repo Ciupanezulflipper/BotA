@@ -1,6 +1,6 @@
 # BotA AI Start Here
 
-Last updated: 2026-08-03 01:14 UTC
+Last updated: 2026-08-07 17:01 UTC
 
 Read this before proposing BotA commands, code, cron, service, strategy,
 notification, provider, Supabase, or deployment changes.
@@ -8,84 +8,118 @@ notification, provider, Supabase, or deployment changes.
 ## Current authoritative truth
 
 ```text
-HEARTBEAT_CODE_BASELINE=4b89d1e0c729b81472ca78d723316289dd4aebb1
+RECORDED_DATE=2026-08-07
 PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
-PHONE_HEAD=011baaaad7071110e33bca06903047c842e7331a
-PHONE_REMOTE_PUSHED=NO
-PHONE_PRESERVATION_COMPLETE=YES
-PHONE_UNTRACKED_FILES_PRESERVED=519
-D1_TIMEFRAME_MAPPING=FIXED_AND_DEPLOYED
-SUPERVISOR_CORE=FIXED_DEPLOYED_AND_ACCEPTED
-SUPERVISOR_WRAPPER=NON_MUTATING_DEPLOYED_AND_ACCEPTED
-CURRENT_CONTROL_PLANE=HEALTHY_7_OF_7
-STATUS_FORMATTER=FIXED_DEPLOYED_AND_ACCEPTED
-AUTOSTATUS=FIXED_DEPLOYED_AND_ACCEPTED
-HEARTBEAT_TOPOLOGY=UNIFIED_DEPLOYED
-HEARTBEAT_DELIVERY=PASS
-DEADMAN_INPUT=MONOTONIC_PROGRESS_INVALID
-AUTOMATIC_TOPOLOGY_RECOVERY_FROM_SUPERVISOR_WRAPPER=DISABLED
-STRATEGY_MUTATION_ALLOWED=NO
+PHONE_HEAD=73b2306b5843f3396823ce815e96051abf78cf50
+CURRENT_NATIVE_MANAGER_PID=31140
+CURRENT_CONTROL_PLANE=DEGRADED_6_OWNED_1_ORPHAN
+CURRENT_REQUIRED_RUNNING=7_OF_7
+CURRENT_ORPHAN_SERVICE=crond
+CURRENT_DUPLICATE_SERVICE_ROWS=0
+LIVE_WATCHER=RUNNING
+SIGNAL_DECISION_ROWS=2507
+SIGNAL_HOLD_ROWS=1082
+SIGNAL_SELL_ROWS=959
+SIGNAL_BUY_ROWS=466
+SIGNAL_ACCEPTED_ROWS=110
+SIGNAL_REJECTED_ROWS=2397
+SIGNAL_ACCEPTANCE_RATE≈4.39_PERCENT
+SIGNAL_REJECTION_RATE≈95.61_PERCENT
+ZERO_ENTRY_SL_TP_ROWS=1014
+ZERO_ENTRY_BUY_SELL_ROWS=0
+ZERO_ENTRY_VERDICT=HOLD_SYMPTOM_NOT_ROOT_CAUSE
+STRATEGY_MUTATION_ALLOWED=NO_PENDING_FUNNEL_CLASSIFICATION
 ```
 
 ## Evidence order
 
-1. `CONTINUITY_CURRENT.md`
-2. `audits/P8_HEARTBEAT_PHONE_DEPLOYMENT_2026-08-03.md`
-3. `audits/PR39_HEARTBEAT_RECONCILIATION_2026-08-03.md`
-4. `audits/P7_SUPERVISOR_WRAPPER_CLOSURE_2026-08-02.md`
-5. `audits/PHONE_DEPLOYMENT_2026-08-02.md`
-6. `audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`
-7. `audits/ERROR_LOG.md`
-8. `ERRORS.md`
-9. GitHub issue #9
+1. `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
+2. `CONTINUITY_CURRENT.md`
+3. `CHAT_HANDOFF_BOTA.md`
+4. `audits/DUPLICATE_MANAGER_FORENSICS_2026-08-07.md` when present/merged
+5. `audits/P8_HEARTBEAT_PHONE_DEPLOYMENT_2026-08-03.md`
+6. `audits/P7_SUPERVISOR_WRAPPER_CLOSURE_2026-08-02.md`
+7. `audits/PHONE_DEPLOYMENT_2026-08-02.md`
+8. `audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`
+9. `audits/ERROR_LOG.md`
+10. `ERRORS.md`
 
-The August 1 one-week production validation remains failed historical evidence.
-The August 2–3 repairs prove bounded current behavior but do not yet constitute a
-new endurance-validation pass.
+## Current signal-throughput finding — 2026-08-07
 
-## Verified phone state
-
-The phone now contains the repaired core, non-mutating supervisor wrapper, and
-unified heartbeat path:
+The live watcher path was observed running:
 
 ```text
-services/bota-heartbeat/run
-  -> tools/heartbeat.sh
-  -> tools/heartbeat_runtime.py
-  -> tools/heartbeat_delivery.py
+runsv bota-watcher
+  -> tools/run_signal_watcher_with_ledger.sh
+  -> tools/signal_watcher_pro.sh --once
 ```
 
-P8 verified:
+The current `logs/alerts.csv` corpus contains 2507 decision rows:
+
+```text
+HOLD=1082
+SELL=959
+BUY=466
+accepted=110
+rejected=2397
+```
+
+This proves the direction engine can generate BUY and SELL decisions. The current
+highest-value problem is downstream throughput: about 95.61% of recorded rows
+are rejected.
+
+Common filter strings contain score thresholds (`score<62`, `score<65`,
+`score<70`), direction-not-tradeable, H1-neutral tags, RR advisory/rejection
+text, and `macro6=3`. `H4_D1_oppose` is rare in the inspected corpus.
+
+A separate direct classification proved that all 1014 rows with
+`entry=0, sl=0, tp=0` are M15 HOLD rows with score 0.00. No BUY or SELL row had
+zero entry/SL/TP. Therefore zero entry is a HOLD symptom, not the current root
+cause.
+
+The exact CSV schema is:
+
+```text
+timestamp,pair,tf,direction,score,confidence,entry,sl,tp,provider,rejected,filter_str,reasons
+```
+
+Do not use `filter_rejected` as a CSV field name in ad-hoc audits; it does not
+exist in this file.
+
+## Current runtime/control-plane finding — 2026-08-07
+
+The native Termux `service-daemon` manager is PID 31140 and its pidfile matches.
+Earlier in the incident there were two managers; the detached `-P` manager died
+and supervisors progressively reconverged to PID 31140. The latest observed
+state is:
 
 ```text
 manager_count=1
+manager_pid=31140
 required=7
-owned=7
+owned=6
 running=7
-orphaned=0
+orphaned=1
 duplicate_service_rows=0
-healthy=true
-only_heartbeat_pid_changed=true
-HB_UTC_RESULT=PASS sources=3
-DEADMAN_UTC_RESULT=MONOTONIC_PROGRESS_INVALID
+healthy=false
+orphan_service=crond
 ```
 
-Heartbeat delivery, authoritative UTC lookup, active-wrapper replacement, and
-control-plane preservation passed. Deadman monitoring is not accepted because
-its live monotonic progress input was invalid.
-
-The legacy `tools/bota_heartbeat_utc.sh` remains preserved unchanged until the
-new path has complete deadman acceptance.
+Do not kill PID 31140 or manually kill the remaining orphan while signal-funnel
+work is in progress. All required services are currently running.
 
 ## Scope lock
 
-Do not change strategy, thresholds, pairs, scoring, ADX, H1/D1 confirmation,
-volatility or macro filters, deduplication, SL/TP, PR #7, provider semantics, or
-Supabase signal semantics during runtime-reliability work.
+Do not change strategy thresholds, H1/H4/D1 behavior, macro filters, RR policy,
+deduplication, SL/TP, provider semantics, Telegram eligibility, or Supabase
+signal semantics until the current rejection funnel is classified precisely.
 
-Never push directly to `main`. Two documentation-only direct-main exceptions
-occurred while recording P8 and are documented in
-`audits/P8_DIRECT_MAIN_DOC_EXCEPTION_2026-08-03.md`; do not repeat them.
+Do not resume broad manager-provenance archaeology unless the control-plane
+condition directly interrupts watcher execution or creates duplicate service
+rows.
+
+Never push directly to `main`. Use branch -> complete content -> verified diff
+-> PR.
 
 ## Evidence and time rules
 
@@ -93,15 +127,15 @@ occurred while recording P8 and are documented in
 - **ASSUMED** means plausible but unproven.
 - **UNKNOWN** means insufficient evidence and must not drive mutation.
 - Trusted provider/server UTC controls market and candle semantics.
-- Monotonic time controls same-boot cadence, cooldowns, backoff, and health.
-- Android/ship wall time is display-only.
+- Monotonic/boottime clocks control same-boot cadence and runtime health.
+- Android/ship wall time is display-only for market decisions.
 - Reject negative or future ages.
-- Do not use `/proc/uptime` on this Android build.
+- Write and inspect complete decision evidence before dedup conclusions.
+- Prefer small direct proofs over giant terminal dumps.
 
 ## Exactly one next action
 
-Inspect `state/shadow_progress.monotonic` and its producer read-only. Determine
-whether the live defect is malformed content, incompatible field format,
-future/negative monotonic age, boot-ID mismatch, or producer failure. Do not
-change heartbeat code, strategy, providers, Supabase, crontab, or service
-topology until the exact cause is proven.
+Classify the 1493 rows with valid entry/SL/TP by `rejected`, pair, direction,
+score bucket, and exact `filter_str`; separately inspect the 110 accepted rows
+and determine whether they reached Telegram eligibility/delivery. Do not mutate
+strategy or thresholds until that funnel is proven.
