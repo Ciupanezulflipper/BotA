@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: **2026-08-07 19:10 UTC**
+Last updated: **2026-08-07 20:20 UTC**
 
 ## Authoritative identifiers
 
@@ -53,7 +53,7 @@ Retained accepted-to-Telegram outcomes:
 1 send failure
 ```
 
-The current dominant strategy-quality question is not whether BotA can emit signals; it can. The problem is that recent high-confidence published signals have poor realized outcomes.
+BotA can emit signals. The current investigation is signal quality/calibration, not basic Telegram transport.
 
 ## Outcome evidence
 
@@ -75,7 +75,7 @@ ADX<30: N=17 W=9 L=8 PIPS=+98.0
 SCORE>=70 + ADX<30: N=12 W=9 L=3 PIPS=+174.2
 ```
 
-Later June–July component cross-check recovered 9/13 published signals:
+Later June-July component cross-check recovered 9/13 published signals:
 
 ```text
 MATCHED_BASELINE: N=9 W=2 L=7 PIPS=-70.2
@@ -84,26 +84,13 @@ SCORE>=70 + ADX<30 + NO_EXTREME: N=4 W=2 L=2 PIPS=+28.9
 ADX>=30 within matched sample: 0W / 4L / -83.3 pips
 ```
 
-This is cross-period evidence that ADX calibration deserves replay testing, but it is not production approval.
+This supports replay-testing ADX calibration but is not production approval.
 
-## Local signal-row retention gap
+## Local retention and raw-input gaps
 
-Verified 2026-08-07 18:58 UTC:
+The four unmatched June 23-26 published outcomes cannot be reconstructed from retained `logs/alerts.csv`.
 
-```text
-UNMATCHED_PUBLISHED_TARGETS=4
-RELAXED_LOCAL_MATCHES=0
-RELAXED_COMPONENT_MATCHES=0
-LOCAL_RETENTION_GAP=CONFIRMED
-```
-
-Stop trying to reconstruct those four rows from `logs/alerts.csv`.
-
-## Raw candle replay prerequisite — verified 2026-08-07 19:10:26 UTC
-
-The canonical candle CSVs are valid ISO-timestamp CSV files. A prior numeric-only inventory parser incorrectly reported zero rows; that result is superseded.
-
-Verified retained input coverage for both EURUSD and GBPUSD:
+Verified candle coverage at 2026-08-07 19:10:26 UTC for both pairs:
 
 ```text
 M15: 499 rows, 2026-07-31 15:00 UTC -> 2026-08-07 19:30 UTC
@@ -112,33 +99,53 @@ H4 : 499 rows, 2026-04-14 13:00 UTC -> 2026-08-07 13:00 UTC
 D1 : 499 rows, 2024-09-02 21:00 UTC -> 2026-08-05 21:00 UTC
 ```
 
-Standalone `data/EURUSD_M15.csv` and `data/GBPUSD_M15.csv` contain 500 rows only from 2026-02-27 through 2026-03-06. They do **not** cover June–July.
+Standalone `data/EURUSD_M15.csv` and `data/GBPUSD_M15.csv` contain only 2026-02-27 through 2026-03-06. The live fetcher uses `count=500` and writes production cache paths, so it is not a historical replay source.
 
-Therefore:
+## Historical acquisition package — added 2026-08-07
+
+A clean current-main implementation now exists on this revision:
 
 ```text
-M15_JUNE_JULY_INPUT_COVERAGE=NO
-H1_JUNE_JULY_INPUT_COVERAGE=NO
-H4_JUNE_JULY_INPUT_COVERAGE=YES
-D1_JUNE_JULY_INPUT_COVERAGE=YES
-TRUE_REPLAY_FROM_RETAINED_INPUTS=BLOCKED
+tools/fetch_historical_candles.py
+tests/test_fetch_historical_candles.py
+.github/workflows/historical-candle-acquisition.yml
+audits/HISTORICAL_CANDLE_ACQUISITION_2026-08-07.md
 ```
 
-Current `tools/data_fetch_candles.sh` is a rolling live fetcher (`count=500`) and must not be used as the replay data collector because it does not provide the required historical range and writes live cache paths.
+The collector:
+
+```text
+DEFAULT_MODE=PREVIEW_NO_NETWORK
+EXECUTION_REQUIRES=--execute
+OUTPUT_NAMESPACE=data/replay/<dataset-id>
+OUTPUT_IMMUTABLE=YES
+PRODUCTION_CACHE_TOUCHED=NO
+OANDA_PRICE=M
+PAIRS=EURUSD GBPUSD
+TIMEFRAMES=M15 H1 H4 D1
+RAW_RESPONSES_PRESERVED=YES
+MANIFEST_SHA256=YES
+```
+
+Focused offline validation before GitHub integration: **10/10 tests passed** plus Python compilation. No real provider, Telegram, or Supabase call was made during repository implementation.
+
+## PR #6 historical sidecar disposition
+
+Draft PR #6 is useful as design/history evidence only. GitHub currently reports it as open, non-mergeable, 125 commits and 129 changed files. Its changed paths include out-of-scope canonical/runtime files in addition to the sidecar. Do not merge or cherry-pick PR #6 wholesale.
+
+The clean collector reuses only validated architectural ideas from that work and is independently tested on current `main`.
 
 ## Efficiency operating model
 
 Canonical workflow: `docs/FORENSIC_OPERATING_MODEL.md`.
 
-Going forward:
-
 ```text
-GitHub connector -> code/history/docs/tests
+GitHub connector  -> code/history/docs/tests
 Supabase connector -> published signal/outcome truth
-Phone/Termux -> runtime-only and local-private evidence
+Phone/Termux       -> runtime-only state, credentials, local-only evidence
 ```
 
-Replace repeated one-off shell/Python probes with a versioned reusable forensic snapshot tool. Build an immutable historical dataset under a replay namespace, then a deterministic replay of the live production semantics. Do not repeatedly rediscover facts already available through connectors.
+Do not issue ad-hoc phone probes for information available through connectors. Reusable tools replace disposable shell/Python probes.
 
 ## Scope lock
 
@@ -146,27 +153,34 @@ Do not lower score/H1/Telegram floors, remove cooldown, add a third pair, or mut
 
 Do not use `tools/backtest_bota.py` as production-rule validation because its strategy/scoring path differs from the live watcher.
 
-Never push directly to `main`; use branch -> complete-file writes -> diff -> PR.
+Never push directly to `main`; use branch -> complete-file writes -> verified diff -> PR.
 
 ## Evidence
 
+- `audits/HISTORICAL_CANDLE_ACQUISITION_2026-08-07.md`
 - `audits/RAW_CANDLE_REPLAY_GAP_2026-08-07.md`
 - `docs/FORENSIC_OPERATING_MODEL.md`
 - `audits/LOCAL_RETENTION_GAP_2026-08-07.md`
 - `audits/JUNE_JULY_ADX_RSI_TEMPORAL_CROSSCHECK_2026-08-07.md`
 - `audits/ADX_RSI_COUNTERFACTUAL_2026-08-07.md`
 - `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
-- `audits/LOCAL_SIGNAL_LEDGER_INVENTORY_2026-08-07.md`
 - `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
 - `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
 - `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
 - `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
 
-## Exactly one next engineering objective
+## Exactly one next action after merge
 
-Implement the reusable **replay infrastructure**, beginning with an immutable paginated historical-data collector and integrity manifest for the missing M15/H1 June–July inputs. This is engineering work, not another manual forensic probe.
+Acquire and integrity-verify one immutable OANDA dataset on the phone, where the credential already exists:
 
-After the dataset is verified, run the frozen policies through a deterministic live-path replay:
+```text
+dataset-id=oanda-20260601-20260801-20260807
+range=[2026-06-01T00:00:00Z, 2026-08-01T00:00:00Z)
+pairs=EURUSD GBPUSD
+timeframes=M15 H1 H4 D1
+```
+
+After that dataset is verified, build/run the deterministic production-semantics replay for frozen policies:
 
 ```text
 A = current production baseline
