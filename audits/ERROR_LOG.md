@@ -1,11 +1,12 @@
 # BotA Runtime Error Log
 
-Last updated: 2026-08-07 18:46 UTC
+Last updated: 2026-08-07 18:58 UTC
 
 This is the canonical compact error and prevention index. Historical full text remains in Git history, `ERRORS.md`, dated audit records, and GitHub issue/PR history.
 
 Current signal evidence:
 
+- `audits/LOCAL_RETENTION_GAP_2026-08-07.md`
 - `audits/JUNE_JULY_ADX_RSI_TEMPORAL_CROSSCHECK_2026-08-07.md`
 - `audits/ADX_RSI_COUNTERFACTUAL_2026-08-07.md`
 - `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
@@ -58,7 +59,11 @@ TEMPORAL_MATCHED_BASELINE_PIPS=-70.2
 TEMPORAL_ADX_LT30_PIPS=+13.1
 TEMPORAL_ADX_LT30_NO_EXTREME_PIPS=+28.9
 TEMPORAL_ADX_GTE30=0W_4L_MINUS83.3_PIPS
-STRATEGY_MUTATION_ALLOWED=NO_PENDING_UNMATCHED_RECOVERY_OR_TRUE_REPLAY
+UNMATCHED_TARGETS=4
+UNMATCHED_RELAXED_MATCHES=0
+UNMATCHED_RELAXED_COMPONENT_MATCHES=0
+LOCAL_RETENTION_GAP=CONFIRMED
+STRATEGY_MUTATION_ALLOWED=NO_PENDING_TRUE_REPLAY
 ```
 
 ## Canonical error index
@@ -266,8 +271,6 @@ Prevention: separate momentum strength from entry quality; do not monotonically 
 ### E063 — In-sample counterfactual can look perfect without proving edge
 Recorded: 2026-08-07 18:38 UTC.
 
-The same 51-row March sample used to discover the ADX/RSI relationship produced:
-
 ```text
 BASELINE: N=51 W=13 L=38 WR=25.5% PIPS=-264.1
 ADX<30: N=17 W=9 L=8 WR=52.9% PIPS=+98.0
@@ -275,9 +278,7 @@ SCORE>=70 + ADX<30: N=12 W=9 L=3 WR=75.0% PIPS=+174.2
 SCORE>=70 + ADX<30 + NO_EXTREME: N=7 W=7 L=0 WR=100.0% PIPS=+171.0
 ```
 
-The 7/7 subset is not production validation. It is a small in-sample subset chosen after observing the same data.
-
-Prevention: freeze candidate rules and validate on a separate unseen historical period before mutation.
+The 7/7 subset is not production validation. Prevention: freeze candidate rules and validate on a separate unseen historical period before mutation.
 
 ### E064 — ADX 30-39 failure persists across RSI states in March sample
 Recorded: 2026-08-07 18:38 UTC.
@@ -288,7 +289,7 @@ Recorded: 2026-08-07 18:38 UTC.
 30-39/EXTREME: n=10 W=0 L=10 PIPS=-182.3
 ```
 
-This strengthens the directional ADX concern because poor results are not confined to one RSI subgroup. It still does not establish a final production threshold.
+This strengthens the directional ADX concern but still does not establish a final production threshold.
 
 ### E065 — Later-period ADX cross-check supports the same direction but coverage is incomplete
 Recorded: 2026-08-07 18:46 UTC.
@@ -305,16 +306,29 @@ ADX_30_39: N=3 W=0 L=3 PIPS=-57.4
 ADX_40_PLUS: N=1 W=0 L=1 PIPS=-25.9
 ```
 
-All four matched ADX >=30 rows lost, totaling -83.3 pips. The later subset independently points in the same direction as March, but 9/13 coverage is insufficient to approve a production rule.
-
-Prevention: resolve unmatched component rows or record the retention gap before claiming out-of-sample validation.
+All four matched ADX >=30 rows lost, totaling -83.3 pips. Prevention: resolve unmatched component rows or record the retention gap before claiming out-of-sample validation.
 
 ### E066 — Supabase `created_at` is not proven to equal BotA decision time
 Recorded: 2026-08-07.
 
-Exact read-only Supabase rows were re-queried. Several already-matched signals have `created_at` values that do not equal the local watcher decision timestamps.
+Several already-matched signals have `created_at` values that do not equal local watcher decision timestamps.
 
 Prevention: treat Supabase `created_at` as publication/storage timing until its semantics are proven; never use it as the sole join key.
+
+### E067 — Local retention gap blocks full June-July component reconstruction
+Recorded: 2026-08-07 18:58 UTC.
+
+```text
+TARGETS_TOTAL=4
+TARGETS_WITH_NEARBY_ROWS=1
+TARGETS_WITH_RELAXED_MATCH=0
+TARGETS_WITH_RELAXED_COMPONENT_MATCH=0
+VERDICT=LOCAL_RETENTION_GAP_CONFIRMED
+```
+
+Three unmatched published targets had no same-pair/same-direction M15 rows within +/-2 days. The fourth had nearby rows but no plausible identity match.
+
+Prevention: once a retention gap is proven, stop widening heuristic match tolerances. Use raw historical candles and the live scoring path for true replay.
 
 ## Current exact funnel
 
@@ -369,7 +383,8 @@ June-July matched ADX>=30=0W/4L, -83.3 pips
 9. Branch -> verified diff -> PR; never direct-main fallback.
 10. Freeze candidate rules before out-of-sample testing.
 11. Resolve unmatched records before claiming temporal validation.
+12. Stop heuristic reconstruction after a confirmed retention gap.
 
 ## Exactly one next action
 
-Resolve the four unmatched June 23-26 published signals against retained local alerts with relaxed matching. If the component rows are absent, record the retention gap and proceed to a true historical replay using raw candles and the live scoring path. No production strategy mutation until this validation is complete.
+Run a true historical replay from raw candles through the live production scoring/fusion semantics with frozen policies A/B/C. Compare signal count, wins/losses, total pips, and preferably MAE/MFE. No production strategy mutation until this validation is complete.
