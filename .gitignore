@@ -43,6 +43,7 @@ state/
 .state/
 queue/
 data/candles/
+data/replay/
 charts_test/
 
 # Locks / pids / stamps
