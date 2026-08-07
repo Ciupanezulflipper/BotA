@@ -250,7 +250,7 @@ def https_transport(base_url: str, path_and_query: str, token: str, timeout_seco
 
 
 def _finite_positive(value: object, field: str) -> float:
-    number = float(value)
+    number = float(str(value))
     if not math.isfinite(number) or number <= 0:
         raise ValueError(f"invalid {field}")
     return number
