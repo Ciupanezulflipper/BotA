@@ -1,157 +1,196 @@
 # BotA Chat Handoff
 
-Last updated: 2026-05-15
+Last updated: 2026-08-07 17:01 UTC
 
 Read this first in any new AI chat before proposing BotA changes.
 
-## Current situation
+## Current question
 
-BotA had a signal drought / low accepted-signal throughput.
+Why does BotA produce very few useful trade signals even though months of runtime,
+service, heartbeat, Telegram, and deployment work have been completed?
 
-Main question:
-Is BotA too quiet because the strategy is broken, or because filters are correctly blocking bad trades?
+The current answer is narrower than previous handoffs:
 
-Current grounded answer:
-BotA is quiet, but replay evidence shows the H1_trend_neutral gate protected BotA from losing trades in the current tested sample.
+> The live direction engine does produce BUY and SELL decisions. The dominant
+> current bottleneck is downstream rejection/eligibility. About 95.61% of the
+> inspected decision corpus is rejected.
 
-## Latest verified commits
+## Verified live watcher path — 2026-08-07
 
-1. bb01ff38d694482071e496922fd3b1d20a0a5644
-Message: fix: map shadow tracker filter_str and log H1 outcome proof
-Meaning: tools/rejected_shadow_tracker.py now recognizes filter_str from logs/alerts.csv.
+```text
+runsv bota-watcher
+  -> tools/run_signal_watcher_with_ledger.sh
+  -> tools/signal_watcher_pro.sh --once
+```
 
-2. ccf9f18c470e5b78ad8b08f84b00bba2ba999f19
-Message: fix: shadow JSONL dedup + outcome proof — 7 SL_HIT 0 TP_HIT on rejected candidates
-Meaning: duplicate shadow rows cleaned and current rejected-candidate outcome proof documented.
+All seven required services were running during the latest observation.
+Control-plane ownership was still degraded because `crond` remained a PID-1
+orphan:
 
-3. Current pending commit
-Meaning: final May 13 pending rows resolved as SL_HIT and handoff was updated.
+```text
+manager_count=1
+manager_pid=31140
+owned=6/7
+orphaned=1
+running=7/7
+duplicates=0
+healthy=false
+```
 
-## Proven facts
+Do not confuse this ownership defect with proof that the watcher is not
+functioning. The watcher was live and recording decisions.
 
-Shadow tracker fix:
-tools/rejected_shadow_tracker.py recognizes:
-["filter_reason", "filter_reasons", "filters", "filter_str"]
+## Signal funnel evidence — 2026-08-07
 
-Shadow JSONL was cleaned after final pending resolution.
+Source:
 
-Before cleanup: 13 rows
-After cleanup: 10 rows
-Removed: 3 duplicate rows
+```text
+logs/alerts.csv
+```
 
-Final clean outcome state:
-Total rows: 10
-Resolved: 10
-Pending: 0
-TP_HIT: 0
-SL_HIT: 10
-WR: 0.0%
+Schema:
 
-## H1 evidence
+```text
+timestamp,pair,tf,direction,score,confidence,entry,sl,tp,provider,rejected,filter_str,reasons
+```
 
-Shadow rows were joined back to logs/alerts.csv.
+Corpus:
 
-Join result:
-Matched: 10
-Unmatched: 0
-Matched H1_trend_neutral: 8
-Matched score_gate: 2
+```text
+TOTAL_DECISIONS=2507
+HOLD=1082
+SELL=959
+BUY=466
+ACCEPTED=110
+REJECTED=2397
+ACCEPTANCE_RATE≈4.39%
+REJECTION_RATE≈95.61%
+```
 
-Resolved H1_trend_neutral rows:
-2026-04-23 14:47 UTC EURUSD BUY score=76.1 -> SL_HIT -16.1p
-2026-04-23 15:46 UTC EURUSD BUY score=71.7 -> SL_HIT -16.0p
-2026-04-23 16:00 UTC EURUSD BUY score=68.7 -> SL_HIT -16.0p
-2026-05-11 14:30 UTC EURUSD BUY score=68.5 -> SL_HIT -11.2p
-2026-05-11 16:51 UTC GBPUSD BUY score=71.0 -> SL_HIT -17.9p
-2026-05-13 15:49 UTC GBPUSD BUY score=71.0 -> SL_HIT -19.9p
-2026-05-13 16:00 UTC GBPUSD BUY score=68.0 -> SL_HIT -19.9p
-2026-05-13 16:16 UTC GBPUSD BUY score=66.0 -> SL_HIT -19.6p
+This is direct evidence that the direction generator is not dead. It creates
+1425 BUY/SELL rows in the inspected corpus.
 
-Current H1 sample:
-H1 resolved: 8
-TP_HIT: 0
-SL_HIT: 8
-WR: 0.0%
+## Dominant rejection strings
 
-Score-gate resolved rows:
-2026-05-07 14:15 UTC EURUSD BUY score=55.2 -> SL_HIT -11.7p
-2026-05-07 14:30 UTC GBPUSD BUY score=56.2 -> SL_HIT -13.7p
+Most common observed `filter_str` values include:
 
-Score-gate sample:
-Resolved: 2
-TP_HIT: 0
-SL_HIT: 2
-WR: 0.0%
+```text
+794  direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3
+537  score<65 | macro6=3
+450  macro6=3 | H1_trend_neutral
+294  score<70 | macro6=3
+145  direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | atr<=0 | macro6=3
+50   score<62 | macro6=3
+42   macro6=3 | H1_trend_neutral_overridden
+16   macro6=3 | H1_trend_confirmed
+4    macro6=3 | H4_D1_oppose
+```
 
-## Current interpretation
+Interpretation rules:
 
-H1_trend_neutral is the main throughput gate.
+- score thresholds are a major current suspect;
+- `macro6=3` is common but has not yet been proven causal rather than
+  informational;
+- H1 remains relevant, but the whole-corpus evidence no longer supports the old
+  statement that H1 neutral is necessarily the single dominant throughput gate;
+- H4/D1 opposition is rare in this corpus.
 
-Current replay evidence says H1_trend_neutral is protective in this tested sample:
-8 resolved H1-blocked candidates
-8 SL_HIT
-0 TP_HIT
+## Zero entry finding — closed as root-cause hypothesis
 
-Therefore:
-Do NOT lower H1 override threshold yet.
-Do NOT remove H1 veto yet.
-Do NOT increase strategy aggressiveness based only on signal drought frustration.
+A direct classification of all 2507 rows found:
 
-## What is not proven yet
+```text
+ALL_VALID_ENTRY_SL_TP=1493
+ALL_ZERO_ENTRY_SL_TP=1014
+MIXED=0
+```
 
-This is not final proof that H1 is always correct.
+Every one of the 1014 zero-entry rows was:
 
-Limitations:
-H1 resolved sample size is 8.
-More samples are needed before long-term tuning.
-The current evidence is strong enough to block reckless H1 changes, but not enough to finalize all future strategy decisions.
+```text
+HOLD
+score=0.00
+M15
+```
 
-## No-change rules
+Pair distribution:
 
-Until more rejected-candidate samples are collected:
+```text
+GBPUSD=519
+EURUSD=490
+USDJPY=5
+```
 
-PRODUCTION_CHANGED=NO
-STRATEGY_CHANGED=NO
-TELEGRAM_CHANGED=NO
-CRON_CHANGED=NO
-H1_THRESHOLD_CHANGED=NO
+And:
+
+```text
+ZERO_ENTRY_BUY_SELL_ROWS=0
+```
+
+Therefore `entry=0`, `sl=0`, and `tp=0` are a HOLD symptom, not the current
+root cause of lost BUY/SELL signals.
+
+## Audit-script correction
+
+One exploratory Python snippet used `filter_rejected` as a DictReader key. That
+field does not exist in `logs/alerts.csv`; the correct key is `rejected`.
+Therefore the snippet's printed empty filter-status section is invalid evidence.
+The earlier acceptance/rejection counts based on column 11 remain valid.
+
+## Historical H1 evidence — retain, but do not over-generalize
+
+The May 2026 rejected-shadow sample remains real historical evidence: ten
+resolved rejected candidates in that small sample all hit SL, including eight
+H1-neutral rows. That evidence supports keeping H1 protections until better
+counter-evidence exists.
+
+However, it must not be used to claim that H1 neutral is the dominant current
+whole-corpus bottleneck. The 2026-08-07 corpus is much larger and shows many
+score-gate and direction/HOLD rejections.
+
+## No-change rules until next proof
+
+```text
+PRODUCTION_STRATEGY_CHANGED=NO
 FILTER_SCORE_CHANGED=NO
+H1_THRESHOLD_CHANGED=NO
+H4_D1_CHANGED=NO
+MACRO_FILTER_CHANGED=NO
+RR_POLICY_CHANGED=NO
+TELEGRAM_ELIGIBILITY_CHANGED=NO
+PROVIDER_CHANGED=NO
+SUPABASE_CHANGED=NO
+```
 
-Do not change:
-H1 veto
-H1 override threshold
-FILTER_SCORE_MIN
-TELEGRAM_MIN_SCORE
-Cron schedule
-Telegram alert routing
-Production signal pipeline
+Do not lower thresholds merely to force signal volume. First quantify exactly
+which valid BUY/SELL candidates are rejected by which gate and what happened to
+the accepted 110 rows.
 
 ## Next exact proof step
 
-Keep collecting rejected shadow outcomes.
+Classify the 1493 rows with valid entry/SL/TP by:
 
-When enough new rejected rows exist, run:
+```text
+pair
+direction
+rejected=true/false
+score bucket
+exact filter_str
+```
 
-cd /data/data/com.termux/files/home/BotA || { echo "FAIL"; exit 1; }
+Then inspect the 110 accepted rows and determine whether they reached Telegram
+eligibility, delivery dedup/cooldown, or actual send success.
 
-python3 tools/rejected_shadow_tracker.py --score-min 65 --lookback-hours 720 --outcome-hours 24
-
-Then inspect logs/rejected_shadow_outcomes.jsonl and join back to logs/alerts.csv before drawing conclusions.
-
-## Separate UX issue
-
-Telegram API warning spam is a separate problem.
-
-The strategy should not be changed because of warning frustration.
-However, Telegram UX should eventually be improved so public/user channel receives useful status summaries instead of repeated API warning fear messages.
+That is the shortest evidence path to answering why valid-looking BUY/SELL
+candidates are not becoming user-visible signals.
 
 ## Working discipline
 
 1. Inspect before changing.
-2. Full-file replacement only when approved.
-3. No patches unless explicitly approved.
-4. Always check logs/error.log before code changes.
-5. Always include PASS/FAIL outcomes.
-6. Always state whether production, strategy, Telegram, cron, or GitHub changed.
-7. Never assume a bottleneck without log proof.
-8. Never change thresholds based on frustration alone.
+2. Use small, pager-proof evidence packages.
+3. Do not repeat broad runtime archaeology unless it directly blocks the signal path.
+4. Record every material finding with an explicit UTC date.
+5. Use the real CSV schema before writing audit scripts.
+6. Separate strategy rejection from Telegram delivery and from runtime health.
+7. Full-file replacement only when a code mutation is approved.
+8. Never change thresholds based only on signal drought frustration.
