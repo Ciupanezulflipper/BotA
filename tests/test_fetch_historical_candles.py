@@ -6,7 +6,7 @@ import json
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -228,17 +228,15 @@ class HistoricalCandlesTests(unittest.TestCase):
             "https://user:pass@api-fxpractice.oanda.com",
             "https://api-fxpractice.oanda.com/path",
         ):
-            with self.subTest(bad=bad):
-                with self.assertRaises(ValueError):
-                    h.validate_base_url(bad)
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                h.validate_base_url(bad)
 
     def test_dataset_id_cannot_escape_replay_root(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             for bad in ("../escape", "/absolute", "a/b", "", "."):
-                with self.subTest(bad=bad):
-                    with self.assertRaises(ValueError):
-                        h.dataset_path_preview(root, bad)
+                with self.subTest(bad=bad), self.assertRaises(ValueError):
+                    h.dataset_path_preview(root, bad)
 
 
 if __name__ == "__main__":
