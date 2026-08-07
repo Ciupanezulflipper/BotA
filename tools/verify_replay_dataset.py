@@ -100,12 +100,59 @@ def _parse_candle_row(
     high = _finite_positive(row["high"], "high", line_no)
     low = _finite_positive(row["low"], "low", line_no)
     close = _finite_positive(row["close"], "close", line_no)
-
     if high < max(opened, close) or low > min(opened, close) or low > high:
         raise ValueError(f"line {line_no}: invalid OHLC ordering")
     if stamp < raw_start or stamp >= raw_end:
         raise ValueError(f"line {line_no}: timestamp outside raw range")
     return stamp
+
+
+def _read_csv_timestamps(path: Path, *, raw_start: datetime, raw_end: datetime) -> list[datetime]:
+    """Read and validate every candle row in one canonical CSV."""
+    with path.open("r", encoding="utf-8", errors="strict", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames != CSV_HEADER:
+            raise ValueError(f"unexpected CSV header in {path.name}")
+        return [
+            _parse_candle_row(
+                row,
+                line_no=line_no,
+                raw_start=raw_start,
+                raw_end=raw_end,
+            )
+            for line_no, row in enumerate(reader, start=2)
+        ]
+
+
+def _validate_timestamp_order(rows: list[datetime]) -> None:
+    """Require non-empty, strictly increasing candle timestamps."""
+    if not rows:
+        raise ValueError("CSV contains no candles")
+    if any(left >= right for left, right in zip(rows, rows[1:])):
+        raise ValueError("timestamps are not strictly increasing")
+
+
+def _coverage_summary(
+    rows: list[datetime],
+    *,
+    evaluation_start: datetime,
+    raw_end: datetime,
+    min_warmup_bars: int,
+) -> dict[str, object]:
+    """Summarize warm-up/evaluation coverage and enforce minimums."""
+    pre_evaluation = sum(stamp < evaluation_start for stamp in rows)
+    evaluation_rows = sum(evaluation_start <= stamp < raw_end for stamp in rows)
+    if pre_evaluation < min_warmup_bars:
+        raise ValueError(f"insufficient warm-up candles: {pre_evaluation} < {min_warmup_bars}")
+    if evaluation_rows <= 0:
+        raise ValueError("no candles in evaluation range")
+    return {
+        "rows": len(rows),
+        "pre_evaluation_rows": pre_evaluation,
+        "evaluation_rows": evaluation_rows,
+        "first_time": iso_z(rows[0]),
+        "last_time": iso_z(rows[-1]),
+    }
 
 
 def verify_csv(
@@ -117,41 +164,14 @@ def verify_csv(
     min_warmup_bars: int,
 ) -> dict[str, object]:
     """Verify one canonical candle CSV and its replay warm-up coverage."""
-    rows: list[datetime] = []
-
-    with path.open("r", encoding="utf-8", errors="strict", newline="") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames != CSV_HEADER:
-            raise ValueError(f"unexpected CSV header in {path.name}")
-        for line_no, row in enumerate(reader, start=2):
-            rows.append(
-                _parse_candle_row(
-                    row,
-                    line_no=line_no,
-                    raw_start=raw_start,
-                    raw_end=raw_end,
-                )
-            )
-
-    if not rows:
-        raise ValueError("CSV contains no candles")
-    if any(left >= right for left, right in zip(rows, rows[1:])):
-        raise ValueError("timestamps are not strictly increasing")
-
-    pre_evaluation = sum(stamp < evaluation_start for stamp in rows)
-    evaluation_rows = sum(evaluation_start <= stamp < raw_end for stamp in rows)
-    if pre_evaluation < min_warmup_bars:
-        raise ValueError(f"insufficient warm-up candles: {pre_evaluation} < {min_warmup_bars}")
-    if evaluation_rows <= 0:
-        raise ValueError("no candles in evaluation range")
-
-    return {
-        "rows": len(rows),
-        "pre_evaluation_rows": pre_evaluation,
-        "evaluation_rows": evaluation_rows,
-        "first_time": iso_z(rows[0]),
-        "last_time": iso_z(rows[-1]),
-    }
+    rows = _read_csv_timestamps(path, raw_start=raw_start, raw_end=raw_end)
+    _validate_timestamp_order(rows)
+    return _coverage_summary(
+        rows,
+        evaluation_start=evaluation_start,
+        raw_end=raw_end,
+        min_warmup_bars=min_warmup_bars,
+    )
 
 
 def _load_manifest(dataset_root: Path, expected_dataset_id: str) -> tuple[Path, dict[str, object]]:
