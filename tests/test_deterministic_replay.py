@@ -10,7 +10,8 @@ TOOLS = ROOT / "tools"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
-import replay_semantics as r  # noqa: E402
+import deterministic_replay as replay_runner
+import replay_semantics as r
 
 
 UTC = timezone.utc
@@ -114,7 +115,7 @@ class ReplaySemanticsTests(unittest.TestCase):
         self.assertEqual(signal["sl"], 1.0985)
         self.assertEqual(signal["tp"], 1.1045)
 
-    def test_adx_below_twenty_is_hard_hold(self):
+    def test_adx_below_twenty_is_hard_hold_and_preserves_live_type_quirk(self):
         signal = r.score_bundle(
             "EURUSD",
             "M15",
@@ -125,6 +126,7 @@ class ReplaySemanticsTests(unittest.TestCase):
             config=r.ReplayConfig(),
         )
         self.assertEqual(signal["direction"], "HOLD")
+        self.assertEqual(signal["volatility"], 0.0)
         self.assertIn("adx_regime", signal["filter_reasons"])
 
     def test_quality_filter_uses_frozen_effective_floor(self):
@@ -224,15 +226,25 @@ class ReplaySemanticsTests(unittest.TestCase):
         self.assertTrue(flags["policy_c_score70_adx_lt30_no_extreme"])
         self.assertFalse(flags["extreme_rsi"])
 
-    def test_source_blobs_are_frozen(self):
-        self.assertEqual(
-            r.PRODUCTION_SOURCE_BLOBS["tools/scoring_engine.sh"],
-            "09c42362a5c3c679696e86d4131ce5dfabd86608",
+    def test_market_closed_event_has_stable_schema(self):
+        event = r._closed_event(
+            {
+                "pair": "EURUSD",
+                "m15_candle_time": "2026-06-06T12:00:00Z",
+                "decision_time": "2026-06-06T12:15:00Z",
+                "market_open": False,
+            }
         )
-        self.assertEqual(
-            r.PRODUCTION_SOURCE_BLOBS["tools/m15_h1_fusion.sh"],
-            "c1de0312ed928f870b9a45df109b730d30888ee7",
-        )
+        self.assertEqual(event["reject_stage"], "MARKET_CLOSED")
+        self.assertEqual(event["tf"], "M15")
+        self.assertEqual(event["h4_vote"], 0)
+        self.assertEqual(event["d1_vote"], 0)
+        self.assertIn("entry", event)
+        self.assertIn("atr", event)
+
+    def test_pinned_production_sources_match_real_git_blob_hashes(self):
+        observed = replay_runner._verify_production_sources(ROOT)
+        self.assertEqual(observed, r.PRODUCTION_SOURCE_BLOBS)
 
 
 if __name__ == "__main__":
