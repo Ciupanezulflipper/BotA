@@ -1,0 +1,64 @@
+name: Historical candle acquisition
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "tools/fetch_historical_candles.py"
+      - "tests/test_fetch_historical_candles.py"
+      - ".github/workflows/historical-candle-acquisition.yml"
+  pull_request:
+    paths:
+      - "tools/fetch_historical_candles.py"
+      - "tests/test_fetch_historical_candles.py"
+      - ".github/workflows/historical-candle-acquisition.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      OANDA_API_TOKEN: ""
+      OANDA_API_URL: "https://api-fxpractice.oanda.com"
+      TELEGRAM_BOT_TOKEN: ""
+      TELEGRAM_CHAT_ID: ""
+      SUPABASE_SERVICE_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile collector and tests
+        run: python -m py_compile tools/fetch_historical_candles.py tests/test_fetch_historical_candles.py
+      - name: Run focused offline tests
+        run: python -m unittest -v tests/test_fetch_historical_candles.py
+      - name: Prove preview is no-network and non-mutating
+        run: |
+          python tools/fetch_historical_candles.py \
+            --dataset-id ci-preview \
+            --start-utc 2026-06-01T00:00:00Z \
+            --end-utc 2026-08-01T00:00:00Z \
+            > preview.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          preview = json.loads(Path("preview.json").read_text(encoding="utf-8"))
+          if preview.get("mode") != "preview":
+              raise SystemExit("preview mode not proven")
+          if preview.get("network_permitted") is not False:
+              raise SystemExit("preview unexpectedly permits network")
+          if preview.get("production_cache_touched") is not False:
+              raise SystemExit("preview claims production cache mutation")
+          if len(preview.get("streams", [])) != 8:
+              raise SystemExit("unexpected stream count")
+          if Path("data/replay/ci-preview").exists():
+              raise SystemExit("preview created dataset output")
+          print("HISTORICAL_CANDLE_PREVIEW=PASS")
+          PY

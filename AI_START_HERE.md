@@ -1,6 +1,6 @@
 # BotA AI Start Here
 
-Last updated: **2026-08-07 19:10 UTC**
+Last updated: **2026-08-07 20:45 UTC**
 
 Read this before proposing BotA commands, code, service, strategy, Telegram, provider, Supabase, replay, or deployment changes.
 
@@ -47,17 +47,19 @@ LOCAL_M15_JUNE_JULY_COVERAGE=NO
 LOCAL_H1_JUNE_JULY_COVERAGE=NO
 LOCAL_H4_JUNE_JULY_COVERAGE=YES
 LOCAL_D1_JUNE_JULY_COVERAGE=YES
-TRUE_REPLAY_FROM_RETAINED_INPUTS=BLOCKED
+HISTORICAL_COLLECTOR=AVAILABLE_ON_THIS_REVISION
+HISTORICAL_DATASET_ACQUIRED=NO
 STRATEGY_MUTATION_ALLOWED=NO_PENDING_TRUE_REPLAY
 ```
 
 ## Read first
 
-1. `CONTINUITY_CURRENT.md` — current state and exactly one next objective.
-2. `docs/FORENSIC_OPERATING_MODEL.md` — mandatory efficient investigation workflow.
-3. `audits/RAW_CANDLE_REPLAY_GAP_2026-08-07.md` — current replay-data blocker.
+1. `CONTINUITY_CURRENT.md` — current state and exactly one next action.
+2. `docs/FORENSIC_OPERATING_MODEL.md` — mandatory connector-first workflow.
+3. `audits/HISTORICAL_CANDLE_ACQUISITION_2026-08-07.md` — collector safety/data contract.
+4. `audits/RAW_CANDLE_REPLAY_GAP_2026-08-07.md` — why historical acquisition is required.
 
-Older dated audits remain evidence, but do not restart their closed investigative branches unless new contradictory evidence appears.
+Older dated audits remain evidence. Do not restart closed investigative branches without new contradictory evidence.
 
 ## Current diagnosis
 
@@ -75,27 +77,64 @@ Later matched ADX>=30:     0W / 4L / -83.3 pips
 
 This is not production approval. The later component sample is only 9/13 because local signal rows were not retained for four published outcomes.
 
-## Raw-data blocker — verified 2026-08-07 19:10:26 UTC
+## Historical data acquisition
 
-Both pairs retain only:
+Use only:
 
 ```text
-M15: 2026-07-31 -> 2026-08-07
-H1 : 2026-07-10 -> 2026-08-07
-H4 : 2026-04-14 -> 2026-08-07
-D1 : 2024-09-02 -> 2026-08-05
+tools/fetch_historical_candles.py
 ```
 
-Standalone historical M15 files end on 2026-03-06. They do not cover June–July.
+Contract:
 
-A previous numeric-only CSV parser incorrectly reported the canonical CSVs as zero-row files. That result is superseded; they are valid ISO-timestamp CSVs.
+```text
+preview/no-network by default
+--execute required for provider GETs
+OANDA price=M
+EURUSD GBPUSD
+M15 H1 H4 D1
+output=data/replay/<dataset-id>
+existing dataset never overwritten
+raw provider responses preserved
+429/5xx retry attempts preserved separately
+bounded retries=3
+SHA-256 manifest emitted
+production data/candles cache not touched
+```
+
+The required first dataset is:
+
+```text
+dataset-id=oanda-20260601-20260801-20260807
+range=[2026-06-01T00:00:00Z, 2026-08-01T00:00:00Z)
+pairs=EURUSD GBPUSD
+timeframes=M15 H1 H4 D1
+```
+
+Canonical acquisition command once the collector is available on the phone:
+
+```bash
+python3 tools/fetch_historical_candles.py \
+  --dataset-id oanda-20260601-20260801-20260807 \
+  --start-utc 2026-06-01T00:00:00Z \
+  --end-utc 2026-08-01T00:00:00Z \
+  --pairs EURUSD GBPUSD \
+  --timeframes M15 H1 H4 D1 \
+  --execute
+```
+
+Do not use `tools/data_fetch_candles.sh` for replay history; it is the rolling production fetcher and writes live cache paths.
+
+## PR #6 warning
+
+Draft PR #6 is historical design evidence only. GitHub reports 129 changed files, including out-of-scope canonical/runtime paths. Do not merge or cherry-pick it wholesale. The current collector is the clean independently tested extraction.
 
 ## Mandatory source hierarchy
 
 ```text
-GitHub connector  -> code, commits, PRs, docs, tests
+GitHub connector   -> code, commits, PRs, docs, tests
 Supabase connector -> published signal/outcome/database truth
-Phone/Termux       -> runtime-only state, .env, local-only logs/caches
+Phone/Termux       -> runtime-only state, credentials, local-only logs/data
 ```
 
 Do not ask the user to run a phone probe for information already obtainable through a connector.
@@ -106,25 +145,18 @@ Do not lower score/H1/Telegram floors, remove cooldown, add a third pair, or mod
 
 Do not use `tools/backtest_bota.py` as production-rule validation because its strategy semantics differ from the live watcher.
 
-Do not use the live rolling candle fetcher to build replay history; it writes production cache paths and uses a short rolling window.
-
 Never push directly to `main`. Use branch -> complete-file writes -> verified diff -> PR.
 
-## Exactly one next engineering objective
+## Exactly one next action after merge
 
-Stop issuing ad-hoc forensic commands. Build reusable replay infrastructure:
+Acquire the immutable June-July OANDA dataset on the phone and verify its manifest/checksums.
 
-```text
-1. immutable historical-data collector + integrity manifest
-2. deterministic replay harness for live production semantics
-3. replay frozen A/B/C policies
-4. only then consider production strategy changes
-```
-
-Frozen policies:
+Only after acquisition passes, build/run a deterministic replay of the live production semantics for the frozen policies:
 
 ```text
 A = current production baseline
 B = score >=70 AND ADX <30
 C = score >=70 AND ADX <30 AND no extreme RSI
 ```
+
+No production strategy mutation before that replay.
