@@ -1,16 +1,17 @@
 # BotA Chat Handoff
 
-Last updated: 2026-08-07 18:09 UTC
+Last updated: 2026-08-07 18:15 UTC
 
 Read this first in any new AI chat before proposing BotA changes.
 
 ## Current grounded answer
 
-BotA is not failing because it cannot generate BUY/SELL directions. The current problem has three separate layers:
+BotA is not failing because it cannot generate BUY/SELL directions. The investigation has separated four layers:
 
 1. strategy throughput is low because score and H1 gates reject most tradeable candidates;
 2. delivery policy suppresses additional strategy-accepted candidates;
-3. recent delivered M15 signal quality is poor, so simply sending more signals is not a valid repair.
+3. recent delivered M15 signal quality is poor, so sending more signals is not a valid repair;
+4. historical component/outcome evidence now points to score calibration that may reward late/exhausted trend entries.
 
 ## Current live configuration
 
@@ -20,7 +21,6 @@ TIMEFRAMES=M15
 FILTER_SCORE_MIN_ALL=65
 H1_TREND_MIN_SCORE=40
 H1_VETO_OVERRIDE_SCORE=75
-H1_VETO_OVERRIDE_ADX=40
 TELEGRAM_MIN_SCORE=70
 TELEGRAM_TIER_YELLOW_MIN=70
 TELEGRAM_TIER_GREEN_MIN=75
@@ -45,8 +45,6 @@ Only EURUSD and GBPUSD are live. A third pair is not currently scanned.
 
 ## Accepted -> Telegram funnel
 
-Retained logs classify 106 strategy-accepted events:
-
 ```text
 61 sent
 38 cooldown-suppressed
@@ -54,21 +52,9 @@ Retained logs classify 106 strategy-accepted events:
 1 send failure
 ```
 
-Four accepted CSV rows have no matched retained log event.
+Telegram transport works. The delivery layer is not the only reason for low signal count.
 
-## Cooldown audit — 2026-08-07 17:54 UTC
-
-```text
-EXACT_DUPLICATE=0
-NOT_EXACT_DUPLICATE=38
-DIRECTION_CHANGED=0
-SCORE_IMPROVED_5PLUS=7
-ENTRY_CHANGED_3PLUS_PIPS=26
-```
-
-All 38 were same-direction updates. The cooldown is coarse, but 38 independent new trades were not proven.
-
-## Recent signal quality — highest priority
+## Recent signal quality
 
 Read-only Supabase outcome data for BotA M15 signals created on or after 2026-06-01:
 
@@ -84,31 +70,65 @@ TOTAL_PIPS=-71.40
 
 High score has not protected recent signals from poor outcomes.
 
-## Local ledger inventory — 2026-08-07 18:09 UTC
+## March ledger x component audit — 2026-08-07 18:15 UTC
 
-The phone has `data/ledger.csv`:
+The 51 local March outcomes joined 100% to extended score-component rows:
 
 ```text
 LEDGER_ROWS=51
-WIN=13
-LOSS=38
-WIN_RATE=25.49%
-FIRST_TIMESTAMP=2026-03-09T21:45:07+02:00
-LAST_TIMESTAMP=2026-03-10T15:15:07+02:00
+JOINED=51
+UNMATCHED=0
+JOINED_WITH_COMPONENTS=51
+WINS=13
+LOSSES=38
+TOTAL_PIPS=-264.1
 ```
 
-This ledger is real but stale and narrow: only about 17.5 hours of March data. It cannot be treated as current strategy evidence. Its best use is an offline join to matching 25-column alert rows to test whether score components behaved differently on its 13 wins versus 38 losses.
+Score bucket:
 
-## Scoring hypotheses under test
+```text
+<70:   WR=18.2% PIPS=-83.5
+70-74: WR=50.0% PIPS=+2.1
+75-84: WR=31.6% PIPS=-44.8
+85+:   WR=17.6% PIPS=-137.9
+```
 
-Current `scoring_engine.sh` gives RSI up to +15 points based on absolute distance from 50. Thus more oversold SELLs and more overbought BUYs can score higher even if entry quality is deteriorating. Current code also uses a 1.0 ATR pullback buffer despite a comment describing ±0.3 ATR. Neither is approved for mutation until outcome correlation is measured.
+The highest score bucket was the worst.
+
+RSI entry state:
+
+```text
+EXTREME:   n=18 WR=11.1% PIPS=-229.2
+STRETCHED: n=11 WR=45.5% PIPS=+69.4
+MODERATE:  n=22 WR=27.3% PIPS=-104.3
+```
+
+ADX band:
+
+```text
+20-29: n=17 WR=52.9% PIPS=+98.0
+30-39: n=26 WR=7.7%  PIPS=-319.1
+40+:   n=8  WR=25.0% PIPS=-43.0
+```
+
+This is the strongest score-component evidence so far. Current scoring gives maximum ADX points at >=30 even though ADX 30-39 was the worst historical band in this sample. Current RSI scoring rewards greater distance from 50 even though extreme RSI was far worse than the intermediate stretched zone.
+
+The evidence supports a non-linear entry-quality problem: stronger trend intensity does not necessarily mean a better M15 entry and may indicate late/exhausted entry timing.
+
+## What is not proven
+
+- Do not infer an exact new ADX threshold from only 17.5 hours of March data.
+- Do not hard-reject every ADX >=30 yet.
+- Do not change current H1 policy from this sample because all 51 March rows had H1 neutral.
+- MACD saturation was not the dominant discriminator.
+- Pair-specific changes are not supported; both EURUSD and GBPUSD were poor.
 
 ## Closed/non-dominant causes
 
 - zero entry/SL/TP: HOLD-only symptom;
 - `macro6=3`: neutral;
 - RR text: advisory;
-- H4+D1: only four tradeable rejects;
+- H4+D1 opposition: rare;
 - Telegram transport: functioning;
 - cooldown: coarse but no direction-reversal suppression observed.
 
@@ -120,22 +140,22 @@ H1_THRESHOLD_CHANGED=NO
 TELEGRAM_SCORE_CHANGED=NO
 COOLDOWN_CHANGED=NO
 PAIR_LIST_CHANGED=NO
+ADX_SCORING_CHANGED=NO
+RSI_SCORING_CHANGED=NO
 PROVIDER_CHANGED=NO
 SUPABASE_CHANGED=NO
 ```
 
-Do not manufacture more signals while recent delivered quality is negative.
-
 ## Exactly one next proof
 
-Join `data/ledger.csv` to `logs/alerts.csv` and report how many of the 51 March outcomes have extended score components. Then compare WIN versus LOSS by score bucket, RSI extremity, MACD saturation, ADX band, H1 state, pair, and direction. Keep March evidence separate from the recent June-August Supabase evidence.
+Run an offline/read-only counterfactual on the 51 joined March rows and the recent component-matched published outcomes. Compare minimal candidate changes such as penalizing extreme RSI, reducing/reversing the ADX bonus above 30, and combining both. Report retained signal count, win rate, and pips before any production mutation.
 
 ## Working discipline
 
 1. Inspect before changing.
 2. Keep commands small and pager-proof.
-3. Validate schemas before analysis.
-4. Separate runtime, strategy, delivery, and outcome quality.
+3. Validate schemas and time coverage before analysis.
+4. Separate runtime, strategy, delivery, and realized outcome quality.
 5. Date every material finding in UTC.
 6. Full-file replacement only for approved mutations.
 7. Branch -> complete content -> verified diff -> PR; never direct-main fallback.
