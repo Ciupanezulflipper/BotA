@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: **2026-08-07 21:33 UTC**
+Last updated: **2026-08-07 21:44 UTC**
 
 ## Authoritative identifiers
 
@@ -8,7 +8,7 @@ Last updated: **2026-08-07 21:33 UTC**
 RECORDED_DATE=2026-08-07
 PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_HEAD=73b2306b5843f3396823ce815e96051abf78cf50
-GITHUB_MAIN=8e746e554b1d754f9e427a80eab3cc694871dc08
+GITHUB_MAIN=ce7d2bc097f2130f663193d49e5e97c62bcf2095
 CURRENT_NATIVE_MANAGER_PID=31140
 CURRENT_SERVICE_DAEMON_PIDFILE=31140
 ```
@@ -104,7 +104,7 @@ Standalone `data/EURUSD_M15.csv` and `data/GBPUSD_M15.csv` contain only 2026-02-
 
 ## Historical acquisition package
 
-Canonical path:
+Canonical acquisition path:
 
 ```text
 tools/fetch_historical_candles.py
@@ -112,7 +112,7 @@ tests/test_fetch_historical_candles.py
 .github/workflows/historical-candle-acquisition.yml
 ```
 
-Collector contract after PR #60:
+Collector contract after PR #61:
 
 ```text
 DEFAULT_MODE=PREVIEW_NO_NETWORK
@@ -125,18 +125,26 @@ PAIRS=EURUSD GBPUSD
 TIMEFRAMES=M15 H1 H4 D1
 RAW_RESPONSES_PRESERVED=YES
 RETRYABLE_HTTP=429_AND_5XX
+RETRYABLE_TRANSPORT=OSError_AND_HTTPException
 MAX_HTTP_ATTEMPTS=3
+RETRY_BACKOFF_SECONDS=0.5
 MANIFEST_SHA256=YES
 PROVIDER_ALIGNED_LEADING_CANDLE=ONE_OVERLAPPING_ALLOWED
 ```
 
-PR #60 merged at:
+PR #60 merged provider-aligned boundary handling at:
 
 ```text
 8e746e554b1d754f9e427a80eab3cc694871dc08
 ```
 
-Its exact head passed historical-acquisition CI, Security Scan, DeepSource Python/Shell/Secrets, and Sonar with 0 new issues and 0 security hotspots.
+PR #61 merged transient transport retry handling at:
+
+```text
+ce7d2bc097f2130f663193d49e5e97c62bcf2095
+```
+
+On PR #61 exact head: historical-acquisition CI passed, Security Scan passed, DeepSource Python/Shell/Secrets passed, Sonar passed with 0 new issues / 0 security hotspots, and no inline review threads were open. CodeRabbit remained non-blocking/pending at merge time.
 
 ## Historical dataset attempt 1 — boundary failure preserved
 
@@ -165,14 +173,14 @@ EMA9 EMA21 RSI14 MACD12/26/9 ADX14 ATR14 BB20
 
 Therefore a replay dataset beginning exactly at 2026-06-01 is under-warmed for early-June decisions.
 
-The selected raw range remains:
+Selected acquisition/evaluation ranges:
 
 ```text
 raw_range=[2024-01-01T00:00:00Z, 2026-08-01T00:00:00Z)
 replay_evaluation=[2026-06-01T00:00:00Z, 2026-08-01T00:00:00Z)
 ```
 
-The no-network warm-up preview passed at **2026-08-07 20:25:37 UTC**:
+No-network warm-up preview passed at **2026-08-07 20:25:37 UTC**:
 
 ```text
 PREVIEW_STATUS=PASS
@@ -187,13 +195,11 @@ FAILED_DATASET_PRESERVED=YES
 
 Recorded start: **2026-08-07 20:29:19 UTC**.
 
-Dataset:
-
 ```text
-data/replay/oanda-warmup-20240101-20260801-20260807-r2/
+dataset=data/replay/oanda-warmup-20240101-20260801-20260807-r2/
 ```
 
-Live progress at **2026-08-07 20:31:12 UTC** proved active acquisition:
+Live progress at **2026-08-07 20:31:12 UTC**:
 
 ```text
 RAW_RESPONSES=45
@@ -214,33 +220,9 @@ PRODUCTION_CACHE_UNCHANGED=YES
 ACQUISITION_STATUS=FAIL
 ```
 
-Classification: transient transport-resilience gap. The collector retried HTTP 429/5xx but did not retry TLS/socket exceptions.
+Classification: transient transport-resilience gap. Fixed by PR #61 with bounded retry and immutable transport-error metadata. Regression coverage proves `SSLEOFError -> SSLEOFError -> 200` recovery.
 
-`GIT_WORKTREE_STATUS_UNCHANGED=NO` is not by itself evidence of tracked production mutation because that wrapper compared untracked files as well; replay artifacts under `data/replay/` can change that result on the older phone checkout. The production candle-cache hash remained identical.
-
-## Transport resilience fix in progress
-
-Branch:
-
-```text
-fix/historical-acquisition-resilience-20260807
-```
-
-Fix scope:
-
-- retry transient `OSError` / `http.client.HTTPException` transport failures under the existing maximum of three attempts;
-- preserve redacted immutable metadata for each transport-error attempt;
-- do not fabricate raw response bodies when no response was received;
-- retain existing HTTP 429/5xx retry behavior;
-- retain fail-closed behavior after retry exhaustion;
-- regression-test the exact class of observed failure with `SSLEOFError -> SSLEOFError -> 200`;
-- no production cache, strategy, threshold, pair, Telegram, Supabase, cron, or service changes.
-
-Audit:
-
-```text
-audits/HISTORICAL_ACQUISITION_TRANSPORT_FAILURE_2026-08-07.md
-```
+`GIT_WORKTREE_STATUS_UNCHANGED=NO` from that wrapper is not by itself evidence of tracked production mutation because the check included untracked replay artifacts. The production candle-cache SHA-256 remained identical. Future wrappers compare tracked diffs separately.
 
 ## Dataset disposition
 
@@ -251,7 +233,32 @@ data/replay/oanda-20260601-20260801-20260807/
 data/replay/oanda-warmup-20240101-20260801-20260807-r2/
 ```
 
-A successful retry must use a new dataset ID after the transport fix is merged.
+The next acquisition must use a new dataset ID.
+
+## Reusable replay dataset verifier — in review
+
+Branch:
+
+```text
+feat/replay-dataset-verifier-20260807
+```
+
+New reusable offline verifier:
+
+```text
+tools/verify_replay_dataset.py
+tests/test_verify_replay_dataset.py
+```
+
+It replaces the large disposable post-acquisition Termux verification block. It verifies manifest identity/scope, artifact SHA-256 and byte counts, path containment, canonical candle CSV structure, timestamp ordering/range, OHLC integrity, manifest-vs-CSV row/first/last agreement, `FAILED.json` absence, at least 500 pre-evaluation candles per stream, and non-empty evaluation coverage.
+
+Audit:
+
+```text
+audits/REPLAY_DATASET_VERIFIER_2026-08-07.md
+```
+
+The historical-acquisition workflow is extended to compile and run both acquisition and verifier test suites.
 
 ## Efficiency operating model
 
@@ -275,6 +282,7 @@ Never push directly to `main`; use branch -> complete-file writes -> verified di
 
 ## Evidence
 
+- `audits/REPLAY_DATASET_VERIFIER_2026-08-07.md`
 - `audits/HISTORICAL_ACQUISITION_TRANSPORT_FAILURE_2026-08-07.md`
 - `audits/HISTORICAL_ACQUISITION_RUNTIME_EDGE_2026-08-07.md`
 - `audits/HISTORICAL_CANDLE_ACQUISITION_2026-08-07.md`
@@ -292,7 +300,7 @@ Never push directly to `main`; use branch -> complete-file writes -> verified di
 
 ## Exactly one next action
 
-Complete review/CI for the transport-resilience branch. If all material gates pass, merge it and execute one new immutable warm-up acquisition with a new dataset ID.
+Complete review/CI for the reusable dataset verifier. If all material gates pass, merge it and run one new immutable warm-up acquisition using a new dataset ID, then verify it with the reviewed verifier from the same commit.
 
 After dataset integrity passes, build/run the deterministic production-semantics replay:
 
