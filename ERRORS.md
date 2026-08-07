@@ -1,11 +1,12 @@
 # BotA Errors and Silent-Failure Register
 
-Last updated: 2026-08-07 17:11 UTC
+Last updated: 2026-08-07 17:38 UTC
 
 Purpose: preserve verified failure classes, current open risks, and prevention rules without repeating broad audits.
 
 Current signal evidence:
 
+- `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
 - `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
 - `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
 - `CONTINUITY_CURRENT.md`
@@ -20,17 +21,29 @@ CURRENT_NATIVE_MANAGER_PID=31140
 CURRENT_CONTROL_PLANE=DEGRADED_6_OWNED_1_ORPHAN
 CURRENT_REQUIRED_RUNNING=7_OF_7
 LIVE_WATCHER=RUNNING
+LIVE_PAIRS=EURUSD_GBPUSD_ONLY
+LIVE_TIMEFRAME=M15
+FILTER_SCORE_MIN_ALL=65
+H1_VETO_OVERRIDE_SCORE=75
+TELEGRAM_MIN_SCORE=70
+TELEGRAM_TIER_YELLOW_MIN=70
+TELEGRAM_TIER_GREEN_MIN=75
+TELEGRAM_COOLDOWN_SECONDS=1800
 VALID_ENTRY_ROWS=1495
 BUY_SELL_VALID_ROWS=1427
 BUY_SELL_ACCEPTED=110
 BUY_SELL_REJECTED=1317
-BUY_SELL_REJECTION_RATE=92.29_PERCENT
 REJECTED_SCORE_GATE=903
 REJECTED_H1_NEUTRAL=410
 REJECTED_H4_D1_OPPOSE=4
+ACCEPTED_LOG_EVENTS_PARSED=106
+TELEGRAM_SENT=61
+TELEGRAM_COOLDOWN=38
+TELEGRAM_SCORE_GATE=6
+TELEGRAM_FAILED=1
+ACCEPTED_LOG_UNMATCHED=4
 ZERO_ENTRY_ROOT_CAUSE=NO
-TELEGRAM_DELIVERY_OF_ACCEPTED=UNPROVEN
-STRATEGY_MUTATION_ALLOWED=NO_PENDING_CURRENT_THRESHOLD_AND_DELIVERY_PROOF
+STRATEGY_MUTATION_ALLOWED=NO_PENDING_OUTCOME_PROOF
 AUTOMATIC_RECOVERY_REENABLE_ALLOWED=NO
 ```
 
@@ -45,33 +58,90 @@ The direction engine is not dead. The 1427 valid BUY/SELL rows decompose as:
   -> 410 rejected by H1-neutral veto
   -> 114 survive H1
   -> 4 rejected by H4+D1 opposition
-  -> 110 accepted
+  -> 110 strategy-accepted
 ```
 
 The dominant strategy bottlenecks are therefore score gating and H1-neutral gating. H4/D1 opposition is negligible in the current corpus.
 
-## Score history warning
+## Current live configuration finding
 
-The corpus contains `score<62`, `score<65`, and `score<70`, proving historical threshold changes. Aggregate history must not be used to infer the current phone threshold. Read current configuration/environment before mutation.
+Verified current phone values:
 
-## Macro and RR interpretation
+```text
+PAIRS=EURUSD GBPUSD
+TIMEFRAMES=M15
+FILTER_SCORE_MIN=65
+FILTER_SCORE_MIN_ALL=65
+H1_TREND_MIN_SCORE=40
+H1_VETO_OVERRIDE_SCORE=75
+H1_VETO_OVERRIDE_ADX=40
+TELEGRAM_MIN_SCORE=70
+TELEGRAM_TIER_YELLOW_MIN=70
+TELEGRAM_TIER_GREEN_MIN=75
+TELEGRAM_COOLDOWN_SECONDS=1800
+DRY_RUN_MODE=0
+TELEGRAM_ENABLED=1
+```
 
-`macro6=3` appears in every accepted and rejected valid BUY/SELL row in the inspected corpus. Current fusion code treats macro6=3 as neutral and applies zero score adjustment. It is not the hard reject.
+The bot currently scans only two live pairs. If a three-pair design is intended, that requirement is not satisfied by current configuration.
 
-RR strings are advisory in current `quality_filter.py`; they co-occur with score/H1 gates and are not the primary rejection cause here.
+The score policy is also stacked. Strategy acceptance can occur at score >=65 when H1 confirms, while Telegram refuses accepted signals below 70. Neutral-H1 candidates generally require score >=75 plus non-opposing H4 context to override the veto.
 
-## Closed hypothesis — zero entry caused lost tradeable signals
+## Accepted -> Telegram finding
+
+Retained watcher logs classify 106 accepted events completely:
+
+```text
+telegram_sent=61
+telegram_cooldown=38
+telegram_score_gate=6
+telegram_failed=1
+telegram_tier_gate=0
+delivery_dedup=0
+dry_run_or_disabled=0
+telegram_backoff=0
+accepted_no_terminal_evidence=0
+```
+
+Percent of parsed accepted events:
+
+```text
+sent=57.55%
+cooldown=35.85%
+Telegram score gate=5.66%
+send failure=0.94%
+```
+
+The CSV contains 110 accepted BUY/SELL rows. Four have no matched retained watcher-log event in this audit and remain delivery-unknown.
+
+Telegram transport itself is functioning and is not the dominant failure domain: 61 retained accepted events were sent and only one transport failure was observed.
+
+## Closed/non-dominant hypotheses
+
+### Zero entry
 
 ```text
 ZERO_ENTRY_BUY_SELL_ROWS=0
 ZERO_ENTRY_ROOT_CAUSE=NO
 ```
 
-All zero-entry/SL/TP rows were HOLD score-0 rows. Do not trace zero entry further unless new BUY/SELL evidence contradicts this.
+All zero-entry/SL/TP rows were HOLD score-0 rows.
+
+### macro6=3
+
+Neutral in current fusion code; present in accepted and rejected rows; not the hard reject.
+
+### RR
+
+Advisory in current `quality_filter.py`; not the dominant hard gate.
+
+### H4+D1 opposition
+
+Only four valid BUY/SELL rejections in the inspected corpus.
 
 ## CSV schema drift — open observability defect
 
-Observed on 2026-08-07:
+Observed:
 
 ```text
 HEADER_COLUMNS=13
@@ -84,27 +154,13 @@ Legacy header:
 timestamp,pair,tf,direction,score,confidence,entry,sl,tp,provider,rejected,filter_str,reasons
 ```
 
-Current watcher appends a newer 25-column format without migrating the existing header. The first 13 positions remain aligned, preserving the current funnel audit. Newer consumers that expect `filter_rejected` and `filter_reasons` by header name can misclassify rows. Treat this as an observability/reporting defect, separate from signal strategy and Telegram delivery.
-
-## Telegram delivery remains a separate failure domain
-
-The 110 accepted rows must still pass:
-
-```text
-TELEGRAM_MIN_SCORE
-TELEGRAM_TIER_YELLOW_MIN
-TELEGRAM_COOLDOWN_SECONDS
-delivery dedup
-Telegram transport
-```
-
-Accepted strategy rows are not equivalent to user-visible signals.
+Current watcher appends newer 25-column rows without migrating the old header. The first 13 positions remain aligned for the current audit, but newer named-field consumers can misclassify rows.
 
 ## Runtime ownership incident — 2026-08-07
 
 Earlier two managers existed. Native Termux manager PID 31140 remains and its pidfile matches. Latest observed topology is six manager-owned required supervisors and one PID-1 orphan (`crond`), with all seven required services running and no duplicate rows.
 
-Exact executor attribution for the manager-start and detached-manager termination remains unproven. Keep this separate from the signal-throughput proof unless runtime safety requires action.
+Exact executor attribution remains unproven. Keep this separate from signal-throughput tuning unless runtime safety requires action.
 
 ## Historical failure classes retained
 
@@ -121,15 +177,19 @@ Exact executor attribution for the manager-start and detached-manager terminatio
 - active service path assumed to equal repository path;
 - broad runtime work obscuring the signal-throughput goal;
 - oversized terminal packages causing pager/output loss;
-- ad-hoc CSV analysis using the wrong field name.
+- ad-hoc CSV analysis using the wrong field name;
+- legacy 13-column CSV header with 25-column rows;
+- connector direct-main fallback violation during documentation work.
 
 ## Runtime and signal lessons
 
 - Runtime health and signal effectiveness are separate acceptance gates.
 - A BUY/SELL direction is not an accepted signal.
-- An accepted strategy row is not a delivered Telegram signal.
+- An accepted strategy row is not necessarily a delivered Telegram signal.
+- A second downstream score floor can silently suppress a strategy-accepted trade.
+- Long cooldowns can materially reduce user-visible signal count even when strategy throughput is unchanged.
+- Pair-universe configuration can cap signal opportunity before strategy logic is considered.
 - Filter reason text may contain informational/advisory tags; presence alone does not prove causal rejection.
-- Historical threshold strings do not prove current effective threshold values.
 - Validate CSV schemas before field-based analysis.
 - Keep runtime, strategy, Telegram, dedup, provider, and persistence failures distinct.
 
@@ -146,4 +206,4 @@ Exact executor attribution for the manager-start and detached-manager terminatio
 
 ## Exactly one next investigation
 
-Read current phone score/H1/Telegram threshold values and classify retained accepted-row delivery outcomes. No strategy or Telegram mutation until that proof is complete.
+Before weakening protective strategy gates, classify historical outcomes for strategy-accepted candidates suppressed only by Telegram score or the 30-minute cooldown. Compare them with delivered-signal outcomes. If those suppressed candidates perform acceptably, the least invasive throughput repair is in delivery policy rather than core strategy.
