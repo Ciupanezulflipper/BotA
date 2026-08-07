@@ -8,6 +8,7 @@ on:
       - "tools/native_service_daemon_migration.py"
       - "tools/native_service_daemon_partial_migration.py"
       - "tools/native_service_daemon_watchdog_finalizer.py"
+      - "tools/duplicate_manager_provenance.py"
       - "ops/phone_migrate_native_service_daemon.sh"
       - "ops/phone_migrate_native_service_daemon_partial.sh"
       - "ops/phone_finalize_native_service_daemon_watchdog.sh"
@@ -15,6 +16,7 @@ on:
       - "tests/test_native_service_daemon_migration.py"
       - "tests/test_native_service_daemon_partial_migration.py"
       - "tests/test_native_service_daemon_watchdog_finalizer.py"
+      - "tests/test_duplicate_manager_provenance.py"
       - ".github/workflows/native-service-daemon-watchdog.yml"
   workflow_dispatch:
 
@@ -36,10 +38,12 @@ jobs:
             tools/native_service_daemon_migration.py \
             tools/native_service_daemon_partial_migration.py \
             tools/native_service_daemon_watchdog_finalizer.py \
+            tools/duplicate_manager_provenance.py \
             tests/test_native_service_daemon_watchdog.py \
             tests/test_native_service_daemon_migration.py \
             tests/test_native_service_daemon_partial_migration.py \
-            tests/test_native_service_daemon_watchdog_finalizer.py
+            tests/test_native_service_daemon_watchdog_finalizer.py \
+            tests/test_duplicate_manager_provenance.py
       - name: Check shell syntax
         run: |
           bash -n tools/start_native_service_daemon_watchdog.sh
@@ -52,7 +56,8 @@ jobs:
             tests/test_native_service_daemon_watchdog.py \
             tests/test_native_service_daemon_migration.py \
             tests/test_native_service_daemon_partial_migration.py \
-            tests/test_native_service_daemon_watchdog_finalizer.py
+            tests/test_native_service_daemon_watchdog_finalizer.py \
+            tests/test_duplicate_manager_provenance.py
       - name: Prevent direct runsvdir launch regression
         run: |
           ! grep -En 'runsvdir[^[:alnum:]_].*-P|Popen\(.*runsvdir|launch_manager' \
