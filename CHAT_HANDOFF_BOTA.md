@@ -1,31 +1,163 @@
 # BotA Chat Handoff
 
-Last updated: 2026-08-07 17:01 UTC
+Last updated: 2026-08-07 17:11 UTC
 
 Read this first in any new AI chat before proposing BotA changes.
 
 ## Current question
 
-Why does BotA produce very few useful trade signals even though months of runtime,
-service, heartbeat, Telegram, and deployment work have been completed?
+Why does BotA produce very few user-visible trade signals despite a live watcher and many months of runtime work?
 
-The current answer is narrower than previous handoffs:
+## Current grounded answer — 2026-08-07
 
-> The live direction engine does produce BUY and SELL decisions. The dominant
-> current bottleneck is downstream rejection/eligibility. About 95.61% of the
-> inspected decision corpus is rejected.
-
-## Verified live watcher path — 2026-08-07
+The direction engine is not dead. The valid BUY/SELL funnel is now measured:
 
 ```text
-runsv bota-watcher
-  -> tools/run_signal_watcher_with_ledger.sh
-  -> tools/signal_watcher_pro.sh --once
+VALID_ENTRY_ROWS=1495
+BUY_SELL_VALID_ROWS=1427
+BUY_SELL_ACCEPTED=110
+BUY_SELL_REJECTED=1317
+BUY_SELL_ACCEPTANCE_RATE=7.71%
+BUY_SELL_REJECTION_RATE=92.29%
 ```
 
-All seven required services were running during the latest observation.
-Control-plane ownership was still degraded because `crond` remained a PID-1
-orphan:
+Exact rejected-stage decomposition:
+
+```text
+SCORE_GATE=903       68.56% of rejected valid BUY/SELL
+H1_NEUTRAL=410       31.13%
+H4_D1_OPPOSE=4        0.30%
+TOTAL=1317
+```
+
+Current source flow means these are sequential stages, not merely overlapping labels:
+
+```text
+1427 valid BUY/SELL
+  -> 903 rejected by M15 score gate
+  -> 524 survive score gate
+  -> 410 rejected by H1-neutral veto
+  -> 114 survive H1
+  -> 4 rejected by H4+D1 opposition
+  -> 110 accepted
+```
+
+The simple current explanation is therefore that score gating and H1-neutral gating remove nearly all valid tradeable candidates before Telegram is considered.
+
+## Direction and pair evidence
+
+```text
+BUY_ACCEPTED=61
+BUY_REJECTED=407
+SELL_ACCEPTED=49
+SELL_REJECTED=910
+```
+
+Accepted by pair:
+
+```text
+EURUSD=56
+GBPUSD=53
+USDJPY=1
+```
+
+The engine demonstrably produces and accepts tradeable directions. The next unresolved question is why those 110 accepted rows did or did not become Telegram signals.
+
+## Score evidence
+
+Rejected valid BUY/SELL:
+
+```text
+<62=740
+62-64.99=105
+65-69.99=148
+70-74.99=141
+75+=183
+```
+
+Accepted valid BUY/SELL:
+
+```text
+<62=0
+62-64.99=5
+65-69.99=13
+70-74.99=8
+75+=84
+```
+
+Accepted score range:
+
+```text
+MIN=62.80
+MEDIAN=80.05
+MAX=98.60
+```
+
+The corpus spans historical configuration changes because rejection strings include `score<62`, `score<65`, and `score<70`. Do not infer today's effective score threshold from historical aggregate data.
+
+## H1 evidence
+
+```text
+H1_NEUTRAL: REJECTED=410 ACCEPTED=94
+H1_CONFIRMED: REJECTED=0 ACCEPTED=16
+H1_OPPOSITE: REJECTED=0 ACCEPTED=0
+```
+
+The H1-neutral string match includes `H1_trend_neutral_overridden`; historical rows span different settings. Do not claim all 94 accepted neutral matches were raw neutral passes without exact filter-string proof.
+
+The older May rejected-shadow evidence remains valid: a small sample of H1-blocked candidates later hit SL. That is still a reason not to remove H1 protection blindly. The new whole-corpus data, however, proves the current throughput split quantitatively.
+
+## Macro and RR interpretation
+
+`macro6=3` occurs in every rejected and accepted valid BUY/SELL row in the current corpus. Current fusion code treats macro6=3 as neutral and applies zero news score adjustment. It is not a hard rejection cause.
+
+RR text occurs in some rows but current `quality_filter.py` treats RR as advisory unless another hard gate rejects the row. Do not tune RR based on these counts.
+
+## Zero-entry hypothesis closed
+
+All-zero entry/SL/TP rows were HOLD score-0 rows. No BUY/SELL row had zero entry/SL/TP.
+
+```text
+ZERO_ENTRY_BUY_SELL_ROWS=0
+ZERO_ENTRY_ROOT_CAUSE=NO
+```
+
+Do not trace zero entry further unless new evidence contradicts this.
+
+## CSV observability defect
+
+Observed:
+
+```text
+HEADER_COLUMNS=13
+ROWS_WITH_25_COLUMNS=2509
+```
+
+Legacy header:
+
+```text
+timestamp,pair,tf,direction,score,confidence,entry,sl,tp,provider,rejected,filter_str,reasons
+```
+
+The current watcher appends newer 25-column rows under the old header. The first 13 positions still align, so the current funnel audit is valid. Newer ledger code that expects `filter_rejected`/`filter_reasons` header names may misclassify rows. This is a reporting/observability defect, not evidence that signal decisions themselves are broken.
+
+## Telegram remains unproven
+
+After strategy acceptance, current watcher code still applies:
+
+```text
+TELEGRAM_MIN_SCORE
+TELEGRAM_TIER_YELLOW_MIN
+TELEGRAM_COOLDOWN_SECONDS
+delivery dedup
+Telegram send
+```
+
+The 110 accepted rows are not proof of 110 Telegram deliveries.
+
+## Current runtime context
+
+Latest observed topology:
 
 ```text
 manager_count=1
@@ -34,163 +166,47 @@ owned=6/7
 orphaned=1
 running=7/7
 duplicates=0
-healthy=false
+orphan=crond
 ```
 
-Do not confuse this ownership defect with proof that the watcher is not
-functioning. The watcher was live and recording decisions.
+The watcher was live and recording decisions. Keep runtime ownership work separate from strategy/delivery diagnosis unless it actually interrupts the watcher.
 
-## Signal funnel evidence — 2026-08-07
-
-Source:
+## No-change rules
 
 ```text
-logs/alerts.csv
-```
-
-Schema:
-
-```text
-timestamp,pair,tf,direction,score,confidence,entry,sl,tp,provider,rejected,filter_str,reasons
-```
-
-Corpus:
-
-```text
-TOTAL_DECISIONS=2507
-HOLD=1082
-SELL=959
-BUY=466
-ACCEPTED=110
-REJECTED=2397
-ACCEPTANCE_RATE≈4.39%
-REJECTION_RATE≈95.61%
-```
-
-This is direct evidence that the direction generator is not dead. It creates
-1425 BUY/SELL rows in the inspected corpus.
-
-## Dominant rejection strings
-
-Most common observed `filter_str` values include:
-
-```text
-794  direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | macro6=3
-537  score<65 | macro6=3
-450  macro6=3 | H1_trend_neutral
-294  score<70 | macro6=3
-145  direction_not_tradeable | score<65 | entry_invalid_zero | rr<=0 | atr<=0 | macro6=3
-50   score<62 | macro6=3
-42   macro6=3 | H1_trend_neutral_overridden
-16   macro6=3 | H1_trend_confirmed
-4    macro6=3 | H4_D1_oppose
-```
-
-Interpretation rules:
-
-- score thresholds are a major current suspect;
-- `macro6=3` is common but has not yet been proven causal rather than
-  informational;
-- H1 remains relevant, but the whole-corpus evidence no longer supports the old
-  statement that H1 neutral is necessarily the single dominant throughput gate;
-- H4/D1 opposition is rare in this corpus.
-
-## Zero entry finding — closed as root-cause hypothesis
-
-A direct classification of all 2507 rows found:
-
-```text
-ALL_VALID_ENTRY_SL_TP=1493
-ALL_ZERO_ENTRY_SL_TP=1014
-MIXED=0
-```
-
-Every one of the 1014 zero-entry rows was:
-
-```text
-HOLD
-score=0.00
-M15
-```
-
-Pair distribution:
-
-```text
-GBPUSD=519
-EURUSD=490
-USDJPY=5
-```
-
-And:
-
-```text
-ZERO_ENTRY_BUY_SELL_ROWS=0
-```
-
-Therefore `entry=0`, `sl=0`, and `tp=0` are a HOLD symptom, not the current
-root cause of lost BUY/SELL signals.
-
-## Audit-script correction
-
-One exploratory Python snippet used `filter_rejected` as a DictReader key. That
-field does not exist in `logs/alerts.csv`; the correct key is `rejected`.
-Therefore the snippet's printed empty filter-status section is invalid evidence.
-The earlier acceptance/rejection counts based on column 11 remain valid.
-
-## Historical H1 evidence — retain, but do not over-generalize
-
-The May 2026 rejected-shadow sample remains real historical evidence: ten
-resolved rejected candidates in that small sample all hit SL, including eight
-H1-neutral rows. That evidence supports keeping H1 protections until better
-counter-evidence exists.
-
-However, it must not be used to claim that H1 neutral is the dominant current
-whole-corpus bottleneck. The 2026-08-07 corpus is much larger and shows many
-score-gate and direction/HOLD rejections.
-
-## No-change rules until next proof
-
-```text
-PRODUCTION_STRATEGY_CHANGED=NO
+STRATEGY_CHANGED=NO
 FILTER_SCORE_CHANGED=NO
 H1_THRESHOLD_CHANGED=NO
 H4_D1_CHANGED=NO
-MACRO_FILTER_CHANGED=NO
-RR_POLICY_CHANGED=NO
+MACRO_CHANGED=NO
+RR_CHANGED=NO
 TELEGRAM_ELIGIBILITY_CHANGED=NO
+DEDUP_CHANGED=NO
 PROVIDER_CHANGED=NO
 SUPABASE_CHANGED=NO
 ```
 
-Do not lower thresholds merely to force signal volume. First quantify exactly
-which valid BUY/SELL candidates are rejected by which gate and what happened to
-the accepted 110 rows.
+## Next exact proof
 
-## Next exact proof step
-
-Classify the 1493 rows with valid entry/SL/TP by:
+Read only the current phone values for score, H1 override, Telegram score/tier, cooldown, dry-run, and Telegram enabled state. Then inspect retained watcher logs and classify accepted rows into:
 
 ```text
-pair
-direction
-rejected=true/false
-score bucket
-exact filter_str
+telegram score gate
+tier gate
+cooldown
+delivery dedup
+sent
+send failed
 ```
 
-Then inspect the 110 accepted rows and determine whether they reached Telegram
-eligibility, delivery dedup/cooldown, or actual send success.
-
-That is the shortest evidence path to answering why valid-looking BUY/SELL
-candidates are not becoming user-visible signals.
+Only after that should any code or threshold change be proposed.
 
 ## Working discipline
 
 1. Inspect before changing.
-2. Use small, pager-proof evidence packages.
-3. Do not repeat broad runtime archaeology unless it directly blocks the signal path.
-4. Record every material finding with an explicit UTC date.
-5. Use the real CSV schema before writing audit scripts.
-6. Separate strategy rejection from Telegram delivery and from runtime health.
-7. Full-file replacement only when a code mutation is approved.
-8. Never change thresholds based only on signal drought frustration.
+2. Keep commands small and pager-proof.
+3. Validate schemas before analyzing fields.
+4. Separate strategy acceptance from Telegram delivery and runtime health.
+5. Record every material finding with explicit UTC date.
+6. Full-file replacement only for approved code mutations.
+7. Never lower thresholds merely to force signal volume.
