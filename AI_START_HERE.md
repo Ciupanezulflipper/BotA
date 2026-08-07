@@ -1,6 +1,6 @@
 # BotA AI Start Here
 
-Last updated: 2026-08-07 18:46 UTC
+Last updated: 2026-08-07 18:58 UTC
 
 Read this before proposing BotA commands, code, cron, service, strategy, notification, provider, Supabase, or deployment changes.
 
@@ -54,23 +54,28 @@ TEMPORAL_ADX_LT30_PIPS=+13.1
 TEMPORAL_ADX_LT30_NO_EXTREME_PIPS=+28.9
 TEMPORAL_ADX_GTE30_WINS=0
 TEMPORAL_ADX_GTE30_LOSSES=4
-STRATEGY_MUTATION_ALLOWED=NO_PENDING_UNMATCHED_RECOVERY_OR_TRUE_REPLAY
+UNMATCHED_TARGETS=4
+UNMATCHED_RELAXED_MATCHES=0
+UNMATCHED_RELAXED_COMPONENT_MATCHES=0
+LOCAL_RETENTION_GAP=CONFIRMED
+STRATEGY_MUTATION_ALLOWED=NO_PENDING_TRUE_REPLAY
 ```
 
 ## Evidence order
 
-1. `audits/JUNE_JULY_ADX_RSI_TEMPORAL_CROSSCHECK_2026-08-07.md`
-2. `audits/ADX_RSI_COUNTERFACTUAL_2026-08-07.md`
-3. `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
-4. `audits/LOCAL_SIGNAL_LEDGER_INVENTORY_2026-08-07.md`
-5. `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
-6. `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
-7. `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
-8. `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
-9. `CONTINUITY_CURRENT.md`
-10. `CHAT_HANDOFF_BOTA.md`
-11. `audits/ERROR_LOG.md`
-12. `ERRORS.md`
+1. `audits/LOCAL_RETENTION_GAP_2026-08-07.md`
+2. `audits/JUNE_JULY_ADX_RSI_TEMPORAL_CROSSCHECK_2026-08-07.md`
+3. `audits/ADX_RSI_COUNTERFACTUAL_2026-08-07.md`
+4. `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
+5. `audits/LOCAL_SIGNAL_LEDGER_INVENTORY_2026-08-07.md`
+6. `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
+7. `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
+8. `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
+9. `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
+10. `CONTINUITY_CURRENT.md`
+11. `CHAT_HANDOFF_BOTA.md`
+12. `audits/ERROR_LOG.md`
+13. `ERRORS.md`
 
 ## Signal funnel
 
@@ -125,7 +130,7 @@ SCORE>=70 + ADX<30 + NO_EXTREME: N=7 W=7 L=0 WR=100.0% PIPS=+171.0
 
 The 7/7 subset is in-sample and high-overfit risk. Do not call it a 100% strategy.
 
-## June-July temporal cross-check — 2026-08-07 18:46 UTC
+## June-July temporal cross-check
 
 Frozen March-derived policies were tested against later published outcomes. Nine of 13 published signals matched retained local component rows:
 
@@ -141,18 +146,44 @@ ADX_30_39: N=3 W=0 L=3 PIPS=-57.4
 ADX_40_PLUS: N=1 W=0 L=1 PIPS=-25.9
 ```
 
-This later-period subset points in the same direction as March: ADX >=30 was 0W/4L and -83.3 pips among matched rows. However, 69.2% match coverage is insufficient to approve a production rule.
+The later-period subset points in the same direction as March, but 69.2% match coverage is insufficient for production approval.
+
+## Local retention gap — 2026-08-07 18:58 UTC
+
+The four unmatched June 23-26 published outcomes were searched again with a wider local-candidate window.
+
+```text
+TARGETS_TOTAL=4
+TARGETS_WITH_NEARBY_ROWS=1
+TARGETS_WITH_RELAXED_MATCH=0
+TARGETS_WITH_RELAXED_COMPONENT_MATCH=0
+VERDICT=LOCAL_RETENTION_GAP_CONFIRMED
+```
+
+Three targets had no same-pair/same-direction M15 rows within +/-2 days. The one target with nearby rows had no plausible identity match. Therefore the full 13-signal component validation cannot be reconstructed from the retained `alerts.csv`.
+
+Stop trying to recover those four rows from this file. The missing rows are now an observability/retention gap, not a tolerance problem.
 
 ## Supabase timestamp caution
 
-Exact Supabase `created_at` values were independently re-read on 2026-08-07. They do not line up directly with several already-matched local watcher decision timestamps. Do not use Supabase `created_at` as the original decision timestamp unless publication-time semantics are proven.
+Exact Supabase `created_at` values do not line up directly with several already-matched local watcher decision timestamps. Do not use `created_at` as the original decision timestamp unless publication-time semantics are proven.
 
 ## Scope lock
 
 Do not lower score/H1/Telegram floors, remove cooldown, add a third pair, or modify ADX/RSI production logic yet.
 
+Do not use `tools/backtest_bota.py` as production-rule validation because its strategy implementation differs from the live watcher path.
+
 Never push directly to `main`. Use branch -> complete content -> verified diff -> PR.
 
 ## Exactly one next action
 
-Resolve the four unmatched June 23-26 published signals by listing the nearest retained local alert candidates with relaxed matching. If those component rows are absent, record the retention gap and proceed to a true historical replay using raw candles and the live scoring path.
+Run a true historical replay from raw candles through the live production scoring/fusion semantics with frozen policies:
+
+```text
+A: current production baseline
+B: score >=70 AND ADX <30
+C: score >=70 AND ADX <30 AND no extreme RSI
+```
+
+Compare signal count, wins/losses, total pips, and preferably MAE/MFE. No production mutation before that replay.

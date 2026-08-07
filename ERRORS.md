@@ -1,11 +1,12 @@
 # BotA Errors and Silent-Failure Register
 
-Last updated: 2026-08-07 18:46 UTC
+Last updated: 2026-08-07 18:58 UTC
 
 Purpose: preserve verified failure classes, current open risks, and prevention rules without repeating broad audits.
 
 Current signal evidence:
 
+- `audits/LOCAL_RETENTION_GAP_2026-08-07.md`
 - `audits/JUNE_JULY_ADX_RSI_TEMPORAL_CROSSCHECK_2026-08-07.md`
 - `audits/ADX_RSI_COUNTERFACTUAL_2026-08-07.md`
 - `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
@@ -57,7 +58,10 @@ TEMPORAL_MATCHED_BASELINE_PIPS=-70.2
 TEMPORAL_ADX_LT30_PIPS=+13.1
 TEMPORAL_ADX_LT30_NO_EXTREME_PIPS=+28.9
 TEMPORAL_ADX_GTE30=0W_4L_MINUS83.3_PIPS
-STRATEGY_MUTATION_ALLOWED=NO_PENDING_UNMATCHED_RECOVERY_OR_TRUE_REPLAY
+UNMATCHED_TARGETS=4
+UNMATCHED_RELAXED_MATCHES=0
+LOCAL_RETENTION_GAP=CONFIRMED
+STRATEGY_MUTATION_ALLOWED=NO_PENDING_TRUE_REPLAY
 ```
 
 ## Current throughput finding
@@ -114,6 +118,22 @@ ADX>=30 matched rows=0W/4L, -83.3 pips
 
 The cross-period direction is consistent with an ADX/late-entry calibration problem, but 69.2% local match coverage is not sufficient to approve a production rule.
 
+## Confirmed retention gap — 2026-08-07 18:58 UTC
+
+The four unmatched June 23-26 published signals were searched with relaxed local matching:
+
+```text
+TARGETS_TOTAL=4
+TARGETS_WITH_NEARBY_ROWS=1
+TARGETS_WITH_RELAXED_MATCH=0
+TARGETS_WITH_RELAXED_COMPONENT_MATCH=0
+VERDICT=LOCAL_RETENTION_GAP_CONFIRMED
+```
+
+Three targets had no same-pair/same-direction M15 rows within +/-2 days. The fourth had nearby rows but no plausible identity match. The full 13-signal component validation cannot be reconstructed from current `alerts.csv` retention.
+
+This is now an observability/retention gap, not a matching-tolerance problem.
+
 ## Supabase timestamp warning
 
 Exact `public.signals.created_at` values were independently re-read on 2026-08-07. Several known matched signals have creation timestamps that do not equal local watcher decision timestamps. Treat `created_at` as publication/storage timing unless semantics are proven. Do not use it as the sole join key.
@@ -139,7 +159,8 @@ Exact `public.signals.created_at` values were independently re-read on 2026-08-0
 - monotonic score-strength mapping almost mistaken for calibrated entry quality;
 - in-sample counterfactual almost mistaken for production validation;
 - partial temporal match coverage almost mistaken for out-of-sample proof;
-- Supabase publication timestamp almost mistaken for decision timestamp.
+- Supabase publication timestamp almost mistaken for decision timestamp;
+- missing local historical component rows almost mistaken for a matching-tolerance problem.
 
 ## Current prevention rules
 
@@ -150,11 +171,12 @@ Exact `public.signals.created_at` values were independently re-read on 2026-08-0
 - Do not claim a 7/7 in-sample subset is a 100% strategy.
 - Do not call 9/13 later-period matching full out-of-sample validation.
 - Freeze candidate rules before later-period testing.
-- Resolve missing component rows or record retention gaps explicitly.
+- Do not keep widening match tolerances after a retention gap is proven.
+- Do not use `tools/backtest_bota.py` to validate the live production strategy path.
 - Keep evidence packages small and dated.
 - Full-file replacement only for approved mutations.
 - Branch -> verified diff -> PR; never direct-main fallback.
 
 ## Exactly one next investigation
 
-Resolve the four unmatched June 23-26 published signals by inspecting the nearest retained local alert candidates with relaxed matching. If the component rows are absent, record the retention gap and proceed to a true historical replay using raw candles and the live scoring path.
+Run a true historical replay from raw candles through the live production scoring/fusion semantics with frozen policies A/B/C. Compare signal count, wins/losses, total pips, and preferably MAE/MFE. No production strategy mutation until this validation is complete.

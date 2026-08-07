@@ -1,6 +1,6 @@
 # BotA Chat Handoff
 
-Last updated: 2026-08-07 18:46 UTC
+Last updated: 2026-08-07 18:58 UTC
 
 Read this first in any new AI chat before proposing BotA changes.
 
@@ -11,7 +11,7 @@ BotA is not failing because it cannot generate BUY/SELL directions. The investig
 1. strategy throughput is low because score and H1 gates reject most tradeable candidates;
 2. delivery policy suppresses additional strategy-accepted candidates;
 3. recent delivered M15 signal quality is poor, so simply sending more signals is not a valid repair;
-4. both March component/outcome evidence and a later June-July matched subset point to ADX/late-entry score calibration as the strongest strategy concern.
+4. both March component/outcome evidence and the recoverable June-July subset point to ADX/late-entry score calibration as the strongest strategy concern.
 
 ## Current live configuration
 
@@ -84,9 +84,9 @@ SCORE>=70 + ADX<30 + NO_EXTREME: N=7 W=7 L=0 PIPS=+171.0
 
 The 7/7 result is in-sample and high-overfit risk. Do not treat it as a 100% strategy.
 
-## June-July temporal cross-check — 2026-08-07 18:46 UTC
+## June-July temporal cross-check
 
-The March-derived rules were frozen and applied to a later published-outcome set. Nine of 13 outcomes matched retained local component rows:
+Nine of 13 published outcomes matched retained local component rows:
 
 ```text
 PUBLISHED=13
@@ -100,22 +100,37 @@ ADX_30_39: N=3 W=0 L=3 PIPS=-57.4
 ADX_40_PLUS: N=1 W=0 L=1 PIPS=-25.9
 ```
 
-This later subset points in the same direction as March: all matched ADX >=30 signals lost. However, the match rate is only 69.2%, so this is not enough to change production.
+This later subset points in the same direction as March: all matched ADX >=30 signals lost. However, 69.2% match coverage is not enough to change production.
 
-## Four unmatched published outcomes
+## Local retention gap — 2026-08-07 18:58 UTC
+
+The four unmatched June 23-26 outcomes were searched with wider local tolerances.
 
 ```text
-2026-06-23 GBPUSD SELL score=79 entry=1.32179 WIN +33.1
-2026-06-23 EURUSD SELL score=78 entry=1.13862 LOSS -13.3
-2026-06-24 GBPUSD SELL score=77 entry=1.31448 LOSS -21.0
-2026-06-26 EURUSD SELL score=75 entry=1.13892 CANCELLED 0.0
+TARGETS_TOTAL=4
+TARGETS_WITH_NEARBY_ROWS=1
+TARGETS_WITH_RELAXED_MATCH=0
+TARGETS_WITH_RELAXED_COMPONENT_MATCH=0
+VERDICT=LOCAL_RETENTION_GAP_CONFIRMED
 ```
 
-The next investigation must determine whether their local component rows are retained but outside the tight match tolerances, or absent from current local retention.
+Three targets had no same-pair/same-direction M15 candidate rows within +/-2 days. The fourth had nearby rows but no plausible identity match. The missing component rows are absent from current local retention.
+
+Therefore the full 13/13 component validation cannot be reconstructed from `logs/alerts.csv`. Stop tuning match tolerances; move to true replay.
 
 ## Supabase timestamp caution
 
-Exact Supabase `created_at` values were re-read on 2026-08-07 and do not directly equal several known local watcher decision timestamps. Do not join by Supabase `created_at` alone until publication/storage semantics are proven.
+Exact Supabase `created_at` values do not directly equal several known watcher decision timestamps. Do not join by Supabase `created_at` alone until publication/storage semantics are proven.
+
+## Closed/non-dominant causes
+
+- zero entry/SL/TP: HOLD-only symptom;
+- `macro6=3`: neutral;
+- RR text: advisory;
+- H4+D1 opposition: rare;
+- Telegram transport: functioning;
+- cooldown: coarse but no direction-reversal suppression observed;
+- missing June 23-26 component rows: confirmed local retention gap, not a matching-tolerance issue.
 
 ## No-change rules
 
@@ -131,9 +146,19 @@ PROVIDER_CHANGED=NO
 SUPABASE_CHANGED=NO
 ```
 
+Do not use `tools/backtest_bota.py` as validation of the production strategy because its scoring/pullback implementation is not the live watcher path.
+
 ## Exactly one next proof
 
-Inspect the nearest local `alerts.csv` candidates for the four unmatched June 23-26 published outcomes using relaxed matching and bounded output. If they cannot be recovered, record a retention gap and proceed to a true historical replay using raw candles and the live scoring path.
+Run a true historical replay from raw candles through the live production scoring/fusion semantics with frozen policies:
+
+```text
+A: current production baseline
+B: score >=70 AND ADX <30
+C: score >=70 AND ADX <30 AND no extreme RSI
+```
+
+Compare signal count, wins/losses, pips, and preferably MAE/MFE. Only then consider a strategy mutation.
 
 ## Working discipline
 
