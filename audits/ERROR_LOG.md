@@ -1,11 +1,12 @@
 # BotA Runtime Error Log
 
-Last updated: 2026-08-07 17:38 UTC
+Last updated: 2026-08-07 17:54 UTC
 
 This is the canonical compact error and prevention index. Historical full text remains in Git history, `ERRORS.md`, dated audit records, and GitHub issue/PR history.
 
 Current signal evidence:
 
+- `audits/COOLDOWN_AND_SIGNAL_QUALITY_2026-08-07.md`
 - `audits/SIGNAL_DELIVERY_FUNNEL_2026-08-07.md`
 - `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
 - `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
@@ -24,8 +25,6 @@ LIVE_PAIRS=EURUSD_GBPUSD_ONLY
 FILTER_SCORE_MIN_ALL=65
 H1_VETO_OVERRIDE_SCORE=75
 TELEGRAM_MIN_SCORE=70
-TELEGRAM_TIER_YELLOW_MIN=70
-TELEGRAM_TIER_GREEN_MIN=75
 TELEGRAM_COOLDOWN_SECONDS=1800
 BUY_SELL_VALID_ROWS=1427
 BUY_SELL_ACCEPTED=110
@@ -33,14 +32,18 @@ BUY_SELL_REJECTED=1317
 REJECTED_SCORE_GATE=903
 REJECTED_H1_NEUTRAL=410
 REJECTED_H4_D1_OPPOSE=4
-ACCEPTED_LOG_EVENTS_PARSED=106
 TELEGRAM_SENT=61
 TELEGRAM_COOLDOWN=38
 TELEGRAM_SCORE_GATE=6
 TELEGRAM_FAILED=1
-ACCEPTED_LOG_UNMATCHED=4
-ZERO_ENTRY_ROOT_CAUSE=NO
-STRATEGY_MUTATION_ALLOWED=NO_PENDING_OUTCOME_PROOF
+COOLDOWN_EXACT_DUPLICATES=0
+COOLDOWN_DIRECTION_REVERSALS=0
+RECENT_DELIVERED_SINCE_2026_06_01=13
+RECENT_WINS=3
+RECENT_LOSSES=9
+RECENT_CANCELLED=1
+RECENT_TOTAL_PIPS=-71.40
+STRATEGY_MUTATION_ALLOWED=NO_PENDING_COMPONENT_OUTCOME_AUDIT
 ```
 
 ## Canonical error index
@@ -58,35 +61,27 @@ A manager died while child `runsv` processes survived under PID 1.
 Prevention: verify manager, parentage, ownership, and restart capability together.
 
 ### E007 — Recursive scan entered runit FIFOs
-A broad scan traversed `supervise` named pipes and hung.
 Prevention: whitelist regular files and exclude supervise directories.
 
 ### E009 — `pipefail` converted zero matches into abort
-Expected `pgrep`/`grep` zero results terminated packages.
 Prevention: explicitly tolerate expected zero matches.
 
 ### E012 — Deadman stale while services appeared running
-PID presence was mistaken for useful progress.
 Prevention: health must prove monotonic forward progress.
 
 ### E015 — Active wall-clock dependencies
-Cadence and health used Android/ship wall time.
 Prevention: server UTC for market semantics; monotonic/boottime for cadence and health.
 
 ### E017 — Inaccessible `/proc/uptime`
-Android denied access.
 Prevention: never depend on `/proc/uptime` on this device.
 
 ### E021 — Continuity lagged runtime truth
-Canonical files remained stale after material changes.
-Prevention: update handoff/error/deployment records with an explicit UTC date after each gate.
+Prevention: update canonical docs with explicit UTC date after each material gate.
 
 ### E022 — Oversized package burdened Termux
-Too many evidence domains were combined and output exceeded practical terminal capture limits.
-Prevention: bounded, pager-proof packages and smaller direct proofs.
+Prevention: bounded, pager-proof packages and small direct proofs.
 
 ### E027 — Control-plane regression after prior closure
-One manager owned only part of the service set.
 Prevention: ownership gate before deeper diagnosis.
 
 ### E031 — `supervise/pid` misidentified as `runsv`
@@ -102,20 +97,16 @@ Prevention: no continuous recovery without executable-path proof, locking, backo
 Status: CLOSED. `tf_minutes("D1")` now returns 1440 on the phone.
 
 ### E043 — Supervisor wrapper contradicted disabled-recovery policy
-Status: CLOSED for that wrapper path. Later incidents still require exact ownership verification.
+Status: CLOSED for that wrapper path.
 
 ### E045 — Strict shell mode left active in interactive Termux
-A direct `set -euo pipefail` in the parent shell caused Termux to exit after an expected failed assertion.
 Prevention: strict mode only inside a bounded child process.
 
 ### E046 — Active service path assumed to be repository path
-The active runit directory and repository copy could be separate physical files.
-Prevention: compare realpath, mode, and checksum for both paths before deployment.
+Prevention: compare realpath, mode, and checksum before deployment.
 
 ### E047 — Runtime work obscured the signal-throughput acceptance criterion
 Recorded: 2026-08-07.
-
-Current direct evidence:
 
 ```text
 1427 valid BUY/SELL
@@ -125,7 +116,7 @@ Current direct evidence:
 110 strategy-accepted
 ```
 
-Prevention: maintain separate acceptance gates for runtime health, raw direction generation, strategy filtering, Telegram eligibility, transport, and persistence.
+Prevention: separate runtime health, raw directions, strategy filtering, delivery, and realized outcomes.
 
 ### E048 — Zero-entry symptom almost promoted to root cause
 Recorded: 2026-08-07.
@@ -133,23 +124,19 @@ Recorded: 2026-08-07.
 ```text
 all_zero_entry_sl_tp=1014
 all_zero_rows_direction=HOLD
-all_zero_rows_score=0.00
 zero_entry_buy_sell_rows=0
 ```
 
-Verdict: zero entry is a HOLD symptom in this corpus, not the root cause of lost BUY/SELL signals.
+Verdict: zero entry is a HOLD symptom, not the root cause of lost BUY/SELL signals.
 
 ### E049 — Ad-hoc CSV audit used the wrong field name
 Recorded: 2026-08-07.
 
-Legacy header uses `rejected` and `filter_str`. One exploratory script looked up `filter_rejected` and therefore produced empty filter-status values.
-
-Prevention: print and validate required headers before analysis; fail if a required field is absent.
+Legacy header uses `rejected` and `filter_str`; an exploratory script used `filter_rejected`.
+Prevention: validate required headers and fail closed.
 
 ### E050 — Pager captured a large Git forensic command
 Recorded: 2026-08-07.
-
-A broad Git evidence package entered `less` and made the result impractical to capture.
 Prevention: disable pagers and keep output bounded.
 
 ### E051 — Legacy alerts header with newer 25-column rows
@@ -160,84 +147,93 @@ HEADER_COLUMNS=13
 ROWS_WITH_25_COLUMNS=2509
 ```
 
-The watcher appends a newer 25-column row layout under an existing 13-column legacy header. The first 13 positions align for the current audit, but newer named-field consumers can silently misclassify rows.
-
-Prevention: explicit schema/version migration or a new versioned decision ledger.
+Prevention: explicit schema/version migration or a versioned decision ledger.
 
 ### E052 — Documentation connector wrote a placeholder directly to main
 Recorded: 2026-08-07.
-
-A connector retry created a placeholder audit directly on `main` in commit `6cf8538dbc6bd64746cc3f32052291d5ebe27a0e` after a branch-not-found error. It was immediately corrected through PR #48.
-
-Prevention: after any branch-not-found write error, stop and create/verify the branch before retrying. Never use `main` as a temporary fallback.
+Prevention: after branch-not-found, create/verify branch before any retry; never use `main` as fallback.
 
 ### E053 — Strategy acceptance and Telegram eligibility use different score floors
 Recorded: 2026-08-07 17:38 UTC.
 
-Verified current values:
-
 ```text
 FILTER_SCORE_MIN_ALL=65
 TELEGRAM_MIN_SCORE=70
-TELEGRAM_TIER_YELLOW_MIN=70
 ```
 
-Effect: a strategy-accepted H1-confirmed M15 signal with score 65.00-69.99 is still suppressed before Telegram. Retained watcher logs prove six accepted events were blocked by this second score gate.
-
-This is not automatically a bug if intentional product policy, but it is a real throughput suppressor and must be treated separately from strategy rejection.
-
-Prevention: document whether "strategy accepted" means "eligible for user alert." If yes, align the delivery floor with strategy acceptance or make the distinction explicit in the product state model.
+Six retained strategy-accepted events were blocked by Telegram score. Historical delivered `<70` BotA M15 rows later cross-checked as 1 win, 5 losses, total -45.50 pips, so lowering the Telegram floor is not supported by current evidence.
 
 ### E054 — Thirty-minute Telegram cooldown suppresses accepted events
 Recorded: 2026-08-07 17:38 UTC.
 
-Verified current value:
-
 ```text
 TELEGRAM_COOLDOWN_SECONDS=1800
+TELEGRAM_COOLDOWN_EVENTS=38_OF_106_MATCHED_ACCEPTED
 ```
 
-Retained watcher-log classification:
-
-```text
-ACCEPTED_EVENTS_PARSED=106
-TELEGRAM_COOLDOWN=38
-```
-
-Thus 35.85% of parsed strategy-accepted events were suppressed by cooldown. This does not prove the cooldown is wrong; it proves it is a major post-acceptance throughput gate.
-
-Prevention: evaluate the outcomes and semantic similarity of cooldown-suppressed candidates before shortening the window. Do not call them duplicates unless the evidence actually proves duplicate trade intent.
+The cooldown is a major post-acceptance throughput gate.
 
 ### E055 — Live pair universe contains only two pairs
 Recorded: 2026-08-07 17:38 UTC.
-
-Verified current setting:
 
 ```text
 PAIRS=EURUSD GBPUSD
 TIMEFRAMES=M15
 ```
 
-Effect: the live watcher cannot currently generate a signal for a third pair. Historical USDJPY rows come from older configuration and do not change current live scope.
-
-Prevention: keep live pair-universe requirements explicit and test them as configuration acceptance criteria.
+A third live pair is not currently scanned.
 
 ### E056 — Accepted CSV count exceeds matched retained delivery-log count
 Recorded: 2026-08-07 17:38 UTC.
 
 ```text
 CSV_ACCEPTED_BUY_SELL_TOTAL=110
-ACCEPTED_EVENTS_PARSED_FROM_RETAINED_LOG=106
+MATCHED_ACCEPTED_LOG_EVENTS=106
 UNMATCHED_ACCEPTED_ROWS=4
 ```
 
-Do not invent delivery outcomes for those four rows. They remain unknown until exact timestamp/log-path evidence is checked.
+Keep four delivery outcomes UNKNOWN.
 
-Prevention: use a durable per-decision lifecycle ledger keyed by stable decision ID rather than reconstructing lifecycle from separate CSV and free-text logs.
+### E057 — Cooldown non-equality almost promoted to proof of new trades
+Recorded: 2026-08-07 17:54 UTC.
 
-## Current exact signal bottleneck
+Cooldown quality audit:
 
-Strategy stage:
+```text
+COOLDOWN_TOTAL=38
+EXACT_DUPLICATE=0
+NOT_EXACT_DUPLICATE=38
+DIRECTION_CHANGED=0
+SCORE_IMPROVED_5PLUS=7
+ENTRY_CHANGED_3PLUS_PIPS=26
+```
+
+The 38 rows are not exact field duplicates, but every one remained the same direction as the preceding sent signal. Therefore `38 independent new trades were blocked` is unproven.
+
+Prevention: distinguish field-level change, same-opportunity update, and genuinely new trade intent. Lifecycle semantics are required before removing repeat-alert controls.
+
+### E058 — Recent high scores do not imply recent positive edge
+Recorded: 2026-08-07.
+
+Read-only Supabase M15 BotA outcome cross-check for signals created since 2026-06-01:
+
+```text
+TOTAL=13
+WINS=3
+LOSSES=9
+CANCELLED=1
+TOTAL_PIPS=-71.40
+75-84_TOTAL_PIPS=-36.40
+85+_TOTAL_PIPS=-35.00
+```
+
+This is direct evidence that increasing signal volume is not sufficient. Recent accepted high-score signals are not demonstrating reliable edge.
+
+Prevention: score calibration and regime/component outcome analysis must precede threshold loosening or pair expansion.
+
+## Current exact funnel
+
+Strategy:
 
 ```text
 SCORE_GATE=903
@@ -246,21 +242,26 @@ H4_D1_OPPOSE=4
 TOTAL_REJECTED_VALID_BUY_SELL=1317
 ```
 
-Delivery stage, retained matched accepted events:
+Delivery, matched accepted events:
 
 ```text
 TELEGRAM_SENT=61
 TELEGRAM_COOLDOWN=38
 TELEGRAM_SCORE_GATE=6
 TELEGRAM_FAILED=1
-TOTAL_MATCHED_ACCEPTED=106
 ```
 
-The current signal drought is therefore layered. Telegram transport is not the dominant failure: 61 sends succeeded and only one failed.
+Outcome quality since 2026-06-01:
 
-## Current control-plane incident note
+```text
+13 delivered BotA M15
+3 wins
+9 losses
+1 cancelled
+-71.40 pips
+```
 
-Native Termux manager PID 31140 remains with matching pidfile. Latest observed topology:
+## Current control-plane note
 
 ```text
 manager_count=1
@@ -271,20 +272,20 @@ duplicates=0
 orphan=crond
 ```
 
-Keep this separate from the proven signal funnel unless watcher execution becomes impaired.
+Keep runtime ownership separate from strategy-quality analysis unless watcher execution becomes impaired.
 
 ## Efficient protocol
 
-1. Read dated current handoff/audit files first.
-2. State one narrow evidence question.
-3. Use small pager-proof commands.
-4. Validate schemas before field-based analysis.
-5. Separate runtime, strategy rejection, Telegram eligibility, cooldown/dedup, transport, and persistence.
+1. Read dated current handoff/audits first.
+2. One narrow evidence question per package.
+3. Small pager-proof commands only.
+4. Validate schemas before field analysis.
+5. Separate runtime, strategy, delivery, and realized outcomes.
 6. Preserve phone state before mutation.
-7. For approved code mutation: backup, rollback, complete-file replacement, checksum, exact commit scope, tests, and independent verification.
-8. Record explicit UTC date on every material finding.
-9. Never fall back to direct-main writes after connector/branch errors.
+7. Full-file replacement for approved mutation.
+8. Date every material finding in UTC.
+9. Branch -> verified diff -> PR; never direct-main fallback.
 
 ## Exactly one next action
 
-Classify the historical trade outcomes of strategy-accepted candidates suppressed by Telegram score and cooldown. Compare them with delivered-signal outcomes before changing strategy, Telegram thresholds, or cooldown. This is the least strategy-invasive path to deciding whether more user-visible signals can be safely surfaced.
+Join recent delivered M15 signals to their 25-column decision components and compare those fields with Supabase outcomes. Identify which scoring component or market regime is associated with recent losing high-score signals before changing any threshold, cooldown, or pair universe.
