@@ -1,6 +1,6 @@
 # BotA AI Start Here
 
-Last updated: **2026-08-07 20:20 UTC**
+Last updated: **2026-08-07 20:45 UTC**
 
 Read this before proposing BotA commands, code, service, strategy, Telegram, provider, Supabase, replay, or deployment changes.
 
@@ -96,6 +96,8 @@ M15 H1 H4 D1
 output=data/replay/<dataset-id>
 existing dataset never overwritten
 raw provider responses preserved
+429/5xx retry attempts preserved separately
+bounded retries=3
 SHA-256 manifest emitted
 production data/candles cache not touched
 ```
@@ -109,11 +111,23 @@ pairs=EURUSD GBPUSD
 timeframes=M15 H1 H4 D1
 ```
 
+Canonical acquisition command once the collector is available on the phone:
+
+```bash
+python3 tools/fetch_historical_candles.py \
+  --dataset-id oanda-20260601-20260801-20260807 \
+  --start-utc 2026-06-01T00:00:00Z \
+  --end-utc 2026-08-01T00:00:00Z \
+  --pairs EURUSD GBPUSD \
+  --timeframes M15 H1 H4 D1 \
+  --execute
+```
+
 Do not use `tools/data_fetch_candles.sh` for replay history; it is the rolling production fetcher and writes live cache paths.
 
 ## PR #6 warning
 
-Draft PR #6 is historical design evidence only. It is currently non-mergeable and GitHub reports 129 changed files, including out-of-scope canonical/runtime paths. Do not merge or cherry-pick it wholesale. The current historical collector is the clean independently tested extraction.
+Draft PR #6 is historical design evidence only. GitHub reports 129 changed files, including out-of-scope canonical/runtime paths. Do not merge or cherry-pick it wholesale. The current collector is the clean independently tested extraction.
 
 ## Mandatory source hierarchy
 
