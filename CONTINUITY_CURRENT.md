@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: **2026-08-07 21:44 UTC**
+Last updated: **2026-08-07 21:54 UTC**
 
 ## Authoritative identifiers
 
@@ -8,7 +8,7 @@ Last updated: **2026-08-07 21:44 UTC**
 RECORDED_DATE=2026-08-07
 PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_HEAD=73b2306b5843f3396823ce815e96051abf78cf50
-GITHUB_MAIN=ce7d2bc097f2130f663193d49e5e97c62bcf2095
+GITHUB_MAIN=be8ab1cc903f8c8b88c1c6fa7a358348f5786c1b
 CURRENT_NATIVE_MANAGER_PID=31140
 CURRENT_SERVICE_DAEMON_PIDFILE=31140
 ```
@@ -235,15 +235,15 @@ data/replay/oanda-warmup-20240101-20260801-20260807-r2/
 
 The next acquisition must use a new dataset ID.
 
-## Reusable replay dataset verifier — in review
+## Reusable replay dataset verifier — merged
 
-Branch:
+PR #62 merged at:
 
 ```text
-feat/replay-dataset-verifier-20260807
+be8ab1cc903f8c8b88c1c6fa7a358348f5786c1b
 ```
 
-New reusable offline verifier:
+Canonical reusable offline verifier:
 
 ```text
 tools/verify_replay_dataset.py
@@ -258,7 +258,22 @@ Audit:
 audits/REPLAY_DATASET_VERIFIER_2026-08-07.md
 ```
 
-The historical-acquisition workflow is extended to compile and run both acquisition and verifier test suites.
+The historical-acquisition workflow now compiles and runs both acquisition and verifier test suites.
+
+PR #62 initially surfaced maintainability findings from Sonar and DeepSource. Those were corrected before merge by extracting smaller validation helpers and making test fixtures static. On exact final head `4c0f676e7ec3602b5ac65f851667fa75167999eb`:
+
+```text
+HISTORICAL_ACQUISITION_CI=PASS
+SECURITY_SCAN=PASS
+DEEPSOURCE_PYTHON=PASS
+DEEPSOURCE_SHELL=PASS
+DEEPSOURCE_SECRETS=PASS
+SONAR_QUALITY_GATE=PASS
+SONAR_NEW_ISSUES=0
+SONAR_SECURITY_HOTSPOTS=0
+```
+
+CodeRabbit was rate-limited and did not perform a substantive review; its status must not be treated as review evidence.
 
 ## Efficiency operating model
 
@@ -300,7 +315,17 @@ Never push directly to `main`; use branch -> complete-file writes -> verified di
 
 ## Exactly one next action
 
-Complete review/CI for the reusable dataset verifier. If all material gates pass, merge it and run one new immutable warm-up acquisition using a new dataset ID, then verify it with the reviewed verifier from the same commit.
+Acquire a new immutable warm-up dataset with the reviewed collector and verify it offline with the reviewed verifier from PR #62 merge commit:
+
+```text
+source_commit=be8ab1cc903f8c8b88c1c6fa7a358348f5786c1b
+dataset_id=oanda-warmup-20240101-20260801-20260807-r3
+raw_range=[2024-01-01T00:00:00Z, 2026-08-01T00:00:00Z)
+replay_evaluation_start=2026-06-01T00:00:00Z
+minimum_warmup_bars_per_stream=500
+pairs=EURUSD GBPUSD
+timeframes=M15 H1 H4 D1
+```
 
 After dataset integrity passes, build/run the deterministic production-semantics replay:
 
