@@ -66,25 +66,26 @@ class ReplayDatasetVerifierTests(unittest.TestCase):
                 }
             ],
         }
-        (dataset / "manifest.json").write_text(
-            json.dumps(manifest),
-            encoding="utf-8",
-        )
+        (dataset / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         return dataset, csv_path
+
+    def _verification_kwargs(self, dataset: Path, *, min_warmup_bars: int) -> dict[str, object]:
+        return {
+            "dataset_root": dataset,
+            "expected_dataset_id": "unit-replay",
+            "raw_start": v.parse_utc("2026-06-01T00:00:00Z"),
+            "raw_end": v.parse_utc("2026-06-01T01:00:00Z"),
+            "evaluation_start": v.parse_utc("2026-06-01T00:30:00Z"),
+            "pairs": ["EURUSD"],
+            "timeframes": ["M15"],
+            "min_warmup_bars": min_warmup_bars,
+        }
 
     def test_complete_dataset_passes_hash_csv_and_warmup_checks(self):
         with tempfile.TemporaryDirectory() as tmp:
             dataset, _ = self._make_dataset(Path(tmp))
-            result = v.verify_dataset(
-                dataset_root=dataset,
-                expected_dataset_id="unit-replay",
-                raw_start=v.parse_utc("2026-06-01T00:00:00Z"),
-                raw_end=v.parse_utc("2026-06-01T01:00:00Z"),
-                evaluation_start=v.parse_utc("2026-06-01T00:30:00Z"),
-                pairs=["EURUSD"],
-                timeframes=["M15"],
-                min_warmup_bars=2,
-            )
+            kwargs = self._verification_kwargs(dataset, min_warmup_bars=2)
+            result = v.verify_dataset(**kwargs)
             self.assertEqual(result["status"], "PASS")
             self.assertEqual(result["artifact_hash_failures"], 0)
             self.assertEqual(result["stream_count"], 1)
@@ -95,48 +96,24 @@ class ReplayDatasetVerifierTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             dataset, csv_path = self._make_dataset(Path(tmp))
             csv_path.write_text(csv_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "artifact checksum failures"):
-                v.verify_dataset(
-                    dataset_root=dataset,
-                    expected_dataset_id="unit-replay",
-                    raw_start=v.parse_utc("2026-06-01T00:00:00Z"),
-                    raw_end=v.parse_utc("2026-06-01T01:00:00Z"),
-                    evaluation_start=v.parse_utc("2026-06-01T00:30:00Z"),
-                    pairs=["EURUSD"],
-                    timeframes=["M15"],
-                    min_warmup_bars=2,
-                )
+            kwargs = self._verification_kwargs(dataset, min_warmup_bars=2)
+            with self.assertRaisesRegex(ValueError, "artifact .* mismatch"):
+                v.verify_dataset(**kwargs)
 
     def test_failed_marker_makes_dataset_ineligible(self):
         with tempfile.TemporaryDirectory() as tmp:
             dataset, _ = self._make_dataset(Path(tmp))
             (dataset / "FAILED.json").write_text('{"status":"FAILED"}\n', encoding="utf-8")
+            kwargs = self._verification_kwargs(dataset, min_warmup_bars=2)
             with self.assertRaisesRegex(ValueError, "FAILED.json"):
-                v.verify_dataset(
-                    dataset_root=dataset,
-                    expected_dataset_id="unit-replay",
-                    raw_start=v.parse_utc("2026-06-01T00:00:00Z"),
-                    raw_end=v.parse_utc("2026-06-01T01:00:00Z"),
-                    evaluation_start=v.parse_utc("2026-06-01T00:30:00Z"),
-                    pairs=["EURUSD"],
-                    timeframes=["M15"],
-                    min_warmup_bars=2,
-                )
+                v.verify_dataset(**kwargs)
 
     def test_insufficient_warmup_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             dataset, _ = self._make_dataset(Path(tmp))
+            kwargs = self._verification_kwargs(dataset, min_warmup_bars=3)
             with self.assertRaisesRegex(ValueError, "insufficient warm-up candles"):
-                v.verify_dataset(
-                    dataset_root=dataset,
-                    expected_dataset_id="unit-replay",
-                    raw_start=v.parse_utc("2026-06-01T00:00:00Z"),
-                    raw_end=v.parse_utc("2026-06-01T01:00:00Z"),
-                    evaluation_start=v.parse_utc("2026-06-01T00:30:00Z"),
-                    pairs=["EURUSD"],
-                    timeframes=["M15"],
-                    min_warmup_bars=3,
-                )
+                v.verify_dataset(**kwargs)
 
 
 if __name__ == "__main__":
