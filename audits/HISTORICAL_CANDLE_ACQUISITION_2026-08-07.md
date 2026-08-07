@@ -1,27 +1,27 @@
 # Historical Candle Acquisition Audit — 2026-08-07
 
-Recorded: **2026-08-07 20:20 UTC**
+Recorded: **2026-08-07 20:45 UTC**
 
 ## Objective
 
 Close the verified replay-input gap without touching BotA's rolling production candle cache.
 
-The required replay interval is the half-open range:
+Required replay interval:
 
 ```text
 2026-06-01T00:00:00Z <= candle_time < 2026-08-01T00:00:00Z
 ```
 
-Pairs and timeframes:
+Scope:
 
 ```text
 EURUSD: M15 H1 H4 D1
 GBPUSD: M15 H1 H4 D1
 ```
 
-## Why a new isolated collector is required
+## Why isolated acquisition is required
 
-The current production fetcher uses OANDA `count=500` and writes `data/candles/<PAIR>_<TF>.csv`. Verified phone retention is insufficient for a June-July replay:
+The production fetcher uses OANDA `count=500` and writes `data/candles/<PAIR>_<TF>.csv`. Phone evidence at 2026-08-07 19:10:26 UTC shows:
 
 ```text
 M15 retained from 2026-07-31
@@ -30,19 +30,23 @@ H4  covers June-July
 D1  covers June-July
 ```
 
-The historical collector therefore writes only below:
+Standalone M15 files cover only 2026-02-27 through 2026-03-06.
+
+Therefore current retained local inputs cannot support a full June-July replay.
+
+The historical collector writes only below:
 
 ```text
 data/replay/<dataset-id>/
 ```
 
-It never uses the production cache path.
+It never writes the production candle cache.
 
 ## PR #6 salvage decision
 
-Draft PR #6 contains valuable historical-replay design work, but it is not an integration source for current `main`.
+Draft PR #6 contains valuable historical-replay design work but is not an integration source for current `main`.
 
-Verified GitHub facts on 2026-08-07:
+Verified GitHub facts:
 
 ```text
 PR=6
@@ -54,13 +58,11 @@ CURRENT_HEAD_SECURITY_SCAN=PASS
 CURRENT_HEAD_HISTORICAL_REPLAY_WORKFLOW=PASS
 ```
 
-The changed-file list includes the isolated sidecar but also canonical/runtime paths such as `CONTINUITY.md`, `DECISIONS.md`, `RESOLVED.md`, `state/STATE.json`, and `tools/heartbeat.sh`. PR #6 must not be merged or cherry-picked wholesale.
+Its changed-file list includes the sidecar plus out-of-scope canonical/runtime paths. Do not merge or cherry-pick PR #6 wholesale.
 
-Only its proven design ideas were reused: explicit historical ranges, bounded chunking, raw evidence preservation, immutable output, checksums, path containment, and fail-closed validation.
+Only validated architectural ideas were reused: explicit historical ranges, bounded chunking, raw evidence preservation, immutable output, checksums, path containment, and fail-closed validation.
 
-## Current production contract mapped into the collector
-
-The new collector preserves the relevant production OANDA contract:
+## Production contract mapped into the collector
 
 ```text
 provider=OANDA
@@ -74,16 +76,16 @@ D1  -> D
 complete_candles_only=YES
 ```
 
-Authentication uses the same names as production:
+Authentication names match production:
 
 ```text
 OANDA_API_TOKEN
 OANDA_API_URL
 ```
 
-`.env` is parsed as data by the Python collector; it is not shell-sourced or executed.
+`.env` is parsed as data, never shell-executed.
 
-Approved origins are restricted to:
+Approved origins:
 
 ```text
 https://api-fxpractice.oanda.com
@@ -99,6 +101,10 @@ https://api-fxtrade.oanda.com
 - explicit `from`/`to` requests with no `count` parameter;
 - bounded requests below OANDA's 5000-candle request limit;
 - bounded HTTP response size and timeout;
+- at most three HTTP attempts per chunk;
+- retries only for HTTP 429 or 5xx;
+- bounded exponential backoff: 0.5 s then 1.0 s;
+- every retry response preserved using attempt-suffixed raw/metadata filenames;
 - raw provider JSON persisted before semantic validation;
 - redacted request/response metadata;
 - complete midpoint candles only;
@@ -109,15 +115,16 @@ https://api-fxtrade.oanda.com
 - immutable dataset IDs: an existing dataset is never overwritten;
 - SHA-256 and byte-size records for every persisted data artifact;
 - `FAILED.json` preservation when acquisition fails after dataset creation;
+- secondary failure-marker write errors reported without masking the original error;
 - no Telegram, Supabase, order placement, strategy, service, cron, or production-cache mutation.
 
-## Validation before GitHub integration
+## Focused validation
 
-Focused offline tests were executed without provider credentials or network access:
+Offline validation after DeepSource and CodeRabbit feedback:
 
 ```text
-TESTS=10
-PASSED=10
+TESTS=11
+PASSED=11
 FAILED=0
 PYTHON_COMPILE=PASS
 REAL_PROVIDER_CALLS=0
@@ -125,23 +132,62 @@ TELEGRAM_CALLS=0
 SUPABASE_CALLS=0
 ```
 
-The focused tests cover request mapping, bounded chunking, incomplete candles, boundary reconciliation, preview non-mutation, immutable datasets, manifest checksums, failed-HTTP evidence preservation, safe `.env` handling, OANDA origin allowlisting, and path-escape rejection.
+Coverage includes:
 
-The dedicated GitHub workflow is an additional merge gate and also proves that preview mode creates no `data/replay/ci-preview` dataset.
+- production OANDA pair/timeframe/request mapping;
+- bounded chunk planning;
+- exclusion of incomplete candles;
+- equal-value/separate-object boundary deduplication;
+- conflicting duplicate rejection;
+- preview non-mutation;
+- immutable datasets plus unchanged manifest on rejected rerun;
+- manifest artifact checksums;
+- non-retryable HTTP failure evidence;
+- retryable `503 -> 429 -> 200` recovery with exact backoff and all attempts preserved;
+- safe `.env` parsing;
+- OANDA scheme/host/credential/path/custom-port restrictions;
+- path escape and overlength dataset-id rejection.
+
+## External review findings and disposition
+
+PR #57 received DeepSource and CodeRabbit review.
+
+DeepSource initially found:
+- one Python type-check issue;
+- one unused test import;
+- two collapsible test context-manager findings;
+- one complexity warning.
+
+The major findings were corrected. The collector was also split into helpers to reduce acquisition-function complexity.
+
+CodeRabbit's substantive finding was missing bounded retry/backoff for 429 and 5xx. This was implemented with attempt-by-attempt evidence preservation and a dedicated deterministic test.
+
+Additional valid CodeRabbit hygiene recommendations incorporated:
+- `actions/checkout` uses `persist-credentials: false`;
+- workflow push validation targets `main`, not the temporary feature branch;
+- custom-port and overlength-ID branches are tested;
+- rejected immutable rerun proves the original manifest is unchanged;
+- boundary dedup test proves equality rather than object identity;
+- successive-candle iteration uses `itertools.pairwise`;
+- failure-marker write errors are reported;
+- dataset-ID validation is shared;
+- the exact acquisition command is recorded.
+
+Merge remains conditional on exact final PR-head CI/security checks passing.
 
 ## Dataset contract
 
-A successful dataset has this high-level layout:
+Successful layout:
 
 ```text
 data/replay/<dataset-id>/
-  raw/<PAIR>/<TF>/chunk-*.json
-  metadata/<PAIR>/<TF>/chunk-*.json
+  raw/<PAIR>/<TF>/chunk-####-attempt-##.json
+  metadata/<PAIR>/<TF>/chunk-####-attempt-##.json
   candles/<PAIR>_<TF>.csv
   manifest.json
 ```
 
-`manifest.json` records provider, midpoint price contract, requested interval, pair/timeframe scope, per-stream rows/request counts/coverage/gaps, and artifact SHA-256 checksums.
+`manifest.json` records provider, midpoint contract, requested interval, pair/timeframe scope, per-stream request and HTTP-attempt counts, rows, coverage/gaps, and artifact SHA-256 checksums.
 
 ## Production mutation status
 
@@ -156,9 +202,9 @@ SERVICE_OR_CRON_CHANGED=NO
 PROVIDER_CALL_PERFORMED_DURING_REPOSITORY_IMPLEMENTATION=NO
 ```
 
-## Next acceptance step
+## Next acceptance step after merge
 
-After this package is merged, run exactly one credential-gated phone acquisition for:
+Acquire exactly one credential-gated dataset:
 
 ```text
 dataset-id=oanda-20260601-20260801-20260807
@@ -168,4 +214,4 @@ pairs=EURUSD GBPUSD
 timeframes=M15 H1 H4 D1
 ```
 
-Then verify `manifest.json` and artifact hashes. Only after the dataset passes integrity checks should the deterministic production-semantics replay be built/run.
+Then verify `manifest.json` and artifact hashes. Only after dataset integrity passes should the deterministic production-semantics replay be built and run.
