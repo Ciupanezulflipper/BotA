@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: **2026-08-07 20:20 UTC**
+Last updated: **2026-08-07 20:45 UTC**
 
 ## Authoritative identifiers
 
@@ -101,9 +101,9 @@ D1 : 499 rows, 2024-09-02 21:00 UTC -> 2026-08-05 21:00 UTC
 
 Standalone `data/EURUSD_M15.csv` and `data/GBPUSD_M15.csv` contain only 2026-02-27 through 2026-03-06. The live fetcher uses `count=500` and writes production cache paths, so it is not a historical replay source.
 
-## Historical acquisition package — added 2026-08-07
+## Historical acquisition package — 2026-08-07
 
-A clean current-main implementation now exists on this revision:
+Current clean package:
 
 ```text
 tools/fetch_historical_candles.py
@@ -112,7 +112,7 @@ tests/test_fetch_historical_candles.py
 audits/HISTORICAL_CANDLE_ACQUISITION_2026-08-07.md
 ```
 
-The collector:
+Collector contract:
 
 ```text
 DEFAULT_MODE=PREVIEW_NO_NETWORK
@@ -124,23 +124,42 @@ OANDA_PRICE=M
 PAIRS=EURUSD GBPUSD
 TIMEFRAMES=M15 H1 H4 D1
 RAW_RESPONSES_PRESERVED=YES
+RETRYABLE_HTTP=429_AND_5XX
+MAX_HTTP_ATTEMPTS=3
+RETRY_ATTEMPTS_PRESERVED=YES
 MANIFEST_SHA256=YES
 ```
 
-Focused offline validation before GitHub integration: **10/10 tests passed** plus Python compilation. No real provider, Telegram, or Supabase call was made during repository implementation.
+Focused offline validation after external-review fixes:
+
+```text
+TESTS=11
+PASSED=11
+FAILED=0
+PYTHON_COMPILE=PASS
+```
+
+The retry test proves a simulated `503 -> 429 -> 200` sequence, backoff values `0.5 -> 1.0`, preservation of all three raw/metadata attempts, and successful completion. No real provider, Telegram, or Supabase call was made during repository implementation.
+
+## External review status
+
+PR #57 was reviewed by GitHub CI, DeepSource, and CodeRabbit.
+
+- DeepSource's initial type/import/style findings were corrected; those major threads became outdated.
+- CodeRabbit identified missing bounded retry handling for 429/5xx. The collector now retries at most three times with bounded exponential backoff and preserves every response attempt.
+- CodeRabbit's valid CI/test hygiene findings were incorporated: no persisted checkout credentials, workflow runs on `main`, stronger path/port/immutability/value-equality tests, and an exact operator command.
+- Exact final PR-head CI/security status must be green before merge.
 
 ## PR #6 historical sidecar disposition
 
-Draft PR #6 is useful as design/history evidence only. GitHub currently reports it as open, non-mergeable, 125 commits and 129 changed files. Its changed paths include out-of-scope canonical/runtime files in addition to the sidecar. Do not merge or cherry-pick PR #6 wholesale.
-
-The clean collector reuses only validated architectural ideas from that work and is independently tested on current `main`.
+Draft PR #6 is useful as design/history evidence only. GitHub reports 129 changed files, including out-of-scope canonical/runtime paths. Do not merge or cherry-pick PR #6 wholesale.
 
 ## Efficiency operating model
 
 Canonical workflow: `docs/FORENSIC_OPERATING_MODEL.md`.
 
 ```text
-GitHub connector  -> code/history/docs/tests
+GitHub connector   -> code/history/docs/tests
 Supabase connector -> published signal/outcome truth
 Phone/Termux       -> runtime-only state, credentials, local-only evidence
 ```
@@ -171,7 +190,7 @@ Never push directly to `main`; use branch -> complete-file writes -> verified di
 
 ## Exactly one next action after merge
 
-Acquire and integrity-verify one immutable OANDA dataset on the phone, where the credential already exists:
+Acquire and integrity-verify one immutable OANDA dataset on the phone:
 
 ```text
 dataset-id=oanda-20260601-20260801-20260807
@@ -180,7 +199,7 @@ pairs=EURUSD GBPUSD
 timeframes=M15 H1 H4 D1
 ```
 
-After that dataset is verified, build/run the deterministic production-semantics replay for frozen policies:
+After that dataset is verified, build/run the deterministic production-semantics replay:
 
 ```text
 A = current production baseline
