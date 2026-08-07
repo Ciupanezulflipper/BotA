@@ -1,13 +1,12 @@
 # BotA Runtime Error Log
 
-Last updated: 2026-08-07 17:01 UTC
+Last updated: 2026-08-07 17:11 UTC
 
-This is the canonical compact error and prevention index. Historical full text
-remains in Git history, `ERRORS.md`, dated audit records, and GitHub issue/PR
-history.
+This is the canonical compact error and prevention index. Historical full text remains in Git history, `ERRORS.md`, dated audit records, and GitHub issue/PR history.
 
 Current signal evidence:
 
+- `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
 - `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
 - `CONTINUITY_CURRENT.md`
 - `CHAT_HANDOFF_BOTA.md`
@@ -19,16 +18,18 @@ PRODUCTION_VALIDATION=FAILED_HISTORICAL
 CURRENT_NATIVE_MANAGER_PID=31140
 CURRENT_CONTROL_PLANE=DEGRADED_6_OWNED_1_ORPHAN
 CURRENT_REQUIRED_RUNNING=7_OF_7
-CURRENT_ORPHAN_SERVICE=crond
 LIVE_WATCHER=RUNNING
-SIGNAL_DECISION_ROWS=2507
-SIGNAL_BUY_SELL_ROWS=1425
-SIGNAL_ACCEPTED_ROWS=110
-SIGNAL_REJECTED_ROWS=2397
-SIGNAL_REJECTION_RATE≈95.61_PERCENT
+VALID_ENTRY_ROWS=1495
+BUY_SELL_VALID_ROWS=1427
+BUY_SELL_ACCEPTED=110
+BUY_SELL_REJECTED=1317
+BUY_SELL_REJECTION_RATE=92.29_PERCENT
+REJECTED_SCORE_GATE=903
+REJECTED_H1_NEUTRAL=410
+REJECTED_H4_D1_OPPOSE=4
 ZERO_ENTRY_ROOT_CAUSE=NO
-AUTOMATIC_RECOVERY_REENABLE_ALLOWED=NO
-STRATEGY_MUTATION_ALLOWED=NO_PENDING_FUNNEL_PROOF
+TELEGRAM_DELIVERY_OF_ACCEPTED=UNPROVEN
+STRATEGY_MUTATION_ALLOWED=NO_PENDING_CURRENT_THRESHOLD_AND_DELIVERY_PROOF
 ```
 
 ## Canonical error index
@@ -70,8 +71,7 @@ Canonical files remained stale after material changes.
 Prevention: update handoff/error/deployment records with an explicit UTC date after each gate.
 
 ### E022 — Oversized package burdened Termux
-Too many evidence domains were combined and output exceeded practical terminal
-capture limits.
+Too many evidence domains were combined and output exceeded practical terminal capture limits.
 Prevention: bounded, pager-proof packages and smaller direct proofs.
 
 ### E027 — Control-plane regression after prior closure
@@ -84,24 +84,17 @@ Prevention: service PID -> PPID -> `runsv` -> manager chain.
 ### E032 — Manager existed while supervisors were orphans
 Prevention: manager existence and service ownership are separate gates.
 
-### E035 — Placeholder/direct-main documentation commits
-Prevention: branch -> content -> diff verification -> PR.
-
 ### E039 — Continuous guard associated with repeated Termux restarts
-Prevention: no continuous recovery without executable-path proof, locking,
-backoff, kill switch, failure injection, and restart observation.
+Prevention: no continuous recovery without executable-path proof, locking, backoff, kill switch, failure injection, and restart observation.
 
 ### E040 — D1 mismatch survived broad discovery
 Status: CLOSED. `tf_minutes("D1")` now returns 1440 on the phone.
 
 ### E043 — Supervisor wrapper contradicted disabled-recovery policy
-Status: CLOSED by P7 for that wrapper path. Later incidents still require exact
-ownership verification; closure of one wrapper defect does not prove permanent
-control-plane health.
+Status: CLOSED for that wrapper path. Later incidents still require exact ownership verification.
 
 ### E045 — Strict shell mode left active in interactive Termux
-A direct `set -euo pipefail` in the parent shell caused Termux to exit after an
-expected failed assertion.
+A direct `set -euo pipefail` in the parent shell caused Termux to exit after an expected failed assertion.
 Prevention: strict mode only inside a bounded child process.
 
 ### E046 — Active service path assumed to be repository path
@@ -111,31 +104,20 @@ Prevention: compare realpath, mode, and checksum for both paths before deploymen
 ### E047 — Runtime work obscured the signal-throughput acceptance criterion
 Recorded: 2026-08-07.
 
-Months of work repeatedly proved service, heartbeat, reporting, Telegram, and
-control-plane properties while recent PR scopes explicitly avoided strategy and
-signal-semantic changes. Runtime health was treated too often as a proxy for the
-actual product goal: useful signals.
-
-Current direct evidence:
+Current direct evidence now narrows this further:
 
 ```text
-logs/alerts.csv rows=2507
-HOLD=1082
-SELL=959
-BUY=466
-accepted=110
-rejected=2397
-rejection_rate≈95.61%
+1427 valid BUY/SELL
+903 rejected by M15 score gate
+410 rejected by H1-neutral veto
+4 rejected by H4+D1 opposition
+110 accepted
 ```
 
-Prevention: maintain separate acceptance gates for runtime health, raw direction
-generation, filter acceptance, persistence, and Telegram delivery.
+Prevention: maintain separate acceptance gates for runtime health, raw direction generation, strategy filtering, Telegram eligibility, transport, and persistence.
 
 ### E048 — Zero-entry symptom almost promoted to root cause
 Recorded: 2026-08-07.
-
-Initial filter strings frequently contained `entry_invalid_zero` and `rr<=0`.
-A direct all-row classification then proved:
 
 ```text
 all_zero_entry_sl_tp=1014
@@ -144,48 +126,62 @@ all_zero_rows_score=0.00
 zero_entry_buy_sell_rows=0
 ```
 
-Verdict: `entry=0/sl=0/tp=0` is a HOLD symptom in this corpus, not the root cause
-of lost BUY/SELL signals.
-
-Prevention: correlate suspected defects with tradeable/non-tradeable direction
-before tracing downstream fields.
+Verdict: zero entry is a HOLD symptom in this corpus, not the root cause of lost BUY/SELL signals.
 
 ### E049 — Ad-hoc CSV audit used the wrong field name
 Recorded: 2026-08-07.
 
-The actual CSV header is:
+Legacy header uses `rejected` and `filter_str`. One exploratory script looked up `filter_rejected` and therefore produced empty filter-status values.
 
-```text
-timestamp,pair,tf,direction,score,confidence,entry,sl,tp,provider,rejected,filter_str,reasons
-```
-
-One exploratory script looked up `filter_rejected` and silently received empty
-values. Its filter-status section is invalid evidence. Its direction/entry
-classification remains valid because those fields exist.
-
-Prevention:
-
-- print/validate required headers before analysis;
-- fail closed when an expected field is missing;
-- never treat empty fallback values as proof.
+Prevention: print and validate required headers before analysis; fail if a required field is absent.
 
 ### E050 — Pager captured a large Git forensic command
 Recorded: 2026-08-07.
 
-A broad `git show/log` package entered `less`; the terminal displayed `less` help
-instead of completing a capturable evidence package.
+A broad Git evidence package entered `less` and made the result impractical to capture.
+Prevention: disable pagers and keep output bounded.
 
-Prevention: set `GIT_PAGER=cat`, use `git --no-pager`, and keep output bounded.
+### E051 — Legacy alerts header with newer 25-column rows
+Recorded: 2026-08-07.
 
-## Current control-plane incident note — 2026-08-07
+Observed:
 
-Native Termux `service-daemon` manager PID 31140 and its pidfile were created at
-essentially the same instant, strongly attributing that manager to the native
-`service-daemon/start-stop-daemon` path. Exact human/executor attribution is not
-proven.
+```text
+HEADER_COLUMNS=13
+ROWS_WITH_25_COLUMNS=2509
+```
 
-Earlier two managers existed. The detached `-P` manager PID 16360 later died and
-supervisors progressively reconverged to PID 31140. Latest observed topology:
+The watcher currently appends a newer 25-column row layout under an existing 13-column legacy header. The first 13 positions align, so current funnel classification remains valid. However, newer structured consumers that expect `filter_rejected` and `filter_reasons` by header name can silently misclassify rows.
+
+Prevention: add an explicit schema/version migration or write a new versioned decision ledger instead of silently extending row width under an old header.
+
+### E052 — Documentation connector wrote a placeholder directly to main
+Recorded: 2026-08-07.
+
+While attempting to create the dated stage-count audit, the connector was invoked with `branch=main` after a branch-not-found error and created a placeholder file directly on `main` in commit `6cf8538dbc6bd64746cc3f32052291d5ebe27a0e`.
+
+This violated the established branch -> content -> diff -> PR rule. A corrective branch `docs/signal-funnel-stage-counts-20260807` was immediately created to replace the placeholder with the complete dated audit and synchronize the canonical files through a PR.
+
+Prevention: after any branch-not-found write error, stop and create/verify the branch before retrying any content write. Never use `main` as a temporary fallback.
+
+## Current exact signal bottleneck — 2026-08-07
+
+Rejected valid BUY/SELL rows:
+
+```text
+SCORE_GATE=903  (68.56%)
+H1_NEUTRAL=410  (31.13%)
+H4_D1_OPPOSE=4  (0.30%)
+TOTAL=1317
+```
+
+The counts sum exactly. Current `m15_h1_fusion.sh` returns immediately when the base M15 signal is already rejected, so score-gated rows do not proceed into H1 fusion. This supports a sequential funnel interpretation rather than mere overlapping text tags.
+
+`macro6=3` occurs in all accepted and rejected valid BUY/SELL rows and current fusion code treats it as neutral with zero score adjustment. RR text is advisory in current `quality_filter.py`.
+
+## Current control-plane incident note
+
+Native Termux manager PID 31140 remains with matching pidfile. Latest observed topology:
 
 ```text
 manager_count=1
@@ -196,22 +192,20 @@ duplicates=0
 orphan=crond
 ```
 
-Do not manually kill PID 31140 or the remaining orphan during signal-funnel
-analysis.
+Keep this separate from the proven strategy funnel unless watcher execution becomes impaired.
 
 ## Efficient protocol
 
-1. Read the dated current handoff/audit files first.
+1. Read dated current handoff/audit files first.
 2. State one narrow evidence question.
 3. Use small pager-proof commands.
 4. Validate schemas before field-based analysis.
-5. Separate runtime health, strategy rejection, dedup/cooldown, persistence, and Telegram delivery.
+5. Separate runtime, strategy rejection, Telegram eligibility, cooldown/dedup, transport, and persistence.
 6. Preserve phone state before mutation.
 7. For approved code mutation: backup, rollback, complete-file replacement, checksum, exact commit scope, tests, and independent verification.
-8. Record the UTC date on every material finding.
+8. Record explicit UTC date on every material finding.
+9. Never fall back to direct-main writes after connector/branch errors.
 
 ## Exactly one next action
 
-Classify the 1493 valid-entry rows by the real `rejected` field, pair, direction,
-score bucket, and exact `filter_str`; then inspect the 110 accepted rows for
-Telegram eligibility and delivery. No strategy mutation before that proof.
+Read current phone score/H1/Telegram threshold values and classify retained accepted-row delivery outcomes. No strategy or Telegram mutation before that proof.

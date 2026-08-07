@@ -1,6 +1,6 @@
 # BotA AI Start Here
 
-Last updated: 2026-08-07 17:01 UTC
+Last updated: 2026-08-07 17:11 UTC
 
 Read this before proposing BotA commands, code, cron, service, strategy,
 notification, provider, Supabase, or deployment changes.
@@ -17,81 +17,85 @@ CURRENT_REQUIRED_RUNNING=7_OF_7
 CURRENT_ORPHAN_SERVICE=crond
 CURRENT_DUPLICATE_SERVICE_ROWS=0
 LIVE_WATCHER=RUNNING
-SIGNAL_DECISION_ROWS=2507
-SIGNAL_HOLD_ROWS=1082
-SIGNAL_SELL_ROWS=959
-SIGNAL_BUY_ROWS=466
-SIGNAL_ACCEPTED_ROWS=110
-SIGNAL_REJECTED_ROWS=2397
-SIGNAL_ACCEPTANCE_RATE≈4.39_PERCENT
-SIGNAL_REJECTION_RATE≈95.61_PERCENT
-ZERO_ENTRY_SL_TP_ROWS=1014
-ZERO_ENTRY_BUY_SELL_ROWS=0
-ZERO_ENTRY_VERDICT=HOLD_SYMPTOM_NOT_ROOT_CAUSE
-STRATEGY_MUTATION_ALLOWED=NO_PENDING_FUNNEL_CLASSIFICATION
+VALID_ENTRY_ROWS=1495
+BUY_SELL_VALID_ROWS=1427
+BUY_SELL_ACCEPTED=110
+BUY_SELL_REJECTED=1317
+BUY_SELL_ACCEPTANCE_RATE=7.71_PERCENT
+BUY_SELL_REJECTION_RATE=92.29_PERCENT
+REJECTED_SCORE_GATE=903
+REJECTED_H1_NEUTRAL=410
+REJECTED_H4_D1_OPPOSE=4
+ZERO_ENTRY_ROOT_CAUSE=NO
+TELEGRAM_DELIVERY_OF_ACCEPTED=NOT_YET_PROVEN
+STRATEGY_MUTATION_ALLOWED=NO_PENDING_CURRENT_THRESHOLD_AND_DELIVERY_PROOF
 ```
 
 ## Evidence order
 
-1. `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
-2. `CONTINUITY_CURRENT.md`
-3. `CHAT_HANDOFF_BOTA.md`
-4. `audits/DUPLICATE_MANAGER_FORENSICS_2026-08-07.md` when present/merged
-5. `audits/P8_HEARTBEAT_PHONE_DEPLOYMENT_2026-08-03.md`
-6. `audits/P7_SUPERVISOR_WRAPPER_CLOSURE_2026-08-02.md`
-7. `audits/PHONE_DEPLOYMENT_2026-08-02.md`
-8. `audits/INCIDENT_2026-08-01_VALIDATION_FAILURE.md`
-9. `audits/ERROR_LOG.md`
-10. `ERRORS.md`
+1. `audits/SIGNAL_FUNNEL_STAGE_COUNTS_2026-08-07.md`
+2. `audits/SIGNAL_FUNNEL_FORENSICS_2026-08-07.md`
+3. `CONTINUITY_CURRENT.md`
+4. `CHAT_HANDOFF_BOTA.md`
+5. `audits/ERROR_LOG.md`
+6. `ERRORS.md`
+7. dated runtime/deployment records from 2026-08-01 through 2026-08-07
 
-## Current signal-throughput finding — 2026-08-07
+## Current signal answer — 2026-08-07
 
-The live watcher path was observed running:
+The live direction engine is not dead. The valid tradeable historical funnel is now measured directly:
 
 ```text
-runsv bota-watcher
-  -> tools/run_signal_watcher_with_ledger.sh
-  -> tools/signal_watcher_pro.sh --once
+1427 valid BUY/SELL
+  -> 903 rejected by M15 score gate
+  -> 524 survive M15 score gate
+  -> 410 rejected by H1-neutral veto
+  -> 114 survive H1
+  -> 4 rejected by H4+D1 opposition
+  -> 110 accepted
 ```
 
-The current `logs/alerts.csv` corpus contains 2507 decision rows:
+Rejected-stage percentages:
 
 ```text
-HOLD=1082
-SELL=959
-BUY=466
-accepted=110
-rejected=2397
+score gate=68.56%
+H1 neutral=31.13%
+H4+D1 opposition=0.30%
 ```
 
-This proves the direction engine can generate BUY and SELL decisions. The current
-highest-value problem is downstream throughput: about 95.61% of recorded rows
-are rejected.
+This is the strongest current explanation for low strategy throughput. The system does create BUY/SELL directions, but only 7.71% of valid BUY/SELL rows survive the strategy/filter gates in the inspected corpus.
 
-Common filter strings contain score thresholds (`score<62`, `score<65`,
-`score<70`), direction-not-tradeable, H1-neutral tags, RR advisory/rejection
-text, and `macro6=3`. `H4_D1_oppose` is rare in the inspected corpus.
+## Important interpretations
 
-A separate direct classification proved that all 1014 rows with
-`entry=0, sl=0, tp=0` are M15 HOLD rows with score 0.00. No BUY or SELL row had
-zero entry/SL/TP. Therefore zero entry is a HOLD symptom, not the current root
-cause.
+- `macro6=3` appears in every accepted and rejected valid BUY/SELL row in this corpus. Current fusion code treats it as neutral and applies zero score adjustment. It is not the hard rejection cause.
+- RR strings are advisory in current `quality_filter.py`; they co-occur with hard score/H1 gates and are not the primary cause here.
+- `H4_D1_oppose` rejected only four valid BUY/SELL rows and is not a dominant bottleneck.
+- The historical corpus spans different score thresholds (`score<62`, `score<65`, `score<70`). Do not infer the current threshold from aggregate history.
+- All zero-entry/SL/TP rows were HOLD score-0 rows. No BUY/SELL row had zero entry. Zero entry is not the current root cause.
 
-The exact CSV schema is:
+## CSV observability defect
+
+The live `logs/alerts.csv` has a 13-column legacy header while 2509 observed data rows contain 25 columns. The first 13 positions remain semantically aligned, so current funnel counts based on direction, score, entry/SL/TP, `rejected`, and `filter_str` are usable.
+
+However, newer structured readers that expect `filter_rejected` and `filter_reasons` column names may misclassify historical rows. Treat this as a separate observability/schema defect, not a strategy explanation.
+
+## Telegram remains a separate acceptance gate
+
+The 110 accepted rows are not proof that 110 user-visible signals were sent. Current watcher code still applies:
 
 ```text
-timestamp,pair,tf,direction,score,confidence,entry,sl,tp,provider,rejected,filter_str,reasons
+TELEGRAM_MIN_SCORE
+TELEGRAM_TIER_YELLOW_MIN
+TELEGRAM_COOLDOWN_SECONDS
+delivery dedup
+Telegram transport
 ```
 
-Do not use `filter_rejected` as a CSV field name in ad-hoc audits; it does not
-exist in this file.
+Before any threshold change, prove the current effective phone values and retained accepted -> Telegram outcomes.
 
-## Current runtime/control-plane finding — 2026-08-07
+## Current runtime/control-plane finding
 
-The native Termux `service-daemon` manager is PID 31140 and its pidfile matches.
-Earlier in the incident there were two managers; the detached `-P` manager died
-and supervisors progressively reconverged to PID 31140. The latest observed
-state is:
+Latest observed runtime topology:
 
 ```text
 manager_count=1
@@ -105,37 +109,25 @@ healthy=false
 orphan_service=crond
 ```
 
-Do not kill PID 31140 or manually kill the remaining orphan while signal-funnel
-work is in progress. All required services are currently running.
+The ownership defect remains real, but the watcher is running and writing decisions. Do not use this defect as the default explanation for low signal throughput.
 
 ## Scope lock
 
-Do not change strategy thresholds, H1/H4/D1 behavior, macro filters, RR policy,
-deduplication, SL/TP, provider semantics, Telegram eligibility, or Supabase
-signal semantics until the current rejection funnel is classified precisely.
+Do not change score thresholds, H1/H4/D1 behavior, macro policy, RR, SL/TP, provider semantics, Telegram eligibility, dedup, Supabase semantics, or service topology until current threshold and delivery evidence is captured.
 
-Do not resume broad manager-provenance archaeology unless the control-plane
-condition directly interrupts watcher execution or creates duplicate service
-rows.
+Do not resume broad manager-provenance archaeology unless runtime safety directly requires it.
 
-Never push directly to `main`. Use branch -> complete content -> verified diff
--> PR.
+Never push directly to `main`. Use branch -> complete content -> verified diff -> PR.
 
-## Evidence and time rules
+## Evidence rules
 
-- **VERIFIED** means current direct evidence proves the claim.
-- **ASSUMED** means plausible but unproven.
-- **UNKNOWN** means insufficient evidence and must not drive mutation.
-- Trusted provider/server UTC controls market and candle semantics.
-- Monotonic/boottime clocks control same-boot cadence and runtime health.
-- Android/ship wall time is display-only for market decisions.
-- Reject negative or future ages.
-- Write and inspect complete decision evidence before dedup conclusions.
-- Prefer small direct proofs over giant terminal dumps.
+- VERIFIED = direct current evidence.
+- ASSUMED = plausible but unproven.
+- UNKNOWN = insufficient evidence; must not drive mutation.
+- Validate CSV/file schemas before field-based analysis.
+- Separate runtime health, strategy rejection, Telegram eligibility, cooldown/dedup, transport, and persistence.
+- Prefer small pager-proof proofs over broad repository/terminal dumps.
 
 ## Exactly one next action
 
-Classify the 1493 rows with valid entry/SL/TP by `rejected`, pair, direction,
-score bucket, and exact `filter_str`; separately inspect the 110 accepted rows
-and determine whether they reached Telegram eligibility/delivery. Do not mutate
-strategy or thresholds until that funnel is proven.
+Read only the current phone values for score/H1/Telegram thresholds and classify retained watcher-log outcomes after strategy acceptance: score gate, tier gate, cooldown, dedup, send success, or send failure. No mutation before that proof.
