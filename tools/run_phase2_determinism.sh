@@ -23,6 +23,7 @@ repo_root="$(pwd -P)"
 dataset="$repo_root/data/replay/$DATASET_ID"
 result="$repo_root/$RESULT_REL"
 tmp="${TMPDIR:-${PREFIX:-/tmp}/tmp}/bota_phase2_$$"
+phase2_failed=0
 
 cleanup() {
   rm -rf "$tmp"
@@ -30,10 +31,10 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 fail() {
+  phase2_failed=1
   echo "PHASE2_DETERMINISM_GATE=FAIL"
   echo "REASON=$1"
   echo "NEXT_ACTION=CLASSIFY_BEFORE_RERUN"
-  return 1
 }
 
 cache_hash() {
@@ -308,3 +309,7 @@ echo "TELEGRAM_MUTATION=NO"
 echo "SUPABASE_MUTATION=NO"
 echo "SERVICE_CRON_MUTATION=NO"
 echo "==================================================================="
+
+if [ "$phase2_failed" -ne 0 ]; then
+  exit 2
+fi
