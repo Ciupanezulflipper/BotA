@@ -348,11 +348,21 @@ inner_tail="$(
     || true
 )"
 
-if (( inner_rc != 0 )) && [[ "${aggregate}" = "INTERNAL_ERROR" ]]; then
+# A nonzero inner run must dominate the semantic aggregate. The reconciler
+# can still produce a healthy-looking aggregate (EVALUATED_REJECTED,
+# EVALUATED_ACCEPTED, DEDUP_SUPPRESSED_DELIVERY, DELIVERY_ATTEMPTED,
+# DATA_STALE, DATA_FETCH_FAILED) from evidence that was already on disk when
+# the inner watcher crashed. Recording that aggregate as the authoritative
+# terminal outcome would be a false-green — the pipeline_health evaluator,
+# the runit error log, and any operator reading last_terminal_outcome would
+# see a normal terminal state despite an underlying execution failure. We
+# still preserve the pre-failure aggregate inside details so forensics can
+# reconstruct what the reconciler observed just before the failure.
+if (( inner_rc != 0 )); then
   record_terminal_or_fail \
     "failed" \
     "INTERNAL_ERROR" \
-    "run_rc=${inner_rc};alerts_grew=${alerts_grew};log_grew=${log_grew};stderr_tail=${inner_tail}" \
+    "run_rc=${inner_rc};aggregate=${aggregate};alerts_grew=${alerts_grew};log_grew=${log_grew};stderr_tail=${inner_tail}" \
     "${reason}" || exit $?
 
   exit 0
