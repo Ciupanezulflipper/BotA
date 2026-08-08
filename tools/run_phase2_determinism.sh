@@ -6,7 +6,6 @@
 REPLAY_SOURCE_COMMIT="6b437179cc58021aa358b1d0b04c121d9304c660"
 DATASET_ID="oanda-warmup-20240101-20260801-20260807-r3"
 RESULT_REL="data/replay_results/phase2-june-july-pr64"
-FIRST_FIELD_AWK='{print $1}'
 
 RUNNER_BLOB="498dbb9affb44f9b71e1b25bbd6228a20415914d"
 SEMANTICS_BLOB="6c18ddcfa7a49c5e5cb9cf139d341783dcb04a23"
@@ -23,10 +22,17 @@ fi
 repo_root="$(pwd -P)"
 dataset="$repo_root/data/replay/$DATASET_ID"
 result="$repo_root/$RESULT_REL"
+result_parent="${result%/*}"
+lock="$result.lock"
+stage="$result.staging.$$"
 tmp="${TMPDIR:-${PREFIX:-/tmp}/tmp}/bota_phase2_$$"
+lock_acquired=0
 
 cleanup() {
-  rm -rf "$tmp"
+  rm -rf "$tmp" "$stage"
+  if [[ "$lock_acquired" -eq 1 ]]; then
+    rmdir "$lock" 2>/dev/null || true
+  fi
   return 0
 }
 
@@ -54,6 +60,14 @@ fail() {
   return 2
 }
 
+sha256_file() {
+  local path="$1"
+  local sum_line
+  sum_line="$(sha256sum "$path")" || return 1
+  printf '%s\n' "${sum_line%% *}"
+  return 0
+}
+
 cache_hash() {
   python3 - "$repo_root/data/candles" <<'PY'
 import hashlib
@@ -74,10 +88,12 @@ PY
 }
 
 tracked_hash() {
-  {
+  local sum_line
+  sum_line="$({
     git -C "$repo_root" diff --no-ext-diff --binary
     git -C "$repo_root" diff --cached --no-ext-diff --binary
-  } | sha256sum | awk "$FIRST_FIELD_AWK"
+  } | sha256sum)" || return 1
+  printf '%s\n' "${sum_line%% *}"
   return 0
 }
 
@@ -118,14 +134,21 @@ if ! git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   fail "NOT_A_GIT_WORKTREE"
 elif [[ ! -f "$dataset/manifest.json" ]]; then
   fail "CANONICAL_R3_DATASET_MISSING"
-elif [[ -e "$result" ]]; then
-  fail "CANONICAL_REPLAY_RESULT_ALREADY_EXISTS"
 elif ! command -v curl >/dev/null 2>&1; then
   fail "CURL_NOT_AVAILABLE"
 elif ! command -v python3 >/dev/null 2>&1; then
   fail "PYTHON3_NOT_AVAILABLE"
 elif ! command -v git >/dev/null 2>&1; then
   fail "GIT_NOT_AVAILABLE"
+fi
+
+mkdir -p "$result_parent" || fail "RESULT_PARENT_CREATE_FAILED"
+if ! mkdir "$lock" 2>/dev/null; then
+  fail "CANONICAL_REPLAY_LOCK_UNAVAILABLE"
+fi
+lock_acquired=1
+if [[ -e "$result" ]]; then
+  fail "CANONICAL_REPLAY_RESULT_ALREADY_EXISTS"
 fi
 
 mkdir -p "$tmp/tools"
@@ -223,10 +246,10 @@ if [[ "$run2_rc" -ne 0 ]]; then
   fail "REPLAY_RUN2_FAILED"
 fi
 
-event1="$(sha256sum "$tmp/run1.events.jsonl" | awk "$FIRST_FIELD_AWK")"
-event2="$(sha256sum "$tmp/run2.events.jsonl" | awk "$FIRST_FIELD_AWK")"
-summary1="$(sha256sum "$tmp/run1.summary.json" | awk "$FIRST_FIELD_AWK")"
-summary2="$(sha256sum "$tmp/run2.summary.json" | awk "$FIRST_FIELD_AWK")"
+event1="$(sha256_file "$tmp/run1.events.jsonl")"
+event2="$(sha256_file "$tmp/run2.events.jsonl")"
+summary1="$(sha256_file "$tmp/run1.summary.json")"
+summary2="$(sha256_file "$tmp/run2.summary.json")"
 
 echo
 echo "===== DETERMINISM PROOF ====="
@@ -304,15 +327,18 @@ else
   fail "TRACKED_WORKTREE_CHANGED"
 fi
 
-mkdir -p "$result"
-cp "$tmp/run1.events.jsonl" "$result/events.jsonl"
-cp "$tmp/run1.summary.json" "$result/summary.json"
 manifest_sha="$(python3 - "$tmp/run1.summary.json" <<'PY'
 import json
 import sys
 print(json.load(open(sys.argv[1], encoding="utf-8"))["dataset_manifest_sha256"])
 PY
 )"
+
+if ! mkdir "$stage"; then
+  fail "RESULT_STAGING_CREATE_FAILED"
+fi
+cp "$tmp/run1.events.jsonl" "$stage/events.jsonl" || fail "RESULT_EVENTS_COPY_FAILED"
+cp "$tmp/run1.summary.json" "$stage/summary.json" || fail "RESULT_SUMMARY_COPY_FAILED"
 {
   echo "REPLAY_SOURCE_COMMIT=$REPLAY_SOURCE_COMMIT"
   echo "DATASET_ID=$DATASET_ID"
@@ -324,7 +350,17 @@ PY
   echo "PRODUCTION_SOURCE_BLOBS_MATCH=YES"
   echo "PRODUCTION_CACHE_UNCHANGED=YES"
   echo "TRACKED_WORKTREE_UNCHANGED=YES"
-} > "$result/DETERMINISM_PROOF.txt"
+} > "$stage/DETERMINISM_PROOF.txt" || fail "RESULT_PROOF_WRITE_FAILED"
+
+if [[ "$(sha256_file "$stage/events.jsonl")" != "$event1" ]]; then
+  fail "STAGED_EVENTS_HASH_MISMATCH"
+fi
+if [[ "$(sha256_file "$stage/summary.json")" != "$summary1" ]]; then
+  fail "STAGED_SUMMARY_HASH_MISMATCH"
+fi
+if ! mv "$stage" "$result"; then
+  fail "CANONICAL_RESULT_PUBLISH_FAILED"
+fi
 
 echo
 echo "PHASE2_DETERMINISM_GATE=PASS"
