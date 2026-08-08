@@ -86,6 +86,26 @@ class ProductionSignalPolicyTests(unittest.TestCase):
         self.assertTrue(result["filter_rejected"])
         self.assertIn("policy_b_adx_missing", result["filter_reasons"])
 
+    def test_strict_json_input_rejects_nonstandard_constants(self) -> None:
+        for constant in ("NaN", "Infinity", "-Infinity"):
+            with self.subTest(constant=constant):
+                with self.assertRaisesRegex(ValueError, "non-standard JSON constant"):
+                    policy._decode(f'{{"score":{constant}}}')
+
+    def test_strict_json_output_falls_back_on_nonfinite_value(self) -> None:
+        encoded = policy._safe_encode(
+            {
+                "pair": "EURUSD",
+                "tf": "M15",
+                "direction": "BUY",
+                "score": float("inf"),
+            }
+        )
+        decoded = json.loads(encoded)
+        self.assertTrue(decoded["filter_rejected"])
+        self.assertEqual(decoded["direction"], "HOLD")
+        self.assertIn("production_policy_error_serialization", decoded["reasons"])
+
     def test_policy_b_disabled_preserves_current_acceptance(self) -> None:
         with mock.patch.dict(os.environ, {"POLICY_B_ENABLED": "0"}, clear=False):
             result = policy.apply_policy(trade(score=90.0, reasons="ok|adx=45.0"))
