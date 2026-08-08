@@ -11,6 +11,9 @@ from typing import Any
 
 REQUIRED_DECISIONS = ("EURUSD:M15", "GBPUSD:M15")
 TERMINAL_COMPONENT_STATUSES = {"completed", "progress", "skipped_market_closed"}
+OPEN_MARKET_FAILURE_OUTCOMES = frozenset(
+    {"CLOCK_GATE_FAILED", "INTERNAL_ERROR", "DATA_FETCH_FAILED"}
+)
 
 
 def root_dir() -> Path:
@@ -119,15 +122,29 @@ def evaluate(market_open: bool) -> dict[str, Any]:
             raw_components if isinstance(raw_components, dict) else {}
         )
         for name, maximum in thresholds.items():
+            event = event_map(components, name)
             result = component_health(
                 name,
-                event_map(components, name),
+                event,
                 now_ns,
                 maximum,
                 start_grace,
             )
+            terminal_outcome = str(event.get("terminal_outcome") or "")
+            result["terminal_outcome"] = terminal_outcome
+            result["market_reason"] = str(event.get("market_reason") or "")
+            if (
+                name == "watcher"
+                and terminal_outcome in OPEN_MARKET_FAILURE_OUTCOMES
+            ):
+                result["healthy"] = False
+                result["evaluation"] = "open_market_terminal_failure"
+                failures.append(
+                    f"watcher_open_market_terminal_failure:{terminal_outcome}:"
+                    f"{result.get('market_reason','')}"
+                )
             component_results[name] = result
-            if not result["healthy"]:
+            if not result["healthy"] and result["evaluation"] != "open_market_terminal_failure":
                 failures.append(
                     f"{name}_progress_stale_or_failed:"
                     f"{result['age_seconds']}:{result['status']}:{result['evaluation']}"
@@ -172,7 +189,7 @@ def evaluate(market_open: bool) -> dict[str, Any]:
         }
 
     return {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "healthy": not failures,
         "market_open": market_open,
         "boot_id": current_boot,
