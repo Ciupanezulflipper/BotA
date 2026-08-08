@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: **2026-08-08 01:31 UTC**
+Last updated: **2026-08-08 01:37 UTC**
 
 ## Authoritative identifiers
 
@@ -19,6 +19,11 @@ OUTCOME_MATCHER_FINAL_HEAD=49ff1d2341cb9157acafb223950e79cb66883a1a
 OUTCOME_MATCHER_MERGE=bfa7f69ef430000994ea06aa7a3ba713a4144d90
 OUTCOME_MATCHER_BLOB=a5453fa6d17b447eb87072e2f2685453e2d4d067
 OUTCOME_FIXTURE_BLOB=8f321dddb645130d9be01a22f8ba14e8f2f81501
+MATCH_GAP_CLASSIFIER_PR=69
+MATCH_GAP_CLASSIFIER_FINAL_HEAD=440def4e9781ba60a55c625046ca0795e536987d
+MATCH_GAP_CLASSIFIER_MERGE=cbd0c3126ecac7b3b03e060eb81c144711b786f2
+MATCH_GAP_CLASSIFIER_BLOB=126ab302e246d8e4a9e254ccf77c80f92bd2b979
+GAP_RESULT_SHA256=5cbf0537a5bc3800e3a3353843d440d04a8e98b10287b81a525a106bf2aae471
 CURRENT_NATIVE_MANAGER_PID=31140
 CURRENT_SERVICE_DAEMON_PIDFILE=31140
 ```
@@ -30,12 +35,13 @@ HISTORICAL_DATA_PHASE=CLOSED_PASS
 DETERMINISTIC_REPLAY_HARNESS_PHASE=CLOSED_PASS
 FULL_JUNE_JULY_REPLAY_EXECUTION_PHASE=CLOSED_PASS
 PUBLISHED_OUTCOME_MATCH_GATE=FAIL_9_OF_13
-MATCH_GAP_CLASSIFICATION_PHASE=NEXT
-ROBUSTNESS_FINAL_VERDICT_PHASE=PENDING
+MATCH_GAP_CLASSIFICATION_PHASE=CLOSED_PASS
+UNEXPLAINED_MATCH_GAPS=0
+ROBUSTNESS_FINAL_VERDICT_PHASE=NEXT
 PRODUCTION_STRATEGY_MUTATION_ALLOWED=NO
 ```
 
-BotA can emit signals. The current investigation is signal quality/calibration, not Telegram transport, historical-data availability, or replay determinism.
+BotA can emit signals. The active investigation is signal quality/calibration, not Telegram transport, historical-data availability, or replay determinism.
 
 ## Runtime and live scope
 
@@ -82,7 +88,7 @@ Retained accepted-to-Telegram outcomes:
 1 send failure
 ```
 
-Cooldown audit showed all 38 retained cooldown blocks were non-exact updates; this does not prove independent trades and does not justify removing cooldown wholesale.
+Cooldown audit showed all 38 retained cooldown blocks were non-exact updates. This does not prove independent trades and does not justify removing cooldown wholesale.
 
 ## Frozen candidate policies
 
@@ -136,7 +142,7 @@ Do not reacquire June-July unless r3 itself is proven corrupt.
 
 ## Deterministic replay — CLOSED PASS
 
-Reviewed replay source merge:
+Reviewed replay source:
 
 ```text
 PR64_FINAL_HEAD=ff77b2cc05b4c0bffe0ac13893ae6431264e08d8
@@ -189,7 +195,7 @@ Known fidelity limits remain explicit: historical live `emit_snapshot.py` provid
 
 ## Published outcome truth
 
-Supabase BotA M15 outcomes in `[2026-06-01,2026-08-01)` were re-queried and remain:
+Supabase BotA M15 outcomes in `[2026-06-01,2026-08-01)` remain:
 
 ```text
 TOTAL=13
@@ -203,14 +209,7 @@ Supabase `created_at` is publication time and must never be the sole replay iden
 
 ## Published-outcome matcher — PR #68 CLOSED PASS
 
-PR #68 added:
-
-```text
-tools/compare_replay_outcomes.py
-tests/test_compare_replay_outcomes.py
-audits/fixtures/supabase_bota_m15_20260601_20260801.json
-audits/REPLAY_OUTCOME_MATCHER_2026-08-07.md
-```
+PR #68 added the reviewed offline matcher and frozen Supabase fixture.
 
 Final exact-head proof:
 
@@ -228,7 +227,7 @@ CODERABBIT_STATUS=SUCCESS_RATE_LIMITED_NOT_REVIEW_EVIDENCE
 MERGE_COMMIT=bfa7f69ef430000994ea06aa7a3ba713a4144d90
 ```
 
-The matching contract was frozen before the canonical result:
+Frozen matching contract:
 
 ```text
 POLICY_A_CURRENT=TRUE
@@ -241,9 +240,7 @@ AMBIGUOUS_MATCH=REPORT_NOT_FORCE
 ONE_TO_ONE_ASSIGNMENT=REQUIRED
 ```
 
-## Canonical Phase-2.2 matching result — PARTIAL
-
-Phone verified the merged matcher and fixture blobs, executed offline, and preserved:
+## Canonical Phase 2.2 matching result — PARTIAL
 
 ```text
 CANONICAL_COMPARISON_RESULT=data/replay_results/phase2-june-july-pr64/outcome_comparison.json
@@ -253,11 +250,6 @@ MATCHER_RC=0
 COMPARISON_JSON=VALID
 NETWORK_USED=NO
 PRODUCTION_MUTATION=NO
-```
-
-Result:
-
-```text
 MATCH_GATE=FAIL
 MATCH_STATUS=PARTIAL_MATCH
 PUBLISHED_OUTCOMES=13
@@ -275,14 +267,14 @@ B: N=5 W=3 L=2 C=0 PIPS=+54.50
 C: N=5 W=3 L=2 C=0 PIPS=+54.50
 ```
 
-Interpretation:
+Interpretation remains limited:
 
-- B remains materially better than A in the reconstructable subset.
-- C provides no incremental benefit over B in this subset because the same five matched outcomes pass B and C.
+- B is materially better than A in the reconstructable subset.
+- C adds no incremental benefit over B in that subset.
 - These are observed published-outcome counterfactuals, not full replay PnL.
-- Production strategy mutation remains forbidden until the four missing live trades are classified and robustness/full outcome resolution completes.
+- Production strategy mutation is not authorized.
 
-The four unmatched published outcomes are:
+The four unmatched published outcomes were:
 
 ```text
 78a0ad15-b53b-4eb3-ad8d-453bc7d667f1  EURUSD SELL score80 CLOSED    -13.50
@@ -291,7 +283,7 @@ ed386a21-1431-4b05-9941-2017789297bb  GBPUSD SELL score75 CLOSED    -18.60
 01f33b41-68cf-4975-a0d9-8ef4699c1d54  EURUSD SELL score75 CANCELLED   0.00
 ```
 
-Combined unmatched outcome:
+Combined:
 
 ```text
 N=4
@@ -299,17 +291,109 @@ WINS=0
 LOSSES=3
 CANCELLED=1
 PIPS=-47.90
-```
-
-Reconciliation:
-
-```text
 MATCHED_PIPS=-23.50
-UNMATCHED_PIPS=-47.90
 ALL_13_PUBLISHED_PIPS=-71.40
 ```
 
-Do not credit the unmatched losses to Policy B/C until replay state around each publication is classified.
+## Match-gap classifier — PR #69 CLOSED PASS
+
+PR #69 introduced the reviewed gap classifier and one-to-one consumed-event protection.
+
+Final exact-head evidence:
+
+```text
+FINAL_HEAD=440def4e9781ba60a55c625046ca0795e536987d
+MERGE_COMMIT=cbd0c3126ecac7b3b03e060eb81c144711b786f2
+CLASSIFIER_BLOB=126ab302e246d8e4a9e254ccf77c80f92bd2b979
+HISTORICAL_REPLAY_CI=PASS
+SECURITY_SCAN=PASS
+DEEPSOURCE_PYTHON=PASS
+DEEPSOURCE_SHELL=PASS
+DEEPSOURCE_SECRETS=PASS
+SONAR_QUALITY_GATE=PASS
+SONAR_NEW_ISSUES=0
+SONAR_SECURITY_HOTSPOTS=0
+```
+
+Review found a real one-to-one edge case before merge. The classifier now reconstructs the nine already-consumed replay events from the canonical comparison and excludes them from all gap scans. Missing, duplicate, or payload-mismatched consumed events fail closed. The canonical comparison itself was not rewritten or rerun.
+
+## Phase 2.3 gap classification — CLOSED PASS
+
+Canonical local result:
+
+```text
+CANONICAL_GAP_RESULT=data/replay_results/phase2-june-july-pr64/match_gap_classification.json
+GAP_RESULT_SHA256=5cbf0537a5bc3800e3a3353843d440d04a8e98b10287b81a525a106bf2aae471
+SOURCE_INTEGRITY=PASS
+GAP_CLASSIFIER_STATUS=COMPLETE
+UNMATCHED_COUNT=4
+CONSUMED_MATCHED_EVENTS=9
+CLASSIFIER_RC=0
+GAP_RESULT_JSON=VALID
+TOLERANCE_WIDENED=NO
+NETWORK_USED=NO
+PRODUCTION_MUTATION=NO
+```
+
+Exact classifications:
+
+```text
+01f33b41-68cf-4975-a0d9-8ef4699c1d54
+EURUSD SELL
+LIVE_PUBLISHED_BUT_REPLAY_NOT_ACCEPTED_WITHIN_45M
+same_direction_within_45m=4
+policy_a_accepted_within_45m=0
+published_status=CANCELLED
+published_result_pips=0.00
+
+0a95433f-6dbe-48c3-b6f3-e43fe996c8f9
+EURUSD SELL
+LIVE_PUBLISHED_BUT_REPLAY_NOT_ACCEPTED_WITHIN_45M
+same_direction_within_45m=1
+policy_a_accepted_within_45m=0
+published_status=CLOSED
+published_result_pips=-15.80
+
+78a0ad15-b53b-4eb3-ad8d-453bc7d667f1
+EURUSD SELL
+REPLAY_ACCEPTED_WITHIN_45M_BUT_ENTRY_DIFF_GT_5P
+same_direction_within_45m=3
+policy_a_accepted_within_45m=1
+published_status=CLOSED
+published_result_pips=-13.50
+
+ed386a21-1431-4b05-9941-2017789297bb
+GBPUSD SELL
+LIVE_PUBLISHED_BUT_REPLAY_NOT_ACCEPTED_WITHIN_45M
+same_direction_within_45m=4
+policy_a_accepted_within_45m=0
+published_status=CLOSED
+published_result_pips=-18.60
+```
+
+The four prior match gaps are therefore fully classified:
+
+```text
+UNEXPLAINED_GAP_COUNT=0
+LIVE_VS_REPLAY_DECISION_STATE_DIVERGENCES=3
+LIVE_VS_REPLAY_ENTRY_DIVERGENCES=1
+MATCHER_BUG_AS_EXPLANATION=NOT_SUPPORTED
+TOLERANCE_WIDENING_NEEDED=NO
+```
+
+Interpretation:
+
+- Three real published outcomes had same-direction replay state in the frozen 45-minute window, but reconstructed Policy A rejected every candidate. These are live-vs-replay decision-state divergences, not missing data and not timestamp-tolerance failures.
+- One real published outcome had a reconstructed Policy-A acceptance in the frozen window, but the replay entry differed by more than 5 pips. This is a price/input reconstruction divergence.
+- The result is consistent with the explicit replay grade `DETERMINISTIC_PRODUCTION_RULES_WITH_PROVIDER_SUBSTITUTION`: deterministic replay does not imply exact recreation of every unretained historical live provider/cache input.
+- The three decision divergences cannot be credited as hypothetical Policy-B/C outcomes because B and C are subsets of reconstructed Policy A.
+- The one entry-divergent accepted replay event still requires its detailed score/ADX/RSI/policy flags from the already-preserved Phase 2.3 JSON before the robustness verdict.
+
+Detailed record:
+
+```text
+audits/REPLAY_OUTCOME_MATCH_GAP_RESULT_2026-08-08.md
+```
 
 ## New live-code finding preserved by replay
 
@@ -317,55 +401,16 @@ Current `m15_h1_fusion.sh` reads top-level `.adx // 0` for the H1-opposite overr
 
 Replay reproduces this behavior. Production remains unchanged.
 
-## Gap-classifier branch contract
-
-The current branch adds:
-
-```text
-tools/classify_replay_match_gaps.py
-tests/test_classify_replay_match_gaps.py
-audits/REPLAY_OUTCOME_MATCH_GAP_CLASSIFICATION_2026-08-08.md
-```
-
-It does **not** rematch or widen tolerances. It enforces the canonical event and comparison SHA-256 values and requires the original 45-minute / 5-pip contract to still be present in the comparison JSON.
-
-For each of the four gaps it reports exact same-direction replay state within the frozen 45-minute window and a separate bounded 180-minute near-miss diagnostic window. The 180-minute window is explicitly not a matching tolerance.
-
-Primary classifications:
-
-```text
-NO_SAME_DIRECTION_EVENT_WITHIN_45M
-LIVE_PUBLISHED_BUT_REPLAY_NOT_ACCEPTED_WITHIN_45M
-REPLAY_ACCEPTED_WITHIN_45M_BUT_ENTRY_DIFF_GT_5P
-```
-
-### One-to-one consumed-event integrity
-
-The canonical comparison already assigned nine replay events to its nine successful published-outcome matches. A gap scan must not treat those already-consumed events as available candidates for any of the four unmatched outcomes.
-
-The reviewed classifier therefore reconstructs the nine consumed ledger indices from the immutable comparison `matched` rows and requires:
-
-```text
-CANONICAL_MATCHED_ROWS_REQUIRED=9
-MATCHED_EVENT_IDENTITY=(pair,decision_time)
-MATCHED_EVENT_PAYLOAD_EQUALITY=REQUIRED
-MATCHED_EVENT_IDENTITIES_UNIQUE=REQUIRED
-CONSUMED_MATCHED_EVENT_COUNT=9
-CONSUMED_MATCHED_EVENTS_EXCLUDED_FROM_ALL_GAP_SCANS=YES
-CANONICAL_COMPARISON_REWRITTEN=NO
-CANONICAL_COMPARISON_RERUN=NO
-```
-
-Missing, duplicate, or payload-mismatched matched events fail closed. The consumed indices are removed before the frozen 45-minute candidate check, the 5-pip exact-candidate check, and the separate 180-minute diagnostic scan. A regression test covers the collision case where a consumed exact event must not produce a false matcher inconsistency.
-
-If an unconsumed Policy-A event satisfying the original match contract is still found after those exclusions, the classifier fails closed as a genuine matcher inconsistency.
-
 ## Scope lock
 
-Until match-gap classification plus robustness/holdout evidence completes:
+Until robustness/holdout evidence completes:
 
 ```text
 DO_NOT_WIDEN_MATCH_TOLERANCES=YES
+DO_NOT_RERUN_HISTORICAL_ACQUISITION=YES
+DO_NOT_RERUN_DETERMINISTIC_REPLAY=YES
+DO_NOT_RERUN_CANONICAL_OUTCOME_MATCHER=YES
+DO_NOT_RERUN_GAP_CLASSIFIER=YES
 DO_NOT_LOWER_SCORE_FLOOR=YES
 DO_NOT_LOWER_H1_FLOOR=YES
 DO_NOT_CHANGE_TELEGRAM_FLOORS=YES
@@ -374,6 +419,7 @@ DO_NOT_ADD_THIRD_PAIR=YES
 DO_NOT_MUTATE_ADX_RULE=YES
 DO_NOT_MUTATE_RSI_RULE=YES
 DO_NOT_FIX_H1_ADX_OVERRIDE_IN_PRODUCTION_YET=YES
+PRODUCTION_STRATEGY_MUTATION_ALLOWED=NO
 ```
 
 `tools/backtest_bota.py` remains unsuitable as production-rule validation because its semantics differ from the live watcher.
@@ -392,6 +438,7 @@ Reusable reviewed tools replace disposable probes. Do not re-probe facts already
 
 ## Key evidence
 
+- `audits/REPLAY_OUTCOME_MATCH_GAP_RESULT_2026-08-08.md`
 - `audits/REPLAY_OUTCOME_MATCH_GAP_CLASSIFICATION_2026-08-08.md`
 - `audits/REPLAY_OUTCOME_MATCHER_2026-08-07.md`
 - `audits/DETERMINISTIC_REPLAY_PHASE2_EXECUTION_2026-08-07.md`
@@ -404,23 +451,38 @@ Reusable reviewed tools replace disposable probes. Do not re-probe facts already
 - `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
 - `docs/FORENSIC_OPERATING_MODEL.md`
 
-## Exactly one next action — classify the four match gaps
+## Exactly one next action — read detailed Phase 2.3 state for robustness verdict
 
-Finish review and merge of the gap classifier, then run it once against:
-
-```text
-data/replay_results/phase2-june-july-pr64/events.jsonl
-data/replay_results/phase2-june-july-pr64/outcome_comparison.json
-audits/fixtures/supabase_bota_m15_20260601_20260801.json
-```
-
-Enforce:
+Read the already-preserved local result once:
 
 ```text
-EVENTS_SHA256=05089e6d97e4ab9f3a522d9ec1188c24e69637bf048f1cd1403f23772ec8dabc
-COMPARISON_SHA256=6abb46288522b615e904ad67bc8e173786e1fddf560563b516e653b5b97f2274
-MATCH_TOLERANCE_WIDENED=NO
-CONSUMED_MATCHED_EVENTS_EXCLUDED=YES
+data/replay_results/phase2-june-july-pr64/match_gap_classification.json
+GAP_RESULT_SHA256=5cbf0537a5bc3800e3a3353843d440d04a8e98b10287b81a525a106bf2aae471
 ```
 
-Use the resulting replay-state evidence to classify each missing live trade before any strategy change or robustness verdict. Do not rerun historical acquisition, deterministic replay, or the canonical outcome matcher.
+Extract only:
+
+```text
+for the three decision divergences:
+  reject_stage
+  filter_reasons
+  H1 trend
+  H4 vote
+  D1 vote
+  score
+  ADX
+  RSI
+
+for the one entry-divergent accepted event:
+  decision_time
+  time_delta_minutes
+  replay entry
+  entry_diff_pips
+  score
+  ADX
+  RSI
+  Policy B flag
+  Policy C flag
+```
+
+This is a local read only. Do not rerun historical acquisition, deterministic replay, the canonical outcome matcher, or the gap classifier. No production strategy mutation before the robustness verdict.
