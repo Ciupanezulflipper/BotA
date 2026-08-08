@@ -13,6 +13,7 @@
 #       2) H1   (trend confirmation / veto)
 #   • Injects NEWS macro data (macro6) from tools/news_sentiment.py into the
 #     output JSON so the watcher/CSV pipeline can consume/audit it.
+#   • Applies tools/production_signal_policy.py to the final fusion payload.
 #
 # FUSION LOGIC (strict but not extreme)
 #   - START from the M15 filtered signal (already direction+score gated).
@@ -25,21 +26,15 @@
 #           - Add "H1_trend_opposite" to filter_reasons
 #           - Append "vetoed_by_H1" to reasons
 #       * If H1 is HOLD / weak / unclear / rejected → treat as NEUTRAL (no veto).
+#   - Any payload that survives current fusion is passed through the final
+#     production policy. Policy failure is fail-closed.
 #
 # JSON INPUT / OUTPUT CONTRACT
 #   • INPUT:  NONE via stdin. This script internally calls:
 #       scoring_engine.sh <PAIR> M15 | quality_filter.py
 #       scoring_engine.sh <PAIR> H1  | quality_filter.py
 #       news_sentiment.py <PAIR>     (JSON mode; Termux-safe RSS macro engine)
-#   • OUTPUT: EXACTLY ONE JSON OBJECT to stdout:
-#       - Starts from the M15 JSON (all fields preserved, including pattern_delta).
-#       - May modify/add:
-#           * filter_rejected   (bool)
-#           * filter_reasons    (append H1_* tags + macro6 tag)
-#           * reasons           (append "vetoed_by_H1" on veto)
-#           * macro6            (int 0..6, neutral=3)
-#           * macro_score       (float)
-#           * macro_provider    (string: off|none|rss|...)
+#   • OUTPUT: EXACTLY ONE JSON OBJECT to stdout.
 ###############################################################################
 
 set -euo pipefail
@@ -93,6 +88,35 @@ jq_field() {
   local json="$1"
   local filter="$2"
   printf '%s\n' "${json}" | jq -r "${filter}"
+}
+
+# ---------------------------------------------------------------------------
+# Helper: final production policy
+# - Existing rejected/HOLD payloads are preserved by the policy module.
+# - Existing accepted M15 payloads receive the frozen Policy-B gate and JPY risk
+#   normalization.
+# - Missing/broken policy module fails closed instead of silently bypassing it.
+# ---------------------------------------------------------------------------
+emit_with_production_policy() {
+  local json="$1"
+  local policy_tool="${TOOLS}/production_signal_policy.py"
+  local policy_json=""
+
+  if [[ -f "${policy_tool}" ]]; then
+    if policy_json="$(printf '%s\n' "${json}" | python3 "${policy_tool}" 2>>"${DEBUG_LOG}")" \
+      && [[ -n "${policy_json}" ]]; then
+      printf '%s\n' "${policy_json}"
+      return 0
+    fi
+  fi
+
+  _log_error "production policy unavailable/failed for ${PAIR}; failing closed"
+  printf '%s\n' "${json}" | jq '
+    .filter_rejected = true
+    | .filter_reasons = ((.filter_reasons // []) + ["production_policy_failure"] | unique)
+    | .policy_b_enforced = true
+    | .policy_b_pass = false
+  '
 }
 
 # ---------------------------------------------------------------------------
@@ -212,8 +236,10 @@ print(int(pts))
   fi
   # Apply news adjustment to score
   if [[ "${news_adj}" != "0" ]]; then
-    m15_json="$(printf '%s
-' "${m15_json}" | jq       --argjson adj "${news_adj}"       --arg tag "${news_tag}"       '
+    m15_json="$(printf '%s\n' "${m15_json}" | jq \
+      --argjson adj "${news_adj}" \
+      --arg tag "${news_tag}" \
+      '
       .score = ([(.score + $adj), 0] | max | if . > 100 then 100 else . end)
       | .confidence = ([(.confidence + $adj), 0] | max | if . > 100 then 100 else . end)
       | .filter_reasons = ((.filter_reasons // []) + [$tag])
@@ -229,14 +255,14 @@ _log_debug "M15 base: pair=${PAIR} dir=${m15_dir} score=${m15_score} rejected=${
 # If M15 rejected or not BUY/SELL, return unchanged.
 if [[ "${m15_filter_rejected}" == "true" ]] || [[ "${m15_dir}" != "BUY" && "${m15_dir}" != "SELL" ]]; then
   _log_debug "M15 rejected or non-tradeable; skipping H1 fusion."
-  printf '%s\n' "${m15_json}"
+  emit_with_production_policy "${m15_json}"
   exit 0
 fi
 
 # 2) H1 trend check
 h1_json="$(run_a2_pipeline "${PAIR}" "H1")" || {
   _log_error "H1 A2 pipeline failed for ${PAIR}, treating H1 as neutral."
-  printf '%s\n' "${m15_json}"
+  emit_with_production_policy "${m15_json}"
   exit 0
 }
 
@@ -268,8 +294,7 @@ if [[ "${m15_dir}" == "SELL" && "${h4_dir_cached}" == "BUY" ]]; then h4_opposing
 
 # Option B: score>=90 AND price breaks H4 EMA21 by 10+ pips -> override H4 veto
 if [[ "${h4_opposing}" == "true" ]]; then
-  _m15_score_b="$(printf '%s
-' "${m15_score:-0}" | awk '{printf("%d", $1)}')"
+  _m15_score_b="$(printf '%s\n' "${m15_score:-0}" | awk '{printf("%d", $1)}')"
   if (( _m15_score_b >= 90 )); then
     _h4_ema21="$(python3 -c "
 import json
@@ -375,7 +400,7 @@ if [[ "${veto}" == "true" ]]; then
         end
       )
     ')"
-  printf '%s\n' "${fused_json}"
+  emit_with_production_policy "${fused_json}"
   exit 0
 fi
 
@@ -389,8 +414,18 @@ if [[ "${m15_dir}" == "BUY" ]] && (( h4_vote < 0 && d1_vote < 0 )); then mtf_vet
 if [[ "${m15_dir}" == "SELL" ]] && (( h4_vote > 0 && d1_vote > 0 )); then mtf_veto="true"; fi
 if [[ "${mtf_veto}" == "true" ]]; then
   _log_debug "MTF veto: ${PAIR} M15=${m15_dir} H4=${h4_vote} D1=${d1_vote}"
-  printf '%s\n' "${m15_json}" | jq '.' | jq \
-    '.filter_rejected=true | .filter_reasons=((.filter_reasons//[])+["H4_D1_oppose"]) | .reasons=(if .reasons=="" or .reasons==null then "vetoed_by_H4_D1" else (.reasons+", vetoed_by_H4_D1") end)'
+  fused_json="$(printf '%s\n' "${m15_json}" | jq '
+    .filter_rejected = true
+    | .filter_reasons = ((.filter_reasons // []) + ["H4_D1_oppose"])
+    | .reasons = (
+        if .reasons == "" or .reasons == null then
+          "vetoed_by_H4_D1"
+        else
+          (.reasons + ", vetoed_by_H4_D1")
+        end
+      )
+  ')"
+  emit_with_production_policy "${fused_json}"
   exit 0
 fi
 
@@ -400,5 +435,5 @@ fused_json="$(printf '%s\n' "${m15_json}" | jq \
   .filter_reasons = ((.filter_reasons // []) + [$tag])
   ')"
 
-printf '%s\n' "${fused_json}"
+emit_with_production_policy "${fused_json}"
 exit 0
