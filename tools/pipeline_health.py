@@ -152,95 +152,118 @@ def component_health(
     }
 
 
+def _evaluate_components(
+    state: dict[str, Any],
+    now_ns: int,
+    failures: list[str],
+) -> dict[str, Any]:
+    """Evaluate open-market component freshness and terminal outcomes."""
+    thresholds = {
+        "updater": int(os.environ.get("MAX_UPDATER_PROGRESS_AGE_SECS", "1500")),
+        "watcher": int(os.environ.get("MAX_WATCHER_PROGRESS_AGE_SECS", "1500")),
+        "shadow": int(os.environ.get("MAX_SHADOW_PROGRESS_AGE_SECS", "1500")),
+    }
+    start_grace = int(os.environ.get("MAX_COMPONENT_START_GRACE_SECS", "300"))
+    raw_components = state.get("components")
+    components: dict[str, Any] = (
+        raw_components if isinstance(raw_components, dict) else {}
+    )
+    results: dict[str, Any] = {}
+
+    for name, maximum in thresholds.items():
+        event = event_map(components, name)
+        result = component_health(
+            name,
+            event,
+            now_ns,
+            maximum,
+            start_grace,
+        )
+        terminal_outcome = str(event.get("terminal_outcome") or "")
+        result["terminal_outcome"] = terminal_outcome
+        result["market_reason"] = str(event.get("market_reason") or "")
+        if name == "watcher" and terminal_outcome in OPEN_MARKET_FAILURE_OUTCOMES:
+            result["healthy"] = False
+            result["evaluation"] = "open_market_terminal_failure"
+            failures.append(
+                f"watcher_open_market_terminal_failure:{terminal_outcome}:"
+                f"{result.get('market_reason','')}"
+            )
+        results[name] = result
+        if not result["healthy"] and result["evaluation"] != "open_market_terminal_failure":
+            failures.append(
+                f"{name}_progress_stale_or_failed:"
+                f"{result['age_seconds']}:{result['status']}:{result['evaluation']}"
+            )
+
+    return results
+
+
+def _evaluate_decisions(
+    state: dict[str, Any],
+    now_ns: int,
+    failures: list[str],
+) -> dict[str, Any]:
+    """Evaluate open-market per-pair decision freshness and completion."""
+    raw_decisions = state.get("decisions")
+    decisions: dict[str, Any] = (
+        raw_decisions if isinstance(raw_decisions, dict) else {}
+    )
+    maximum = int(os.environ.get("MAX_DECISION_AGE_SECS", "1500"))
+    results: dict[str, Any] = {}
+
+    for key in required_decisions():
+        event = event_map(decisions, key)
+        age = age_seconds(event, now_ns)
+        outcome = str(event.get("outcome") or "missing")
+        status = str(event.get("status") or "missing")
+        healthy = (
+            age is not None
+            and age <= maximum
+            and outcome != "missing"
+            and status == "completed"
+        )
+        results[key] = {
+            "healthy": healthy,
+            "age_seconds": age,
+            "max_age_seconds": maximum,
+            "outcome": outcome,
+            "status": status,
+            "event_id": event.get("event_id"),
+        }
+        if not healthy:
+            failures.append(
+                f"decision_missing_or_stale:{key}:{age}:{status}:{outcome}"
+            )
+
+    return results
+
+
 def evaluate(market_open: bool) -> dict[str, Any]:
     """Return useful-progress health without filesystem wall-clock mtimes."""
     state = load_progress()
     current_boot = boot_id()
     now_ns = monotonic_ns()
     failures: list[str] = []
-    component_results: dict[str, Any] = {}
-    decision_results: dict[str, Any] = {}
 
     if state.get("boot_id") != current_boot:
         failures.append("pipeline_progress_missing_for_current_boot")
 
     if market_open:
-        thresholds = {
-            "updater": int(os.environ.get("MAX_UPDATER_PROGRESS_AGE_SECS", "1500")),
-            "watcher": int(os.environ.get("MAX_WATCHER_PROGRESS_AGE_SECS", "1500")),
-            "shadow": int(os.environ.get("MAX_SHADOW_PROGRESS_AGE_SECS", "1500")),
-        }
-        start_grace = int(os.environ.get("MAX_COMPONENT_START_GRACE_SECS", "300"))
-        raw_components = state.get("components")
-        components: dict[str, Any] = (
-            raw_components if isinstance(raw_components, dict) else {}
-        )
-        for name, maximum in thresholds.items():
-            event = event_map(components, name)
-            result = component_health(
-                name,
-                event,
-                now_ns,
-                maximum,
-                start_grace,
-            )
-            terminal_outcome = str(event.get("terminal_outcome") or "")
-            result["terminal_outcome"] = terminal_outcome
-            result["market_reason"] = str(event.get("market_reason") or "")
-            if (
-                name == "watcher"
-                and terminal_outcome in OPEN_MARKET_FAILURE_OUTCOMES
-            ):
-                result["healthy"] = False
-                result["evaluation"] = "open_market_terminal_failure"
-                failures.append(
-                    f"watcher_open_market_terminal_failure:{terminal_outcome}:"
-                    f"{result.get('market_reason','')}"
-                )
-            component_results[name] = result
-            if not result["healthy"] and result["evaluation"] != "open_market_terminal_failure":
-                failures.append(
-                    f"{name}_progress_stale_or_failed:"
-                    f"{result['age_seconds']}:{result['status']}:{result['evaluation']}"
-                )
-
-        raw_decisions = state.get("decisions")
-        decisions: dict[str, Any] = (
-            raw_decisions if isinstance(raw_decisions, dict) else {}
-        )
-        maximum = int(os.environ.get("MAX_DECISION_AGE_SECS", "1500"))
-        for key in required_decisions():
-            event = event_map(decisions, key)
-            age = age_seconds(event, now_ns)
-            outcome = str(event.get("outcome") or "missing")
-            status = str(event.get("status") or "missing")
-            healthy = (
-                age is not None
-                and age <= maximum
-                and outcome != "missing"
-                and status == "completed"
-            )
-            decision_results[key] = {
-                "healthy": healthy,
-                "age_seconds": age,
-                "max_age_seconds": maximum,
-                "outcome": outcome,
-                "status": status,
-                "event_id": event.get("event_id"),
-            }
-            if not healthy:
-                failures.append(
-                    f"decision_missing_or_stale:{key}:{age}:{status}:{outcome}"
-                )
+        component_results = _evaluate_components(state, now_ns, failures)
+        decision_results = _evaluate_decisions(state, now_ns, failures)
     else:
-        component_results["market"] = {
-            "healthy": True,
-            "status": "closed",
-            "note": (
-                "useful-progress freshness gates are suspended while the "
-                "configured market gate is closed"
-            ),
+        component_results = {
+            "market": {
+                "healthy": True,
+                "status": "closed",
+                "note": (
+                    "useful-progress freshness gates are suspended while the "
+                    "configured market gate is closed"
+                ),
+            }
         }
+        decision_results = {}
 
     return {
         "schema_version": "1.2",
