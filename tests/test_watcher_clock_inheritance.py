@@ -22,6 +22,7 @@ doing any live network work or side-effects.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -94,13 +95,17 @@ class ScanOnceInheritsTrustedEpochTests(unittest.TestCase):
         harness = self._write_harness(probe_body)
         merged = os.environ.copy()
         merged.update(env)
-        subprocess.run(
-            ["bash", str(harness)],
+        bash = shutil.which("bash")
+        if not bash:
+            self.fail("bash executable not found on PATH")
+        completed = subprocess.run(  # skipcq
+            [bash, str(harness)],
             env=merged,
             capture_output=True,
             text=True,
             check=False,
         )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
         log = self.root / "state" / "scan.log"
         return log.read_text(encoding="utf-8") if log.exists() else ""
 
