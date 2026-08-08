@@ -13,8 +13,8 @@
 #         DELIVERY_ATTEMPTED
 #         INTERNAL_ERROR
 #
-# This is the new top-level entry that a runit service (or cron) should invoke
-# in place of directly calling signal_watcher_pro.sh. It:
+# This is the top-level entry that a runit service (or cron) should invoke in
+# place of directly calling signal_watcher_pro.sh. It:
 #
 #   1. Consults tools/market_open.sh (server-clock gate) and records the reason
 #      code exposed via MARKET_OPEN_REASON_FILE.
@@ -37,6 +37,9 @@
 #
 # Environment:
 #   BOTA_ROOT                 : BotA root override (default ${HOME}/BotA)
+#   BOTA_CYCLE_ID             : optional externally supplied cycle identity.
+#                                When absent, this script creates one and exports
+#                                it to all child watcher/reconciler processes.
 #   WATCHER_GATED_DRY_RUN     : when "1", do not execute the inner watcher.
 #                                Useful for CI harnesses and the
 #                                monday_readiness_check.py fixture harness.
@@ -44,8 +47,8 @@
 #                                the gate is not consulted at runtime — the
 #                                supplied reason code is used verbatim.
 #
-# Exit code: 0 on healthy cycle (terminal outcome recorded), nonzero on any
-# internal failure that prevented recording a terminal outcome.
+# Exit code: 0 when a terminal outcome was recorded. Nonzero means an internal
+# failure prevented the authoritative terminal ledger write.
 
 set -uo pipefail
 
@@ -70,7 +73,11 @@ print(time.clock_gettime_ns(clock) if clock is not None else time.monotonic_ns()
 PY
 }
 
-CYCLE_ID="$(boot_id_value):$(monotonic_ns_value)"
+CYCLE_ID="${BOTA_CYCLE_ID:-}"
+if [[ -z "${CYCLE_ID}" ]]; then
+  CYCLE_ID="$(boot_id_value):$(monotonic_ns_value)"
+fi
+export BOTA_CYCLE_ID="${CYCLE_ID}"
 
 record_terminal() {
   local status="$1"
@@ -78,6 +85,7 @@ record_terminal() {
   local details="$3"
   local market_reason="$4"
   local server_epoch="${BOTA_SERVER_EPOCH:-0}"
+
   python3 "${TOOLS}/pipeline_ledger.py" component \
     --component "${COMPONENT}" \
     --status "${status}" \
@@ -86,11 +94,35 @@ record_terminal() {
     --terminal-outcome "${outcome}" \
     --market-reason "${market_reason}" \
     --server-epoch "${server_epoch}" \
-    >/dev/null 2>>"${ERROR_LOG}" || return $?
+    >/dev/null 2>>"${ERROR_LOG}"
+}
+
+record_terminal_or_fail() {
+  local status="$1"
+  local outcome="$2"
+  local details="$3"
+  local market_reason="$4"
+  local rc=0
+
+  record_terminal \
+    "${status}" \
+    "${outcome}" \
+    "${details}" \
+    "${market_reason}" || rc=$?
+
+  if (( rc != 0 )); then
+    printf '%s\n' \
+      "watcher_gated_cycle: terminal ledger write failed rc=${rc} cycle_id=${CYCLE_ID} outcome=${outcome}" \
+      | tee -a "${ERROR_LOG}" >&2
+    return "${rc}"
+  fi
+
+  return 0
 }
 
 record_started() {
   local server_epoch="${BOTA_SERVER_EPOCH:-0}"
+
   python3 "${TOOLS}/pipeline_ledger.py" component \
     --component "${COMPONENT}" \
     --status started \
@@ -99,10 +131,6 @@ record_started() {
     >/dev/null 2>>"${ERROR_LOG}" || true
 }
 
-# Alerts.csv is the persisted decision journal. Reading its size BEFORE running
-# the watcher lets us tell "watcher persisted a new decision row" apart from
-# "watcher exited before persisting anything". This is used to promote
-# ambiguous EVALUATED_* outcomes when appropriate.
 alerts_before_size() {
   stat -c '%s' "${LOGS}/alerts.csv" 2>/dev/null || echo 0
 }
@@ -113,22 +141,28 @@ log_before_size() {
 
 record_started
 
-# --- Gate check ------------------------------------------------------------
 reason_file="$(mktemp -t market_reason.XXXXXX)"
 epoch_file="$(mktemp -t market_epoch.XXXXXX)"
 trap 'rm -f "${reason_file}" "${epoch_file}"' EXIT
 
 gate_rc=0
+
 if [[ -n "${WATCHER_GATED_MARKET_HINT:-}" ]]; then
   printf '%s\n' "${WATCHER_GATED_MARKET_HINT}" >"${reason_file}"
+
   case "${WATCHER_GATED_MARKET_HINT}" in
-    MARKET_OPEN) gate_rc=0 ;;
-    *)           gate_rc=1 ;;
+    MARKET_OPEN)
+      gate_rc=0
+      ;;
+    *)
+      gate_rc=1
+      ;;
   esac
 else
   MARKET_OPEN_REASON_FILE="${reason_file}" \
     BOTA_SERVER_EPOCH_FILE="${epoch_file}" \
-    bash "${TOOLS}/market_open.sh" >/dev/null 2>>"${ERROR_LOG}" || gate_rc=$?
+    bash "${TOOLS}/market_open.sh" \
+    >/dev/null 2>>"${ERROR_LOG}" || gate_rc=$?
 fi
 
 reason="$(head -n1 "${reason_file}" 2>/dev/null || true)"
@@ -137,32 +171,45 @@ reason="${reason:-MARKET_GATE_ERROR}"
 
 if [[ -s "${epoch_file}" && -z "${BOTA_SERVER_EPOCH:-}" ]]; then
   probed_epoch="$(head -n1 "${epoch_file}" | tr -d '[:space:]')"
+
   if [[ "${probed_epoch}" =~ ^[0-9]+$ && "${probed_epoch}" -gt 1000000000 ]]; then
     export BOTA_SERVER_EPOCH="${probed_epoch}"
   fi
 fi
 
 if [[ "${reason}" = "MARKET_OPEN" ]]; then
-  :  # fall through to watcher
+  :
 else
   case "${reason}" in
     MARKET_CLOSED_*)
-      record_terminal "skipped_market_closed" "MARKET_CLOSED" \
-        "gate_reason=${reason}" "${reason}" || true
+      record_terminal_or_fail \
+        "skipped_market_closed" \
+        "MARKET_CLOSED" \
+        "gate_reason=${reason}" \
+        "${reason}" || exit $?
+
       exit 0
       ;;
+
     CLOCK_UNAVAILABLE|MARKET_GATE_ERROR|*)
-      record_terminal "failed" "CLOCK_GATE_FAILED" \
-        "gate_reason=${reason};gate_rc=${gate_rc}" "${reason}" || true
+      record_terminal_or_fail \
+        "failed" \
+        "CLOCK_GATE_FAILED" \
+        "gate_reason=${reason};gate_rc=${gate_rc}" \
+        "${reason}" || exit $?
+
       exit 0
       ;;
   esac
 fi
 
-# --- Watcher execution ------------------------------------------------------
 if [[ "${WATCHER_GATED_DRY_RUN:-0}" = "1" ]]; then
-  record_terminal "completed" "EVALUATED_REJECTED" \
-    "dry_run=1" "${reason}" || true
+  record_terminal_or_fail \
+    "completed" \
+    "EVALUATED_REJECTED" \
+    "dry_run=1" \
+    "${reason}" || exit $?
+
   exit 0
 fi
 
@@ -171,104 +218,156 @@ log_before="$(log_before_size)"
 
 inner_rc=0
 inner_stderr="$(mktemp -t watcher_gated.XXXXXX)"
+
 trap 'rm -f "${reason_file}" "${epoch_file}" "${inner_stderr}"' EXIT
 
-bash "${TOOLS}/run_signal_watcher_with_ledger.sh" 2>"${inner_stderr}" >/dev/null || inner_rc=$?
+BOTA_CYCLE_ID="${CYCLE_ID}" \
+  bash "${TOOLS}/run_signal_watcher_with_ledger.sh" \
+  2>"${inner_stderr}" >/dev/null || inner_rc=$?
 
 alerts_after="$(alerts_before_size)"
 log_after="$(log_before_size)"
+
 alerts_grew=0
 [[ "${alerts_after}" -gt "${alerts_before}" ]] && alerts_grew=1
+
 log_grew=0
 [[ "${log_after}" -gt "${log_before}" ]] && log_grew=1
 
-# Aggregate the per-pair decisions written by the reconciler for THIS cycle
-# into one component-level terminal outcome.
 aggregate="$(BOTA_ROOT="${ROOT}" CYCLE_ID="${CYCLE_ID}" python3 - <<'PY' 2>/dev/null
-import json, os, pathlib
+import json
+import os
+import pathlib
 
-root = os.environ.get("BOTA_ROOT", "").strip() or str(pathlib.Path.home() / "BotA")
+root = os.environ.get("BOTA_ROOT", "").strip() or str(
+    pathlib.Path.home() / "BotA"
+)
 cycle_id = os.environ.get("CYCLE_ID", "")
 path = pathlib.Path(root) / "state" / "pipeline_progress.json"
 
 try:
     state = json.loads(path.read_text(encoding="utf-8"))
 except Exception:
-    print("INTERNAL_ERROR"); raise SystemExit(0)
+    print("INTERNAL_ERROR")
+    raise SystemExit(0)
 
 decisions = state.get("decisions") if isinstance(state, dict) else None
+
 if not isinstance(decisions, dict):
-    print("INTERNAL_ERROR"); raise SystemExit(0)
+    print("INTERNAL_ERROR")
+    raise SystemExit(0)
 
 cycle_events = [
-    event for event in decisions.values()
-    if isinstance(event, dict) and str(event.get("cycle_id") or "") == cycle_id
+    event
+    for event in decisions.values()
+    if isinstance(event, dict)
+    and str(event.get("cycle_id") or "") == cycle_id
 ]
 
 if not cycle_events:
-    # Reconciler ran but produced no per-pair events for this cycle.
-    print("DATA_FETCH_FAILED"); raise SystemExit(0)
+    print("DATA_FETCH_FAILED")
+    raise SystemExit(0)
+
 
 def has_outcome(events, needles):
     for event in events:
         outcome = str(event.get("outcome") or "").lower()
+
         if any(needle in outcome for needle in needles):
             return True
+
     return False
+
 
 def any_persisted_accept(events):
     for event in events:
         if event.get("alerts_csv_persisted") and not event.get("filter_rejected"):
             return True
+
     return False
 
+
 if has_outcome(cycle_events, ("telegram_sent",)):
-    print("DELIVERY_ATTEMPTED"); raise SystemExit(0)
+    print("DELIVERY_ATTEMPTED")
+    raise SystemExit(0)
 
 if has_outcome(cycle_events, ("telegram_failed",)):
-    print("DELIVERY_ATTEMPTED"); raise SystemExit(0)
+    print("DELIVERY_ATTEMPTED")
+    raise SystemExit(0)
 
 if has_outcome(cycle_events, ("delivery_dedup",)):
-    print("DEDUP_SUPPRESSED_DELIVERY"); raise SystemExit(0)
+    print("DEDUP_SUPPRESSED_DELIVERY")
+    raise SystemExit(0)
 
-if has_outcome(cycle_events, ("telegram_score_gate", "telegram_tier_gate", "telegram_cooldown")):
-    print("EVALUATED_ACCEPTED"); raise SystemExit(0)
+if has_outcome(
+    cycle_events,
+    (
+        "telegram_score_gate",
+        "telegram_tier_gate",
+        "telegram_cooldown",
+    ),
+):
+    print("EVALUATED_ACCEPTED")
+    raise SystemExit(0)
 
 if any_persisted_accept(cycle_events):
-    print("EVALUATED_ACCEPTED"); raise SystemExit(0)
+    print("EVALUATED_ACCEPTED")
+    raise SystemExit(0)
 
 if has_outcome(cycle_events, ("raw_cache_invalid",)):
-    print("DATA_FETCH_FAILED"); raise SystemExit(0)
+    print("DATA_FETCH_FAILED")
+    raise SystemExit(0)
 
 if has_outcome(cycle_events, ("candle_stale",)):
-    print("DATA_STALE"); raise SystemExit(0)
+    print("DATA_STALE")
+    raise SystemExit(0)
 
-if has_outcome(cycle_events, ("news_gate", "calendar_gate", "pause_guard",
-                             "filter_rejected", "parse_error")):
-    print("EVALUATED_REJECTED"); raise SystemExit(0)
+if has_outcome(
+    cycle_events,
+    (
+        "news_gate",
+        "calendar_gate",
+        "pause_guard",
+        "filter_rejected",
+        "parse_error",
+    ),
+):
+    print("EVALUATED_REJECTED")
+    raise SystemExit(0)
 
-# Reconciler produced events but no recognized terminal outcome for the cycle.
 print("INTERNAL_ERROR")
 PY
 )"
 
 aggregate="${aggregate:-INTERNAL_ERROR}"
-inner_tail="$(tail -c 400 "${inner_stderr}" 2>/dev/null | tr -d '\r' | tr '\n' ' ' || true)"
+
+inner_tail="$(
+  tail -c 400 "${inner_stderr}" 2>/dev/null \
+    | tr -d '\r' \
+    | tr '\n' ' ' \
+    || true
+)"
 
 if (( inner_rc != 0 )) && [[ "${aggregate}" = "INTERNAL_ERROR" ]]; then
-  record_terminal "failed" "INTERNAL_ERROR" \
+  record_terminal_or_fail \
+    "failed" \
+    "INTERNAL_ERROR" \
     "run_rc=${inner_rc};alerts_grew=${alerts_grew};log_grew=${log_grew};stderr_tail=${inner_tail}" \
-    "${reason}" || true
+    "${reason}" || exit $?
+
   exit 0
 fi
 
 status_for_ledger="completed"
+
 if [[ "${aggregate}" = "INTERNAL_ERROR" || "${aggregate}" = "DATA_FETCH_FAILED" ]]; then
   status_for_ledger="failed"
 fi
 
-record_terminal "${status_for_ledger}" "${aggregate}" \
+record_terminal_or_fail \
+  "${status_for_ledger}" \
+  "${aggregate}" \
   "run_rc=${inner_rc};alerts_grew=${alerts_grew};log_grew=${log_grew}" \
-  "${reason}" || true
+  "${reason}" || exit $?
 
 exit 0
