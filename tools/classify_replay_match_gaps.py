@@ -16,7 +16,9 @@ from typing import Any
 EXPECTED_MATCH_TIME_MINUTES = 45.0
 EXPECTED_MATCH_ENTRY_PIPS = 5.0
 DIAGNOSTIC_WINDOW_MINUTES = 180.0
+EXPECTED_MATCHED_COUNT = 9
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+EventCandidate = tuple[int, dict[str, Any], float, float]
 
 
 def _sha256(path: Path) -> str:
@@ -89,7 +91,7 @@ def _validate_comparison(comparison: dict[str, Any]) -> list[str]:
         raise ValueError("canonical comparison counts missing")
     expected_counts = {
         "published_outcomes": 13,
-        "matched_outcomes": 9,
+        "matched_outcomes": EXPECTED_MATCHED_COUNT,
         "unmatched_outcomes": 4,
         "ambiguous_outcomes": 0,
     }
@@ -133,6 +135,50 @@ def _load_outcomes(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return by_id
 
 
+def _event_identity(event: dict[str, Any]) -> tuple[str, str]:
+    pair = str(event.get("pair", ""))
+    decision_time = str(event.get("decision_time", ""))
+    if not pair or not decision_time:
+        raise ValueError("replay event identity requires pair and decision_time")
+    return pair, decision_time
+
+
+def _ledger_identity_map(events: list[dict[str, Any]]) -> dict[tuple[str, str], int]:
+    result: dict[tuple[str, str], int] = {}
+    for index, event in enumerate(events):
+        identity = _event_identity(event)
+        if identity in result:
+            raise ValueError(f"duplicate replay event identity: {identity}")
+        result[identity] = index
+    return result
+
+
+def _consumed_event_indices(
+    comparison: dict[str, Any], events: list[dict[str, Any]]
+) -> set[int]:
+    matched = comparison.get("matched")
+    if not isinstance(matched, list) or len(matched) != EXPECTED_MATCHED_COUNT:
+        raise ValueError("canonical comparison matched rows missing or incomplete")
+    identity_map = _ledger_identity_map(events)
+    consumed: set[int] = set()
+    for row in matched:
+        if not isinstance(row, dict) or not isinstance(row.get("event"), dict):
+            raise ValueError("canonical comparison matched row has no event payload")
+        matched_event = row["event"]
+        identity = _event_identity(matched_event)
+        index = identity_map.get(identity)
+        if index is None:
+            raise ValueError(f"matched replay event missing from ledger: {identity}")
+        if events[index] != matched_event:
+            raise ValueError(f"matched replay event payload mismatch: {identity}")
+        if index in consumed:
+            raise ValueError(f"matched replay event consumed more than once: {identity}")
+        consumed.add(index)
+    if len(consumed) != EXPECTED_MATCHED_COUNT:
+        raise ValueError("canonical comparison consumed event count mismatch")
+    return consumed
+
+
 def _event_metrics(outcome: dict[str, Any], event: dict[str, Any]) -> tuple[float, float]:
     published_time = _parse_utc(str(outcome.get("created_at", "")))
     decision_time = _parse_utc(str(event.get("decision_time", "")))
@@ -152,6 +198,50 @@ def _same_pair_direction(outcome: dict[str, Any], event: dict[str, Any]) -> bool
         str(event.get("pair", "")) == str(outcome.get("pair", ""))
         and str(event.get("direction", "")) == str(outcome.get("direction", ""))
     )
+
+
+def _candidate_rows(
+    outcome: dict[str, Any],
+    events: list[dict[str, Any]],
+    excluded_indices: set[int],
+) -> list[EventCandidate]:
+    rows: list[EventCandidate] = []
+    for index, event in enumerate(events):
+        if index in excluded_indices or not _same_pair_direction(outcome, event):
+            continue
+        time_minutes, entry_pips = _event_metrics(outcome, event)
+        rows.append((index, event, time_minutes, entry_pips))
+    return rows
+
+
+def _accepted(rows: list[EventCandidate]) -> list[EventCandidate]:
+    return [row for row in rows if bool(row[1].get("policy_a_current"))]
+
+
+def _within_time(rows: list[EventCandidate], minutes: float) -> list[EventCandidate]:
+    return [row for row in rows if row[2] <= minutes]
+
+
+def _within_entry(rows: list[EventCandidate], pips: float) -> list[EventCandidate]:
+    return [row for row in rows if row[3] <= pips]
+
+
+def _classification_label(
+    within_45: list[EventCandidate], accepted_45: list[EventCandidate]
+) -> str:
+    if not within_45:
+        return "NO_SAME_DIRECTION_EVENT_WITHIN_45M"
+    if not accepted_45:
+        return "LIVE_PUBLISHED_BUT_REPLAY_NOT_ACCEPTED_WITHIN_45M"
+    return "REPLAY_ACCEPTED_WITHIN_45M_BUT_ENTRY_DIFF_GT_5P"
+
+
+def _nearest_by_time(rows: list[EventCandidate]) -> EventCandidate | None:
+    return min(rows, key=lambda row: (row[2], row[3], row[0]), default=None)
+
+
+def _nearest_by_entry(rows: list[EventCandidate]) -> EventCandidate | None:
+    return min(rows, key=lambda row: (row[3], row[2], row[0]), default=None)
 
 
 def _event_summary(
@@ -178,68 +268,37 @@ def _event_summary(
     }
 
 
+def _summarize_candidate(
+    outcome: dict[str, Any], candidate: EventCandidate | None
+) -> dict[str, Any] | None:
+    if candidate is None:
+        return None
+    return _event_summary(outcome, candidate[1], candidate[0])
+
+
+def _within_45_summaries(
+    outcome: dict[str, Any], rows: list[EventCandidate]
+) -> list[dict[str, Any]]:
+    ordered = sorted(rows, key=lambda row: (row[2], row[3], row[0]))[:8]
+    return [_event_summary(outcome, row[1], row[0]) for row in ordered]
+
+
 def _classify_one(
-    outcome: dict[str, Any], events: list[dict[str, Any]]
+    outcome: dict[str, Any],
+    events: list[dict[str, Any]],
+    excluded_indices: set[int] | None = None,
 ) -> dict[str, Any]:
-    candidates: list[tuple[int, dict[str, Any], float, float]] = []
-    for index, event in enumerate(events):
-        if not _same_pair_direction(outcome, event):
-            continue
-        time_minutes, entry_pips = _event_metrics(outcome, event)
-        candidates.append((index, event, time_minutes, entry_pips))
-
-    within_45 = [item for item in candidates if item[2] <= EXPECTED_MATCH_TIME_MINUTES]
-    accepted_45 = [item for item in within_45 if bool(item[1].get("policy_a_current"))]
-    exact_candidate = [
-        item
-        for item in accepted_45
-        if item[3] <= EXPECTED_MATCH_ENTRY_PIPS
-    ]
-    if exact_candidate:
+    candidates = _candidate_rows(outcome, events, excluded_indices or set())
+    within_45 = _within_time(candidates, EXPECTED_MATCH_TIME_MINUTES)
+    accepted_45 = _accepted(within_45)
+    exact_candidates = _within_entry(accepted_45, EXPECTED_MATCH_ENTRY_PIPS)
+    if exact_candidates:
         raise ValueError(
-            f"matcher inconsistency: unmatched outcome {outcome['id']} has a frozen-contract candidate"
+            f"matcher inconsistency: unmatched outcome {outcome['id']} has an unconsumed frozen-contract candidate"
         )
-
-    diagnostic = [item for item in candidates if item[2] <= DIAGNOSTIC_WINDOW_MINUTES]
-    accepted_diagnostic = [
-        item for item in diagnostic if bool(item[1].get("policy_a_current"))
-    ]
-
-    if not within_45:
-        classification = "NO_SAME_DIRECTION_EVENT_WITHIN_45M"
-    elif not accepted_45:
-        classification = "LIVE_PUBLISHED_BUT_REPLAY_NOT_ACCEPTED_WITHIN_45M"
-    else:
-        classification = "REPLAY_ACCEPTED_WITHIN_45M_BUT_ENTRY_DIFF_GT_5P"
-
-    nearest_same_direction = min(
-        diagnostic,
-        key=lambda item: (item[2], item[3], item[0]),
-        default=None,
-    )
-    nearest_accepted_time = min(
-        accepted_diagnostic,
-        key=lambda item: (item[2], item[3], item[0]),
-        default=None,
-    )
-    nearest_accepted_entry = min(
-        accepted_diagnostic,
-        key=lambda item: (item[3], item[2], item[0]),
-        default=None,
-    )
-
-    def summarize(
-        item: tuple[int, dict[str, Any], float, float] | None,
-    ) -> dict[str, Any] | None:
-        if item is None:
-            return None
-        return _event_summary(outcome, item[1], item[0])
-
-    within_45_summaries = [
-        _event_summary(outcome, item[1], item[0])
-        for item in sorted(within_45, key=lambda row: (row[2], row[3], row[0]))[:8]
-    ]
-
+    diagnostic = _within_time(candidates, DIAGNOSTIC_WINDOW_MINUTES)
+    accepted_diagnostic = _accepted(diagnostic)
+    classification = _classification_label(within_45, accepted_45)
     return {
         "outcome_id": outcome["id"],
         "pair": outcome.get("pair"),
@@ -255,11 +314,25 @@ def _classify_one(
         "policy_a_frozen_contract_candidates": 0,
         "same_direction_within_180m": len(diagnostic),
         "policy_a_same_direction_within_180m": len(accepted_diagnostic),
-        "nearest_same_direction_within_180m": summarize(nearest_same_direction),
-        "nearest_policy_a_by_time_within_180m": summarize(nearest_accepted_time),
-        "nearest_policy_a_by_entry_within_180m": summarize(nearest_accepted_entry),
-        "same_direction_events_within_45m": within_45_summaries,
+        "nearest_same_direction_within_180m": _summarize_candidate(
+            outcome, _nearest_by_time(diagnostic)
+        ),
+        "nearest_policy_a_by_time_within_180m": _summarize_candidate(
+            outcome, _nearest_by_time(accepted_diagnostic)
+        ),
+        "nearest_policy_a_by_entry_within_180m": _summarize_candidate(
+            outcome, _nearest_by_entry(accepted_diagnostic)
+        ),
+        "same_direction_events_within_45m": _within_45_summaries(outcome, within_45),
     }
+
+
+def _classification_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        key = str(row["classification"])
+        counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def classify(
@@ -282,14 +355,11 @@ def classify(
     if missing_ids:
         raise ValueError(f"unmatched outcome ids missing from frozen snapshot: {missing_ids}")
     events = _load_events(events_path)
+    consumed_indices = _consumed_event_indices(comparison, events)
     classifications = [
-        _classify_one(outcomes[outcome_id], events)
+        _classify_one(outcomes[outcome_id], events, consumed_indices)
         for outcome_id in sorted(unmatched_ids)
     ]
-    class_counts: dict[str, int] = {}
-    for row in classifications:
-        key = str(row["classification"])
-        class_counts[key] = class_counts.get(key, 0) + 1
     return {
         "schema_version": 1,
         "status": "COMPLETE",
@@ -304,10 +374,12 @@ def classify(
             "max_entry_pips": EXPECTED_MATCH_ENTRY_PIPS,
             "tolerance_widened": False,
         },
+        "consumed_matched_event_count": len(consumed_indices),
+        "consumed_events_excluded_from_gap_scan": True,
         "diagnostic_window_minutes": DIAGNOSTIC_WINDOW_MINUTES,
         "diagnostic_window_is_matching_tolerance": False,
         "unmatched_count": len(unmatched_ids),
-        "classification_counts": dict(sorted(class_counts.items())),
+        "classification_counts": _classification_counts(classifications),
         "unmatched": classifications,
     }
 
@@ -327,6 +399,10 @@ def _parser() -> argparse.ArgumentParser:
 def _print_summary(result: dict[str, Any]) -> None:
     print(f"GAP_CLASSIFIER_STATUS={result['status']}", file=sys.stderr)
     print(f"UNMATCHED_COUNT={result['unmatched_count']}", file=sys.stderr)
+    print(
+        f"CONSUMED_MATCHED_EVENTS={result['consumed_matched_event_count']}",
+        file=sys.stderr,
+    )
     for row in result["unmatched"]:
         print(
             "GAP="
