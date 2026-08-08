@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-REQUIRED_DECISIONS = ("EURUSD:M15", "GBPUSD:M15")
+REQUIRED_DECISIONS = ("EURUSD:M15", "GBPUSD:M15", "USDJPY:M15")
 TERMINAL_COMPONENT_STATUSES = {"completed", "progress", "skipped_market_closed"}
 
 
@@ -67,17 +67,21 @@ def component_health(
     now_ns: int,
     maximum: int,
     start_grace: int,
+    current_boot: str,
 ) -> dict[str, Any]:
     """Evaluate a component, allowing only a short explicit in-progress grace."""
     age = age_seconds(event, now_ns)
     status = str(event.get("status") or "missing")
+    event_boot = str(event.get("boot_id") or "missing")
+    same_boot = event_boot == current_boot
     if status == "started":
-        healthy = age is not None and age <= start_grace
+        healthy = same_boot and age is not None and age <= start_grace
         maximum_used = start_grace
         state = "in_progress_grace" if healthy else "stuck_started"
     else:
         healthy = (
-            age is not None
+            same_boot
+            and age is not None
             and age <= maximum
             and status in TERMINAL_COMPONENT_STATUSES
         )
@@ -90,9 +94,39 @@ def component_health(
         "max_age_seconds": maximum_used,
         "status": status,
         "evaluation": state,
+        "same_boot": same_boot,
         "cycle_id": event.get("cycle_id"),
         "event_id": event.get("event_id"),
     }
+
+
+def add_component_result(
+    *,
+    name: str,
+    components: dict[str, Any],
+    results: dict[str, Any],
+    failures: list[str],
+    now_ns: int,
+    maximum: int,
+    start_grace: int,
+    current_boot: str,
+) -> None:
+    """Evaluate and append one component result."""
+    result = component_health(
+        name,
+        event_map(components, name),
+        now_ns,
+        maximum,
+        start_grace,
+        current_boot,
+    )
+    results[name] = result
+    if not result["healthy"]:
+        failures.append(
+            f"{name}_progress_stale_or_failed:"
+            f"{result['age_seconds']}:{result['status']}:"
+            f"{result['evaluation']}:same_boot={result['same_boot']}"
+        )
 
 
 def evaluate(market_open: bool) -> dict[str, Any]:
@@ -107,31 +141,44 @@ def evaluate(market_open: bool) -> dict[str, Any]:
     if state.get("boot_id") != current_boot:
         failures.append("pipeline_progress_missing_for_current_boot")
 
+    raw_components = state.get("components")
+    components: dict[str, Any] = (
+        raw_components if isinstance(raw_components, dict) else {}
+    )
+    start_grace = int(os.environ.get("MAX_COMPONENT_START_GRACE_SECS", "300"))
+
+    # ProfitLab delivery is an always-on cron worker. It must keep proving local
+    # forward progress even while the FX market is closed; otherwise delivery
+    # can silently die while the trading pipeline itself is legitimately idle.
+    add_component_result(
+        name="profitlab_delivery",
+        components=components,
+        results=component_results,
+        failures=failures,
+        now_ns=now_ns,
+        maximum=int(os.environ.get("MAX_PROFITLAB_PROGRESS_AGE_SECS", "180")),
+        start_grace=int(os.environ.get("MAX_PROFITLAB_START_GRACE_SECS", "90")),
+        current_boot=current_boot,
+    )
+
     if market_open:
         thresholds = {
             "updater": int(os.environ.get("MAX_UPDATER_PROGRESS_AGE_SECS", "1500")),
             "watcher": int(os.environ.get("MAX_WATCHER_PROGRESS_AGE_SECS", "1500")),
             "shadow": int(os.environ.get("MAX_SHADOW_PROGRESS_AGE_SECS", "1500")),
+            "d1_sync": int(os.environ.get("MAX_D1_SYNC_PROGRESS_AGE_SECS", "1500")),
         }
-        start_grace = int(os.environ.get("MAX_COMPONENT_START_GRACE_SECS", "300"))
-        raw_components = state.get("components")
-        components: dict[str, Any] = (
-            raw_components if isinstance(raw_components, dict) else {}
-        )
         for name, maximum in thresholds.items():
-            result = component_health(
-                name,
-                event_map(components, name),
-                now_ns,
-                maximum,
-                start_grace,
+            add_component_result(
+                name=name,
+                components=components,
+                results=component_results,
+                failures=failures,
+                now_ns=now_ns,
+                maximum=maximum,
+                start_grace=start_grace,
+                current_boot=current_boot,
             )
-            component_results[name] = result
-            if not result["healthy"]:
-                failures.append(
-                    f"{name}_progress_stale_or_failed:"
-                    f"{result['age_seconds']}:{result['status']}:{result['evaluation']}"
-                )
 
         raw_decisions = state.get("decisions")
         decisions: dict[str, Any] = (
@@ -143,8 +190,11 @@ def evaluate(market_open: bool) -> dict[str, Any]:
             age = age_seconds(event, now_ns)
             outcome = str(event.get("outcome") or "missing")
             status = str(event.get("status") or "missing")
+            event_boot = str(event.get("boot_id") or "missing")
+            same_boot = event_boot == current_boot
             healthy = (
-                age is not None
+                same_boot
+                and age is not None
                 and age <= maximum
                 and outcome != "missing"
                 and status == "completed"
@@ -155,28 +205,32 @@ def evaluate(market_open: bool) -> dict[str, Any]:
                 "max_age_seconds": maximum,
                 "outcome": outcome,
                 "status": status,
+                "same_boot": same_boot,
                 "event_id": event.get("event_id"),
             }
             if not healthy:
                 failures.append(
-                    f"decision_missing_or_stale:{key}:{age}:{status}:{outcome}"
+                    f"decision_missing_or_stale:{key}:{age}:{status}:"
+                    f"{outcome}:same_boot={same_boot}"
                 )
     else:
         component_results["market"] = {
             "healthy": True,
             "status": "closed",
             "note": (
-                "useful-progress freshness gates are suspended while the "
-                "configured market gate is closed"
+                "market-dependent freshness gates are suspended while the "
+                "configured market gate is closed; always-on delivery health "
+                "remains enforced"
             ),
         }
 
     return {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "healthy": not failures,
         "market_open": market_open,
         "boot_id": current_boot,
         "monotonic_ns": now_ns,
+        "required_decisions": list(REQUIRED_DECISIONS),
         "components": component_results,
         "decisions": decision_results,
         "failure_reasons": failures,
