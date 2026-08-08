@@ -11,7 +11,8 @@ engine uses a 0.0001 cap for every pair; that is harmless for EURUSD/GBPUSD but
 would produce malformed USDJPY SL/TP distances.
 
 The program is stdin/stdout JSON only. It performs no network I/O and no file
-writes. Invalid policy inputs fail closed for otherwise accepted M15 trades.
+writes. Invalid policy or JPY risk inputs fail closed for otherwise accepted
+M15 trades.
 """
 
 from __future__ import annotations
@@ -68,6 +69,15 @@ def _append_unique(items: list[str], value: str) -> None:
         items.append(value)
 
 
+def _filter_reasons(data: Mapping[str, Any]) -> list[str]:
+    reasons = data.get("filter_reasons", [])
+    if isinstance(reasons, list):
+        return [str(item) for item in reasons]
+    if reasons in (None, ""):
+        return []
+    return [str(reasons)]
+
+
 def _risk_ratio(direction: str, entry: float, sl: float, tp: float) -> float:
     if direction == "BUY":
         risk = entry - sl
@@ -80,17 +90,17 @@ def _risk_ratio(direction: str, entry: float, sl: float, tp: float) -> float:
     return reward / risk
 
 
-def _normalize_jpy_risk(data: dict[str, Any]) -> None:
+def _normalize_jpy_risk(data: dict[str, Any]) -> bool:
     pair = str(data.get("pair", "")).upper()
     tf = str(data.get("tf", data.get("timeframe", ""))).upper()
     direction = str(data.get("direction", "")).upper()
     if "JPY" not in pair or tf != "M15" or direction not in {"BUY", "SELL"}:
-        return
+        return True
 
     entry = _finite(data.get("entry"))
     atr = _finite(data.get("atr"))
     if entry is None or atr is None or entry <= 0.0 or atr <= 0.0:
-        return
+        return False
 
     sl_mult = max(0.0, _env_float("SCALP_SL_ATR_MULT", 2.0))
     tp_mult = max(0.0, _env_float("SCALP_TP_ATR_MULT", 4.0))
@@ -101,7 +111,7 @@ def _normalize_jpy_risk(data: dict[str, Any]) -> None:
     sl_distance = min(atr * sl_mult, max_sl_pips * pip)
     tp_distance = min(atr * tp_mult, max_tp_pips * pip)
     if sl_distance <= 0.0 or tp_distance <= 0.0:
-        return
+        return False
 
     if direction == "BUY":
         sl = entry - sl_distance
@@ -115,37 +125,15 @@ def _normalize_jpy_risk(data: dict[str, Any]) -> None:
     data["filter_rr"] = round(_risk_ratio(direction, entry, sl, tp), 3)
     data["risk_pip_size"] = pip
     data["risk_pair_aware"] = True
+    return True
 
 
-def apply_policy(payload: Mapping[str, Any]) -> dict[str, Any]:
-    """Return a copied payload after final production policy enforcement."""
-    data = dict(payload)
-    direction = str(data.get("direction", "HOLD")).upper()
-    tf = str(data.get("tf", data.get("timeframe", ""))).upper()
-
-    if bool(data.get("filter_rejected", False)) or direction not in {"BUY", "SELL"}:
-        return data
-    if tf != "M15":
-        return data
-
-    _normalize_jpy_risk(data)
-
-    if not _enabled("POLICY_B_ENABLED", True):
-        data["policy_b_enforced"] = False
-        return data
-
+def _apply_policy_b(data: dict[str, Any], reasons: list[str], rejected: bool) -> bool:
     score_min = _env_float("POLICY_B_SCORE_MIN", 70.0)
     adx_max = _env_float("POLICY_B_ADX_MAX", 30.0)
     score = _finite(data.get("score"))
     adx = _extract_adx(data)
 
-    reasons = data.get("filter_reasons", [])
-    if not isinstance(reasons, list):
-        reasons = [str(reasons)] if reasons not in (None, "") else []
-    else:
-        reasons = [str(item) for item in reasons]
-
-    rejected = False
     if score is None:
         _append_unique(reasons, "policy_b_score_missing")
         rejected = True
@@ -165,6 +153,30 @@ def apply_policy(payload: Mapping[str, Any]) -> dict[str, Any]:
     data["policy_b_adx_max"] = adx_max
     data["policy_b_adx"] = adx
     data["policy_b_pass"] = not rejected
+    return rejected
+
+
+def apply_policy(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a copied payload after final production policy enforcement."""
+    data = dict(payload)
+    direction = str(data.get("direction", "HOLD")).upper()
+    tf = str(data.get("tf", data.get("timeframe", ""))).upper()
+
+    if bool(data.get("filter_rejected", False)) or direction not in {"BUY", "SELL"}:
+        return data
+    if tf != "M15":
+        return data
+
+    reasons = _filter_reasons(data)
+    rejected = not _normalize_jpy_risk(data)
+    if rejected:
+        _append_unique(reasons, "policy_jpy_risk_invalid")
+
+    if _enabled("POLICY_B_ENABLED", True):
+        rejected = _apply_policy_b(data, reasons, rejected)
+    else:
+        data["policy_b_enforced"] = False
+
     data["filter_reasons"] = reasons
     if rejected:
         data["filter_rejected"] = True
