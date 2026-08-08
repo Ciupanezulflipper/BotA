@@ -62,14 +62,43 @@ class ReplayMatchGapClassifierTests(unittest.TestCase):
         )
 
     def _canonical_files(
-        self, root: Path, events: list[dict]
+        self, root: Path, gap_events: list[dict]
     ) -> tuple[Path, Path, Path, str, str]:
         events_path = root / "events.jsonl"
         comparison_path = root / "comparison.json"
         outcomes_path = root / "outcomes.json"
-        self._write_events(events_path, events)
 
-        unmatched = ["one", "two", "three", "four"]
+        unmatched_outcomes = [
+            self._make_outcome("one"),
+            {**self._make_outcome("two"), "created_at": "2026-06-10T16:01:00Z"},
+            {**self._make_outcome("three"), "created_at": "2026-06-11T16:01:00Z"},
+            {**self._make_outcome("four"), "created_at": "2026-06-12T16:01:00Z"},
+        ]
+        matched_outcomes: list[dict] = []
+        matched_events: list[dict] = []
+        matched_rows: list[dict] = []
+        for index in range(9):
+            day = 13 + index
+            outcome = {
+                **self._make_outcome(f"matched-{index}"),
+                "pair": "GBPUSD",
+                "direction": "BUY",
+                "created_at": f"2026-06-{day:02d}T12:01:00Z",
+                "entry_price": 1.30000 + index * 0.001,
+            }
+            event = self._event(
+                pair="GBPUSD",
+                direction="BUY",
+                decision_time=f"2026-06-{day:02d}T12:00:00Z",
+                entry=1.30000 + index * 0.001,
+                accepted=True,
+            )
+            matched_outcomes.append(outcome)
+            matched_events.append(event)
+            matched_rows.append({"outcome": outcome, "event": event, "diagnostics": {}})
+
+        all_events = [*gap_events, *matched_events]
+        self._write_events(events_path, all_events)
         comparison = {
             "match_gate": "FAIL",
             "counts": {
@@ -82,25 +111,14 @@ class ReplayMatchGapClassifierTests(unittest.TestCase):
                 "max_abs_time_delta_minutes": 45.0,
                 "max_entry_pips": 5.0,
             },
-            "unmatched_outcome_ids": unmatched,
+            "matched": matched_rows,
+            "unmatched_outcome_ids": ["one", "two", "three", "four"],
             "ambiguous": {},
         }
         self._write_json(comparison_path, comparison)
-
-        outcomes = [
-            self._make_outcome("one"),
-            {**self._make_outcome("two"), "created_at": "2026-06-10T16:01:00Z"},
-            {**self._make_outcome("three"), "created_at": "2026-06-11T16:01:00Z"},
-            {**self._make_outcome("four"), "created_at": "2026-06-12T16:01:00Z"},
-        ]
-        for index in range(9):
-            outcomes.append(
-                {
-                    **self._make_outcome(f"matched-{index}"),
-                    "created_at": f"2026-06-{13 + index:02d}T16:01:00Z",
-                }
-            )
-        self._write_json(outcomes_path, {"outcomes": outcomes})
+        self._write_json(
+            outcomes_path, {"outcomes": [*unmatched_outcomes, *matched_outcomes]}
+        )
 
         events_sha = hashlib.sha256(events_path.read_bytes()).hexdigest()
         comparison_sha = hashlib.sha256(comparison_path.read_bytes()).hexdigest()
@@ -150,6 +168,15 @@ class ReplayMatchGapClassifierTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "matcher inconsistency"):
             classifier._classify_one(outcome, events)
 
+    def test_consumed_exact_event_is_excluded_from_gap_scan(self) -> None:
+        outcome = self._make_outcome()
+        events = [self._event(accepted=True)]
+        result = classifier._classify_one(outcome, events, {0})
+        self.assertEqual(
+            result["classification"], "NO_SAME_DIRECTION_EVENT_WITHIN_45M"
+        )
+        self.assertEqual(result["same_direction_within_45m"], 0)
+
     def test_canonical_comparison_contract_is_enforced(self) -> None:
         valid = {
             "match_gate": "FAIL",
@@ -184,7 +211,7 @@ class ReplayMatchGapClassifierTests(unittest.TestCase):
     def test_full_classification_preserves_four_gap_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            events = [
+            gap_events = [
                 self._event(accepted=False),
                 self._event(
                     decision_time="2026-06-10T16:00:00Z",
@@ -207,7 +234,7 @@ class ReplayMatchGapClassifierTests(unittest.TestCase):
                 outcomes_path,
                 events_sha,
                 comparison_sha,
-            ) = self._canonical_files(root, events)
+            ) = self._canonical_files(root, gap_events)
             result = classifier.classify(
                 events_path=events_path,
                 comparison_path=comparison_path,
@@ -217,6 +244,8 @@ class ReplayMatchGapClassifierTests(unittest.TestCase):
             )
             self.assertEqual(result["status"], "COMPLETE")
             self.assertEqual(result["unmatched_count"], 4)
+            self.assertEqual(result["consumed_matched_event_count"], 9)
+            self.assertTrue(result["consumed_events_excluded_from_gap_scan"])
             self.assertFalse(result["frozen_match_contract"]["tolerance_widened"])
             self.assertFalse(result["diagnostic_window_is_matching_tolerance"])
 
