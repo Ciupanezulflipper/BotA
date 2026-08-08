@@ -82,9 +82,7 @@ class ProductionSignalPolicyTests(unittest.TestCase):
     def test_boolean_numeric_inputs_are_rejected(self) -> None:
         self.assertIsNone(policy._finite(True))
         self.assertIsNone(policy._finite(False))
-        result = policy.apply_policy(
-            trade(adx_raw=True, reasons="ok|rsi=55.0")
-        )
+        result = policy.apply_policy(trade(adx_raw=True, reasons="ok|rsi=55.0"))
         self.assertTrue(result["filter_rejected"])
         self.assertIn("policy_b_adx_missing", result["filter_reasons"])
 
@@ -285,9 +283,7 @@ print(json.dumps(data, separators=(",", ":")))
             encoding="utf-8",
         )
 
-    def _run_fusion(
-        self, scenario: str, *, include_policy: bool = True
-    ) -> dict:
+    def _run_fusion(self, scenario: str, *, include_policy: bool = True) -> dict:
         if shutil.which("jq") is None:
             self.skipTest("jq is required by production fusion")
         with tempfile.TemporaryDirectory() as temp:
@@ -337,7 +333,7 @@ print(json.dumps(data, separators=(",", ":")))
         self.assertFalse(result["policy_b_pass"])
         self.assertEqual(
             sorted(result["filter_reasons"]),
-            ["prior_reason", "production_policy_failure"],
+            ["macro6=3", "prior_reason", "production_policy_failure"],
         )
 
 
