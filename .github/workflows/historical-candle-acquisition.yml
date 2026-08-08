@@ -12,6 +12,8 @@ on:
       - "tools/run_phase2_determinism.sh"
       - "tools/compare_replay_outcomes.py"
       - "tools/classify_replay_match_gaps.py"
+      - "tools/production_signal_policy.py"
+      - "tools/sync_d1_trend_cache.py"
       - "tools/scoring_engine.sh"
       - "tools/m15_h1_fusion.sh"
       - "tools/build_indicators.py"
@@ -19,11 +21,13 @@ on:
       - "tools/sr_score.py"
       - "tools/market_open.sh"
       - "tools/emit_snapshot.py"
+      - "ops/bota_crontab.canonical"
       - "tests/test_fetch_historical_candles.py"
       - "tests/test_verify_replay_dataset.py"
       - "tests/test_deterministic_replay.py"
       - "tests/test_compare_replay_outcomes.py"
       - "tests/test_classify_replay_match_gaps.py"
+      - "tests/test_weekend_production_readiness.py"
       - "audits/fixtures/supabase_bota_m15_20260601_20260801.json"
       - ".github/workflows/historical-candle-acquisition.yml"
   pull_request:
@@ -35,6 +39,8 @@ on:
       - "tools/run_phase2_determinism.sh"
       - "tools/compare_replay_outcomes.py"
       - "tools/classify_replay_match_gaps.py"
+      - "tools/production_signal_policy.py"
+      - "tools/sync_d1_trend_cache.py"
       - "tools/scoring_engine.sh"
       - "tools/m15_h1_fusion.sh"
       - "tools/build_indicators.py"
@@ -42,11 +48,13 @@ on:
       - "tools/sr_score.py"
       - "tools/market_open.sh"
       - "tools/emit_snapshot.py"
+      - "ops/bota_crontab.canonical"
       - "tests/test_fetch_historical_candles.py"
       - "tests/test_verify_replay_dataset.py"
       - "tests/test_deterministic_replay.py"
       - "tests/test_compare_replay_outcomes.py"
       - "tests/test_classify_replay_match_gaps.py"
+      - "tests/test_weekend_production_readiness.py"
       - "audits/fixtures/supabase_bota_m15_20260601_20260801.json"
       - ".github/workflows/historical-candle-acquisition.yml"
 
@@ -67,10 +75,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Compile acquisition and replay tools
+      - name: Compile acquisition replay and production-policy tools
         run: |
           python -m py_compile \
             tools/fetch_historical_candles.py \
@@ -79,14 +88,18 @@ jobs:
             tools/deterministic_replay.py \
             tools/compare_replay_outcomes.py \
             tools/classify_replay_match_gaps.py \
+            tools/production_signal_policy.py \
+            tools/sync_d1_trend_cache.py \
             tests/test_fetch_historical_candles.py \
             tests/test_verify_replay_dataset.py \
             tests/test_deterministic_replay.py \
             tests/test_compare_replay_outcomes.py \
-            tests/test_classify_replay_match_gaps.py
-      - name: Validate phase2 shell runner
+            tests/test_classify_replay_match_gaps.py \
+            tests/test_weekend_production_readiness.py
+      - name: Validate shell entrypoints
         run: |
           bash -n tools/run_phase2_determinism.sh
+          bash -n tools/m15_h1_fusion.sh
           bash tools/run_phase2_determinism.sh --self-check
       - name: Run focused offline tests
         run: |
@@ -95,7 +108,8 @@ jobs:
             tests/test_verify_replay_dataset.py \
             tests/test_deterministic_replay.py \
             tests/test_compare_replay_outcomes.py \
-            tests/test_classify_replay_match_gaps.py
+            tests/test_classify_replay_match_gaps.py \
+            tests/test_weekend_production_readiness.py
       - name: Prove preview is no-network and non-mutating
         run: |
           python tools/fetch_historical_candles.py \
