@@ -38,7 +38,7 @@ class ReplayMatchGapClassifierTests(unittest.TestCase):
         }
 
     @staticmethod
-    def _outcome(outcome_id: str = "one") -> dict:
+    def _make_outcome(outcome_id: str = "one") -> dict:
         return {
             "id": outcome_id,
             "pair": "EURUSD",
@@ -88,15 +88,15 @@ class ReplayMatchGapClassifierTests(unittest.TestCase):
         self._write_json(comparison_path, comparison)
 
         outcomes = [
-            self._outcome("one"),
-            {**self._outcome("two"), "created_at": "2026-06-10T16:01:00Z"},
-            {**self._outcome("three"), "created_at": "2026-06-11T16:01:00Z"},
-            {**self._outcome("four"), "created_at": "2026-06-12T16:01:00Z"},
+            self._make_outcome("one"),
+            {**self._make_outcome("two"), "created_at": "2026-06-10T16:01:00Z"},
+            {**self._make_outcome("three"), "created_at": "2026-06-11T16:01:00Z"},
+            {**self._make_outcome("four"), "created_at": "2026-06-12T16:01:00Z"},
         ]
         for index in range(9):
             outcomes.append(
                 {
-                    **self._outcome(f"matched-{index}"),
+                    **self._make_outcome(f"matched-{index}"),
                     "created_at": f"2026-06-{13 + index:02d}T16:01:00Z",
                 }
             )
@@ -107,7 +107,7 @@ class ReplayMatchGapClassifierTests(unittest.TestCase):
         return events_path, comparison_path, outcomes_path, events_sha, comparison_sha
 
     def test_replay_rejection_within_frozen_window_is_classified(self) -> None:
-        outcome = self._outcome()
+        outcome = self._make_outcome()
         result = classifier._classify_one(outcome, [self._event(accepted=False)])
         self.assertEqual(
             result["classification"],
@@ -121,7 +121,7 @@ class ReplayMatchGapClassifierTests(unittest.TestCase):
         )
 
     def test_entry_divergence_is_classified(self) -> None:
-        outcome = self._outcome()
+        outcome = self._make_outcome()
         event = self._event(accepted=True, entry=1.15610)
         result = classifier._classify_one(outcome, [event])
         self.assertEqual(
@@ -135,7 +135,7 @@ class ReplayMatchGapClassifierTests(unittest.TestCase):
         )
 
     def test_no_same_direction_within_frozen_window_is_classified(self) -> None:
-        outcome = self._outcome()
+        outcome = self._make_outcome()
         event = self._event(decision_time="2026-06-09T18:00:00Z", accepted=True)
         result = classifier._classify_one(outcome, [event])
         self.assertEqual(
@@ -146,7 +146,9 @@ class ReplayMatchGapClassifierTests(unittest.TestCase):
 
     def test_exact_frozen_contract_candidate_fails_closed(self) -> None:
         with self.assertRaisesRegex(ValueError, "matcher inconsistency"):
-            classifier._classify_one(self._outcome(), [self._event(accepted=True)])
+            classifier._classify_one(
+                self._make_outcome(), [self._event(accepted=True)]
+            )
 
     def test_canonical_comparison_contract_is_enforced(self) -> None:
         valid = {
