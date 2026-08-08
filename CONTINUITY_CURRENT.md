@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: **2026-08-08 01:18 UTC**
+Last updated: **2026-08-08 01:31 UTC**
 
 ## Authoritative identifiers
 
@@ -339,7 +339,26 @@ LIVE_PUBLISHED_BUT_REPLAY_NOT_ACCEPTED_WITHIN_45M
 REPLAY_ACCEPTED_WITHIN_45M_BUT_ENTRY_DIFF_GT_5P
 ```
 
-If an actual Policy-A event satisfying the original match contract is found, the classifier fails closed as a matcher inconsistency.
+### One-to-one consumed-event integrity
+
+The canonical comparison already assigned nine replay events to its nine successful published-outcome matches. A gap scan must not treat those already-consumed events as available candidates for any of the four unmatched outcomes.
+
+The reviewed classifier therefore reconstructs the nine consumed ledger indices from the immutable comparison `matched` rows and requires:
+
+```text
+CANONICAL_MATCHED_ROWS_REQUIRED=9
+MATCHED_EVENT_IDENTITY=(pair,decision_time)
+MATCHED_EVENT_PAYLOAD_EQUALITY=REQUIRED
+MATCHED_EVENT_IDENTITIES_UNIQUE=REQUIRED
+CONSUMED_MATCHED_EVENT_COUNT=9
+CONSUMED_MATCHED_EVENTS_EXCLUDED_FROM_ALL_GAP_SCANS=YES
+CANONICAL_COMPARISON_REWRITTEN=NO
+CANONICAL_COMPARISON_RERUN=NO
+```
+
+Missing, duplicate, or payload-mismatched matched events fail closed. The consumed indices are removed before the frozen 45-minute candidate check, the 5-pip exact-candidate check, and the separate 180-minute diagnostic scan. A regression test covers the collision case where a consumed exact event must not produce a false matcher inconsistency.
+
+If an unconsumed Policy-A event satisfying the original match contract is still found after those exclusions, the classifier fails closed as a genuine matcher inconsistency.
 
 ## Scope lock
 
@@ -401,6 +420,7 @@ Enforce:
 EVENTS_SHA256=05089e6d97e4ab9f3a522d9ec1188c24e69637bf048f1cd1403f23772ec8dabc
 COMPARISON_SHA256=6abb46288522b615e904ad67bc8e173786e1fddf560563b516e653b5b97f2274
 MATCH_TOLERANCE_WIDENED=NO
+CONSUMED_MATCHED_EVENTS_EXCLUDED=YES
 ```
 
-Use the resulting replay-state evidence to classify each missing live trade before any strategy change or robustness verdict.
+Use the resulting replay-state evidence to classify each missing live trade before any strategy change or robustness verdict. Do not rerun historical acquisition, deterministic replay, or the canonical outcome matcher.
