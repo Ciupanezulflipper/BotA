@@ -82,7 +82,7 @@ def load_state(path: Path) -> dict[str, Any] | None:
         value = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return None
-    except (OSError, UnicodeError, ValueError):
+    except (OSError, ValueError):
         return None
     return value if isinstance(value, dict) else None
 
@@ -183,9 +183,103 @@ def publish(row: dict[str, str], publisher: Path) -> bool:
     return result.returncode == 0
 
 
+def prepare_cursor(
+    alerts: Path,
+    state_path: Path,
+    *,
+    bootstrap: bool,
+) -> tuple[int | None, int]:
+    source_size = alerts.stat().st_size
+    if bootstrap:
+        write_state(state_path, source_size, source_size)
+        print(f"PROFITLAB_DELIVERY_BOOTSTRAP=PASS offset={source_size}")
+        return None, source_size
+
+    state = load_state(state_path)
+    if state is None:
+        write_state(state_path, source_size, source_size)
+        print(f"PROFITLAB_DELIVERY_BOOTSTRAP=PASS offset={source_size}")
+        return None, source_size
+
+    try:
+        offset = int(state.get("offset", source_size))
+    except (TypeError, ValueError, OverflowError):
+        offset = source_size
+
+    if offset < 0 or source_size < offset:
+        write_state(state_path, source_size, source_size)
+        print(f"PROFITLAB_DELIVERY_CURSOR_RESET=TO_END offset={source_size}")
+        return None, source_size
+
+    if offset == source_size:
+        print("PROFITLAB_DELIVERY=NO_NEW_ROWS")
+        return None, source_size
+
+    return offset, source_size
+
+
+def process_new_rows(
+    alerts: Path,
+    state_path: Path,
+    publisher: Path,
+    offset: int,
+    source_size: int,
+) -> int:
+    with alerts.open("rb") as handle:
+        handle.seek(offset)
+        while True:
+            row_start = handle.tell()
+            raw = handle.readline()
+            if not raw:
+                break
+            row_end = handle.tell()
+
+            if not raw.endswith(b"\n"):
+                print(f"PROFITLAB_DELIVERY_PARTIAL_ROW offset={row_start}")
+                return 0
+
+            row = parse_row(raw)
+            if row is None:
+                write_state(state_path, row_end, source_size)
+                print(f"PROFITLAB_DELIVERY_SKIP=MALFORMED offset={row_start}")
+                continue
+
+            if not eligible(row):
+                write_state(state_path, row_end, source_size)
+                continue
+
+            if not publisher.is_file():
+                print("PROFITLAB_DELIVERY_PUBLISHER=MISSING", file=sys.stderr)
+                return 1
+
+            if not publish(row, publisher):
+                print(
+                    "PROFITLAB_DELIVERY=RETRY_REQUIRED "
+                    f"pair={row['pair'].strip().upper()} "
+                    f"tf={row['tf'].strip().upper()} "
+                    f"offset={row_start}",
+                    file=sys.stderr,
+                )
+                return 1
+
+            write_state(state_path, row_end, source_size)
+            print(
+                "PROFITLAB_DELIVERY=PASS "
+                f"pair={row['pair'].strip().upper()} "
+                f"tf={row['tf'].strip().upper()} "
+                f"direction={row['direction'].strip().upper()} "
+                f"score={row['score'].strip()}"
+            )
+
+    final_size = alerts.stat().st_size
+    final_state = load_state(state_path) or {}
+    final_offset = int(final_state.get("offset", offset))
+    print(f"PROFITLAB_DELIVERY_DONE offset={final_offset} size={final_size}")
+    return 0
+
+
 def run(*, bootstrap: bool = False) -> int:
     alerts, state_path, lock_path, publisher = paths()
-
     if not alerts.exists():
         print("PROFITLAB_DELIVERY_SOURCE=MISSING")
         return 0
@@ -201,84 +295,28 @@ def run(*, bootstrap: bool = False) -> int:
             print("PROFITLAB_DELIVERY=ALREADY_RUNNING")
             return 0
 
-        source_size = alerts.stat().st_size
-        if bootstrap:
-            write_state(state_path, source_size, source_size)
-            print(f"PROFITLAB_DELIVERY_BOOTSTRAP=PASS offset={source_size}")
-            return 0
-
-        state = load_state(state_path)
-        if state is None:
-            write_state(state_path, source_size, source_size)
-            print(f"PROFITLAB_DELIVERY_BOOTSTRAP=PASS offset={source_size}")
-            return 0
-
         try:
-            offset = int(state.get("offset", source_size))
-        except (TypeError, ValueError, OverflowError):
-            offset = source_size
+            offset, source_size = prepare_cursor(
+                alerts,
+                state_path,
+                bootstrap=bootstrap,
+            )
+        except OSError as exc:
+            print(
+                f"PROFITLAB_DELIVERY_CURSOR_ERROR={type(exc).__name__}",
+                file=sys.stderr,
+            )
+            return 1
 
-        if offset < 0 or source_size < offset:
-            write_state(state_path, source_size, source_size)
-            print(f"PROFITLAB_DELIVERY_CURSOR_RESET=TO_END offset={source_size}")
+        if offset is None:
             return 0
-
-        if offset == source_size:
-            print("PROFITLAB_DELIVERY=NO_NEW_ROWS")
-            return 0
-
-        with alerts.open("rb") as handle:
-            handle.seek(offset)
-            while True:
-                row_start = handle.tell()
-                raw = handle.readline()
-                if not raw:
-                    break
-                row_end = handle.tell()
-
-                if not raw.endswith(b"\n"):
-                    print(f"PROFITLAB_DELIVERY_PARTIAL_ROW offset={row_start}")
-                    return 0
-
-                row = parse_row(raw)
-                if row is None:
-                    write_state(state_path, row_end, source_size)
-                    print(f"PROFITLAB_DELIVERY_SKIP=MALFORMED offset={row_start}")
-                    continue
-
-                if not eligible(row):
-                    write_state(state_path, row_end, source_size)
-                    continue
-
-                if not publisher.is_file():
-                    print("PROFITLAB_DELIVERY_PUBLISHER=MISSING", file=sys.stderr)
-                    return 1
-
-                if publish(row, publisher):
-                    write_state(state_path, row_end, source_size)
-                    print(
-                        "PROFITLAB_DELIVERY=PASS "
-                        f"pair={row['pair'].strip().upper()} "
-                        f"tf={row['tf'].strip().upper()} "
-                        f"direction={row['direction'].strip().upper()} "
-                        f"score={row['score'].strip()}"
-                    )
-                    continue
-
-                print(
-                    "PROFITLAB_DELIVERY=RETRY_REQUIRED "
-                    f"pair={row['pair'].strip().upper()} "
-                    f"tf={row['tf'].strip().upper()} "
-                    f"offset={row_start}",
-                    file=sys.stderr,
-                )
-                return 1
-
-        final_size = alerts.stat().st_size
-        final_state = load_state(state_path) or {}
-        final_offset = int(final_state.get("offset", offset))
-        print(f"PROFITLAB_DELIVERY_DONE offset={final_offset} size={final_size}")
-        return 0
+        return process_new_rows(
+            alerts,
+            state_path,
+            publisher,
+            offset,
+            source_size,
+        )
 
 
 def main() -> int:
