@@ -58,7 +58,7 @@ class CompareReplayOutcomesTests(unittest.TestCase):
         }
 
     @staticmethod
-    def _outcome(
+    def _make_outcome(
         *,
         outcome_id: str,
         pair: str,
@@ -113,7 +113,7 @@ class CompareReplayOutcomesTests(unittest.TestCase):
                 ),
             ]
             outcomes = [
-                self._outcome(
+                self._make_outcome(
                     outcome_id="one",
                     pair="EURUSD",
                     direction="SELL",
@@ -122,7 +122,7 @@ class CompareReplayOutcomesTests(unittest.TestCase):
                     result_pips=20.0,
                     live_score=80,
                 ),
-                self._outcome(
+                self._make_outcome(
                     outcome_id="two",
                     pair="GBPUSD",
                     direction="BUY",
@@ -145,10 +145,21 @@ class CompareReplayOutcomesTests(unittest.TestCase):
 
             self.assertEqual(result["match_gate"], "PASS")
             self.assertEqual(result["counts"]["matched_outcomes"], 2)
-            self.assertEqual(result["policy_observed_published_outcomes"]["A"]["total_pips"], 10.0)
-            self.assertEqual(result["policy_observed_published_outcomes"]["B"]["matched_n"], 1)
-            self.assertEqual(result["policy_observed_published_outcomes"]["B"]["total_pips"], 20.0)
-            self.assertEqual(result["policy_observed_published_outcomes"]["C"]["wins"], 1)
+            self.assertEqual(
+                result["policy_observed_published_outcomes"]["A"]["total_pips"],
+                10.0,
+            )
+            self.assertEqual(
+                result["policy_observed_published_outcomes"]["B"]["matched_n"],
+                1,
+            )
+            self.assertEqual(
+                result["policy_observed_published_outcomes"]["B"]["total_pips"],
+                20.0,
+            )
+            self.assertEqual(
+                result["policy_observed_published_outcomes"]["C"]["wins"], 1
+            )
 
     def test_ambiguous_candidates_are_not_forced(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -174,7 +185,7 @@ class CompareReplayOutcomesTests(unittest.TestCase):
                 ),
             ]
             outcomes = [
-                self._outcome(
+                self._make_outcome(
                     outcome_id="ambiguous",
                     pair="EURUSD",
                     direction="SELL",
