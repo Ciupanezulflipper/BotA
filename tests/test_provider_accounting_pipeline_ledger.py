@@ -173,7 +173,7 @@ class PipelineProgressTests(TemporaryBotARootMixin, unittest.TestCase):
             return pipeline_ledger.main(argv)
 
     def seed_healthy_progress(self) -> None:
-        for component in ("updater", "shadow"):
+        for component in ("updater", "shadow", "profitlab_delivery", "d1_sync"):
             self.assertEqual(
                 self.ledger(
                     [
@@ -188,7 +188,7 @@ class PipelineProgressTests(TemporaryBotARootMixin, unittest.TestCase):
                 ),
                 0,
             )
-        for pair in ("EURUSD", "GBPUSD"):
+        for pair in ("EURUSD", "GBPUSD", "USDJPY"):
             self.assertEqual(
                 self.ledger(
                     [
@@ -245,13 +245,25 @@ class PipelineProgressTests(TemporaryBotARootMixin, unittest.TestCase):
             "stuck_started",
         )
 
-    def test_market_closed_suspends_decision_freshness(self) -> None:
-        state = pipeline_ledger.empty_state()
-        (self.root / "state" / "pipeline_progress.json").write_text(
-            json.dumps(state)
+    def test_market_closed_suspends_market_dependent_freshness(self) -> None:
+        self.assertEqual(
+            self.ledger(
+                [
+                    "component",
+                    "--component",
+                    "profitlab_delivery",
+                    "--status",
+                    "completed",
+                    "--cycle-id",
+                    "cycle-profitlab",
+                ]
+            ),
+            0,
         )
         result = pipeline_health.evaluate(market_open=False)
         self.assertTrue(result["healthy"], result["failure_reasons"])
+        self.assertIn("profitlab_delivery", result["components"])
+        self.assertIn("market", result["components"])
 
 
 class WatcherCycleTests(unittest.TestCase):
