@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: **2026-08-07 23:26 UTC**
+Last updated: **2026-08-07 23:46 UTC**
 
 ## Authoritative identifiers
 
@@ -8,10 +8,14 @@ Last updated: **2026-08-07 23:26 UTC**
 RECORDED_DATE=2026-08-07
 PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_HEAD=73b2306b5843f3396823ce815e96051abf78cf50
-GITHUB_MAIN=6b437179cc58021aa358b1d0b04c121d9304c660
+GITHUB_MAIN_AT_PHASE2_RUNNER_MERGE=91f81ddf28e6b0fadfa2e87a3f71f9464c962073
 PHASE1_PR=64
 PHASE1_FINAL_HEAD=ff77b2cc05b4c0bffe0ac13893ae6431264e08d8
 PHASE1_MERGE=6b437179cc58021aa358b1d0b04c121d9304c660
+PHASE2_RUNNER_PR=66
+PHASE2_RUNNER_FINAL_HEAD=a3193eacb5450c143a459acb456037ab3833962c
+PHASE2_RUNNER_MERGE=91f81ddf28e6b0fadfa2e87a3f71f9464c962073
+PHASE2_RUNNER_BLOB=bed536931026231956536543b914703e7ee096d2
 CURRENT_NATIVE_MANAGER_PID=31140
 CURRENT_SERVICE_DAEMON_PIDFILE=31140
 ```
@@ -21,16 +25,17 @@ CURRENT_SERVICE_DAEMON_PIDFILE=31140
 ```text
 HISTORICAL_DATA_PHASE=CLOSED_PASS
 DETERMINISTIC_REPLAY_HARNESS_PHASE=CLOSED_PASS
-FULL_JUNE_JULY_REPLAY_PHASE=NEXT
+FULL_JUNE_JULY_REPLAY_EXECUTION_PHASE=CLOSED_PASS
+OUTCOME_MATCH_AND_ABC_COMPARISON_PHASE=NEXT
 ROBUSTNESS_FINAL_VERDICT_PHASE=PENDING
 PRODUCTION_STRATEGY_MUTATION_ALLOWED=NO
 ```
 
-BotA can emit signals. The current investigation is signal quality/calibration, not basic Telegram transport or historical-data availability.
+BotA can emit signals. The current investigation is signal quality/calibration, not basic Telegram transport, historical-data availability, or replay determinism.
 
 ## Runtime and live scope
 
-Latest verified effective settings:
+Latest verified effective settings remain:
 
 ```text
 manager_count=1
@@ -54,7 +59,7 @@ TELEGRAM_ENABLED=1
 
 Runtime ownership remains degraded, but it is not the current signal-quality bottleneck. Only two pairs are live.
 
-## Proven signal funnel
+## Proven historical signal funnel
 
 ```text
 1427 valid BUY/SELL
@@ -75,9 +80,9 @@ Retained accepted-to-Telegram outcomes:
 
 Cooldown audit showed all 38 retained cooldown blocks were non-exact updates; this does not prove they were independent trades and does not justify removing cooldown wholesale.
 
-## Outcome evidence motivating replay
+## Published outcome evidence motivating calibration work
 
-Supabase BotA M15 published outcomes on/after 2026-06-01:
+Supabase BotA M15 outcomes in `[2026-06-01, 2026-08-01)` were re-queried after the deterministic replay pass and remain:
 
 ```text
 TOTAL=13
@@ -87,32 +92,28 @@ CANCELLED=1
 TOTAL_PIPS=-71.40
 ```
 
-March local ledger joined 51/51 to score components:
+The exact 13 rows are the database truth to be frozen for the next matching phase. Supabase `created_at` must **not** be used as the sole replay identity key because publication time can differ from watcher decision time.
+
+Earlier evidence:
 
 ```text
-BASELINE: N=51 W=13 L=38 PIPS=-264.1
-ADX<30: N=17 W=9 L=8 PIPS=+98.0
-SCORE>=70 + ADX<30: N=12 W=9 L=3 PIPS=+174.2
-SCORE>=70 + ADX<30 + NO_EXTREME: N=7 W=7 L=0 PIPS=+171.0
+MARCH_BASELINE: N=51 W=13 L=38 PIPS=-264.1
+MARCH_ADX_LT30: N=17 W=9 L=8 PIPS=+98.0
+MARCH_SCORE70_ADX_LT30: N=12 W=9 L=3 PIPS=+174.2
+MARCH_SCORE70_ADX_LT30_NO_EXTREME: N=7 W=7 L=0 PIPS=+171.0
+
+JUNE_JULY_OLD_MATCHED_BASELINE: N=9 W=2 L=7 PIPS=-70.2
+JUNE_JULY_OLD_SCORE70_ADX_LT30: N=5 W=2 L=3 PIPS=+13.1
+JUNE_JULY_OLD_SCORE70_ADX_LT30_NO_EXTREME: N=4 W=2 L=2 PIPS=+28.9
+JUNE_JULY_OLD_ADX_GTE30: 0W / 4L / -83.3 pips
+OLD_MATCH_RATE=69.2%
 ```
 
-The 7/7 March subgroup is explicitly treated as overfit-risk, not as a 100%-win strategy claim.
-
-Later June-July component cross-check recovered 9/13 published signals:
-
-```text
-MATCHED_BASELINE: N=9 W=2 L=7 PIPS=-70.2
-SCORE>=70 + ADX<30: N=5 W=2 L=3 PIPS=+13.1
-SCORE>=70 + ADX<30 + NO_EXTREME: N=4 W=2 L=2 PIPS=+28.9
-ADX>=30 within matched sample: 0W / 4L / -83.3 pips
-MATCH_RATE=69.2%
-```
-
-This is enough to justify replay-testing ADX/RSI calibration but not enough for production approval.
+The March 7/7 subgroup remains explicitly overfit-risk. The older 9/13 June-July component match is superseded as a completeness target by the deterministic event ledger but remains historical evidence.
 
 ## Frozen candidate policies
 
-These were fixed before observing full June-July replay results:
+These were fixed before observing the full June-July replay counts:
 
 ```text
 A = current production acceptance
@@ -125,24 +126,7 @@ BUY  extreme RSI >=70
 
 Do not move these thresholds after seeing replay results and then describe the result as the original test.
 
-## Historical-data phase — closed PASS
-
-Retained rolling live data was insufficient for full June-July replay. The immutable acquisition package was built and verified through PRs #57, #59, #60, #61 and #62.
-
-Relevant later merge identifiers:
-
-```text
-PR #60 provider-aligned leading candle fix=8e746e554b1d754f9e427a80eab3cc694871dc08
-PR #61 transient transport retry fix=ce7d2bc097f2130f663193d49e5e97c62bcf2095
-PR #62 reusable replay dataset verifier=be8ab1cc903f8c8b88c1c6fa7a358348f5786c1b
-```
-
-Two failed immutable roots remain forensic evidence:
-
-```text
-data/replay/oanda-20260601-20260801-20260807/
-data/replay/oanda-warmup-20240101-20260801-20260807-r2/
-```
+## Historical-data phase — CLOSED PASS
 
 Canonical successful replay input:
 
@@ -151,17 +135,7 @@ DATASET_ID=oanda-warmup-20240101-20260801-20260807-r3
 RAW_RANGE=[2024-01-01T00:00:00Z,2026-08-01T00:00:00Z)
 EVALUATION_RANGE=[2026-06-01T00:00:00Z,2026-08-01T00:00:00Z)
 REPLAY_DATASET_ELIGIBLE=YES
-```
-
-Pinned acquisition-source proof:
-
-```text
-SOURCE_COMMIT=be8ab1cc903f8c8b88c1c6fa7a358348f5786c1b
-COLLECTOR_EXPECTED_BLOB=e03e76ee3493b34e50ab88cd9df2ba30ce007f43
-COLLECTOR_ACTUAL_BLOB=e03e76ee3493b34e50ab88cd9df2ba30ce007f43
-VERIFIER_EXPECTED_BLOB=04dff84cbbd1a86a5508282f09b12726744778eb
-VERIFIER_ACTUAL_BLOB=04dff84cbbd1a86a5508282f09b12726744778eb
-SOURCE_INTEGRITY=PASS
+DATASET_MANIFEST_SHA256=e0033c797fc561935beebd27eaa275c0c659ccaac93acfaa2309abf8354ecf2f
 ```
 
 Final r3 integrity verdict:
@@ -180,74 +154,34 @@ ACQUISITION_STATUS=PASS
 REPLAY_DATASET_ELIGIBLE=YES
 ```
 
-Per-stream coverage:
+Two earlier failed immutable roots remain forensic evidence and must not be deleted or reused:
 
 ```text
-EURUSD D1  rows=670   warmup=626   evaluation=44   requests=1  attempts=1
-EURUSD H1  rows=16078 warmup=15001 evaluation=1077 requests=6  attempts=6
-EURUSD H4  rows=4020  warmup=3751  evaluation=269  requests=2  attempts=2
-EURUSD M15 rows=64309 warmup=60001 evaluation=4308 requests=21 attempts=21
-GBPUSD D1  rows=670   warmup=626   evaluation=44   requests=1  attempts=1
-GBPUSD H1  rows=16078 warmup=15001 evaluation=1077 requests=6  attempts=6
-GBPUSD H4  rows=4020  warmup=3751  evaluation=269  requests=2  attempts=2
-GBPUSD M15 rows=64306 warmup=59998 evaluation=4308 requests=21 attempts=21
+data/replay/oanda-20260601-20260801-20260807/
+data/replay/oanda-warmup-20240101-20260801-20260807-r2/
 ```
 
-All r3 provider requests completed on their first HTTP attempt. Do not reacquire another June-July dataset unless r3 itself is later proven corrupt.
+Do not reacquire another June-July dataset unless r3 itself is proven corrupt.
 
-## Deterministic replay harness — Phase 1 closed PASS
+## Deterministic replay harness — Phase 1 CLOSED PASS
 
-PR #64 introduced:
+PR #64 introduced the reviewed deterministic replay implementation:
 
 ```text
 tools/replay_semantics.py
 tools/deterministic_replay.py
 tests/test_deterministic_replay.py
 audits/DETERMINISTIC_REPLAY_HARNESS_2026-08-07.md
+audits/DETERMINISTIC_REPLAY_PHASE1_PROOF_2026-08-07.md
 ```
 
-Final immutable proof:
+Immutable Phase-1 provenance:
 
 ```text
 PR=64
 FINAL_PR_HEAD=ff77b2cc05b4c0bffe0ac13893ae6431264e08d8
 MERGE_COMMIT=6b437179cc58021aa358b1d0b04c121d9304c660
-MAIN_AFTER_MERGE=6b437179cc58021aa358b1d0b04c121d9304c660
-CHANGED_FILES=7
-BEHIND_MAIN_BEFORE_MERGE=0
 ```
-
-Exact final-head gates:
-
-```text
-HISTORICAL_AND_REPLAY_CI=PASS
-CI_RUN_NUMBER=39
-CI_RUN_ID=31226834369
-
-SECURITY_SCAN=PASS
-SECURITY_RUN_NUMBER=1065
-SECURITY_RUN_ID=31226834370
-
-DEEPSOURCE_PYTHON=PASS
-DEEPSOURCE_SHELL=PASS
-DEEPSOURCE_SECRETS=PASS
-CODERABBIT=SUCCESS
-
-SONAR_CHECK_ID=93022819471
-SONAR_QUALITY_GATE=PASS
-SONAR_NEW_ISSUES=0
-SONAR_SECURITY_HOTSPOTS=0
-```
-
-All final review threads were resolved before merge. The merge was executed with `expected_head_sha=ff77b2cc05b4c0bffe0ac13893ae6431264e08d8`.
-
-Detailed immutable proof:
-
-```text
-audits/DETERMINISTIC_REPLAY_PHASE1_PROOF_2026-08-07.md
-```
-
-## Replay fidelity contract
 
 Replay grade:
 
@@ -255,38 +189,118 @@ Replay grade:
 DETERMINISTIC_PRODUCTION_RULES_WITH_PROVIDER_SUBSTITUTION
 ```
 
-The harness:
+The harness uses completed candles only, reconstructs historical UTC market-hours/session semantics, reuses production indicator/quality/SR math, reproduces the current 1.0 ATR pullback buffer and ADX<20 behavior, reproduces H1/H4/D1 fusion semantics, and performs no live-provider/Telegram/Supabase/service/cron/cooldown/production-cache mutation.
 
-- uses completed candles only; no future H1/H4/D1 candle is exposed to an earlier M15 decision;
-- reuses production `build_indicators.py`, `quality_filter.py` and `sr_score.py` math;
-- reconstructs historical UTC market-hours and session-score semantics;
-- reproduces current 1.0 ATR pullback buffer;
-- reproduces ADX<20 hard HOLD and current scoring components;
-- preserves the production ADX-block numeric `volatility=0.0` quirk;
-- reproduces H1 neutral/opposite logic and H4+D1 veto structure;
-- performs no provider, Telegram, Supabase, service, cron, cooldown, production-cache or strategy mutation.
+Exact historical `emit_snapshot.py` network responses were not retained; verified OANDA H4/D1 bundles are used with the same vote formula and the provider substitution is explicit. Historical D1 runtime-cache values are not established in tracked evidence, so the baseline replay preserves production fail-open `ANY` semantics.
 
-Exact historical `emit_snapshot.py` TwelveData/Yahoo responses were not retained. Replay therefore applies the same vote formula to verified OANDA H4/D1 bundles and declares that provider substitution explicitly.
+## Deterministic full execution — Phase 2 CLOSED PASS
 
-Historical `cache/d1_trend_<PAIR>.json` values/writer are not established in tracked evidence. Baseline replay uses the scoring engine's fail-open `ANY`; EMA is sensitivity-only.
-
-## Pinned production-source provenance
-
-Replay verifies these source Git object IDs before executing:
+PR #66 added the reusable reviewed execution wrapper:
 
 ```text
-tools/scoring_engine.sh      09c42362a5c3c679696e86d4131ce5dfabd86608
-tools/m15_h1_fusion.sh       c1de0312ed928f870b9a45df109b730d30888ee7
-tools/quality_filter.py       18b76f908652d483c115c930373972836cea81dc
-tools/build_indicators.py     2abce4a325d6d9da8bb0958b97a651d4288e1792
-tools/sr_score.py             616b996a8ce439a19483762645a2247ca96fd066
-tools/market_open.sh          a73ca97f3a63c3245311585e231e5e69eaffc506
-tools/emit_snapshot.py        425c9adace57956981cf7e3111fd5df504c4f1ca
+tools/run_phase2_determinism.sh
 ```
 
-`tools/deterministic_replay.py` resolves Git to an absolute executable and uses `git hash-object --no-filters` to compare the actual source files against this map before replay. It also re-runs the canonical dataset verifier and records SHA-256 of the exact r3 `manifest.json` bytes.
+Final PR #66 exact-head gates:
 
-## New live-code finding from Phase 1
+```text
+FINAL_HEAD=a3193eacb5450c143a459acb456037ab3833962c
+HISTORICAL_AND_REPLAY_CI=PASS
+CI_RUN_NUMBER=46
+SECURITY_SCAN=PASS
+SECURITY_RUN_NUMBER=1085
+DEEPSOURCE_PYTHON=PASS
+DEEPSOURCE_SHELL=PASS
+DEEPSOURCE_SECRETS=PASS
+SONAR_QUALITY_GATE=PASS
+SONAR_NEW_ISSUES=0
+SONAR_SECURITY_HOTSPOTS=0
+CODERABBIT_FINAL_STATUS=SUCCESS_RATE_LIMITED
+MERGE_COMMIT=91f81ddf28e6b0fadfa2e87a3f71f9464c962073
+```
+
+CodeRabbit's final status was rate-limited and is not treated as substantive final review evidence. Earlier substantive CodeRabbit findings on failure exit semantics, dependency verification, signal handling, and atomic/exclusive publication were incorporated before the final clean head.
+
+The phone downloaded the merged runner and verified its exact blob before execution:
+
+```text
+RUNNER_EXPECTED_BLOB=bed536931026231956536543b914703e7ee096d2
+RUNNER_ACTUAL_BLOB=bed536931026231956536543b914703e7ee096d2
+RUNNER_INTEGRITY=PASS
+DEVICE_UTC=2026-08-07 23:46:14 UTC
+```
+
+Every downloaded replay dependency matched its reviewed Git blob ID and:
+
+```text
+REPLAY_SOURCE_INTEGRITY=PASS
+PRODUCTION_SOURCE_BLOBS_MATCH=YES
+```
+
+The full June-July replay was executed twice:
+
+```text
+RUN1_RC=0
+RUN2_RC=0
+RUN1_EVENTS_SHA256=05089e6d97e4ab9f3a522d9ec1188c24e69637bf048f1cd1403f23772ec8dabc
+RUN2_EVENTS_SHA256=05089e6d97e4ab9f3a522d9ec1188c24e69637bf048f1cd1403f23772ec8dabc
+EVENT_BYTES_IDENTICAL=YES
+RUN1_SUMMARY_SHA256=f00e42962dd08f7aef7f5e2ecb5d3475d57bbca8abc3bce9f4d2d0d70b903594
+RUN2_SUMMARY_SHA256=f00e42962dd08f7aef7f5e2ecb5d3475d57bbca8abc3bce9f4d2d0d70b903594
+SUMMARY_BYTES_IDENTICAL=YES
+PHASE2_DETERMINISM_GATE=PASS
+```
+
+Canonical local result:
+
+```text
+CANONICAL_REPLAY_RESULT=data/replay_results/phase2-june-july-pr64
+REPLAY_STATUS=COMPLETE
+REPLAY_GRADE=DETERMINISTIC_PRODUCTION_RULES_WITH_PROVIDER_SUBSTITUTION
+DECISION_ROWS=8618
+```
+
+Frozen-policy acceptance counts:
+
+```text
+POLICY_A_ACCEPTED=105
+POLICY_B_ACCEPTED=51
+POLICY_C_ACCEPTED=45
+```
+
+Replay funnel:
+
+```text
+ACCEPTED=105
+H1_CONFIRM=461
+H4_D1_CONFIRM=10
+M15_SETUP_OR_SCORE=4104
+MARKET_CLOSED=3938
+TOTAL=8618
+```
+
+These are reconstruction counts only. They do not establish trade profitability.
+
+Isolation proof:
+
+```text
+PRODUCTION_CACHE_SHA256_BEFORE=8d407d175e23929dd3ff2c898ee994670ca1057a2dfdfd0c3c61acc91fbb0847
+PRODUCTION_CACHE_SHA256_AFTER=8d407d175e23929dd3ff2c898ee994670ca1057a2dfdfd0c3c61acc91fbb0847
+PRODUCTION_CACHE_UNCHANGED=YES
+TRACKED_WORKTREE_UNCHANGED=YES
+PRODUCTION_STRATEGY_MUTATION=NO
+TELEGRAM_MUTATION=NO
+SUPABASE_MUTATION=NO
+SERVICE_CRON_MUTATION=NO
+```
+
+Detailed proof:
+
+```text
+audits/DETERMINISTIC_REPLAY_PHASE2_EXECUTION_2026-08-07.md
+```
+
+## New live-code finding preserved by replay
 
 Current `m15_h1_fusion.sh` reads top-level:
 
@@ -300,7 +314,7 @@ Replay reproduces this behavior. Production is **not** changed yet.
 
 ## Scope lock
 
-Until replay + robustness evidence completes:
+Until outcome matching plus robustness/holdout evidence completes:
 
 ```text
 DO_NOT_LOWER_SCORE_FLOOR=YES
@@ -322,13 +336,14 @@ Canonical workflow: `docs/FORENSIC_OPERATING_MODEL.md`.
 ```text
 GitHub connector   -> code/history/docs/tests
 Supabase connector -> published signal/outcome truth
-Phone/Termux       -> runtime-only state, credentials, local-only evidence
+Phone/Termux       -> runtime-only state, credentials, local-only immutable data/results
 ```
 
-Do not re-probe facts already captured in canonical audits. Reusable tools replace disposable shell/Python probes.
+Do not re-probe facts already captured in canonical audits. Reusable reviewed tools replace disposable shell/Python probes.
 
 ## Key evidence
 
+- `audits/DETERMINISTIC_REPLAY_PHASE2_EXECUTION_2026-08-07.md`
 - `audits/DETERMINISTIC_REPLAY_PHASE1_PROOF_2026-08-07.md`
 - `audits/DETERMINISTIC_REPLAY_HARNESS_2026-08-07.md`
 - `audits/HISTORICAL_CANDLE_ACQUISITION_2026-08-07.md`
@@ -343,19 +358,28 @@ Do not re-probe facts already captured in canonical audits. Reusable tools repla
 - `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
 - `docs/FORENSIC_OPERATING_MODEL.md`
 
-## Exactly one next action — Phase 2 deterministic execution gate
+## Exactly one next action — outcome matching and frozen A/B/C comparison
 
-Run the exact merged replay harness **twice** against canonical r3 for the frozen June-July interval and require identical event bytes before interpreting strategy performance:
+Build and review one reusable tool that consumes the canonical local deterministic event ledger:
 
 ```text
-RUN1_EVENTS_SHA256 == RUN2_EVENTS_SHA256
-RUN1_SUMMARY_CORE == RUN2_SUMMARY_CORE
-EXPECTED_PRODUCTION_SOURCE_BLOBS == OBSERVED_PRODUCTION_SOURCE_BLOBS
-DATASET_MANIFEST_SHA256_PRESENT=YES
-PRODUCTION_CACHE_UNCHANGED=YES
-TRACKED_WORKTREE_UNCHANGED=YES
+data/replay_results/phase2-june-july-pr64/events.jsonl
 ```
 
-If determinism passes, compare replay reconstruction to known published signal evidence and evaluate A/B/C outcomes. That is Phase 2.
+and a frozen snapshot of the 13 Supabase M15 outcomes in the evaluation interval.
 
-No production strategy mutation before Phase 2 and the robustness/final-verdict phase.
+Matching contract must:
+
+```text
+PAIR_MATCH=REQUIRED
+DIRECTION_MATCH=REQUIRED
+ENTRY_PRICE_CONSISTENCY=REQUIRED
+BOUNDED_TEMPORAL_CONSISTENCY=REQUIRED
+CREATED_AT_AS_SOLE_KEY=FORBIDDEN
+AMBIGUOUS_MATCH=REPORT_NOT_FORCE
+ONE_REPLAY_EVENT_PER_PUBLISHED_SIGNAL=REQUIRED
+```
+
+Only after the matching gate is explicit/reproducible may observed outcome statistics be calculated for frozen policies A/B/C.
+
+No production strategy mutation before that comparison and the robustness/final-verdict phase.

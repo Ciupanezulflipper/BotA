@@ -1,6 +1,6 @@
 # BotA AI Start Here
 
-Last updated: **2026-08-07 20:45 UTC**
+Last updated: **2026-08-07 23:46 UTC**
 
 Read this before proposing BotA commands, code, service, strategy, Telegram, provider, Supabase, replay, or deployment changes.
 
@@ -10,6 +10,7 @@ Read this before proposing BotA commands, code, service, strategy, Telegram, pro
 RECORDED_DATE=2026-08-07
 PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_HEAD=73b2306b5843f3396823ce815e96051abf78cf50
+GITHUB_MAIN_AT_PHASE2_RUNNER_MERGE=91f81ddf28e6b0fadfa2e87a3f71f9464c962073
 LIVE_WATCHER=RUNNING
 LIVE_PAIRS=EURUSD_GBPUSD_ONLY
 LIVE_TIMEFRAME=M15
@@ -19,144 +20,156 @@ TELEGRAM_MIN_SCORE=70
 TELEGRAM_COOLDOWN_SECONDS=1800
 DRY_RUN_MODE=0
 TELEGRAM_ENABLED=1
-BUY_SELL_VALID_ROWS=1427
-BUY_SELL_ACCEPTED=110
-BUY_SELL_REJECTED=1317
-REJECTED_SCORE_GATE=903
-REJECTED_H1_NEUTRAL=410
-REJECTED_H4_D1_OPPOSE=4
-TELEGRAM_SENT=61
-TELEGRAM_COOLDOWN=38
-TELEGRAM_SCORE_GATE=6
-TELEGRAM_FAILED=1
-RECENT_PUBLISHED_SIGNALS=13
-RECENT_WINS=3
-RECENT_LOSSES=9
-RECENT_CANCELLED=1
-RECENT_TOTAL_PIPS=-71.40
-MARCH_LEDGER_ROWS=51
-MARCH_ADX_LT30_PIPS=+98.0
-TEMPORAL_PUBLISHED=13
-TEMPORAL_MATCHED=9
-TEMPORAL_MATCH_RATE=69.2_PERCENT
-TEMPORAL_ADX_LT30_PIPS=+13.1
-TEMPORAL_ADX_GTE30_WINS=0
-TEMPORAL_ADX_GTE30_LOSSES=4
-LOCAL_SIGNAL_RETENTION_GAP=CONFIRMED
-LOCAL_M15_JUNE_JULY_COVERAGE=NO
-LOCAL_H1_JUNE_JULY_COVERAGE=NO
-LOCAL_H4_JUNE_JULY_COVERAGE=YES
-LOCAL_D1_JUNE_JULY_COVERAGE=YES
-HISTORICAL_COLLECTOR=AVAILABLE_ON_THIS_REVISION
-HISTORICAL_DATASET_ACQUIRED=NO
-STRATEGY_MUTATION_ALLOWED=NO_PENDING_TRUE_REPLAY
+HISTORICAL_DATA_PHASE=CLOSED_PASS
+DETERMINISTIC_REPLAY_HARNESS_PHASE=CLOSED_PASS
+FULL_JUNE_JULY_REPLAY_EXECUTION=CLOSED_PASS
+OUTCOME_MATCH_AND_ABC_COMPARISON=NEXT
+PRODUCTION_STRATEGY_MUTATION_ALLOWED=NO
 ```
 
 ## Read first
 
 1. `CONTINUITY_CURRENT.md` — current state and exactly one next action.
-2. `docs/FORENSIC_OPERATING_MODEL.md` — mandatory connector-first workflow.
-3. `audits/HISTORICAL_CANDLE_ACQUISITION_2026-08-07.md` — collector safety/data contract.
-4. `audits/RAW_CANDLE_REPLAY_GAP_2026-08-07.md` — why historical acquisition is required.
+2. `audits/DETERMINISTIC_REPLAY_PHASE2_EXECUTION_2026-08-07.md` — canonical Phase-2 execution proof.
+3. `audits/DETERMINISTIC_REPLAY_PHASE1_PROOF_2026-08-07.md` — reviewed replay-harness provenance.
+4. `docs/FORENSIC_OPERATING_MODEL.md` — mandatory connector-first workflow.
 
-Older dated audits remain evidence. Do not restart closed investigative branches without new contradictory evidence.
+Older dated audits remain evidence. Do not restart closed acquisition/runtime branches without new contradictory evidence.
 
 ## Current diagnosis
 
-BotA can produce BUY/SELL decisions and Telegram can send them. The current problem is signal quality/calibration, not basic transport.
+BotA can emit BUY/SELL decisions and Telegram can send them. The investigation is now about **signal quality/calibration**, not basic transport, historical-data availability, or replay determinism.
 
-ADX is the strongest replay candidate found so far:
-
-```text
-March baseline:          -264.1 pips
-March ADX<30:             +98.0 pips
-Later matched baseline:   -70.2 pips
-Later matched ADX<30:     +13.1 pips
-Later matched ADX>=30:     0W / 4L / -83.3 pips
-```
-
-This is not production approval. The later component sample is only 9/13 because local signal rows were not retained for four published outcomes.
-
-## Historical data acquisition
-
-Use only:
+Known published outcome evidence for BotA M15 on/after 2026-06-01 remains poor:
 
 ```text
-tools/fetch_historical_candles.py
+SUPABASE_JUNE_JULY_TOTAL=13
+WINS=3
+LOSSES=9
+CANCELLED=1
+TOTAL_PIPS=-71.40
 ```
 
-Contract:
+Earlier March and partial June-July component audits made ADX/RSI calibration worth testing, but did not authorize production changes.
+
+## Canonical historical dataset
 
 ```text
-preview/no-network by default
---execute required for provider GETs
-OANDA price=M
-EURUSD GBPUSD
-M15 H1 H4 D1
-output=data/replay/<dataset-id>
-existing dataset never overwritten
-raw provider responses preserved
-429/5xx retry attempts preserved separately
-bounded retries=3
-SHA-256 manifest emitted
-production data/candles cache not touched
+DATASET_ID=oanda-warmup-20240101-20260801-20260807-r3
+RAW_RANGE=[2024-01-01T00:00:00Z,2026-08-01T00:00:00Z)
+EVALUATION_RANGE=[2026-06-01T00:00:00Z,2026-08-01T00:00:00Z)
+REPLAY_DATASET_ELIGIBLE=YES
+DATASET_MANIFEST_SHA256=e0033c797fc561935beebd27eaa275c0c659ccaac93acfaa2309abf8354ecf2f
 ```
 
-The required first dataset is:
+Do not reacquire this interval unless r3 itself is proven corrupt. Two earlier failed immutable acquisition roots remain forensic evidence and must not be deleted/reused.
+
+## Deterministic replay result
+
+Reviewed replay source:
 
 ```text
-dataset-id=oanda-20260601-20260801-20260807
-range=[2026-06-01T00:00:00Z, 2026-08-01T00:00:00Z)
-pairs=EURUSD GBPUSD
-timeframes=M15 H1 H4 D1
+PHASE1_REPLAY_MERGE=6b437179cc58021aa358b1d0b04c121d9304c660
+PHASE2_RUNNER_PR=66
+PHASE2_RUNNER_MERGE=91f81ddf28e6b0fadfa2e87a3f71f9464c962073
+PHASE2_RUNNER_BLOB=bed536931026231956536543b914703e7ee096d2
+CANONICAL_REPLAY_RESULT=data/replay_results/phase2-june-july-pr64
 ```
 
-Canonical acquisition command once the collector is available on the phone:
+The phone executed the merged runner twice against r3. Exact proof:
 
-```bash
-python3 tools/fetch_historical_candles.py \
-  --dataset-id oanda-20260601-20260801-20260807 \
-  --start-utc 2026-06-01T00:00:00Z \
-  --end-utc 2026-08-01T00:00:00Z \
-  --pairs EURUSD GBPUSD \
-  --timeframes M15 H1 H4 D1 \
-  --execute
+```text
+RUN1_RC=0
+RUN2_RC=0
+RUN1_EVENTS_SHA256=05089e6d97e4ab9f3a522d9ec1188c24e69637bf048f1cd1403f23772ec8dabc
+RUN2_EVENTS_SHA256=05089e6d97e4ab9f3a522d9ec1188c24e69637bf048f1cd1403f23772ec8dabc
+RUN1_SUMMARY_SHA256=f00e42962dd08f7aef7f5e2ecb5d3475d57bbca8abc3bce9f4d2d0d70b903594
+RUN2_SUMMARY_SHA256=f00e42962dd08f7aef7f5e2ecb5d3475d57bbca8abc3bce9f4d2d0d70b903594
+EVENT_BYTES_IDENTICAL=YES
+SUMMARY_BYTES_IDENTICAL=YES
+PRODUCTION_SOURCE_BLOBS_MATCH=YES
+PRODUCTION_CACHE_UNCHANGED=YES
+TRACKED_WORKTREE_UNCHANGED=YES
+PHASE2_DETERMINISM_GATE=PASS
 ```
 
-Do not use `tools/data_fetch_candles.sh` for replay history; it is the rolling production fetcher and writes live cache paths.
+Replay grade:
 
-## PR #6 warning
+```text
+DETERMINISTIC_PRODUCTION_RULES_WITH_PROVIDER_SUBSTITUTION
+```
 
-Draft PR #6 is historical design evidence only. GitHub reports 129 changed files, including out-of-scope canonical/runtime paths. Do not merge or cherry-pick it wholesale. The current collector is the clean independently tested extraction.
+The known provider-substitution and D1 fail-open limitations remain explicit; deterministic does not mean perfect historical identity to every unretained live network/cache input.
+
+## Frozen A/B/C policies
+
+These policies were fixed before observing the full June-July replay counts:
+
+```text
+A = current production acceptance
+B = A AND score >=70 AND ADX <30
+C = B AND no extreme RSI
+SELL extreme RSI <=30
+BUY  extreme RSI >=70
+```
+
+Full deterministic reconstruction produced:
+
+```text
+DECISION_ROWS=8618
+POLICY_A_ACCEPTED=105
+POLICY_B_ACCEPTED=51
+POLICY_C_ACCEPTED=45
+REJECTION_STAGES={ACCEPTED:105,H1_CONFIRM:461,H4_D1_CONFIRM:10,M15_SETUP_OR_SCORE:4104,MARKET_CLOSED:3938}
+```
+
+These are acceptance counts, **not performance results**. Do not infer that B or C is better merely because it accepts fewer events.
+
+## Important production-code finding preserved by replay
+
+Current `m15_h1_fusion.sh` reads top-level `.adx // 0` for the H1-opposite override, while current scoring JSON does not emit a top-level `adx` field. Therefore the intended `ADX>=40` opposite-trend override receives zero and cannot activate under the inspected production contract.
+
+Replay reproduces this behavior. Do not fix production yet; outcome/robustness evidence comes first.
 
 ## Mandatory source hierarchy
 
 ```text
 GitHub connector   -> code, commits, PRs, docs, tests
 Supabase connector -> published signal/outcome/database truth
-Phone/Termux       -> runtime-only state, credentials, local-only logs/data
+Phone/Termux       -> runtime-only state, credentials, local-only immutable data/results
 ```
 
-Do not ask the user to run a phone probe for information already obtainable through a connector.
+Do not ask for ad-hoc phone probes for facts already obtainable through connectors. Reusable reviewed tools are preferred when local-only evidence must be consumed.
 
 ## Scope lock
 
-Do not lower score/H1/Telegram floors, remove cooldown, add a third pair, or modify ADX/RSI production logic yet.
+Until outcome matching plus robustness/holdout evidence completes:
+
+```text
+DO_NOT_LOWER_SCORE_FLOOR=YES
+DO_NOT_LOWER_H1_FLOOR=YES
+DO_NOT_CHANGE_TELEGRAM_FLOORS=YES
+DO_NOT_REMOVE_COOLDOWN=YES
+DO_NOT_ADD_THIRD_PAIR=YES
+DO_NOT_MUTATE_ADX_RULE=YES
+DO_NOT_MUTATE_RSI_RULE=YES
+DO_NOT_FIX_H1_ADX_OVERRIDE_IN_PRODUCTION_YET=YES
+```
 
 Do not use `tools/backtest_bota.py` as production-rule validation because its strategy semantics differ from the live watcher.
 
-Never push directly to `main`. Use branch -> complete-file writes -> verified diff -> PR.
+Never push directly to `main`. Use branch -> complete-file writes -> verified diff -> PR -> exact-head gates -> merge.
 
-## Exactly one next action after merge
+## Exactly one next action
 
-Acquire the immutable June-July OANDA dataset on the phone and verify its manifest/checksums.
-
-Only after acquisition passes, build/run a deterministic replay of the live production semantics for the frozen policies:
+Build and review one reusable outcome-matching tool that consumes:
 
 ```text
-A = current production baseline
-B = score >=70 AND ADX <30
-C = score >=70 AND ADX <30 AND no extreme RSI
+data/replay_results/phase2-june-july-pr64/events.jsonl
 ```
 
-No production strategy mutation before that replay.
+and a frozen Supabase June-July outcome snapshot, then computes matched outcome statistics for policies A/B/C.
+
+Matching must not use Supabase `created_at` as a sole identity key. Require pair + direction and use bounded entry-price + temporal consistency; report ambiguity instead of forcing a match.
+
+No production strategy mutation before this comparison and the later robustness/final-verdict phase.
