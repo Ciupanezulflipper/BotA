@@ -102,12 +102,12 @@ emit_with_production_policy() {
   local policy_tool="${TOOLS}/production_signal_policy.py"
   local policy_json=""
 
-  if [[ -f "${policy_tool}" ]]; then
-    if policy_json="$(printf '%s\n' "${json}" | python3 "${policy_tool}" 2>>"${DEBUG_LOG}")" \
-      && [[ -n "${policy_json}" ]]; then
-      printf '%s\n' "${policy_json}"
-      return 0
-    fi
+  if [[ -f "${policy_tool}" ]] \
+    && policy_json="$(printf '%s\n' "${json}" | python3 "${policy_tool}" 2>>"${DEBUG_LOG}")" \
+    && [[ -n "${policy_json}" ]]
+  then
+    printf '%s\n' "${policy_json}"
+    return 0
   fi
 
   _log_error "production policy unavailable/failed for ${PAIR}; failing closed"
