@@ -9,11 +9,60 @@ import time
 from pathlib import Path
 from typing import Any
 
-REQUIRED_DECISIONS = ("EURUSD:M15", "GBPUSD:M15")
+# Safe production defaults. These are consulted only when neither the
+# PAIRS/TIMEFRAMES environment nor BOTA_REQUIRED_DECISIONS provides a
+# scope. They intentionally match the current three-pair production
+# configuration so health evaluation cannot silently drop USDJPY.
+DEFAULT_PAIRS = ("EURUSD", "GBPUSD", "USDJPY")
+DEFAULT_TIMEFRAMES = ("M15",)
+
 TERMINAL_COMPONENT_STATUSES = {"completed", "progress", "skipped_market_closed"}
 OPEN_MARKET_FAILURE_OUTCOMES = frozenset(
     {"CLOCK_GATE_FAILED", "INTERNAL_ERROR", "DATA_FETCH_FAILED"}
 )
+
+
+def _split_scope(raw: str) -> tuple[str, ...]:
+    """Return the whitespace/comma separated, upper-cased tokens in ``raw``."""
+    if not raw:
+        return ()
+    tokens = [item.strip().upper() for item in raw.replace(",", " ").split()]
+    return tuple(token for token in tokens if token)
+
+
+def required_decisions() -> tuple[str, ...]:
+    """Derive the required pair:timeframe scope from configuration.
+
+    Precedence:
+        1. ``BOTA_REQUIRED_DECISIONS`` — explicit comma/space list of
+           ``PAIR:TIMEFRAME`` entries, used verbatim.
+        2. Cartesian product of ``PAIRS`` x ``TIMEFRAMES`` when both are
+           set to non-empty values.
+        3. Cartesian product of ``DEFAULT_PAIRS`` x ``DEFAULT_TIMEFRAMES``.
+
+    A supplied but malformed configuration (e.g. ``PAIRS=""``) is treated
+    as absent and falls through to the next precedence rule; there is no
+    silent empty result — the evaluator would otherwise report healthy
+    without checking any decision at all.
+    """
+    explicit = os.environ.get("BOTA_REQUIRED_DECISIONS", "").strip()
+    if explicit:
+        entries = [item for item in _split_scope(explicit) if ":" in item]
+        if entries:
+            return tuple(entries)
+
+    pairs = _split_scope(os.environ.get("PAIRS", ""))
+    timeframes = _split_scope(os.environ.get("TIMEFRAMES", ""))
+    if not pairs:
+        pairs = DEFAULT_PAIRS
+    if not timeframes:
+        timeframes = DEFAULT_TIMEFRAMES
+    return tuple(f"{pair}:{timeframe}" for pair in pairs for timeframe in timeframes)
+
+
+# Backward-compatible module attribute used by callers that expect the old
+# tuple. It is intentionally re-computed lazily inside evaluate().
+REQUIRED_DECISIONS = required_decisions()
 
 
 def root_dir() -> Path:
@@ -155,7 +204,7 @@ def evaluate(market_open: bool) -> dict[str, Any]:
             raw_decisions if isinstance(raw_decisions, dict) else {}
         )
         maximum = int(os.environ.get("MAX_DECISION_AGE_SECS", "1500"))
-        for key in REQUIRED_DECISIONS:
+        for key in required_decisions():
             event = event_map(decisions, key)
             age = age_seconds(event, now_ns)
             outcome = str(event.get("outcome") or "missing")

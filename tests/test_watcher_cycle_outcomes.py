@@ -256,7 +256,7 @@ class HealthEvaluatorClockGateStuckTests(TemporaryBotARoot):
         # outcome). Note: emitting a decision also overwrites
         # state.components.watcher, which is why the component event must
         # come last.
-        for pair in ("EURUSD", "GBPUSD"):
+        for pair in ("EURUSD", "GBPUSD", "USDJPY"):
             subprocess.run(
                 [
                     sys.executable,

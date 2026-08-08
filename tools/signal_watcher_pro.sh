@@ -1030,11 +1030,26 @@ except Exception:
 }
 
 scan_once() {
-  # v2.0.3 — ship-mode: compute trusted server UTC before pair/tf loop
-  # Fail closed if server clock unavailable (phone clock unreliable on ship)
-  local tf pair _sv_epoch
-  _sv_epoch="$(compute_server_clock_epoch 2>/dev/null || echo 0)"
-  _sv_epoch="${_sv_epoch:-0}"
+  # v2.0.4 — ship-mode: compute trusted server UTC before pair/tf loop
+  # Fail closed if server clock unavailable (phone clock unreliable on ship).
+  #
+  # When invoked through tools/watcher_gated_cycle.sh, an already-trusted
+  # BOTA_SERVER_EPOCH is exported by the outer gate (which just probed the
+  # server clock to decide MARKET_OPEN vs MARKET_CLOSED). Re-probing here
+  # would add a redundant network dependency that can fail in isolation and
+  # turn a successfully gated cycle into a fail-closed skip. Reuse the
+  # inherited epoch when it is a plausible non-zero unix timestamp;
+  # otherwise fall back to the direct probe. Never trust the phone's local
+  # clock.
+  local tf pair _sv_epoch _inherited
+  _inherited="${BOTA_SERVER_EPOCH:-0}"
+  if [[ "${_inherited}" =~ ^[0-9]+$ ]] && (( _inherited > 1000000000 )); then
+    _sv_epoch="${_inherited}"
+    log "CLOCK" "server_clock_inherited BOTA_SERVER_EPOCH=${_sv_epoch}"
+  else
+    _sv_epoch="$(compute_server_clock_epoch 2>/dev/null || echo 0)"
+    _sv_epoch="${_sv_epoch:-0}"
+  fi
   if [[ "${_sv_epoch}" =~ ^[0-9]+$ ]] && (( _sv_epoch > 1000000000 )); then
     export BOTA_SERVER_EPOCH="${_sv_epoch}"
     log "CLOCK" "server_clock_ok BOTA_SERVER_EPOCH=${BOTA_SERVER_EPOCH}"
