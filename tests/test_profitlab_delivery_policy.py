@@ -10,7 +10,6 @@ import subprocess
 import sys
 import tempfile
 import unittest
-import urllib.error
 from pathlib import Path
 from unittest import mock
 
@@ -86,14 +85,18 @@ def alert_row(
     ]
 
 
-def make_root(base: Path) -> tuple[Path, Path, Path]:
+def make_root(
+    base: Path,
+    *,
+    header: list[str] | None = None,
+) -> tuple[Path, Path, Path]:
     root = base / "BotA"
     (root / "logs").mkdir(parents=True)
     (root / "state").mkdir(parents=True)
     (root / "tools").mkdir(parents=True)
     alerts = root / "logs" / "alerts.csv"
     with alerts.open("w", encoding="utf-8", newline="") as handle:
-        csv.writer(handle).writerow(HEADER)
+        csv.writer(handle).writerow(header or HEADER)
 
     publish_log = root / "publish.log"
     fake_publisher = root / "tools" / "fake_publisher.py"
@@ -116,8 +119,7 @@ sys.exit(1 if os.environ.get(\"PUBLISH_FAIL\") == \"1\" else 0)
 
 def append_rows(alerts: Path, *rows: list[str]) -> None:
     with alerts.open("a", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle)
-        writer.writerows(rows)
+        csv.writer(handle).writerows(rows)
 
 
 def run_worker(
@@ -193,6 +195,21 @@ class ProfitLabWorkerTests(unittest.TestCase):
         source = WORKER.read_text(encoding="utf-8")
         self.assertNotIn("TELEGRAM_", source)
 
+    def test_legacy_header_does_not_block_new_current_rows(self) -> None:
+        legacy_header = HEADER[:13]
+        with tempfile.TemporaryDirectory() as temporary:
+            root, alerts, publish_log = make_root(
+                Path(temporary),
+                header=legacy_header,
+            )
+            run_worker(root, publish_log, bootstrap=True)
+            append_rows(alerts, alert_row())
+            result = run_worker(root, publish_log)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("PROFITLAB_DELIVERY=PASS", result.stdout)
+            self.assertTrue(publish_log.exists())
+
     def test_rejected_and_non_green_rows_do_not_publish(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root, alerts, publish_log = make_root(Path(temporary))
@@ -241,18 +258,42 @@ class ProfitLabWorkerTests(unittest.TestCase):
             self.assertEqual(state_offset(root), alerts.stat().st_size)
 
 
-class FakeResponse:
-    def __init__(self, payload: bytes = b"") -> None:
+class FakeHTTPResponse:
+    def __init__(self, status: int, payload: bytes = b"") -> None:
+        self.status = status
         self.payload = payload
 
     def read(self) -> bytes:
         return self.payload
 
-    def __enter__(self) -> "FakeResponse":
-        return self
 
-    def __exit__(self, exc_type, exc, traceback) -> bool:
-        return False
+class FakeHTTPSConnection:
+    def __init__(self, responses: list[FakeHTTPResponse]) -> None:
+        self.responses = list(responses)
+        self.requests: list[dict[str, object]] = []
+        self.closed = False
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        body=None,
+        headers=None,
+    ) -> None:
+        self.requests.append(
+            {
+                "method": method,
+                "path": path,
+                "body": body,
+                "headers": headers or {},
+            }
+        )
+
+    def getresponse(self) -> FakeHTTPResponse:
+        return self.responses.pop(0)
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class SupabasePublisherTests(unittest.TestCase):
@@ -265,6 +306,9 @@ class SupabasePublisherTests(unittest.TestCase):
         return module
 
     def test_existing_active_signal_is_idempotent_success(self) -> None:
+        connection = FakeHTTPSConnection(
+            [FakeHTTPResponse(200, b'[{"id":"existing"}]')]
+        )
         with tempfile.TemporaryDirectory() as temporary:
             environment = {
                 "BOTA_ROOT": str(Path(temporary) / "BotA"),
@@ -273,10 +317,10 @@ class SupabasePublisherTests(unittest.TestCase):
             with mock.patch.dict(os.environ, environment, clear=False):
                 module = self.load_module()
                 with mock.patch.object(
-                    module.urllib.request,
-                    "urlopen",
-                    return_value=FakeResponse(b'[{"id":"existing"}]'),
-                ) as urlopen:
+                    module.http.client,
+                    "HTTPSConnection",
+                    return_value=connection,
+                ):
                     ok = module.publish(
                         "EURUSD",
                         "BUY",
@@ -288,10 +332,13 @@ class SupabasePublisherTests(unittest.TestCase):
                         "GREEN",
                     )
 
-            self.assertTrue(ok)
-            self.assertEqual(urlopen.call_count, 1)
+        self.assertTrue(ok)
+        self.assertEqual(len(connection.requests), 1)
+        self.assertEqual(connection.requests[0]["method"], "GET")
 
     def test_dedup_query_failure_fails_closed_without_insert(self) -> None:
+        connection = FakeHTTPSConnection([])
+        connection.request = mock.Mock(side_effect=OSError("offline"))
         with tempfile.TemporaryDirectory() as temporary:
             environment = {
                 "BOTA_ROOT": str(Path(temporary) / "BotA"),
@@ -300,10 +347,10 @@ class SupabasePublisherTests(unittest.TestCase):
             with mock.patch.dict(os.environ, environment, clear=False):
                 module = self.load_module()
                 with mock.patch.object(
-                    module.urllib.request,
-                    "urlopen",
-                    side_effect=urllib.error.URLError("offline"),
-                ) as urlopen:
+                    module.http.client,
+                    "HTTPSConnection",
+                    return_value=connection,
+                ) as connection_factory:
                     ok = module.publish(
                         "EURUSD",
                         "BUY",
@@ -315,18 +362,13 @@ class SupabasePublisherTests(unittest.TestCase):
                         "GREEN",
                     )
 
-            self.assertFalse(ok)
-            self.assertEqual(urlopen.call_count, 1)
+        self.assertFalse(ok)
+        self.assertEqual(connection_factory.call_count, 1)
+        self.assertEqual(connection.request.call_count, 1)
 
     def test_new_signal_queries_then_inserts_expected_payload(self) -> None:
-        requests = []
-
-        def fake_urlopen(request, timeout=10):
-            requests.append(request)
-            if len(requests) == 1:
-                return FakeResponse(b"[]")
-            return FakeResponse()
-
+        query_connection = FakeHTTPSConnection([FakeHTTPResponse(200, b"[]")])
+        insert_connection = FakeHTTPSConnection([FakeHTTPResponse(201, b"")])
         with tempfile.TemporaryDirectory() as temporary:
             environment = {
                 "BOTA_ROOT": str(Path(temporary) / "BotA"),
@@ -335,9 +377,9 @@ class SupabasePublisherTests(unittest.TestCase):
             with mock.patch.dict(os.environ, environment, clear=False):
                 module = self.load_module()
                 with mock.patch.object(
-                    module.urllib.request,
-                    "urlopen",
-                    side_effect=fake_urlopen,
+                    module.http.client,
+                    "HTTPSConnection",
+                    side_effect=[query_connection, insert_connection],
                 ):
                     ok = module.publish(
                         "GBPUSD",
@@ -351,8 +393,11 @@ class SupabasePublisherTests(unittest.TestCase):
                     )
 
         self.assertTrue(ok)
-        self.assertEqual(len(requests), 2)
-        payload = json.loads(requests[1].data.decode("utf-8"))
+        self.assertEqual(len(query_connection.requests), 1)
+        self.assertEqual(len(insert_connection.requests), 1)
+        request = insert_connection.requests[0]
+        self.assertEqual(request["method"], "POST")
+        payload = json.loads(request["body"].decode("utf-8"))
         self.assertEqual(payload["pair"], "GBPUSD")
         self.assertEqual(payload["direction"], "SELL")
         self.assertEqual(payload["signal_strength"], 5)
