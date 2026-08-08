@@ -68,7 +68,12 @@ def active_signal_exists(pair: str, key: str) -> bool | None:
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             rows = json.loads(response.read().decode("utf-8"))
-    except Exception as exc:  # noqa: BLE001 - network boundary must fail closed
+    except (
+        OSError,
+        TimeoutError,
+        ValueError,
+        urllib.error.URLError,
+    ) as exc:
         print(
             f"[supabase_publish] dedup check failed: {type(exc).__name__}",
             file=sys.stderr,
@@ -146,7 +151,7 @@ def publish(pair, direction, entry, sl, tp, score, tf, tier) -> bool:
                 file=sys.stderr,
             )
             return False
-        except Exception as exc:  # noqa: BLE001 - network boundary
+        except (OSError, TimeoutError, urllib.error.URLError) as exc:
             print(
                 f"[supabase_publish] publish failed: {type(exc).__name__}",
                 file=sys.stderr,
