@@ -11,6 +11,7 @@ on:
       - "tools/deterministic_replay.py"
       - "tools/run_phase2_determinism.sh"
       - "tools/compare_replay_outcomes.py"
+      - "tools/classify_replay_match_gaps.py"
       - "tools/scoring_engine.sh"
       - "tools/m15_h1_fusion.sh"
       - "tools/build_indicators.py"
@@ -22,6 +23,7 @@ on:
       - "tests/test_verify_replay_dataset.py"
       - "tests/test_deterministic_replay.py"
       - "tests/test_compare_replay_outcomes.py"
+      - "tests/test_classify_replay_match_gaps.py"
       - "audits/fixtures/supabase_bota_m15_20260601_20260801.json"
       - ".github/workflows/historical-candle-acquisition.yml"
   pull_request:
@@ -32,6 +34,7 @@ on:
       - "tools/deterministic_replay.py"
       - "tools/run_phase2_determinism.sh"
       - "tools/compare_replay_outcomes.py"
+      - "tools/classify_replay_match_gaps.py"
       - "tools/scoring_engine.sh"
       - "tools/m15_h1_fusion.sh"
       - "tools/build_indicators.py"
@@ -43,6 +46,7 @@ on:
       - "tests/test_verify_replay_dataset.py"
       - "tests/test_deterministic_replay.py"
       - "tests/test_compare_replay_outcomes.py"
+      - "tests/test_classify_replay_match_gaps.py"
       - "audits/fixtures/supabase_bota_m15_20260601_20260801.json"
       - ".github/workflows/historical-candle-acquisition.yml"
 
@@ -74,10 +78,12 @@ jobs:
             tools/replay_semantics.py \
             tools/deterministic_replay.py \
             tools/compare_replay_outcomes.py \
+            tools/classify_replay_match_gaps.py \
             tests/test_fetch_historical_candles.py \
             tests/test_verify_replay_dataset.py \
             tests/test_deterministic_replay.py \
-            tests/test_compare_replay_outcomes.py
+            tests/test_compare_replay_outcomes.py \
+            tests/test_classify_replay_match_gaps.py
       - name: Validate phase2 shell runner
         run: |
           bash -n tools/run_phase2_determinism.sh
@@ -88,7 +94,8 @@ jobs:
             tests/test_fetch_historical_candles.py \
             tests/test_verify_replay_dataset.py \
             tests/test_deterministic_replay.py \
-            tests/test_compare_replay_outcomes.py
+            tests/test_compare_replay_outcomes.py \
+            tests/test_classify_replay_match_gaps.py
       - name: Prove preview is no-network and non-mutating
         run: |
           python tools/fetch_historical_candles.py \
