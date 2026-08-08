@@ -40,8 +40,14 @@ def root_dir() -> Path:
     )
 
 
+# Compatibility seam retained for the historical offline test suite. Production
+# processes resolve this after BOTA_ROOT is loaded; tests may safely monkeypatch
+# the fixed cache root without weakening pair/path validation.
+CACHE_DIR = root_dir() / "cache"
+
+
 def cache_dir() -> Path:
-    return root_dir() / "cache"
+    return CACHE_DIR
 
 
 def record_progress(status: str, details: str = "") -> None:
