@@ -145,10 +145,10 @@ class ReplayMatchGapClassifierTests(unittest.TestCase):
         self.assertIsNotNone(result["nearest_same_direction_within_180m"])
 
     def test_exact_frozen_contract_candidate_fails_closed(self) -> None:
+        outcome = self._make_outcome()
+        events = [self._event(accepted=True)]
         with self.assertRaisesRegex(ValueError, "matcher inconsistency"):
-            classifier._classify_one(
-                self._make_outcome(), [self._event(accepted=True)]
-            )
+            classifier._classify_one(outcome, events)
 
     def test_canonical_comparison_contract_is_enforced(self) -> None:
         valid = {
