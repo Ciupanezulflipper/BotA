@@ -9,6 +9,7 @@ on:
       - "tools/verify_replay_dataset.py"
       - "tools/replay_semantics.py"
       - "tools/deterministic_replay.py"
+      - "tools/run_phase2_determinism.sh"
       - "tools/scoring_engine.sh"
       - "tools/m15_h1_fusion.sh"
       - "tools/build_indicators.py"
@@ -26,6 +27,7 @@ on:
       - "tools/verify_replay_dataset.py"
       - "tools/replay_semantics.py"
       - "tools/deterministic_replay.py"
+      - "tools/run_phase2_determinism.sh"
       - "tools/scoring_engine.sh"
       - "tools/m15_h1_fusion.sh"
       - "tools/build_indicators.py"
@@ -68,6 +70,10 @@ jobs:
             tests/test_fetch_historical_candles.py \
             tests/test_verify_replay_dataset.py \
             tests/test_deterministic_replay.py
+      - name: Validate phase2 shell runner
+        run: |
+          bash -n tools/run_phase2_determinism.sh
+          bash tools/run_phase2_determinism.sh --self-check
       - name: Run focused offline tests
         run: |
           python -m unittest -v \
