@@ -11,7 +11,7 @@ RUNNER_BLOB="498dbb9affb44f9b71e1b25bbd6228a20415914d"
 SEMANTICS_BLOB="6c18ddcfa7a49c5e5cb9cf139d341783dcb04a23"
 VERIFIER_BLOB="04dff84cbbd1a86a5508282f09b12726744778eb"
 
-if [ "${1:-}" = "--self-check" ]; then
+if [[ "${1:-}" == "--self-check" ]]; then
   echo "PHASE2_RUNNER_SELF_CHECK=PASS"
   echo "REPLAY_SOURCE_COMMIT=$REPLAY_SOURCE_COMMIT"
   echo "DATASET_ID=$DATASET_ID"
@@ -23,7 +23,6 @@ repo_root="$(pwd -P)"
 dataset="$repo_root/data/replay/$DATASET_ID"
 result="$repo_root/$RESULT_REL"
 tmp="${TMPDIR:-${PREFIX:-/tmp}/tmp}/bota_phase2_$$"
-phase2_failed=0
 
 cleanup() {
   rm -rf "$tmp"
@@ -31,10 +30,11 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 fail() {
-  phase2_failed=1
+  local reason="$1"
   echo "PHASE2_DETERMINISM_GATE=FAIL"
-  echo "REASON=$1"
+  echo "REASON=$reason"
   echo "NEXT_ACTION=CLASSIFY_BEFORE_RERUN"
+  exit 2
 }
 
 cache_hash() {
@@ -62,6 +62,32 @@ tracked_hash() {
   } | sha256sum | awk '{print $1}'
 }
 
+declare -A expected_blobs=(
+  [deterministic_replay.py]="498dbb9affb44f9b71e1b25bbd6228a20415914d"
+  [replay_semantics.py]="6c18ddcfa7a49c5e5cb9cf139d341783dcb04a23"
+  [verify_replay_dataset.py]="04dff84cbbd1a86a5508282f09b12726744778eb"
+  [build_indicators.py]="2abce4a325d6d9da8bb0958b97a651d4288e1792"
+  [quality_filter.py]="18b76f908652d483c115c930373972836cea81dc"
+  [sr_score.py]="616b996a8ce439a19483762645a2247ca96fd066"
+  [scoring_engine.sh]="09c42362a5c3c679696e86d4131ce5dfabd86608"
+  [m15_h1_fusion.sh]="c1de0312ed928f870b9a45df109b730d30888ee7"
+  [market_open.sh]="a73ca97f3a63c3245311585e231e5e69eaffc506"
+  [emit_snapshot.py]="425c9adace57956981cf7e3111fd5df504c4f1ca"
+)
+
+source_files=(
+  deterministic_replay.py
+  replay_semantics.py
+  verify_replay_dataset.py
+  build_indicators.py
+  quality_filter.py
+  sr_score.py
+  scoring_engine.sh
+  m15_h1_fusion.sh
+  market_open.sh
+  emit_snapshot.py
+)
+
 echo "==================================================================="
 echo "BOTA PHASE 2.1 — DETERMINISTIC DOUBLE REPLAY"
 echo "DEVICE_UTC=$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
@@ -71,9 +97,9 @@ echo "==================================================================="
 
 if ! git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   fail "NOT_A_GIT_WORKTREE"
-elif [ ! -f "$dataset/manifest.json" ]; then
+elif [[ ! -f "$dataset/manifest.json" ]]; then
   fail "CANONICAL_R3_DATASET_MISSING"
-elif [ -e "$result" ]; then
+elif [[ -e "$result" ]]; then
   fail "CANONICAL_REPLAY_RESULT_ALREADY_EXISTS"
 elif ! command -v curl >/dev/null 2>&1; then
   fail "CURL_NOT_AVAILABLE"
@@ -81,135 +107,131 @@ elif ! command -v python3 >/dev/null 2>&1; then
   fail "PYTHON3_NOT_AVAILABLE"
 elif ! command -v git >/dev/null 2>&1; then
   fail "GIT_NOT_AVAILABLE"
+fi
+
+mkdir -p "$tmp/tools"
+base="https://raw.githubusercontent.com/Ciupanezulflipper/BotA/$REPLAY_SOURCE_COMMIT/tools"
+
+for file in "${source_files[@]}"; do
+  if ! curl \
+    --proto '=https' \
+    --proto-redir '=https' \
+    --retry 4 \
+    --retry-delay 1 \
+    --retry-all-errors \
+    --connect-timeout 15 \
+    --max-time 90 \
+    -fsSL \
+    "$base/$file" \
+    -o "$tmp/tools/$file"
+  then
+    fail "PINNED_SOURCE_DOWNLOAD_FAILED:$file"
+  fi
+
+done
+
+echo
+echo "===== REPLAY SOURCE PROOF ====="
+source_mismatch=""
+for file in "${source_files[@]}"; do
+  expected="${expected_blobs[$file]}"
+  actual="$(git hash-object --no-filters "$tmp/tools/$file")"
+  echo "SOURCE_BLOB=$file|expected=$expected|actual=$actual"
+  if [[ "$actual" != "$expected" ]]; then
+    source_mismatch="$file"
+    break
+  fi
+done
+
+actual_runner="$(git hash-object --no-filters "$tmp/tools/deterministic_replay.py")"
+actual_semantics="$(git hash-object --no-filters "$tmp/tools/replay_semantics.py")"
+actual_verifier="$(git hash-object --no-filters "$tmp/tools/verify_replay_dataset.py")"
+echo "RUNNER_EXPECTED_BLOB=$RUNNER_BLOB"
+echo "RUNNER_ACTUAL_BLOB=$actual_runner"
+echo "SEMANTICS_EXPECTED_BLOB=$SEMANTICS_BLOB"
+echo "SEMANTICS_ACTUAL_BLOB=$actual_semantics"
+echo "VERIFIER_EXPECTED_BLOB=$VERIFIER_BLOB"
+echo "VERIFIER_ACTUAL_BLOB=$actual_verifier"
+
+if [[ -n "$source_mismatch" ]]; then
+  echo "REPLAY_SOURCE_INTEGRITY=FAIL"
+  fail "REVIEWED_REPLAY_SOURCE_MISMATCH:$source_mismatch"
+fi
+echo "REPLAY_SOURCE_INTEGRITY=PASS"
+
+cache_before="$(cache_hash)"
+tracked_before="$(tracked_hash)"
+echo "PRODUCTION_CACHE_SHA256_BEFORE=$cache_before"
+
+common_args=(
+  --dataset-root "$dataset"
+  --source-root "$tmp"
+  --source-commit "$REPLAY_SOURCE_COMMIT"
+  --raw-start-utc "2024-01-01T00:00:00Z"
+  --raw-end-utc "2026-08-01T00:00:00Z"
+  --evaluation-start-utc "2026-06-01T00:00:00Z"
+  --evaluation-end-utc "2026-08-01T00:00:00Z"
+  --pairs EURUSD GBPUSD
+  --min-warmup-bars 500
+)
+
+echo
+echo "===== REPLAY RUN 1 ====="
+PYTHONPATH="$tmp/tools" python3 "$tmp/tools/deterministic_replay.py" \
+  "${common_args[@]}" \
+  --output "$tmp/run1.events.jsonl" \
+  --summary-output "$tmp/run1.summary.json" \
+  > "$tmp/run1.stdout.json"
+run1_rc=$?
+echo "RUN1_RC=$run1_rc"
+
+if [[ "$run1_rc" -ne 0 ]]; then
+  [[ -s "$tmp/run1.stdout.json" ]] && cat "$tmp/run1.stdout.json"
+  fail "REPLAY_RUN1_FAILED"
+fi
+
+echo
+echo "===== REPLAY RUN 2 ====="
+PYTHONPATH="$tmp/tools" python3 "$tmp/tools/deterministic_replay.py" \
+  "${common_args[@]}" \
+  --output "$tmp/run2.events.jsonl" \
+  --summary-output "$tmp/run2.summary.json" \
+  > "$tmp/run2.stdout.json"
+run2_rc=$?
+echo "RUN2_RC=$run2_rc"
+
+if [[ "$run2_rc" -ne 0 ]]; then
+  [[ -s "$tmp/run2.stdout.json" ]] && cat "$tmp/run2.stdout.json"
+  fail "REPLAY_RUN2_FAILED"
+fi
+
+event1="$(sha256sum "$tmp/run1.events.jsonl" | awk '{print $1}')"
+event2="$(sha256sum "$tmp/run2.events.jsonl" | awk '{print $1}')"
+summary1="$(sha256sum "$tmp/run1.summary.json" | awk '{print $1}')"
+summary2="$(sha256sum "$tmp/run2.summary.json" | awk '{print $1}')"
+
+echo
+echo "===== DETERMINISM PROOF ====="
+echo "RUN1_EVENTS_SHA256=$event1"
+echo "RUN2_EVENTS_SHA256=$event2"
+echo "RUN1_SUMMARY_SHA256=$summary1"
+echo "RUN2_SUMMARY_SHA256=$summary2"
+
+if cmp -s "$tmp/run1.events.jsonl" "$tmp/run2.events.jsonl"; then
+  echo "EVENT_BYTES_IDENTICAL=YES"
 else
-  mkdir -p "$tmp/tools"
-  base="https://raw.githubusercontent.com/Ciupanezulflipper/BotA/$REPLAY_SOURCE_COMMIT/tools"
-  download_failed=""
+  echo "EVENT_BYTES_IDENTICAL=NO"
+  fail "EVENT_BYTES_DIFFER"
+fi
 
-  for file in \
-    deterministic_replay.py \
-    replay_semantics.py \
-    verify_replay_dataset.py \
-    build_indicators.py \
-    quality_filter.py \
-    sr_score.py \
-    scoring_engine.sh \
-    m15_h1_fusion.sh \
-    market_open.sh \
-    emit_snapshot.py
-  do
-    if ! curl \
-      --retry 4 \
-      --retry-delay 1 \
-      --retry-all-errors \
-      --connect-timeout 15 \
-      --max-time 90 \
-      -fsSL \
-      "$base/$file" \
-      -o "$tmp/tools/$file"
-    then
-      download_failed="$file"
-      break
-    fi
-  done
+if cmp -s "$tmp/run1.summary.json" "$tmp/run2.summary.json"; then
+  echo "SUMMARY_BYTES_IDENTICAL=YES"
+else
+  echo "SUMMARY_BYTES_IDENTICAL=NO"
+  fail "SUMMARY_BYTES_DIFFER"
+fi
 
-  if [ -n "$download_failed" ]; then
-    fail "PINNED_SOURCE_DOWNLOAD_FAILED:$download_failed"
-  else
-    actual_runner="$(git hash-object --no-filters "$tmp/tools/deterministic_replay.py")"
-    actual_semantics="$(git hash-object --no-filters "$tmp/tools/replay_semantics.py")"
-    actual_verifier="$(git hash-object --no-filters "$tmp/tools/verify_replay_dataset.py")"
-
-    echo
-    echo "===== REPLAY SOURCE PROOF ====="
-    echo "RUNNER_EXPECTED_BLOB=$RUNNER_BLOB"
-    echo "RUNNER_ACTUAL_BLOB=$actual_runner"
-    echo "SEMANTICS_EXPECTED_BLOB=$SEMANTICS_BLOB"
-    echo "SEMANTICS_ACTUAL_BLOB=$actual_semantics"
-    echo "VERIFIER_EXPECTED_BLOB=$VERIFIER_BLOB"
-    echo "VERIFIER_ACTUAL_BLOB=$actual_verifier"
-
-    if [ "$actual_runner" != "$RUNNER_BLOB" ] || \
-       [ "$actual_semantics" != "$SEMANTICS_BLOB" ] || \
-       [ "$actual_verifier" != "$VERIFIER_BLOB" ]
-    then
-      echo "REPLAY_SOURCE_INTEGRITY=FAIL"
-      fail "REVIEWED_REPLAY_SOURCE_MISMATCH"
-    else
-      echo "REPLAY_SOURCE_INTEGRITY=PASS"
-
-      cache_before="$(cache_hash)"
-      tracked_before="$(tracked_hash)"
-      echo "PRODUCTION_CACHE_SHA256_BEFORE=$cache_before"
-
-      common_args=(
-        --dataset-root "$dataset"
-        --source-root "$tmp"
-        --source-commit "$REPLAY_SOURCE_COMMIT"
-        --raw-start-utc "2024-01-01T00:00:00Z"
-        --raw-end-utc "2026-08-01T00:00:00Z"
-        --evaluation-start-utc "2026-06-01T00:00:00Z"
-        --evaluation-end-utc "2026-08-01T00:00:00Z"
-        --pairs EURUSD GBPUSD
-        --min-warmup-bars 500
-      )
-
-      echo
-      echo "===== REPLAY RUN 1 ====="
-      PYTHONPATH="$tmp/tools" python3 "$tmp/tools/deterministic_replay.py" \
-        "${common_args[@]}" \
-        --output "$tmp/run1.events.jsonl" \
-        --summary-output "$tmp/run1.summary.json" \
-        > "$tmp/run1.stdout.json"
-      run1_rc=$?
-      echo "RUN1_RC=$run1_rc"
-
-      run2_rc=1
-      if [ "$run1_rc" -eq 0 ]; then
-        echo
-        echo "===== REPLAY RUN 2 ====="
-        PYTHONPATH="$tmp/tools" python3 "$tmp/tools/deterministic_replay.py" \
-          "${common_args[@]}" \
-          --output "$tmp/run2.events.jsonl" \
-          --summary-output "$tmp/run2.summary.json" \
-          > "$tmp/run2.stdout.json"
-        run2_rc=$?
-        echo "RUN2_RC=$run2_rc"
-      fi
-
-      if [ "$run1_rc" -ne 0 ] || [ "$run2_rc" -ne 0 ]; then
-        [ -s "$tmp/run1.stdout.json" ] && cat "$tmp/run1.stdout.json"
-        [ -s "$tmp/run2.stdout.json" ] && cat "$tmp/run2.stdout.json"
-        fail "REPLAY_EXECUTION_FAILED"
-      else
-        event1="$(sha256sum "$tmp/run1.events.jsonl" | awk '{print $1}')"
-        event2="$(sha256sum "$tmp/run2.events.jsonl" | awk '{print $1}')"
-        summary1="$(sha256sum "$tmp/run1.summary.json" | awk '{print $1}')"
-        summary2="$(sha256sum "$tmp/run2.summary.json" | awk '{print $1}')"
-
-        echo
-        echo "===== DETERMINISM PROOF ====="
-        echo "RUN1_EVENTS_SHA256=$event1"
-        echo "RUN2_EVENTS_SHA256=$event2"
-        echo "RUN1_SUMMARY_SHA256=$summary1"
-        echo "RUN2_SUMMARY_SHA256=$summary2"
-
-        events_equal=0
-        summaries_equal=0
-        if cmp -s "$tmp/run1.events.jsonl" "$tmp/run2.events.jsonl"; then
-          events_equal=1
-          echo "EVENT_BYTES_IDENTICAL=YES"
-        else
-          echo "EVENT_BYTES_IDENTICAL=NO"
-        fi
-        if cmp -s "$tmp/run1.summary.json" "$tmp/run2.summary.json"; then
-          summaries_equal=1
-          echo "SUMMARY_BYTES_IDENTICAL=YES"
-        else
-          echo "SUMMARY_BYTES_IDENTICAL=NO"
-        fi
-
-        summary_gate="$(python3 - "$tmp/run1.summary.json" "$DATASET_ID" <<'PY'
+summary_gate="$(python3 - "$tmp/run1.summary.json" "$DATASET_ID" <<'PY'
 import json
 import re
 import sys
@@ -238,78 +260,61 @@ print("REJECTION_STAGES=" + json.dumps(data.get("rejection_stages", {}), sort_ke
 PY
 )"
 
-        summary_gate_status="$(printf '%s\n' "$summary_gate" | sed -n '1p')"
-        printf '%s\n' "$summary_gate" | sed -n '2,$p'
+summary_gate_status="$(printf '%s\n' "$summary_gate" | sed -n '1p')"
+printf '%s\n' "$summary_gate" | sed -n '2,$p'
+if [[ "$summary_gate_status" != "PASS" ]]; then
+  fail "REPLAY_SUMMARY_PROVENANCE_FAILED"
+fi
 
-        cache_after="$(cache_hash)"
-        tracked_after="$(tracked_hash)"
+cache_after="$(cache_hash)"
+tracked_after="$(tracked_hash)"
 
-        echo
-        echo "===== ISOLATION PROOF ====="
-        echo "PRODUCTION_CACHE_SHA256_AFTER=$cache_after"
+echo
+echo "===== ISOLATION PROOF ====="
+echo "PRODUCTION_CACHE_SHA256_AFTER=$cache_after"
+if [[ "$cache_before" == "$cache_after" ]]; then
+  echo "PRODUCTION_CACHE_UNCHANGED=YES"
+else
+  echo "PRODUCTION_CACHE_UNCHANGED=NO"
+  fail "PRODUCTION_CACHE_CHANGED"
+fi
 
-        cache_equal=0
-        tracked_equal=0
-        if [ "$cache_before" = "$cache_after" ]; then
-          cache_equal=1
-          echo "PRODUCTION_CACHE_UNCHANGED=YES"
-        else
-          echo "PRODUCTION_CACHE_UNCHANGED=NO"
-        fi
-        if [ "$tracked_before" = "$tracked_after" ]; then
-          tracked_equal=1
-          echo "TRACKED_WORKTREE_UNCHANGED=YES"
-        else
-          echo "TRACKED_WORKTREE_UNCHANGED=NO"
-        fi
+if [[ "$tracked_before" == "$tracked_after" ]]; then
+  echo "TRACKED_WORKTREE_UNCHANGED=YES"
+else
+  echo "TRACKED_WORKTREE_UNCHANGED=NO"
+  fail "TRACKED_WORKTREE_CHANGED"
+fi
 
-        if [ "$events_equal" -eq 1 ] && \
-           [ "$summaries_equal" -eq 1 ] && \
-           [ "$summary_gate_status" = "PASS" ] && \
-           [ "$cache_equal" -eq 1 ] && \
-           [ "$tracked_equal" -eq 1 ]
-        then
-          mkdir -p "$result"
-          cp "$tmp/run1.events.jsonl" "$result/events.jsonl"
-          cp "$tmp/run1.summary.json" "$result/summary.json"
-          manifest_sha="$(python3 - "$tmp/run1.summary.json" <<'PY'
+mkdir -p "$result"
+cp "$tmp/run1.events.jsonl" "$result/events.jsonl"
+cp "$tmp/run1.summary.json" "$result/summary.json"
+manifest_sha="$(python3 - "$tmp/run1.summary.json" <<'PY'
 import json
 import sys
 print(json.load(open(sys.argv[1], encoding="utf-8"))["dataset_manifest_sha256"])
 PY
 )"
-          {
-            echo "REPLAY_SOURCE_COMMIT=$REPLAY_SOURCE_COMMIT"
-            echo "DATASET_ID=$DATASET_ID"
-            echo "DATASET_MANIFEST_SHA256=$manifest_sha"
-            echo "EVENTS_SHA256=$event1"
-            echo "SUMMARY_SHA256=$summary1"
-            echo "RUN1_RUN2_EVENTS_IDENTICAL=YES"
-            echo "RUN1_RUN2_SUMMARIES_IDENTICAL=YES"
-            echo "PRODUCTION_SOURCE_BLOBS_MATCH=YES"
-            echo "PRODUCTION_CACHE_UNCHANGED=YES"
-            echo "TRACKED_WORKTREE_UNCHANGED=YES"
-          } > "$result/DETERMINISM_PROOF.txt"
+{
+  echo "REPLAY_SOURCE_COMMIT=$REPLAY_SOURCE_COMMIT"
+  echo "DATASET_ID=$DATASET_ID"
+  echo "DATASET_MANIFEST_SHA256=$manifest_sha"
+  echo "EVENTS_SHA256=$event1"
+  echo "SUMMARY_SHA256=$summary1"
+  echo "RUN1_RUN2_EVENTS_IDENTICAL=YES"
+  echo "RUN1_RUN2_SUMMARIES_IDENTICAL=YES"
+  echo "PRODUCTION_SOURCE_BLOBS_MATCH=YES"
+  echo "PRODUCTION_CACHE_UNCHANGED=YES"
+  echo "TRACKED_WORKTREE_UNCHANGED=YES"
+} > "$result/DETERMINISM_PROOF.txt"
 
-          echo
-          echo "PHASE2_DETERMINISM_GATE=PASS"
-          echo "CANONICAL_REPLAY_RESULT=$result"
-          echo "NEXT_ACTION=PHASE2_OUTCOME_AND_ABC_COMPARISON"
-        else
-          fail "DETERMINISM_OR_ISOLATION_GATE_FAILED"
-        fi
-      fi
-    fi
-  fi
-fi
-
+echo
+echo "PHASE2_DETERMINISM_GATE=PASS"
+echo "CANONICAL_REPLAY_RESULT=$result"
+echo "NEXT_ACTION=PHASE2_OUTCOME_AND_ABC_COMPARISON"
 echo "TEMP_REPLAY_FILES_RETAINED=NO"
 echo "PRODUCTION_STRATEGY_MUTATION=NO"
 echo "TELEGRAM_MUTATION=NO"
 echo "SUPABASE_MUTATION=NO"
 echo "SERVICE_CRON_MUTATION=NO"
 echo "==================================================================="
-
-if [ "$phase2_failed" -ne 0 ]; then
-  exit 2
-fi
