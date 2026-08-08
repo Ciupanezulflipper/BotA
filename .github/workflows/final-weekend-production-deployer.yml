@@ -1,0 +1,35 @@
+name: Final weekend production deployer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/deploy_weekend_production_final.py"
+      - "tests/test_final_weekend_production_deployer.py"
+      - ".github/workflows/final-weekend-production-deployer.yml"
+  pull_request:
+    paths:
+      - "tools/deploy_weekend_production_final.py"
+      - "tests/test_final_weekend_production_deployer.py"
+      - ".github/workflows/final-weekend-production-deployer.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and self-check
+        run: |
+          python -m py_compile tools/deploy_weekend_production_final.py tests/test_final_weekend_production_deployer.py
+          python tools/deploy_weekend_production_final.py --self-check
+      - name: Run deployer unit tests
+        run: python -m unittest -v tests/test_final_weekend_production_deployer.py
