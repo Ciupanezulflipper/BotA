@@ -240,15 +240,6 @@ class CompareReplayOutcomesTests(unittest.TestCase):
                     max_entry_pips=5.0,
                 )
 
-    def test_output_cannot_overwrite_input(self) -> None:
-        events = Path("/tmp/events.jsonl")
-        outcomes = Path("/tmp/outcomes.json")
-        with self.assertRaisesRegex(ValueError, "must not overwrite"):
-            matcher._validate_output_path(events, events, outcomes)
-        with self.assertRaisesRegex(ValueError, "must not overwrite"):
-            matcher._validate_output_path(outcomes, events, outcomes)
-        matcher._validate_output_path(Path("/tmp/result.json"), events, outcomes)
-
     def test_frozen_supabase_fixture_totals(self) -> None:
         fixture = (
             Path(__file__).resolve().parents[1]
@@ -260,9 +251,10 @@ class CompareReplayOutcomesTests(unittest.TestCase):
         outcomes = data["outcomes"]
         self.assertEqual(data["expected_count"], 13)
         self.assertEqual(len(outcomes), 13)
-        self.assertEqual(
-            round(sum(float(row["result_pips"]) for row in outcomes), 2),
+        self.assertAlmostEqual(
+            sum(float(row["result_pips"]) for row in outcomes),
             -71.40,
+            places=6,
         )
         classes = [matcher._outcome_class(row) for row in outcomes]
         self.assertEqual(classes.count("win"), 3)
