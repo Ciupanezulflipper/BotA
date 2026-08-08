@@ -1,8 +1,12 @@
 # BotA AI Start Here
 
-Last updated: **2026-08-08 01:37 UTC**
+Last updated: **2026-08-08 23:50 UTC**
 
-Read this before proposing BotA commands, code, service, strategy, Telegram, provider, Supabase, replay, or deployment changes.
+Read this before proposing BotA commands, code, service, strategy, Telegram, provider, Supabase, replay, deployment, or phone-tooling changes.
+
+## Shared Android/Termux toolchain
+
+Read `ANDROID_TERMUX_TOOLCHAIN.md` before proposing or installing additional Android/Termux engineering tools. It is the canonical 2026-08-08 phone-tool baseline shared with LifVio and dividend-capture-scanner. Installed tools are available globally, but no project hook, formatter, scanner baseline, or Spec Kit initialization should be assumed unless separately proven in this repository.
 
 ## Current authoritative truth
 
@@ -31,11 +35,12 @@ PRODUCTION_STRATEGY_MUTATION_ALLOWED=NO
 ## Read first
 
 1. `CONTINUITY_CURRENT.md` — current state and exactly one next action.
-2. `audits/REPLAY_OUTCOME_MATCH_GAP_RESULT_2026-08-08.md` — executed Phase 2.3 result.
-3. `audits/REPLAY_OUTCOME_MATCH_GAP_CLASSIFICATION_2026-08-08.md` — reviewed classifier contract and one-to-one integrity fix.
-4. `audits/REPLAY_OUTCOME_MATCHER_2026-08-07.md` — frozen matching contract defined before the result.
-5. `audits/DETERMINISTIC_REPLAY_PHASE2_EXECUTION_2026-08-07.md` — canonical deterministic replay proof.
-6. `docs/FORENSIC_OPERATING_MODEL.md` — mandatory connector-first workflow.
+2. `ANDROID_TERMUX_TOOLCHAIN.md` — shared Android/Termux engineering-tool baseline and usage boundaries.
+3. `audits/REPLAY_OUTCOME_MATCH_GAP_RESULT_2026-08-08.md` — executed Phase 2.3 result.
+4. `audits/REPLAY_OUTCOME_MATCH_GAP_CLASSIFICATION_2026-08-08.md` — reviewed classifier contract and one-to-one integrity fix.
+5. `audits/REPLAY_OUTCOME_MATCHER_2026-08-07.md` — frozen matching contract defined before the result.
+6. `audits/DETERMINISTIC_REPLAY_PHASE2_EXECUTION_2026-08-07.md` — canonical deterministic replay proof.
+7. `docs/FORENSIC_OPERATING_MODEL.md` — mandatory connector-first workflow.
 
 Older dated audits remain evidence. Do not restart closed acquisition/runtime branches without new contradictory evidence.
 
