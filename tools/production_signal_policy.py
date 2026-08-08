@@ -24,7 +24,7 @@ import signal
 import sys
 from typing import Any, Mapping
 
-ADX_RE = re.compile(r"(?:^|[|,\s])adx\s*=\s*(-?[0-9]+(?:\.[0-9]+)?)", re.IGNORECASE)
+ADX_RE = re.compile(r"(?:^|[|,\s])adx\s*=\s*(-?\d+(?:\.\d+)?)", re.IGNORECASE)
 
 
 def _finite(value: Any) -> float | None:
@@ -186,7 +186,14 @@ def _fallback(reason: str) -> dict[str, Any]:
     }
 
 
-def main() -> int:
+def _emit(output: Mapping[str, Any]) -> None:
+    try:
+        sys.stdout.write(json.dumps(dict(output), separators=(",", ":")))
+    except BrokenPipeError:
+        pass
+
+
+def main() -> None:
     try:
         signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     except Exception:
@@ -200,13 +207,8 @@ def main() -> int:
         output = apply_policy(payload)
     except Exception as exc:
         output = _fallback(f"production_policy_error_{type(exc).__name__}")
-
-    try:
-        sys.stdout.write(json.dumps(output, separators=(",", ":")))
-    except BrokenPipeError:
-        return 0
-    return 0
+    _emit(output)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
