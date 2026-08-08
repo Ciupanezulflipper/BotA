@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +14,7 @@ from tools import sync_d1_trend_cache as d1_sync
 
 
 ROOT = Path(__file__).resolve().parents[1]
+FUSION = ROOT / "tools" / "m15_h1_fusion.sh"
 
 
 def trade(**overrides):
@@ -76,6 +79,15 @@ class ProductionSignalPolicyTests(unittest.TestCase):
         self.assertTrue(result["filter_rejected"])
         self.assertIn("policy_b_adx_missing", result["filter_reasons"])
 
+    def test_boolean_numeric_inputs_are_rejected(self) -> None:
+        self.assertIsNone(policy._finite(True))
+        self.assertIsNone(policy._finite(False))
+        result = policy.apply_policy(
+            trade(adx_raw=True, reasons="ok|rsi=55.0")
+        )
+        self.assertTrue(result["filter_rejected"])
+        self.assertIn("policy_b_adx_missing", result["filter_reasons"])
+
     def test_policy_b_disabled_preserves_current_acceptance(self) -> None:
         with mock.patch.dict(os.environ, {"POLICY_B_ENABLED": "0"}, clear=False):
             result = policy.apply_policy(trade(score=90.0, reasons="ok|adx=45.0"))
@@ -108,6 +120,20 @@ class ProductionSignalPolicyTests(unittest.TestCase):
         self.assertEqual(result["filter_rr"], 2.0)
         self.assertEqual(result["risk_pip_size"], 0.01)
         self.assertTrue(result["risk_pair_aware"])
+
+    def test_invalid_usdjpy_risk_inputs_fail_closed(self) -> None:
+        result = policy.apply_policy(
+            trade(
+                pair="USDJPY",
+                entry=True,
+                atr=True,
+                score=75.0,
+                reasons="ok|adx=25.0",
+            )
+        )
+        self.assertTrue(result["filter_rejected"])
+        self.assertIn("policy_jpy_risk_invalid", result["filter_reasons"])
+        self.assertNotIn("risk_pair_aware", result)
 
     def test_non_jpy_risk_is_not_rewritten(self) -> None:
         result = policy.apply_policy(trade(sl=1.0981, tp=1.1038))
@@ -147,22 +173,180 @@ class D1TrendCacheSyncTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             cache = Path(temp)
             (cache / "indicators_EURUSD_D1.json").write_text(
-                json.dumps({"tf_ok": False, "error": "tf_mismatch"}),
+                json.dumps(
+                    {
+                        "pair": "EURUSD",
+                        "timeframe": "D1",
+                        "tf_ok": False,
+                        "error": "tf_mismatch",
+                    }
+                ),
                 encoding="utf-8",
             )
-            with mock.patch.object(d1_sync, "CACHE_DIR", cache):
-                with self.assertRaisesRegex(ValueError, "timeframe validation"):
-                    d1_sync.sync_pair("EURUSD")
+            with (
+                mock.patch.object(d1_sync, "CACHE_DIR", cache),
+                self.assertRaisesRegex(ValueError, "timeframe validation"),
+            ):
+                d1_sync.sync_pair("EURUSD")
 
-    def test_unsupported_pair_is_rejected_before_path_construction(self) -> None:
+    def test_wrong_pair_or_timeframe_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            cache = Path(temp)
+            (cache / "indicators_GBPUSD_D1.json").write_text(
+                json.dumps(
+                    {
+                        "pair": "EURUSD",
+                        "timeframe": "H1",
+                        "tf_ok": True,
+                        "error": "",
+                        "ema9": 1.2,
+                        "ema21": 1.1,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(d1_sync, "CACHE_DIR", cache),
+                self.assertRaisesRegex(ValueError, "identity/timeframe validation"),
+            ):
+                d1_sync.sync_pair("GBPUSD")
+
+    def test_unsupported_pair_is_rejected_before_path_selection(self) -> None:
         with self.assertRaisesRegex(ValueError, "unsupported production pair"):
             d1_sync._cache_paths("EURJPY")
+
+
+class FusionPolicyBehaviorTests(unittest.TestCase):
+    @staticmethod
+    def _write(path: Path, content: str) -> None:
+        path.write_text(content, encoding="utf-8")
+
+    def _make_root(self, root: Path, *, include_policy: bool = True) -> None:
+        tools = root / "tools"
+        cache = root / "cache"
+        tools.mkdir(parents=True)
+        cache.mkdir(parents=True)
+
+        self._write(
+            tools / "scoring_engine.sh",
+            """#!/usr/bin/env bash
+scenario="${FUSION_SCENARIO:-accepted}"
+tf="${2:-M15}"
+if [[ "${scenario}" == "m15_failure" && "${tf}" == "M15" ]]; then exit 7; fi
+if [[ "${scenario}" == "h1_failure" && "${tf}" == "H1" ]]; then exit 8; fi
+if [[ "${tf}" == "M15" ]]; then
+  if [[ "${scenario}" == "m15_early" ]]; then
+    printf '%s\n' '{"pair":"EURUSD","tf":"M15","direction":"BUY","entry":1.1,"sl":1.098,"tp":1.104,"atr":0.001,"price":1.1,"score":75,"confidence":75,"filter_rejected":true,"filter_reasons":["base_reject"],"reasons":"ok|adx=25.0"}'
+  elif [[ "${scenario}" == "policy_missing_scalar" ]]; then
+    printf '%s\n' '{"pair":"EURUSD","tf":"M15","direction":"BUY","entry":1.1,"sl":1.098,"tp":1.104,"atr":0.001,"price":1.1,"score":75,"confidence":75,"filter_rejected":true,"filter_reasons":"prior_reason","reasons":"ok|adx=25.0"}'
+  else
+    printf '%s\n' '{"pair":"EURUSD","tf":"M15","direction":"BUY","entry":1.1,"sl":1.098,"tp":1.104,"atr":0.001,"price":1.1,"score":75,"confidence":75,"filter_rejected":false,"filter_reasons":[],"reasons":"ok|adx=25.0"}'
+  fi
+else
+  if [[ "${scenario}" == "h1_veto" ]]; then
+    printf '%s\n' '{"pair":"EURUSD","tf":"H1","direction":"SELL","score":70,"filter_rejected":false,"filter_reasons":[]}'
+  else
+    printf '%s\n' '{"pair":"EURUSD","tf":"H1","direction":"BUY","score":70,"filter_rejected":false,"filter_reasons":[]}'
+  fi
+fi
+""",
+        )
+        self._write(
+            tools / "quality_filter.py",
+            """import sys
+raw = sys.stdin.read().strip()
+print(raw if raw else "{}")
+""",
+        )
+        self._write(
+            tools / "emit_snapshot.py",
+            """import os
+scenario = os.environ.get("FUSION_SCENARIO", "accepted")
+if scenario == "h4_d1_veto":
+    print("H4: vote=-3")
+    print("D1: vote=-3")
+else:
+    print("H4: vote=0")
+    print("D1: vote=0")
+""",
+        )
+        if include_policy:
+            self._write(
+                tools / "production_signal_policy.py",
+                """import json, sys
+data = json.load(sys.stdin)
+data["policy_probe_applied"] = True
+data["policy_probe_input_rejected"] = bool(data.get("filter_rejected", False))
+print(json.dumps(data, separators=(",", ":")))
+""",
+            )
+        (cache / "indicators_EURUSD_H4.json").write_text(
+            json.dumps({"ema9": 1.11, "ema21": 1.10}),
+            encoding="utf-8",
+        )
+
+    def _run_fusion(
+        self, scenario: str, *, include_policy: bool = True
+    ) -> dict:
+        if shutil.which("jq") is None:
+            self.skipTest("jq is required by production fusion")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self._make_root(root, include_policy=include_policy)
+            env = os.environ.copy()
+            env.update(
+                {
+                    "BOTA_ROOT": str(root),
+                    "NEWS_ON": "0",
+                    "FUSION_SCENARIO": scenario,
+                    "H1_TREND_MIN_SCORE": "40",
+                    "H1_VETO_OVERRIDE_SCORE": "75",
+                    "H1_VETO_OVERRIDE_ADX": "40",
+                }
+            )
+            completed = subprocess.run(
+                ["bash", str(FUSION), "EURUSD"],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=15,
+            )
+            return json.loads(completed.stdout)
+
+    def test_every_fusion_exit_path_applies_final_policy(self) -> None:
+        scenarios = {
+            "m15_failure": True,
+            "m15_early": True,
+            "h1_failure": False,
+            "h1_veto": True,
+            "h4_d1_veto": True,
+            "accepted": False,
+        }
+        for scenario, expected_rejected in scenarios.items():
+            with self.subTest(scenario=scenario):
+                result = self._run_fusion(scenario)
+                self.assertTrue(result["policy_probe_applied"])
+                self.assertEqual(
+                    result["policy_probe_input_rejected"], expected_rejected
+                )
+
+    def test_missing_policy_fallback_normalizes_scalar_filter_reasons(self) -> None:
+        result = self._run_fusion("policy_missing_scalar", include_policy=False)
+        self.assertTrue(result["filter_rejected"])
+        self.assertFalse(result["policy_b_pass"])
+        self.assertEqual(
+            sorted(result["filter_reasons"]),
+            ["prior_reason", "production_policy_failure"],
+        )
 
 
 class ProductionConfigurationTests(unittest.TestCase):
     def test_canonical_cron_monitors_three_pairs_with_policy_b(self) -> None:
         cron = (ROOT / "ops" / "bota_crontab.canonical").read_text(encoding="utf-8")
-        signal_lines = [line for line in cron.splitlines() if "signal_watcher_pro.sh" in line]
+        signal_lines = [
+            line for line in cron.splitlines() if "signal_watcher_pro.sh" in line
+        ]
         self.assertEqual(len(signal_lines), 1)
         line = signal_lines[0]
         self.assertIn('PAIRS="EURUSD GBPUSD USDJPY"', line)
@@ -173,17 +357,14 @@ class ProductionConfigurationTests(unittest.TestCase):
 
     def test_canonical_updater_syncs_three_d1_trends(self) -> None:
         cron = (ROOT / "ops" / "bota_crontab.canonical").read_text(encoding="utf-8")
-        updater_lines = [line for line in cron.splitlines() if "indicators_updater.sh" in line]
+        updater_lines = [
+            line for line in cron.splitlines() if "indicators_updater.sh" in line
+        ]
         self.assertEqual(len(updater_lines), 1)
         line = updater_lines[0]
         self.assertIn('PAIRS="EURUSD GBPUSD USDJPY"', line)
         self.assertIn("sync_d1_trend_cache.py", line)
         self.assertIn("--pairs EURUSD GBPUSD USDJPY", line)
-
-    def test_fusion_runs_final_production_policy(self) -> None:
-        fusion = (ROOT / "tools" / "m15_h1_fusion.sh").read_text(encoding="utf-8")
-        self.assertIn("production_signal_policy.py", fusion)
-        self.assertIn("emit_with_production_policy", fusion)
 
 
 if __name__ == "__main__":
