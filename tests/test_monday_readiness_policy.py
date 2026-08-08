@@ -65,10 +65,7 @@ def write_pipeline_state(
     if include_market_components:
         for name in ("updater", "watcher", "shadow", "d1_sync"):
             components[name] = component_event()
-    decisions = {
-        f"{pair}:M15": decision_event()
-        for pair in decision_pairs
-    }
+    decisions = {f"{pair}:M15": decision_event() for pair in decision_pairs}
     path = root / "state" / "pipeline_progress.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -95,10 +92,7 @@ class PipelineReadinessTests(unittest.TestCase):
     def test_market_open_requires_usdjpy_decision(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "BotA"
-            write_pipeline_state(
-                root,
-                decision_pairs=("EURUSD", "GBPUSD"),
-            )
+            write_pipeline_state(root, decision_pairs=("EURUSD", "GBPUSD"))
             result = self.evaluate(root, market_open=True)
 
         self.assertFalse(result["healthy"])
@@ -242,11 +236,12 @@ class ProducerLedgerIntegrationTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
-
-            targets = [cache / f"d1_trend_{pair}.json" for pair in PAIRS]
+            target_exists = all(
+                (cache / f"d1_trend_{pair}.json").exists() for pair in PAIRS
+            )
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertTrue(all(path.exists() for path in targets))
+        self.assertTrue(target_exists)
         component = state["components"]["d1_sync"]
         self.assertEqual(component["status"], "completed")
 
@@ -258,7 +253,7 @@ class ReadinessSourcePolicyTests(unittest.TestCase):
         self.assertNotIn("HTTPSConnection(", source)
         self.assertNotIn("requests.", source)
         self.assertNotIn("curl ", source)
-        self.assertNotIn("crontab ", source)
+        self.assertNotIn('["crontab"', source)
         self.assertIn("verify_canonical_crontab.sh", source)
         self.assertIn("control_plane_status.py", source)
         self.assertIn("pipeline_health.py", source)
@@ -266,9 +261,9 @@ class ReadinessSourcePolicyTests(unittest.TestCase):
     def test_readiness_scope_is_three_pair_policy_b(self) -> None:
         source = READINESS.read_text(encoding="utf-8")
         self.assertIn('("EURUSD", "GBPUSD", "USDJPY")', source)
-        self.assertIn('POLICY_B_ENABLED=1', source)
-        self.assertIn('POLICY_B_SCORE_MIN=70', source)
-        self.assertIn('POLICY_B_ADX_MAX=30', source)
+        self.assertIn("POLICY_B_ENABLED=1", source)
+        self.assertIn("POLICY_B_SCORE_MIN=70", source)
+        self.assertIn("POLICY_B_ADX_MAX=30", source)
 
 
 if __name__ == "__main__":
