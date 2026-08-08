@@ -5,6 +5,9 @@ The indicator updater already fetches and builds D1 bundles for the configured
 pairs. This helper derives the lightweight d1_trend_<PAIR>.json files from those
 local bundles, avoiding a second provider request and keeping USDJPY on the same
 provider/candle state as the rest of the pipeline.
+
+Production runtime accepts pair names only. Filesystem paths are fixed beneath
+$HOME/BotA/cache and are never constructed from CLI input.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_PAIRS = ("EURUSD", "GBPUSD", "USDJPY")
+CACHE_DIR = (Path.home() / "BotA" / "cache").resolve()
 PAIR_FILES = {
     "EURUSD": ("indicators_EURUSD_D1.json", "d1_trend_EURUSD.json"),
     "GBPUSD": ("indicators_GBPUSD_D1.json", "d1_trend_GBPUSD.json"),
@@ -39,23 +43,20 @@ def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     os.replace(temp, path)
 
 
-def _cache_paths(root: Path, pair: str) -> tuple[Path, Path]:
+def _cache_paths(pair: str) -> tuple[Path, Path]:
     normalized = pair.upper().strip()
     filenames = PAIR_FILES.get(normalized)
     if filenames is None:
         raise ValueError(f"unsupported production pair: {normalized}")
 
-    cache = (root / "cache").resolve()
-    source = (cache / filenames[0]).resolve()
-    target = (cache / filenames[1]).resolve()
-    if source.parent != cache or target.parent != cache:
-        raise ValueError("D1 cache path escaped cache directory")
+    source = CACHE_DIR / filenames[0]
+    target = CACHE_DIR / filenames[1]
     return source, target
 
 
-def sync_pair(root: Path, pair: str) -> dict[str, Any]:
+def sync_pair(pair: str) -> dict[str, Any]:
     pair = pair.upper().strip()
-    source, target = _cache_paths(root.resolve(), pair)
+    source, target = _cache_paths(pair)
 
     if not source.is_file():
         raise FileNotFoundError(f"missing D1 indicators: {source}")
@@ -99,18 +100,12 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _root() -> Path:
-    configured = os.environ.get("BOTA_ROOT")
-    return Path(configured).expanduser().resolve() if configured else (Path.home() / "BotA").resolve()
-
-
 def main() -> int:
     args = _parser().parse_args()
-    root = _root()
     failures = 0
     for pair in args.pairs:
         try:
-            result = sync_pair(root, pair)
+            result = sync_pair(pair)
             print(
                 f"D1_SYNC={pair}|trend={result['trend']}|"
                 f"ema9={result['ema9']:.5f}|ema21={result['ema21']:.5f}"
