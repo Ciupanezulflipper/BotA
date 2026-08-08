@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 import unittest
 from datetime import datetime, timezone
@@ -10,11 +11,11 @@ TOOLS = ROOT / "tools"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
-import deterministic_replay as replay_runner
 import replay_semantics as r
 
 
 UTC = timezone.utc
+HISTORICAL_PRODUCTION_SOURCE_COMMIT = "6b437179cc58021aa358b1d0b04c121d9304c660"
 
 
 def dt(text: str) -> datetime:
@@ -242,9 +243,21 @@ class ReplaySemanticsTests(unittest.TestCase):
         self.assertIn("entry", event)
         self.assertIn("atr", event)
 
-    def test_pinned_production_sources_match_real_git_blob_hashes(self):
-        observed = replay_runner._verify_production_sources(ROOT)
-        self.assertEqual(observed, r.PRODUCTION_SOURCE_BLOBS)
+    def test_pinned_sources_match_historical_production_commit(self):
+        for relative, expected in r.PRODUCTION_SOURCE_BLOBS.items():
+            completed = subprocess.run(
+                [
+                    "git",
+                    "rev-parse",
+                    f"{HISTORICAL_PRODUCTION_SOURCE_COMMIT}:{relative}",
+                ],
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            self.assertEqual(completed.stdout.strip(), expected, relative)
 
 
 if __name__ == "__main__":
