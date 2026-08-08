@@ -8,16 +8,15 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import http.client
 import json
 import os
 import sys
-import urllib.error
-import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SUPABASE_URL = "https://ozgkeslgjqbqfewojnmr.supabase.co"
+SUPABASE_HOST = "ozgkeslgjqbqfewojnmr.supabase.co"
 
 
 def service_key() -> str:
@@ -52,33 +51,39 @@ def score_to_strength(score: int) -> int:
     return 1
 
 
+def auth_headers(key: str) -> dict[str, str]:
+    return {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+    }
+
+
 def active_signal_exists(pair: str, key: str) -> bool | None:
     """Return active-state truth, or None if the dedup query failed."""
-    url = (
-        f"{SUPABASE_URL}/rest/v1/signals"
+    path = (
+        "/rest/v1/signals"
         f"?status=eq.ACTIVE&pair=eq.{pair.upper()}&select=id"
     )
-    request = urllib.request.Request(
-        url,
-        headers={
-            "apikey": key,
-            "Authorization": f"Bearer {key}",
-        },
-    )
+    connection = http.client.HTTPSConnection(SUPABASE_HOST, timeout=10)
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            rows = json.loads(response.read().decode("utf-8"))
-    except (
-        OSError,
-        TimeoutError,
-        ValueError,
-        urllib.error.URLError,
-    ) as exc:
+        connection.request("GET", path, headers=auth_headers(key))
+        response = connection.getresponse()
+        body = response.read()
+        if not 200 <= response.status < 300:
+            print(
+                f"[supabase_publish] dedup HTTP {response.status}",
+                file=sys.stderr,
+            )
+            return None
+        rows = json.loads(body.decode("utf-8"))
+    except (OSError, ValueError, http.client.HTTPException) as exc:
         print(
             f"[supabase_publish] dedup check failed: {type(exc).__name__}",
             file=sys.stderr,
         )
         return None
+    finally:
+        connection.close()
 
     if rows:
         print(
@@ -88,6 +93,35 @@ def active_signal_exists(pair: str, key: str) -> bool | None:
         )
         return True
     return False
+
+
+def insert_signal(payload: dict[str, object], key: str) -> bool:
+    data = json.dumps(payload).encode("utf-8")
+    headers = {
+        **auth_headers(key),
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+    connection = http.client.HTTPSConnection(SUPABASE_HOST, timeout=10)
+    try:
+        connection.request("POST", "/rest/v1/signals", body=data, headers=headers)
+        response = connection.getresponse()
+        body = response.read().decode("utf-8", "replace")
+        if 200 <= response.status < 300:
+            return True
+        print(
+            f"[supabase_publish] HTTP {response.status}: {body[:200]}",
+            file=sys.stderr,
+        )
+        return False
+    except (OSError, http.client.HTTPException) as exc:
+        print(
+            f"[supabase_publish] publish failed: {type(exc).__name__}",
+            file=sys.stderr,
+        )
+        return False
+    finally:
+        connection.close()
 
 
 def publish(pair, direction, entry, sl, tp, score, tf, tier) -> bool:
@@ -124,39 +158,14 @@ def publish(pair, direction, entry, sl, tp, score, tf, tier) -> bool:
             "min_tier": "pro",
             "rationale": f"BotA score={score} tier={tier}",
         }
+        if not insert_signal(payload, key):
+            return False
 
-        data = json.dumps(payload).encode("utf-8")
-        request = urllib.request.Request(
-            f"{SUPABASE_URL}/rest/v1/signals",
-            data=data,
-            headers={
-                "Content-Type": "application/json",
-                "apikey": key,
-                "Authorization": f"Bearer {key}",
-                "Prefer": "return=minimal",
-            },
-            method="POST",
+        print(
+            f"[supabase_publish] published {pair} {direction} entry={entry}",
+            file=sys.stderr,
         )
-        try:
-            with urllib.request.urlopen(request, timeout=10):
-                print(
-                    f"[supabase_publish] published {pair} {direction} entry={entry}",
-                    file=sys.stderr,
-                )
-                return True
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", "replace")
-            print(
-                f"[supabase_publish] HTTP {exc.code}: {body[:200]}",
-                file=sys.stderr,
-            )
-            return False
-        except (OSError, TimeoutError, urllib.error.URLError) as exc:
-            print(
-                f"[supabase_publish] publish failed: {type(exc).__name__}",
-                file=sys.stderr,
-            )
-            return False
+        return True
 
 
 def main() -> int:
