@@ -28,6 +28,8 @@ ADX_RE = re.compile(r"(?:^|[|,\s])adx\s*=\s*(-?\d+(?:\.\d+)?)", re.IGNORECASE)
 
 
 def _finite(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
     try:
         number = float(value)
     except (TypeError, ValueError):
