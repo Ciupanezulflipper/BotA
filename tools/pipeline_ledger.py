@@ -21,7 +21,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
+
+TERMINAL_OUTCOMES = frozenset(
+    {
+        "MARKET_CLOSED",
+        "CLOCK_GATE_FAILED",
+        "DATA_FETCH_FAILED",
+        "DATA_STALE",
+        "EVALUATED_REJECTED",
+        "EVALUATED_ACCEPTED",
+        "DEDUP_SUPPRESSED_DELIVERY",
+        "DELIVERY_ATTEMPTED",
+        "INTERNAL_ERROR",
+    }
+)
 
 
 def root_dir() -> Path:
@@ -157,14 +171,40 @@ def commit_event(event: dict[str, Any], state_update: callable) -> None:
         save_state_unlocked(path, state)
 
 
+def normalize_terminal_outcome(value: str | None) -> str:
+    """Return a validated terminal outcome or empty string if none provided."""
+    if not value:
+        return ""
+    code = str(value).strip().upper()
+    if code and code not in TERMINAL_OUTCOMES:
+        raise ValueError(
+            f"unknown terminal_outcome {code!r}; expected one of {sorted(TERMINAL_OUTCOMES)}"
+        )
+    return code
+
+
 def command_component(args: argparse.Namespace) -> int:
     """Record component start, progress, completion, degradation, or failure."""
     event = common_event(args, "component")
     event["cycle_id"] = str(args.cycle_id or "")
     event["details"] = str(args.details or "")[:2000]
+    event["terminal_outcome"] = normalize_terminal_outcome(
+        getattr(args, "terminal_outcome", "")
+    )
+    event["market_reason"] = str(getattr(args, "market_reason", "") or "")[:64]
 
     def update(state: dict[str, Any]) -> None:
         state.setdefault("components", {})[event["component"]] = event
+        if event["terminal_outcome"]:
+            state["last_terminal_outcome"] = {
+                "component": event["component"],
+                "cycle_id": event["cycle_id"],
+                "terminal_outcome": event["terminal_outcome"],
+                "market_reason": event["market_reason"],
+                "monotonic_ns": event["monotonic_ns"],
+                "timestamp_utc": event["timestamp_utc"],
+                "event_id": event["event_id"],
+            }
 
     commit_event(event, update)
     print(json.dumps(event, sort_keys=True))
@@ -189,6 +229,10 @@ def command_decision(args: argparse.Namespace) -> int:
             "alerts_csv_persisted": str(args.alerts_csv_persisted).lower() == "true",
             "telegram_result": str(args.telegram_result or "not_attempted"),
             "supabase_result": str(args.supabase_result or "not_attempted"),
+            "terminal_outcome": normalize_terminal_outcome(
+                getattr(args, "terminal_outcome", "")
+            ),
+            "market_reason": str(getattr(args, "market_reason", "") or "")[:64],
         }
     )
     key = f"{event['pair']}:{event['timeframe']}"
@@ -223,6 +267,8 @@ def build_parser() -> argparse.ArgumentParser:
     component.add_argument("--details", default="")
     component.add_argument("--note", default="")
     component.add_argument("--server-epoch", type=int, default=0)
+    component.add_argument("--terminal-outcome", default="")
+    component.add_argument("--market-reason", default="")
     component.set_defaults(func=command_component)
 
     decision = sub.add_parser("decision")
@@ -243,6 +289,8 @@ def build_parser() -> argparse.ArgumentParser:
     decision.add_argument("--supabase-result", default="not_attempted")
     decision.add_argument("--note", default="")
     decision.add_argument("--server-epoch", type=int, default=0)
+    decision.add_argument("--terminal-outcome", default="")
+    decision.add_argument("--market-reason", default="")
     decision.set_defaults(func=command_decision)
 
     status = sub.add_parser("status")

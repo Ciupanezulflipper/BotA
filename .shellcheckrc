@@ -1,0 +1,4 @@
+# BotA shell scripts run under Bash on Android Termux. The production shebang
+# uses Termux's absolute Bash path, which generic analyzers may not recognize.
+# Declare the dialect explicitly so ShellCheck/DeepSource apply Bash semantics.
+shell=bash

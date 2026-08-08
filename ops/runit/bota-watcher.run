@@ -1,4 +1,25 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# FILE: ops/runit/bota-watcher.run
+# ROLE: runit persistent scheduler for the gated watcher cycle.
+#
+# One gated cycle per iteration is delegated to tools/watcher_gated_cycle.sh,
+# which is a one-shot script that emits exactly one terminal outcome and
+# exits. Between iterations, this wrapper sleeps SLEEP_SECONDS (default 300)
+# to preserve the historical production cadence and to prevent a runit tight
+# restart loop after normal one-shot completion.
+#
+# signal_watcher_pro.sh is NOT invoked directly from this wrapper any more.
+# It is only reached through the gated ledger path (watcher_gated_cycle.sh ->
+# run_signal_watcher_with_ledger.sh -> signal_watcher_pro.sh --once), which
+# preserves the existing watcher.lock instance-locking behavior in
+# signal_watcher_pro.sh main().
+#
+# A nonzero gated-cycle exit is logged visibly to logs/error.log rather than
+# swallowed, but does not kill this persistent scheduler; the next iteration
+# runs after the normal SLEEP_SECONDS interval. This matches "one failed
+# cycle should not permanently kill the persistent scheduler" while still
+# providing bounded cadence.
+
 set -euo pipefail
 set +x
 
@@ -30,4 +51,24 @@ export CANDLE_MAX_AGE_SECS="2700"
 export DRY_RUN_MODE="0"
 export TELEGRAM_ENABLED="1"
 
-exec bash "${ROOT}/tools/signal_watcher_pro.sh"
+# SLEEP_SECONDS matches the historical signal_watcher_pro.sh default (300s)
+# and can be overridden via .env.runtime. Any override below 30s is clamped
+# so a mistyped configuration cannot spin the CPU.
+: "${SLEEP_SECONDS:=300}"
+if ! [[ "${SLEEP_SECONDS}" =~ ^[0-9]+$ ]] || (( SLEEP_SECONDS < 30 )); then
+  SLEEP_SECONDS=300
+fi
+
+ERROR_LOG="${ROOT}/logs/error.log"
+mkdir -p "${ROOT}/logs" "${ROOT}/state"
+
+while true; do
+  rc=0
+  bash "${ROOT}/tools/watcher_gated_cycle.sh" || rc=$?
+  if (( rc != 0 )); then
+    printf 'bota-watcher: gated_cycle_rc=%s ts=%s\n' \
+      "${rc}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >>"${ERROR_LOG}"
+  fi
+  sleep "${SLEEP_SECONDS}"
+done

@@ -17,8 +17,60 @@ import sys
 from pathlib import Path
 from typing import Any
 
-EXPECTED = (("EURUSD", "M15"), ("GBPUSD", "M15"))
+# Safe production default. Consulted when neither a complete PAIRS/TIMEFRAMES
+# environment nor BOTA_REQUIRED_DECISIONS provides a scope. Kept in sync with
+# tools/pipeline_health.DEFAULT_PAIRS / DEFAULT_TIMEFRAMES so a mismatch
+# between what the watcher reconciles and what the health evaluator expects
+# is impossible under default configuration.
+DEFAULT_EXPECTED = (
+    ("EURUSD", "M15"),
+    ("GBPUSD", "M15"),
+    ("USDJPY", "M15"),
+)
 MAX_NEW_BYTES = 262_144
+
+
+def _split_scope(raw: str) -> tuple[str, ...]:
+    """Return upper-cased whitespace/comma-separated tokens of ``raw``."""
+    if not raw:
+        return ()
+    tokens = [item.strip().upper() for item in raw.replace(",", " ").split()]
+    return tuple(token for token in tokens if token)
+
+
+def expected_scope() -> tuple[tuple[str, str], ...]:
+    """Resolve the pair/timeframe reconciliation scope for this cycle.
+
+    Precedence:
+        1. ``BOTA_REQUIRED_DECISIONS`` — explicit ``PAIR:TIMEFRAME`` list.
+        2. Cartesian product of ``PAIRS`` x ``TIMEFRAMES`` when BOTH are set.
+        3. ``DEFAULT_EXPECTED`` (three-pair production scope).
+
+    A partial PAIRS/TIMEFRAMES environment is treated as incomplete and falls
+    back to the full safe production scope. This keeps reconciliation aligned
+    with pipeline health instead of silently inventing a missing dimension.
+    """
+    explicit = os.environ.get("BOTA_REQUIRED_DECISIONS", "").strip()
+    if explicit:
+        entries: list[tuple[str, str]] = []
+        for token in _split_scope(explicit):
+            if ":" not in token:
+                continue
+            pair, _, timeframe = token.partition(":")
+            if pair and timeframe:
+                entries.append((pair, timeframe))
+        if entries:
+            return tuple(entries)
+
+    pairs = _split_scope(os.environ.get("PAIRS", ""))
+    timeframes = _split_scope(os.environ.get("TIMEFRAMES", ""))
+    if pairs and timeframes:
+        return tuple((pair, tf) for pair in pairs for tf in timeframes)
+    return DEFAULT_EXPECTED
+
+
+# Backward-compatible name for callers/tests that still import EXPECTED.
+EXPECTED = DEFAULT_EXPECTED
 
 
 def root_dir() -> Path:
@@ -247,7 +299,7 @@ def main() -> int:
     effective_epoch = trusted_server_epoch(args.server_epoch, log_text)
     results: list[dict[str, Any]] = []
 
-    for pair, timeframe in EXPECTED:
+    for pair, timeframe in expected_scope():
         matching = [
             row
             for row in rows
