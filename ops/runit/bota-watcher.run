@@ -1,0 +1,33 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+set +x
+
+ROOT="${HOME}/BotA"
+RUNTIME_ENV="${ROOT}/.env.runtime"
+
+if [[ -f "${RUNTIME_ENV}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${RUNTIME_ENV}"
+  set +a
+fi
+
+export PAIRS="EURUSD GBPUSD USDJPY"
+export TIMEFRAMES="M15"
+export POLICY_B_ENABLED="1"
+export POLICY_B_SCORE_MIN="70"
+export POLICY_B_ADX_MAX="30"
+export NEWS_ON="0"
+export FILTER_SCORE_MIN="65"
+export FILTER_SCORE_MIN_ALL="65"
+export TELEGRAM_MIN_SCORE="70"
+export TELEGRAM_TIER_YELLOW_MIN="70"
+export TELEGRAM_TIER_YELLOW_MIN_INT="70"
+export TELEGRAM_TIER_GREEN_MIN="75"
+export TELEGRAM_TIER_GREEN_MIN_INT="75"
+export TELEGRAM_COOLDOWN_SECONDS="1800"
+export CANDLE_MAX_AGE_SECS="2700"
+export DRY_RUN_MODE="0"
+export TELEGRAM_ENABLED="1"
+
+exec bash "${ROOT}/tools/signal_watcher_pro.sh"
