@@ -3,7 +3,8 @@
 
 The worker consumes new rows appended to logs/alerts.csv. It keeps an independent
 byte cursor, retries the same eligible row until Supabase publication succeeds,
-and never replays historical rows on first activation.
+never replays historical rows on first activation, and records local useful
+progress in BotA's monotonic pipeline ledger.
 """
 from __future__ import annotations
 
@@ -75,6 +76,40 @@ def paths() -> tuple[Path, Path, Path, Path]:
         )
     )
     return alerts, state, lock, publisher
+
+
+def record_progress(status: str, details: str = "") -> None:
+    """Record local delivery progress without making network calls."""
+    ledger = Path(__file__).resolve().with_name("pipeline_ledger.py")
+    if not ledger.is_file():
+        return
+    command = [
+        sys.executable,
+        str(ledger),
+        "component",
+        "--component",
+        "profitlab_delivery",
+        "--status",
+        status,
+        "--cycle-id",
+        f"profitlab:{os.getpid()}",
+        "--details",
+        details[:1000],
+    ]
+    try:
+        subprocess.run(
+            command,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        # Delivery remains fail-closed through pipeline_health: if the ledger
+        # cannot advance, the previous event becomes stale instead of being
+        # falsely refreshed by a secondary health mechanism.
+        return
 
 
 def load_state(path: Path) -> dict[str, Any] | None:
@@ -278,12 +313,32 @@ def process_new_rows(
     return 0
 
 
+def progress_details(alerts: Path, state_path: Path, result: str) -> str:
+    """Build a compact non-secret progress summary."""
+    try:
+        source_size = alerts.stat().st_size
+    except OSError:
+        source_size = -1
+    state = load_state(state_path) or {}
+    try:
+        offset = int(state.get("offset", -1))
+    except (TypeError, ValueError, OverflowError):
+        offset = -1
+    pending = source_size - offset if source_size >= 0 and offset >= 0 else -1
+    return (
+        f"result={result};offset={offset};source_size={source_size};"
+        f"pending_bytes={pending}"
+    )
+
+
 def run(*, bootstrap: bool = False) -> int:
     alerts, state_path, lock_path, publisher = paths()
     if not alerts.exists():
+        record_progress("failed", "result=source_missing")
         print("PROFITLAB_DELIVERY_SOURCE=MISSING")
         return 0
     if not source_has_header(alerts):
+        record_progress("failed", "result=source_empty")
         print("PROFITLAB_DELIVERY_SOURCE=EMPTY")
         return 0
 
@@ -292,9 +347,12 @@ def run(*, bootstrap: bool = False) -> int:
         try:
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
+            # Do not refresh health from a second instance. If the lock owner
+            # becomes stuck, its earlier started event will age out naturally.
             print("PROFITLAB_DELIVERY=ALREADY_RUNNING")
             return 0
 
+        record_progress("started", progress_details(alerts, state_path, "started"))
         try:
             offset, source_size = prepare_cursor(
                 alerts,
@@ -302,6 +360,10 @@ def run(*, bootstrap: bool = False) -> int:
                 bootstrap=bootstrap,
             )
         except OSError as exc:
+            record_progress(
+                "failed",
+                progress_details(alerts, state_path, f"cursor_error:{type(exc).__name__}"),
+            )
             print(
                 f"PROFITLAB_DELIVERY_CURSOR_ERROR={type(exc).__name__}",
                 file=sys.stderr,
@@ -309,14 +371,28 @@ def run(*, bootstrap: bool = False) -> int:
             return 1
 
         if offset is None:
+            record_progress(
+                "completed",
+                progress_details(alerts, state_path, "idle_or_bootstrap"),
+            )
             return 0
-        return process_new_rows(
+
+        result = process_new_rows(
             alerts,
             state_path,
             publisher,
             offset,
             source_size,
         )
+        record_progress(
+            "completed" if result == 0 else "failed",
+            progress_details(
+                alerts,
+                state_path,
+                "processed" if result == 0 else "retry_required",
+            ),
+        )
+        return result
 
 
 def main() -> int:
