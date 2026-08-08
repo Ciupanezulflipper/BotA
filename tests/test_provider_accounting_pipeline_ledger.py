@@ -188,7 +188,7 @@ class PipelineProgressTests(TemporaryBotARootMixin, unittest.TestCase):
                 ),
                 0,
             )
-        for pair in ("EURUSD", "GBPUSD"):
+        for pair in ("EURUSD", "GBPUSD", "USDJPY"):
             self.assertEqual(
                 self.ledger(
                     [
