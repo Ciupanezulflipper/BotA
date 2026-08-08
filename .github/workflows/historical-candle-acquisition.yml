@@ -5,6 +5,7 @@ on:
     branches:
       - main
     paths:
+      - ".github/workflows/historical-candle-acquisition.yml"
       - "tools/fetch_historical_candles.py"
       - "tools/verify_replay_dataset.py"
       - "tools/replay_semantics.py"
@@ -29,9 +30,9 @@ on:
       - "tests/test_classify_replay_match_gaps.py"
       - "tests/test_weekend_production_readiness.py"
       - "audits/fixtures/supabase_bota_m15_20260601_20260801.json"
-      - ".github/workflows/historical-candle-acquisition.yml"
   pull_request:
     paths:
+      - ".github/workflows/historical-candle-acquisition.yml"
       - "tools/fetch_historical_candles.py"
       - "tools/verify_replay_dataset.py"
       - "tools/replay_semantics.py"
@@ -56,7 +57,6 @@ on:
       - "tests/test_classify_replay_match_gaps.py"
       - "tests/test_weekend_production_readiness.py"
       - "audits/fixtures/supabase_bota_m15_20260601_20260801.json"
-      - ".github/workflows/historical-candle-acquisition.yml"
 
 permissions:
   contents: read
