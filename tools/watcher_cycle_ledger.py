@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-EXPECTED = (("EURUSD", "M15"), ("GBPUSD", "M15"))
+EXPECTED = (("EURUSD", "M15"), ("GBPUSD", "M15"), ("USDJPY", "M15"))
 MAX_NEW_BYTES = 262_144
 
 
