@@ -10,7 +10,8 @@ from tools import compare_replay_outcomes as matcher
 
 
 class CompareReplayOutcomesTests(unittest.TestCase):
-    def _write_events(self, root: Path, rows: list[dict]) -> Path:
+    @staticmethod
+    def _write_events(root: Path, rows: list[dict]) -> Path:
         path = root / "events.jsonl"
         path.write_text(
             "".join(json.dumps(row) + "\n" for row in rows),
@@ -18,7 +19,8 @@ class CompareReplayOutcomesTests(unittest.TestCase):
         )
         return path
 
-    def _write_outcomes(self, root: Path, rows: list[dict]) -> Path:
+    @staticmethod
+    def _write_outcomes(root: Path, rows: list[dict]) -> Path:
         path = root / "outcomes.json"
         path.write_text(
             json.dumps(
@@ -237,6 +239,15 @@ class CompareReplayOutcomesTests(unittest.TestCase):
                     max_time_minutes=45.0,
                     max_entry_pips=5.0,
                 )
+
+    def test_output_cannot_overwrite_input(self) -> None:
+        events = Path("/tmp/events.jsonl")
+        outcomes = Path("/tmp/outcomes.json")
+        with self.assertRaisesRegex(ValueError, "must not overwrite"):
+            matcher._validate_output_path(events, events, outcomes)
+        with self.assertRaisesRegex(ValueError, "must not overwrite"):
+            matcher._validate_output_path(outcomes, events, outcomes)
+        matcher._validate_output_path(Path("/tmp/result.json"), events, outcomes)
 
     def test_frozen_supabase_fixture_totals(self) -> None:
         fixture = (
