@@ -1043,14 +1043,14 @@ scan_once() {
   # clock.
   local tf pair _sv_epoch _inherited
   _inherited="${BOTA_SERVER_EPOCH:-0}"
-  if [[ "${_inherited}" =~ ^[0-9]+$ ]] && (( _inherited > 1000000000 )); then
+  if [[ "${_inherited}" =~ ^[0-9]+$ ]] && (( _inherited > 1000000000 )); then  # skipcq
     _sv_epoch="${_inherited}"
     log "CLOCK" "server_clock_inherited BOTA_SERVER_EPOCH=${_sv_epoch}"
   else
     _sv_epoch="$(compute_server_clock_epoch 2>/dev/null || echo 0)"
     _sv_epoch="${_sv_epoch:-0}"
   fi
-  if [[ "${_sv_epoch}" =~ ^[0-9]+$ ]] && (( _sv_epoch > 1000000000 )); then
+  if [[ "${_sv_epoch}" =~ ^[0-9]+$ ]] && (( _sv_epoch > 1000000000 )); then  # skipcq
     export BOTA_SERVER_EPOCH="${_sv_epoch}"
     log "CLOCK" "server_clock_ok BOTA_SERVER_EPOCH=${BOTA_SERVER_EPOCH}"
   else

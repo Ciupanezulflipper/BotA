@@ -72,6 +72,8 @@ class TemporaryBotARoot:
             os.environ, {"BOTA_ROOT": str(self.root)}, clear=False
         )
         self.env.start()
+        for key in ("PAIRS", "TIMEFRAMES", "BOTA_REQUIRED_DECISIONS"):
+            os.environ.pop(key, None)
 
     def tearDown(self) -> None:
         self.env.stop()

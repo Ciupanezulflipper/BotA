@@ -83,7 +83,7 @@ emit_closed() {
 # DeepSource does not follow the indirect reference from `trap on_error ERR`.
 # This handler is intentionally invoked only by the ERR trap below.
 # skipcq
-on_error() {
+on_error() {  # skipcq
   local exit_code=$?
   if [[ -n "$_final_reason" ]]; then
     return 0

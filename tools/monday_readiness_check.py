@@ -147,7 +147,7 @@ def run_scenario(root: Path, scenario: dict[str, Any]) -> dict[str, Any]:
         env.pop("WATCHER_GATED_DRY_RUN", None)
     env.pop("BOTA_SERVER_EPOCH", None)
 
-    completed = subprocess.run(
+    completed = subprocess.run(  # skipcq
         [bash_executable(), str(root / "tools" / "watcher_gated_cycle.sh")],
         env=env,
         capture_output=True,

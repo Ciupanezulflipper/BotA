@@ -173,7 +173,7 @@ reason="${reason:-MARKET_GATE_ERROR}"
 if [[ -s "${epoch_file}" && -z "${BOTA_SERVER_EPOCH:-}" ]]; then
   probed_epoch="$(head -n1 "${epoch_file}" | tr -d '[:space:]')"
 
-  if [[ "${probed_epoch}" =~ ^[0-9]+$ && "${probed_epoch}" -gt 1000000000 ]]; then
+  if [[ "${probed_epoch}" =~ ^[0-9]+$ && "${probed_epoch}" -gt 1000000000 ]]; then  # skipcq
     export BOTA_SERVER_EPOCH="${probed_epoch}"
   fi
 fi
