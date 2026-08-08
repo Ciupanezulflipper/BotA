@@ -6,6 +6,7 @@
 REPLAY_SOURCE_COMMIT="6b437179cc58021aa358b1d0b04c121d9304c660"
 DATASET_ID="oanda-warmup-20240101-20260801-20260807-r3"
 RESULT_REL="data/replay_results/phase2-june-july-pr64"
+FIRST_FIELD_AWK='{print $1}'
 
 RUNNER_BLOB="498dbb9affb44f9b71e1b25bbd6228a20415914d"
 SEMANTICS_BLOB="6c18ddcfa7a49c5e5cb9cf139d341783dcb04a23"
@@ -36,6 +37,7 @@ signal_fail() {
   echo "REASON=INTERRUPTED:$signal_name"
   echo "NEXT_ACTION=CLASSIFY_BEFORE_RERUN"
   exit 130
+  return 130
 }
 
 trap cleanup EXIT
@@ -49,6 +51,7 @@ fail() {
   echo "REASON=$reason"
   echo "NEXT_ACTION=CLASSIFY_BEFORE_RERUN"
   exit 2
+  return 2
 }
 
 cache_hash() {
@@ -67,13 +70,15 @@ if root.exists():
         h.update(b"\0")
 print(h.hexdigest())
 PY
+  return 0
 }
 
 tracked_hash() {
   {
     git -C "$repo_root" diff --no-ext-diff --binary
     git -C "$repo_root" diff --cached --no-ext-diff --binary
-  } | sha256sum | awk '{print $1}'
+  } | sha256sum | awk "$FIRST_FIELD_AWK"
+  return 0
 }
 
 declare -A expected_blobs=(
@@ -218,10 +223,10 @@ if [[ "$run2_rc" -ne 0 ]]; then
   fail "REPLAY_RUN2_FAILED"
 fi
 
-event1="$(sha256sum "$tmp/run1.events.jsonl" | awk '{print $1}')"
-event2="$(sha256sum "$tmp/run2.events.jsonl" | awk '{print $1}')"
-summary1="$(sha256sum "$tmp/run1.summary.json" | awk '{print $1}')"
-summary2="$(sha256sum "$tmp/run2.summary.json" | awk '{print $1}')"
+event1="$(sha256sum "$tmp/run1.events.jsonl" | awk "$FIRST_FIELD_AWK")"
+event2="$(sha256sum "$tmp/run2.events.jsonl" | awk "$FIRST_FIELD_AWK")"
+summary1="$(sha256sum "$tmp/run1.summary.json" | awk "$FIRST_FIELD_AWK")"
+summary2="$(sha256sum "$tmp/run2.summary.json" | awk "$FIRST_FIELD_AWK")"
 
 echo
 echo "===== DETERMINISM PROOF ====="
