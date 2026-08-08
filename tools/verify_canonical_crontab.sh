@@ -1,9 +1,12 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# Verify the BotA cron block after core runtime jobs migrated to runit.
+
 set +e
 
 ROOT="${BOTA_ROOT:-/data/data/com.termux/files/home/BotA}"
 CANON="${ROOT}/ops/bota_crontab.canonical"
 TMPDIR="${ROOT}/logs/tmp"
+CRONTAB_SOURCE_FILE="${CRONTAB_SOURCE_FILE:-}"
 mkdir -p "$TMPDIR"
 
 echo "=== VERIFY CANONICAL BOTA CRONTAB ==="
@@ -19,9 +22,25 @@ echo "NO_EXIT_COMMANDS=YES"
 FAIL=0
 CUR="${TMPDIR}/crontab.current.verify.$$"
 BLOCK="${TMPDIR}/crontab.current_bota_block.verify.$$"
+ACTIVE="${TMPDIR}/crontab.current_active.verify.$$"
+MIGRATED="${TMPDIR}/crontab.current_migrated.verify.$$"
 
-crontab -l > "$CUR" 2>/dev/null
-echo "CRONTAB_READ_RC=$?"
+trap 'rm -f "$CUR" "$BLOCK" "$ACTIVE" "$MIGRATED"' EXIT HUP INT TERM
+
+if [ -n "$CRONTAB_SOURCE_FILE" ]; then
+  cat "$CRONTAB_SOURCE_FILE" > "$CUR" 2>/dev/null
+  READ_RC=$?
+  echo "CRONTAB_READ_SOURCE=file"
+else
+  crontab -l > "$CUR" 2>/dev/null
+  READ_RC=$?
+  echo "CRONTAB_READ_SOURCE=live"
+fi
+
+echo "CRONTAB_READ_RC=$READ_RC"
+if [ "$READ_RC" -ne 0 ]; then
+  FAIL=1
+fi
 
 if [ -s "$CANON" ]; then
   echo "CANONICAL_FILE_OK=$CANON"
@@ -36,21 +55,41 @@ awk '
   $0 == "# BotA runtime END" {flag=0}
 ' "$CUR" > "$BLOCK" 2>/dev/null
 
+grep -v '^[[:space:]]*#' "$BLOCK" > "$ACTIVE" 2>/dev/null
+grep '^[[:space:]]*#MIGRATED_TO_RUNIT[[:space:]]' "$BLOCK" > "$MIGRATED" 2>/dev/null
+
 echo
-echo "=== REQUIRED LIVE LINE COUNTS ==="
+echo "=== REQUIRED ACTIVE CRON JOBS ==="
 for pattern in \
-  "dividend-capture-scanner/run_bot.sh" \
-  "signal_watcher_pro.sh" \
-  "indicators_updater.sh" \
-  "run_shadow_manager.sh" \
-  "run_signal_closer_live.sh" \
-  "daily_summary_server_gate.sh" \
+  "alerts_to_trades.py" \
+  "pause_guard.py" \
+  "autostatus.sh" \
+  "signal_accuracy.py" \
   "clock_drift_check.sh" \
-  "bota_supervisor.sh"
+  "daily_summary_server_gate.sh" \
+  "run_runtime_health_push.sh"
 do
-  count="$(grep -v '^[[:space:]]*#' "$CUR" 2>/dev/null | grep -F "$pattern" | wc -l | tr -d ' ')"
-  echo "$pattern COUNT=$count"
+  count="$(grep -F "$pattern" "$ACTIVE" 2>/dev/null | wc -l | tr -d ' ')"
+  echo "$pattern ACTIVE_COUNT=$count"
   if [ "$count" != "1" ]; then
+    FAIL=1
+  fi
+done
+
+echo
+echo "=== REQUIRED RUNIT MIGRATIONS ==="
+for pattern in \
+  "signal_watcher_pro.sh" \
+  "run_shadow_manager.sh" \
+  "indicators_updater.sh" \
+  "heartbeat.sh" \
+  "bota_supervisor.sh" \
+  "run_signal_closer_live.sh"
+do
+  migrated_count="$(grep -F "$pattern" "$MIGRATED" 2>/dev/null | wc -l | tr -d ' ')"
+  active_count="$(grep -F "$pattern" "$ACTIVE" 2>/dev/null | wc -l | tr -d ' ')"
+  echo "$pattern MIGRATED_COUNT=$migrated_count ACTIVE_COUNT=$active_count"
+  if [ "$migrated_count" != "1" ] || [ "$active_count" != "0" ]; then
     FAIL=1
   fi
 done
@@ -81,4 +120,4 @@ else
   echo "PHASE2_VERIFY_PASS=NO"
 fi
 
-rm -f "$CUR" "$BLOCK"
+exit "$FAIL"
