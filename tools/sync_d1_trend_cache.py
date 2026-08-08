@@ -4,10 +4,11 @@
 The indicator updater already fetches and builds D1 bundles for the configured
 pairs. This helper derives the lightweight d1_trend_<PAIR>.json files from those
 local bundles, avoiding a second provider request and keeping USDJPY on the same
-provider/candle state as the rest of the pipeline.
+provider/candle state as the rest of the pipeline. Each run also records local
+useful progress in BotA's monotonic pipeline ledger.
 
 Production runtime accepts pair names only. Filesystem paths are fixed beneath
-$HOME/BotA/cache and are never constructed from CLI input.
+BOTA_ROOT/cache and are never constructed from arbitrary CLI paths.
 """
 
 from __future__ import annotations
@@ -16,17 +17,68 @@ import argparse
 import json
 import math
 import os
+import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 DEFAULT_PAIRS = ("EURUSD", "GBPUSD", "USDJPY")
-CACHE_DIR = (Path.home() / "BotA" / "cache").resolve()
 PAIR_FILES = {
     "EURUSD": ("indicators_EURUSD_D1.json", "d1_trend_EURUSD.json"),
     "GBPUSD": ("indicators_GBPUSD_D1.json", "d1_trend_GBPUSD.json"),
     "USDJPY": ("indicators_USDJPY_D1.json", "d1_trend_USDJPY.json"),
 }
+
+
+def root_dir() -> Path:
+    configured = os.environ.get("BOTA_ROOT", "").strip()
+    return (
+        Path(configured).expanduser().resolve()
+        if configured
+        else (Path.home() / "BotA").resolve()
+    )
+
+
+# Compatibility seam retained for the historical offline test suite. Production
+# processes resolve this after BOTA_ROOT is loaded; tests may safely monkeypatch
+# the fixed cache root without weakening pair/path validation.
+CACHE_DIR = root_dir() / "cache"
+
+
+def cache_dir() -> Path:
+    return CACHE_DIR
+
+
+def record_progress(status: str, details: str = "") -> None:
+    """Record D1 synchronization progress without provider/network activity."""
+    ledger = Path(__file__).resolve().with_name("pipeline_ledger.py")
+    if not ledger.is_file():
+        return
+    command = [
+        sys.executable,
+        str(ledger),
+        "component",
+        "--component",
+        "d1_sync",
+        "--status",
+        status,
+        "--cycle-id",
+        f"d1_sync:{os.getpid()}",
+        "--details",
+        details[:1000],
+    ]
+    try:
+        subprocess.run(
+            command,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return
 
 
 def _finite(value: Any) -> float | None:
@@ -51,8 +103,9 @@ def _cache_paths(pair: str) -> tuple[Path, Path]:
     if filenames is None:
         raise ValueError(f"unsupported production pair: {normalized}")
 
-    source = CACHE_DIR / filenames[0]
-    target = CACHE_DIR / filenames[1]
+    root = cache_dir()
+    source = root / filenames[0]
+    target = root / filenames[1]
     return source, target
 
 
@@ -110,18 +163,41 @@ def _parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = _parser().parse_args()
+    requested = tuple(args.pairs)
+    full_production_scope = set(requested) == set(DEFAULT_PAIRS)
+    record_progress("started", f"pairs={' '.join(requested)}")
     failures = 0
-    for pair in args.pairs:
+    completed: list[str] = []
+    for pair in requested:
         try:
             result = sync_pair(pair)
+            completed.append(pair)
             print(
                 f"D1_SYNC={pair}|trend={result['trend']}|"
                 f"ema9={result['ema9']:.5f}|ema21={result['ema21']:.5f}"
             )
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             failures += 1
             print(f"D1_SYNC_FAIL={pair}|error={type(exc).__name__}")
+
+    if failures:
+        health_status = "failed"
+    elif full_production_scope:
+        health_status = "completed"
+    else:
+        # A successful ad-hoc subset sync is valid as a command, but it must not
+        # refresh the production D1 health gate for all three live pairs.
+        health_status = "partial"
+
+    record_progress(
+        health_status,
+        (
+            f"pairs={' '.join(requested)};completed={' '.join(completed)};"
+            f"failures={failures};full_production_scope={full_production_scope}"
+        ),
+    )
     print(f"D1_SYNC_STATUS={'PASS' if failures == 0 else 'FAIL'}")
+    print(f"D1_SYNC_PRODUCTION_SCOPE={'FULL' if full_production_scope else 'PARTIAL'}")
     return 0 if failures == 0 else 1
 
 

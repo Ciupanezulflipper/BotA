@@ -9,6 +9,9 @@ on:
       - "tools/pipeline_health.py"
       - "tools/control_plane_status.py"
       - "tools/watcher_cycle_ledger.py"
+      - "tools/profitlab_delivery.py"
+      - "tools/sync_d1_trend_cache.py"
+      - "tools/monday_readiness.py"
       - "tools/run_signal_watcher_with_ledger.sh"
       - "tools/data_fetch_candles.sh"
       - "tools/indicators_updater.sh"
@@ -16,6 +19,7 @@ on:
       - "tools/bota_supervisor.sh"
       - "tools/heartbeat.sh"
       - "tests/test_provider_accounting_pipeline_ledger.py"
+      - "tests/test_monday_readiness_policy.py"
       - ".github/workflows/provider-accounting-pipeline-ledger.yml"
   workflow_dispatch:
 
@@ -39,7 +43,12 @@ jobs:
             tools/pipeline_ledger.py \
             tools/pipeline_health.py \
             tools/control_plane_status.py \
-            tools/watcher_cycle_ledger.py
+            tools/watcher_cycle_ledger.py \
+            tools/profitlab_delivery.py \
+            tools/sync_d1_trend_cache.py \
+            tools/monday_readiness.py \
+            tests/test_provider_accounting_pipeline_ledger.py \
+            tests/test_monday_readiness_policy.py
       - name: Check shell syntax
         run: |
           bash -n tools/data_fetch_candles.sh
@@ -49,4 +58,7 @@ jobs:
           bash -n tools/bota_supervisor.sh
           bash -n tools/heartbeat.sh
       - name: Run focused regression tests
-        run: python -m unittest -v tests.test_provider_accounting_pipeline_ledger
+        run: |
+          python -m unittest -v \
+            tests.test_provider_accounting_pipeline_ledger \
+            tests.test_monday_readiness_policy
