@@ -11,7 +11,7 @@ RUNNER_BLOB="498dbb9affb44f9b71e1b25bbd6228a20415914d"
 SEMANTICS_BLOB="6c18ddcfa7a49c5e5cb9cf139d341783dcb04a23"
 VERIFIER_BLOB="04dff84cbbd1a86a5508282f09b12726744778eb"
 
-if [[ "${1:-}" == "--self-check" ]]; then
+if [[ "${1:-}" = "--self-check" ]]; then
   echo "PHASE2_RUNNER_SELF_CHECK=PASS"
   echo "REPLAY_SOURCE_COMMIT=$REPLAY_SOURCE_COMMIT"
   echo "DATASET_ID=$DATASET_ID"
@@ -26,8 +26,22 @@ tmp="${TMPDIR:-${PREFIX:-/tmp}/tmp}/bota_phase2_$$"
 
 cleanup() {
   rm -rf "$tmp"
+  return 0
 }
-trap cleanup EXIT HUP INT TERM
+
+signal_fail() {
+  local signal_name="$1"
+  trap - HUP INT TERM
+  echo "PHASE2_DETERMINISM_GATE=FAIL"
+  echo "REASON=INTERRUPTED:$signal_name"
+  echo "NEXT_ACTION=CLASSIFY_BEFORE_RERUN"
+  exit 130
+}
+
+trap cleanup EXIT
+trap 'signal_fail HUP' HUP
+trap 'signal_fail INT' INT
+trap 'signal_fail TERM' TERM
 
 fail() {
   local reason="$1"
@@ -127,7 +141,6 @@ for file in "${source_files[@]}"; do
   then
     fail "PINNED_SOURCE_DOWNLOAD_FAILED:$file"
   fi
-
 done
 
 echo
@@ -272,14 +285,14 @@ tracked_after="$(tracked_hash)"
 echo
 echo "===== ISOLATION PROOF ====="
 echo "PRODUCTION_CACHE_SHA256_AFTER=$cache_after"
-if [[ "$cache_before" == "$cache_after" ]]; then
+if [[ "$cache_before" = "$cache_after" ]]; then
   echo "PRODUCTION_CACHE_UNCHANGED=YES"
 else
   echo "PRODUCTION_CACHE_UNCHANGED=NO"
   fail "PRODUCTION_CACHE_CHANGED"
 fi
 
-if [[ "$tracked_before" == "$tracked_after" ]]; then
+if [[ "$tracked_before" = "$tracked_after" ]]; then
   echo "TRACKED_WORKTREE_UNCHANGED=YES"
 else
   echo "TRACKED_WORKTREE_UNCHANGED=NO"
