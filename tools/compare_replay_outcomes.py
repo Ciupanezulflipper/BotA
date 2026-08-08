@@ -324,7 +324,7 @@ def _validate_expected_sha256(expected: str | None, actual: str) -> str | None:
         return None
     normalized = expected.strip().lower()
     if not SHA256_RE.fullmatch(normalized):
-        raise ValueError("expected replay event SHA-256 must be 64 lowercase hex digits")
+        raise ValueError("expected replay event SHA-256 must be 64 hex digits")
     if actual != normalized:
         raise ValueError(
             f"replay event ledger SHA-256 mismatch: {actual}!={normalized}"
@@ -474,7 +474,7 @@ def compare(
 
 
 def _validate_output_path(output: Path, events: Path, outcomes: Path) -> None:
-    if output == events or output == outcomes:
+    if output in {events, outcomes}:
         raise ValueError("comparison output must not overwrite an input file")
 
 
