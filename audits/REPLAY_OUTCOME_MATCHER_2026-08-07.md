@@ -96,13 +96,15 @@ A later full replay outcome-resolution model is required before claiming perform
 
 The matcher is offline and does not query Supabase, OANDA, Telegram, or any other network service at runtime.
 
-It reads the immutable local replay event ledger and frozen JSON snapshot, then writes only the explicit comparison output selected by the operator.
+The Python tool is intentionally read-only. It opens the immutable local replay event ledger and frozen JSON outcome snapshot for reading, emits the complete machine-readable comparison JSON to standard output, and emits the compact forensic gate summary to standard error.
+
+The matcher does not accept an output path and does not create or modify files itself. The reviewed phone invocation may redirect standard output to the fixed canonical comparison result path after separately proving that the replay ledger SHA-256 is the expected immutable value.
 
 It must not mutate production strategy, thresholds, pair scope, Telegram, Supabase, services, cron, cooldown state, or the production candle cache.
 
 ## Next action after reviewed merge
 
-Run the reviewed matcher once against the canonical event ledger with the exact expected event SHA-256 and frozen tolerances above.
+Run the reviewed matcher once against the canonical event ledger with the exact expected event SHA-256 and frozen tolerances above. Redirect its JSON stdout to the fixed canonical comparison result file while leaving the compact stderr gate visible in Termux.
 
 If `MATCH_GATE=PASS`, record the exact A/B/C observed published-outcome comparison and proceed to robustness/full replay trade-outcome resolution.
 
