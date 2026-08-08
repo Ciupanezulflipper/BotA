@@ -88,9 +88,11 @@ class ProductionSignalPolicyTests(unittest.TestCase):
 
     def test_strict_json_input_rejects_nonstandard_constants(self) -> None:
         for constant in ("NaN", "Infinity", "-Infinity"):
-            with self.subTest(constant=constant):
-                with self.assertRaisesRegex(ValueError, "non-standard JSON constant"):
-                    policy._decode(f'{{"score":{constant}}}')
+            with (
+                self.subTest(constant=constant),
+                self.assertRaisesRegex(ValueError, "non-standard JSON constant"),
+            ):
+                policy._decode(f'{{"score":{constant}}}')
 
     def test_strict_json_output_falls_back_on_nonfinite_value(self) -> None:
         encoded = policy._safe_encode(
