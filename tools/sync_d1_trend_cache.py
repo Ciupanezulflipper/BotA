@@ -176,7 +176,7 @@ def main() -> int:
                 f"D1_SYNC={pair}|trend={result['trend']}|"
                 f"ema9={result['ema9']:.5f}|ema21={result['ema21']:.5f}"
             )
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError) as exc:
             failures += 1
             print(f"D1_SYNC_FAIL={pair}|error={type(exc).__name__}")
 
