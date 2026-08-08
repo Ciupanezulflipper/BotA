@@ -36,18 +36,27 @@ def load_object(path: Path) -> dict[str, Any]:
 
 
 def run_command(command: list[str], root: Path) -> subprocess.CompletedProcess[str]:
+    """Run one fixed local readiness delegate and convert launch failures to FAIL."""
     environment = os.environ.copy()
     environment["BOTA_ROOT"] = str(root)
-    return subprocess.run(
-        command,
-        cwd=root,
-        env=environment,
-        stdin=subprocess.DEVNULL,
-        text=True,
-        capture_output=True,
-        timeout=30,
-        check=False,
-    )
+    try:
+        return subprocess.run(
+            command,
+            cwd=root,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=127,
+            stdout="",
+            stderr=type(exc).__name__,
+        )
 
 
 def append_check(
@@ -78,7 +87,11 @@ def check_production_scope(root: Path, checks: list[dict[str, Any]]) -> None:
         checks,
         "production_scope",
         not missing,
-        {"pairs": list(PRODUCTION_PAIRS), "timeframe": PRODUCTION_TIMEFRAME, "missing": missing},
+        {
+            "pairs": list(PRODUCTION_PAIRS),
+            "timeframe": PRODUCTION_TIMEFRAME,
+            "missing": missing,
+        },
     )
 
 
@@ -90,7 +103,7 @@ def check_runtime_truth(
     path = root / "state" / "runtime_health.json"
     try:
         health = load_object(path)
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:
         append_check(checks, "runtime_truth", False, type(exc).__name__)
         return
 
@@ -125,18 +138,19 @@ def check_control_plane(root: Path, checks: list[dict[str, Any]]) -> None:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
         data = {}
-    healthy = result.returncode == 0 and isinstance(data, dict) and data.get("healthy") is True
+    healthy = result.returncode == 0 and data.get("healthy") is True
     append_check(
         checks,
         "control_plane",
         healthy,
         {
             "returncode": result.returncode,
-            "manager_count": data.get("manager_count") if isinstance(data, dict) else None,
-            "owned": data.get("owned") if isinstance(data, dict) else None,
-            "running": data.get("running") if isinstance(data, dict) else None,
-            "orphaned": data.get("orphaned") if isinstance(data, dict) else None,
-            "duplicate_service_rows": data.get("duplicate_service_rows") if isinstance(data, dict) else None,
+            "delegate_error": result.stderr or None,
+            "manager_count": data.get("manager_count"),
+            "owned": data.get("owned"),
+            "running": data.get("running"),
+            "orphaned": data.get("orphaned"),
+            "duplicate_service_rows": data.get("duplicate_service_rows"),
         },
     )
 
@@ -150,6 +164,7 @@ def check_canonical_cron(root: Path, checks: list[dict[str, Any]]) -> None:
         result.returncode == 0,
         {
             "returncode": result.returncode,
+            "delegate_error": result.stderr or None,
             "hash_match": "BOTA_BLOCK_HASH_MATCH=YES" in result.stdout,
             "phase2_verify": "PHASE2_VERIFY_PASS=YES" in result.stdout,
         },
@@ -168,16 +183,17 @@ def check_pipeline(
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
         data = {}
-    healthy = result.returncode == 0 and isinstance(data, dict) and data.get("healthy") is True
+    healthy = result.returncode == 0 and data.get("healthy") is True
     append_check(
         checks,
         "pipeline_progress",
         healthy,
         {
             "returncode": result.returncode,
-            "required_decisions": data.get("required_decisions") if isinstance(data, dict) else None,
-            "failure_reasons": data.get("failure_reasons") if isinstance(data, dict) else None,
-            "components": data.get("components") if isinstance(data, dict) else None,
+            "delegate_error": result.stderr or None,
+            "required_decisions": data.get("required_decisions"),
+            "failure_reasons": data.get("failure_reasons"),
+            "components": data.get("components"),
         },
     )
 
@@ -199,7 +215,7 @@ def check_d1_caches(root: Path, checks: list[dict[str, Any]]) -> None:
             }
             if not healthy:
                 failures.append(pair)
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError) as exc:
             failures.append(pair)
             details[pair] = {"healthy": False, "error": type(exc).__name__}
     append_check(checks, "d1_cache_identity", not failures, details)
@@ -208,19 +224,26 @@ def check_d1_caches(root: Path, checks: list[dict[str, Any]]) -> None:
 def check_profitlab_cursor(root: Path, checks: list[dict[str, Any]]) -> None:
     alerts = root / "logs" / "alerts.csv"
     cursor = root / "state" / "profitlab_delivery_cursor.json"
+    detail: dict[str, Any]
     try:
         source_size = alerts.stat().st_size
         data = load_object(cursor)
         offset = int(data["offset"])
         state_source_size = int(data.get("source_size", source_size))
-        healthy = 0 <= offset <= source_size and 0 <= state_source_size <= source_size
+        pending_bytes = source_size - offset
+        healthy = (
+            offset == source_size
+            and 0 <= state_source_size <= source_size
+            and pending_bytes == 0
+        )
         detail = {
             "offset": offset,
             "source_size": source_size,
             "state_source_size": state_source_size,
-            "pending_bytes": source_size - offset,
+            "pending_bytes": pending_bytes,
+            "queue_drained": pending_bytes == 0,
         }
-    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, KeyError, TypeError, ValueError) as exc:
         healthy = False
         detail = {"error": type(exc).__name__}
     append_check(checks, "profitlab_cursor", healthy, detail)
@@ -232,11 +255,11 @@ def check_provider_accounting(root: Path, checks: list[dict[str, Any]]) -> None:
         data = load_object(path)
         providers = data.get("providers")
         healthy = isinstance(providers, dict)
-        detail = {
+        detail: dict[str, Any] = {
             "utc_date": data.get("utc_date"),
             "providers": sorted(providers) if isinstance(providers, dict) else None,
         }
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:
         healthy = False
         detail = {"error": type(exc).__name__}
     append_check(checks, "provider_accounting", healthy, detail)
@@ -268,7 +291,7 @@ def evaluate(market_open: bool) -> dict[str, Any]:
 
     failures = [check["name"] for check in checks if not check["healthy"]]
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "read_only": True,
         "network_calls_requested": False,
         "service_mutation_performed": False,
