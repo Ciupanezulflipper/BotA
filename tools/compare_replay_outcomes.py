@@ -20,6 +20,7 @@ POLICY_FIELDS = {
     "C": "policy_c_score70_adx_lt30_no_extreme",
 }
 SCORE_RE = re.compile(r"\bscore=([0-9]+(?:\.[0-9]+)?)\b")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 @dataclass(frozen=True)
@@ -150,20 +151,17 @@ def _build_candidates(
 ) -> dict[str, list[Candidate]]:
     result: dict[str, list[Candidate]] = {}
     for outcome in outcomes:
-        candidates = [
-            candidate
-            for index, event in enumerate(events)
-            if (
-                candidate := _candidate(
-                    outcome,
-                    event,
-                    index,
-                    max_time_minutes=max_time_minutes,
-                    max_entry_pips=max_entry_pips,
-                )
+        candidates: list[Candidate] = []
+        for index, event in enumerate(events):
+            candidate = _candidate(
+                outcome,
+                event,
+                index,
+                max_time_minutes=max_time_minutes,
+                max_entry_pips=max_entry_pips,
             )
-            is not None
-        ]
+            if candidate is not None:
+                candidates.append(candidate)
         candidates.sort(
             key=lambda item: (
                 round(item.entry_diff_pips, 9),
@@ -202,8 +200,7 @@ def _resolve_unique_matches(
             if len(outcome_ids) != 1:
                 continue
             outcome_id = outcome_ids[0]
-            match = filtered[outcome_id][0]
-            matches[outcome_id] = match
+            matches[outcome_id] = filtered[outcome_id][0]
             used_events.add(event_index)
             progress = True
         pending = filtered
@@ -279,36 +276,13 @@ def _matched_row(
     }
 
 
-def compare(
-    *,
-    events_path: Path,
-    outcomes_path: Path,
-    expected_events_sha256: str | None,
-    max_time_minutes: float,
-    max_entry_pips: float,
-) -> dict[str, Any]:
-    if max_time_minutes <= 0 or max_entry_pips <= 0:
-        raise ValueError("matching tolerances must be positive")
-
-    events_sha256 = _sha256(events_path)
-    if expected_events_sha256 and events_sha256 != expected_events_sha256.lower():
-        raise ValueError(
-            "replay event ledger SHA-256 mismatch: "
-            f"{events_sha256}!={expected_events_sha256.lower()}"
-        )
-
-    events = _load_events(events_path)
-    snapshot, outcomes = _load_outcomes(outcomes_path)
-    candidates = _build_candidates(
-        outcomes,
-        events,
-        max_time_minutes=max_time_minutes,
-        max_entry_pips=max_entry_pips,
-    )
-    matches, unresolved = _resolve_unique_matches(candidates)
+def _build_matched_rows(
+    outcomes: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+    matches: dict[str, Candidate],
+) -> list[dict[str, Any]]:
     outcome_by_id = {str(row["id"]): row for row in outcomes}
-
-    matched_rows = [
+    rows = [
         _matched_row(
             outcome_by_id[outcome_id],
             events[candidate.event_index],
@@ -316,13 +290,22 @@ def compare(
         )
         for outcome_id, candidate in matches.items()
     ]
-    matched_rows.sort(key=lambda row: str(row["outcome"]["created_at"]))
+    rows.sort(key=lambda row: str(row["outcome"]["created_at"]))
+    return rows
 
+
+def _unresolved_payload(
+    events: list[dict[str, Any]],
+    unresolved: dict[str, list[Candidate]],
+) -> tuple[list[str], dict[str, list[dict[str, Any]]]]:
     unmatched_ids = sorted(
         outcome_id for outcome_id, choices in unresolved.items() if not choices
     )
-    ambiguous = {
-        outcome_id: [
+    ambiguous: dict[str, list[dict[str, Any]]] = {}
+    for outcome_id, choices in sorted(unresolved.items()):
+        if not choices:
+            continue
+        ambiguous[outcome_id] = [
             {
                 "event_index": candidate.event_index,
                 "decision_time": events[candidate.event_index].get("decision_time"),
@@ -333,44 +316,94 @@ def compare(
             }
             for candidate in choices
         ]
-        for outcome_id, choices in sorted(unresolved.items())
-        if choices
+    return unmatched_ids, ambiguous
+
+
+def _validate_expected_sha256(expected: str | None, actual: str) -> str | None:
+    if expected is None:
+        return None
+    normalized = expected.strip().lower()
+    if not SHA256_RE.fullmatch(normalized):
+        raise ValueError("expected replay event SHA-256 must be 64 lowercase hex digits")
+    if actual != normalized:
+        raise ValueError(
+            f"replay event ledger SHA-256 mismatch: {actual}!={normalized}"
+        )
+    return normalized
+
+
+def _replay_counts(events: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        policy: sum(bool(event.get(field)) for event in events)
+        for policy, field in POLICY_FIELDS.items()
     }
 
-    expected_count = int(snapshot["expected_count"])
-    match_gate = (
+
+def _match_gate(
+    expected_count: int,
+    outcomes: list[dict[str, Any]],
+    matched_rows: list[dict[str, Any]],
+    unmatched_ids: list[str],
+    ambiguous: dict[str, list[dict[str, Any]]],
+) -> bool:
+    return (
         len(outcomes) == expected_count
         and len(matched_rows) == expected_count
         and not unmatched_ids
         and not ambiguous
     )
 
-    replay_counts = {
-        policy: sum(bool(event.get(field)) for event in events)
-        for policy, field in POLICY_FIELDS.items()
+
+def _matching_contract(max_time_minutes: float, max_entry_pips: float) -> dict[str, Any]:
+    return {
+        "pair_match": "required",
+        "direction_match": "required",
+        "policy_a_acceptance": "required_candidate_pool",
+        "entry_price_consistency": "required",
+        "max_entry_pips": max_entry_pips,
+        "bounded_temporal_consistency": "required",
+        "max_abs_time_delta_minutes": max_time_minutes,
+        "created_at_as_sole_key": "forbidden",
+        "ambiguous_match": "report_not_force",
+        "one_replay_event_per_published_signal": "required",
     }
+
+
+def _comparison_result(
+    *,
+    events: list[dict[str, Any]],
+    outcomes: list[dict[str, Any]],
+    snapshot: dict[str, Any],
+    matched_rows: list[dict[str, Any]],
+    unmatched_ids: list[str],
+    ambiguous: dict[str, list[dict[str, Any]]],
+    events_path: Path,
+    outcomes_path: Path,
+    events_sha256: str,
+    expected_events_sha256: str | None,
+    max_time_minutes: float,
+    max_entry_pips: float,
+) -> dict[str, Any]:
+    expected_count = int(snapshot["expected_count"])
+    gate = _match_gate(
+        expected_count,
+        outcomes,
+        matched_rows,
+        unmatched_ids,
+        ambiguous,
+    )
+    replay_counts = _replay_counts(events)
     policy_stats = {
         policy: _policy_stats(matched_rows, field)
         for policy, field in POLICY_FIELDS.items()
     }
-
+    match_rate = 100.0 * len(matched_rows) / len(outcomes) if outcomes else 0.0
     return {
         "schema_version": 1,
-        "status": "COMPLETE" if match_gate else "PARTIAL_MATCH",
-        "match_gate": "PASS" if match_gate else "FAIL",
-        "policy_statistics_complete": match_gate,
-        "matching_contract": {
-            "pair_match": "required",
-            "direction_match": "required",
-            "policy_a_acceptance": "required_candidate_pool",
-            "entry_price_consistency": "required",
-            "max_entry_pips": max_entry_pips,
-            "bounded_temporal_consistency": "required",
-            "max_abs_time_delta_minutes": max_time_minutes,
-            "created_at_as_sole_key": "forbidden",
-            "ambiguous_match": "report_not_force",
-            "one_replay_event_per_published_signal": "required",
-        },
+        "status": "COMPLETE" if gate else "PARTIAL_MATCH",
+        "match_gate": "PASS" if gate else "FAIL",
+        "policy_statistics_complete": gate,
+        "matching_contract": _matching_contract(max_time_minutes, max_entry_pips),
         "integrity": {
             "events_path": str(events_path),
             "events_sha256": events_sha256,
@@ -388,17 +421,61 @@ def compare(
             "matched_outcomes": len(matched_rows),
             "unmatched_outcomes": len(unmatched_ids),
             "ambiguous_outcomes": len(ambiguous),
-            "match_rate_percent": round(
-                100.0 * len(matched_rows) / len(outcomes), 2
-            )
-            if outcomes
-            else 0.0,
+            "match_rate_percent": round(match_rate, 2),
         },
         "policy_observed_published_outcomes": policy_stats,
         "matched": matched_rows,
         "unmatched_outcome_ids": unmatched_ids,
         "ambiguous": ambiguous,
     }
+
+
+def compare(
+    *,
+    events_path: Path,
+    outcomes_path: Path,
+    expected_events_sha256: str | None,
+    max_time_minutes: float,
+    max_entry_pips: float,
+) -> dict[str, Any]:
+    if max_time_minutes <= 0 or max_entry_pips <= 0:
+        raise ValueError("matching tolerances must be positive")
+
+    events_sha256 = _sha256(events_path)
+    normalized_expected = _validate_expected_sha256(
+        expected_events_sha256,
+        events_sha256,
+    )
+    events = _load_events(events_path)
+    snapshot, outcomes = _load_outcomes(outcomes_path)
+    candidates = _build_candidates(
+        outcomes,
+        events,
+        max_time_minutes=max_time_minutes,
+        max_entry_pips=max_entry_pips,
+    )
+    matches, unresolved = _resolve_unique_matches(candidates)
+    matched_rows = _build_matched_rows(outcomes, events, matches)
+    unmatched_ids, ambiguous = _unresolved_payload(events, unresolved)
+    return _comparison_result(
+        events=events,
+        outcomes=outcomes,
+        snapshot=snapshot,
+        matched_rows=matched_rows,
+        unmatched_ids=unmatched_ids,
+        ambiguous=ambiguous,
+        events_path=events_path,
+        outcomes_path=outcomes_path,
+        events_sha256=events_sha256,
+        expected_events_sha256=normalized_expected,
+        max_time_minutes=max_time_minutes,
+        max_entry_pips=max_entry_pips,
+    )
+
+
+def _validate_output_path(output: Path, events: Path, outcomes: Path) -> None:
+    if output == events or output == outcomes:
+        raise ValueError("comparison output must not overwrite an input file")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -444,10 +521,13 @@ def _print_console(result: dict[str, Any]) -> None:
 
 def main() -> int:
     args = _parser().parse_args()
+    events_path = Path(args.events).resolve()
+    outcomes_path = Path(args.outcomes).resolve()
     output = Path(args.output).resolve()
+    _validate_output_path(output, events_path, outcomes_path)
     result = compare(
-        events_path=Path(args.events).resolve(),
-        outcomes_path=Path(args.outcomes).resolve(),
+        events_path=events_path,
+        outcomes_path=outcomes_path,
         expected_events_sha256=args.expected_events_sha256,
         max_time_minutes=args.max_time_minutes,
         max_entry_pips=args.max_entry_pips,
