@@ -18,6 +18,11 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_PAIRS = ("EURUSD", "GBPUSD", "USDJPY")
+PAIR_FILES = {
+    "EURUSD": ("indicators_EURUSD_D1.json", "d1_trend_EURUSD.json"),
+    "GBPUSD": ("indicators_GBPUSD_D1.json", "d1_trend_GBPUSD.json"),
+    "USDJPY": ("indicators_USDJPY_D1.json", "d1_trend_USDJPY.json"),
+}
 
 
 def _finite(value: Any) -> float | None:
@@ -29,16 +34,28 @@ def _finite(value: Any) -> float | None:
 
 
 def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.tmp.{os.getpid()}")
     temp.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
     os.replace(temp, path)
 
 
+def _cache_paths(root: Path, pair: str) -> tuple[Path, Path]:
+    normalized = pair.upper().strip()
+    filenames = PAIR_FILES.get(normalized)
+    if filenames is None:
+        raise ValueError(f"unsupported production pair: {normalized}")
+
+    cache = (root / "cache").resolve()
+    source = (cache / filenames[0]).resolve()
+    target = (cache / filenames[1]).resolve()
+    if source.parent != cache or target.parent != cache:
+        raise ValueError("D1 cache path escaped cache directory")
+    return source, target
+
+
 def sync_pair(root: Path, pair: str) -> dict[str, Any]:
     pair = pair.upper().strip()
-    source = root / "cache" / f"indicators_{pair}_D1.json"
-    target = root / "cache" / f"d1_trend_{pair}.json"
+    source, target = _cache_paths(root.resolve(), pair)
 
     if not source.is_file():
         raise FileNotFoundError(f"missing D1 indicators: {source}")
@@ -74,19 +91,24 @@ def _parser() -> argparse.ArgumentParser:
         description="Sync BotA D1 trend caches from local D1 indicator bundles"
     )
     parser.add_argument(
-        "--root",
-        default=os.environ.get("BOTA_ROOT", str(Path.home() / "BotA")),
+        "--pairs",
+        nargs="+",
+        choices=DEFAULT_PAIRS,
+        default=list(DEFAULT_PAIRS),
     )
-    parser.add_argument("--pairs", nargs="+", default=list(DEFAULT_PAIRS))
     return parser
+
+
+def _root() -> Path:
+    configured = os.environ.get("BOTA_ROOT")
+    return Path(configured).expanduser().resolve() if configured else (Path.home() / "BotA").resolve()
 
 
 def main() -> int:
     args = _parser().parse_args()
-    root = Path(args.root).expanduser().resolve()
+    root = _root()
     failures = 0
-    for raw_pair in args.pairs:
-        pair = str(raw_pair).upper().strip()
+    for pair in args.pairs:
         try:
             result = sync_pair(root, pair)
             print(
