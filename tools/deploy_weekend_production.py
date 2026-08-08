@@ -15,13 +15,11 @@ not touched. Telegram is never invoked by deployment validation.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 import urllib.error
@@ -306,16 +304,14 @@ def _backup_files(root: Path, backup: Path) -> None:
 
 def _backup_crontab(backup: Path) -> bool:
     completed = _run(["crontab", "-l"], timeout=15)
-    had_crontab = completed.returncode == 0
-    (backup / "crontab.before.txt").write_text(
-        completed.stdout if had_crontab else "",
-        encoding="utf-8",
-    )
+    if completed.returncode != 0:
+        raise DeploymentError("existing crontab is not readable")
+    (backup / "crontab.before.txt").write_text(completed.stdout, encoding="utf-8")
     (backup / "crontab_state.json").write_text(
-        json.dumps({"had_crontab": had_crontab}) + "\n",
+        json.dumps({"had_crontab": True}) + "\n",
         encoding="utf-8",
     )
-    return had_crontab
+    return True
 
 
 def _deploy_files(root: Path, stage: Path) -> None:
@@ -367,8 +363,9 @@ def _strip_bota_block(current: str) -> str:
 
 def _install_cron(root: Path, stage: Path) -> None:
     current = _run(["crontab", "-l"], timeout=15)
-    current_text = current.stdout if current.returncode == 0 else ""
-    preserved = _strip_bota_block(current_text)
+    if current.returncode != 0:
+        raise DeploymentError("existing crontab became unreadable")
+    preserved = _strip_bota_block(current.stdout)
     canonical = (root / "ops/bota_crontab.canonical").read_text(encoding="utf-8").strip()
     if not canonical.startswith(BOTA_BEGIN) or not canonical.endswith(BOTA_END):
         raise DeploymentError("canonical BotA cron markers invalid")
