@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# shellcheck shell=bash
 # FILE: tools/watcher_gated_cycle.sh
 # DESC: One gated watcher cycle that emits EXACTLY ONE terminal outcome to the
 #       pipeline ledger, drawn from the Monday-readiness enum:
@@ -41,8 +42,8 @@
 #                                When absent, this script creates one and exports
 #                                it to all child watcher/reconciler processes.
 #   WATCHER_GATED_DRY_RUN     : when "1", do not execute the inner watcher.
-#                                Useful for CI harnesses and the
-#                                monday_readiness_check.py fixture harness.
+#                                Accepted only for isolated non-production roots
+#                                used by CI/readiness fixture harnesses.
 #   WATCHER_GATED_MARKET_HINT : override for the fixture harness. When set,
 #                                the gate is not consulted at runtime — the
 #                                supplied reason code is used verbatim.
@@ -204,6 +205,19 @@ else
 fi
 
 if [[ "${WATCHER_GATED_DRY_RUN:-0}" = "1" ]]; then
+  # Fixture-only dry-run mode must never make the canonical phone runtime look
+  # healthy. If the flag leaks into ${HOME}/BotA, record an authoritative
+  # failure instead of synthesizing a completed EVALUATED_REJECTED cycle.
+  if [[ "${ROOT%/}" = "${HOME}/BotA" ]]; then
+    record_terminal_or_fail \
+      "failed" \
+      "INTERNAL_ERROR" \
+      "dry_run_refused_in_production=1" \
+      "${reason}" || exit $?
+
+    exit 0
+  fi
+
   record_terminal_or_fail \
     "completed" \
     "EVALUATED_REJECTED" \

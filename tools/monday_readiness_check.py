@@ -38,7 +38,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -117,6 +116,14 @@ SCENARIOS: tuple[dict[str, Any], ...] = (
 )
 
 
+def bash_executable() -> str:
+    """Return an absolute Bash path suitable for Termux and normal CI hosts."""
+    value = shutil.which("bash")
+    if not value:
+        raise RuntimeError("bash executable not found on PATH")
+    return value
+
+
 def stage_bota_root(tmp: Path) -> Path:
     """Copy the minimum tool set into a temp root and return that root."""
     (tmp / "tools").mkdir(parents=True, exist_ok=True)
@@ -141,7 +148,7 @@ def run_scenario(root: Path, scenario: dict[str, Any]) -> dict[str, Any]:
     env.pop("BOTA_SERVER_EPOCH", None)
 
     completed = subprocess.run(
-        ["bash", str(root / "tools" / "watcher_gated_cycle.sh")],
+        [bash_executable(), str(root / "tools" / "watcher_gated_cycle.sh")],
         env=env,
         capture_output=True,
         text=True,

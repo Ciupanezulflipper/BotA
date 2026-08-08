@@ -128,6 +128,15 @@ class MarketOpenReasonTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertEqual(reason, "MARKET_CLOSED_ASIAN_PRE_0700")
 
+    def test_weekday_midnight_is_asian_closed_not_clock_unavailable(self) -> None:
+        # 00:00 UTC is a valid trusted-clock value. It must reach the normal
+        # Asian-session gate instead of being mistaken for the old 0000
+        # clock-unavailable sentinel.
+        rc, stdout, reason = self.run_gate("1 0000 2026-08-10T00:00:00Z 4 3 1786320000")
+        self.assertEqual(stdout, "Closed")
+        self.assertEqual(rc, 1)
+        self.assertEqual(reason, "MARKET_CLOSED_ASIAN_PRE_0700")
+
     def test_post_ny_emits_post_ny_reason(self) -> None:
         rc, stdout, reason = self.run_gate("1 2100 2026-08-10T21:00:00Z 4 3 1786395600")
         self.assertEqual(stdout, "Closed")

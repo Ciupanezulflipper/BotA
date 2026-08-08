@@ -9,10 +9,10 @@ import time
 from pathlib import Path
 from typing import Any
 
-# Safe production defaults. These are consulted only when neither the
-# PAIRS/TIMEFRAMES environment nor BOTA_REQUIRED_DECISIONS provides a
-# scope. They intentionally match the current three-pair production
-# configuration so health evaluation cannot silently drop USDJPY.
+# Safe production defaults. These are consulted when neither a complete
+# PAIRS/TIMEFRAMES environment nor BOTA_REQUIRED_DECISIONS provides a scope.
+# They intentionally match the current three-pair production configuration so
+# health evaluation cannot silently drop USDJPY.
 DEFAULT_PAIRS = ("EURUSD", "GBPUSD", "USDJPY")
 DEFAULT_TIMEFRAMES = ("M15",)
 
@@ -36,14 +36,15 @@ def required_decisions() -> tuple[str, ...]:
     Precedence:
         1. ``BOTA_REQUIRED_DECISIONS`` — explicit comma/space list of
            ``PAIR:TIMEFRAME`` entries, used verbatim.
-        2. Cartesian product of ``PAIRS`` x ``TIMEFRAMES`` when both are
-           set to non-empty values.
+        2. Cartesian product of ``PAIRS`` x ``TIMEFRAMES`` when BOTH are
+           present and non-empty.
         3. Cartesian product of ``DEFAULT_PAIRS`` x ``DEFAULT_TIMEFRAMES``.
 
-    A supplied but malformed configuration (e.g. ``PAIRS=""``) is treated
-    as absent and falls through to the next precedence rule; there is no
-    silent empty result — the evaluator would otherwise report healthy
-    without checking any decision at all.
+    Partial or malformed PAIRS/TIMEFRAMES configuration fails closed to the
+    full safe production default. Silently filling only the missing dimension
+    can narrow or expand health scope in ways that disagree with the watcher.
+    The evaluator must never report healthy after checking an accidental
+    partial scope.
     """
     explicit = os.environ.get("BOTA_REQUIRED_DECISIONS", "").strip()
     if explicit:
@@ -53,11 +54,15 @@ def required_decisions() -> tuple[str, ...]:
 
     pairs = _split_scope(os.environ.get("PAIRS", ""))
     timeframes = _split_scope(os.environ.get("TIMEFRAMES", ""))
-    if not pairs:
-        pairs = DEFAULT_PAIRS
-    if not timeframes:
-        timeframes = DEFAULT_TIMEFRAMES
-    return tuple(f"{pair}:{timeframe}" for pair in pairs for timeframe in timeframes)
+    if pairs and timeframes:
+        return tuple(
+            f"{pair}:{timeframe}" for pair in pairs for timeframe in timeframes
+        )
+    return tuple(
+        f"{pair}:{timeframe}"
+        for pair in DEFAULT_PAIRS
+        for timeframe in DEFAULT_TIMEFRAMES
+    )
 
 
 # Backward-compatible module attribute used by callers that expect the old

@@ -5,13 +5,15 @@ the Monday-readiness enum. These tests exercise both the direct pipeline
 ledger surface (single-decision emission) and the aggregated cycle-level
 outcome emitted by ``tools/watcher_gated_cycle.sh``.
 
-The suite also encodes two structural invariants that must not regress:
+The suite also encodes structural invariants that must not regress:
 
 * alerts.csv decision persistence happens before Telegram delivery dedup —
   this is the observability contract that lets us distinguish "no signal"
   from "signal suppressed post-decision".
 * the ``pipeline_health`` evaluator flags open-market ``CLOCK_GATE_FAILED``
   cycles as unhealthy but leaves closed-market inactivity healthy.
+* fixture dry-run mode is refused at the canonical production root so a leaked
+  test flag cannot synthesize green liveness on the phone.
 """
 from __future__ import annotations
 
@@ -45,7 +47,9 @@ pipeline_ledger = load_module("pl_watcher_outcome", TOOLS / "pipeline_ledger.py"
 pipeline_health = load_module("ph_watcher_outcome", TOOLS / "pipeline_health.py")
 
 
-class TemporaryBotARoot(unittest.TestCase):
+class TemporaryBotARoot:
+    """Reusable fixture mixin for concrete unittest.TestCase subclasses."""
+
     def setUp(self) -> None:
         super().setUp()
         self.tmp = tempfile.TemporaryDirectory()
@@ -97,7 +101,7 @@ class TemporaryBotARoot(unittest.TestCase):
         )
 
 
-class LedgerTerminalOutcomeContractTests(TemporaryBotARoot):
+class LedgerTerminalOutcomeContractTests(TemporaryBotARoot, unittest.TestCase):
     """Validate ledger enforcement of the 9-item terminal-outcome enum."""
 
     def test_accepts_all_nine_terminal_outcomes(self) -> None:
@@ -155,7 +159,7 @@ class LedgerTerminalOutcomeContractTests(TemporaryBotARoot):
         self.assertEqual(summary.get("terminal_outcome"), "EVALUATED_REJECTED")
 
 
-class GatedCycleTerminalOutcomeTests(TemporaryBotARoot):
+class GatedCycleTerminalOutcomeTests(TemporaryBotARoot, unittest.TestCase):
     """End-to-end: watcher_gated_cycle.sh emits ONE terminal outcome per cycle."""
 
     SCENARIOS = (
@@ -220,8 +224,39 @@ class GatedCycleTerminalOutcomeTests(TemporaryBotARoot):
         self.assertNotEqual(first, second.get("event_id"))
         self.assertEqual(second.get("terminal_outcome"), "CLOCK_GATE_FAILED")
 
+    def test_canonical_production_root_refuses_fixture_dry_run(self) -> None:
+        production_home = self.root / "production-home"
+        production_root = production_home / "BotA"
+        shutil.copytree(self.root / "tools", production_root / "tools")
+        (production_root / "state").mkdir(parents=True)
+        (production_root / "logs").mkdir(parents=True)
 
-class HealthEvaluatorClockGateStuckTests(TemporaryBotARoot):
+        env = os.environ.copy()
+        env["HOME"] = str(production_home)
+        env["BOTA_ROOT"] = str(production_root)
+        env["WATCHER_GATED_MARKET_HINT"] = "MARKET_OPEN"
+        env["WATCHER_GATED_DRY_RUN"] = "1"
+        env.pop("BOTA_SERVER_EPOCH", None)
+
+        completed = subprocess.run(
+            ["bash", str(production_root / "tools" / "watcher_gated_cycle.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+        state = json.loads(
+            (production_root / "state" / "pipeline_progress.json").read_text()
+        )
+        watcher = state.get("components", {}).get("watcher", {})
+        self.assertEqual(watcher.get("status"), "failed")
+        self.assertEqual(watcher.get("terminal_outcome"), "INTERNAL_ERROR")
+        self.assertIn("dry_run_refused_in_production=1", watcher.get("details", ""))
+
+
+class HealthEvaluatorClockGateStuckTests(TemporaryBotARoot, unittest.TestCase):
     """Open-market CLOCK_GATE_FAILED must be flagged unhealthy."""
 
     def _seed_watcher(
@@ -250,7 +285,7 @@ class HealthEvaluatorClockGateStuckTests(TemporaryBotARoot):
                 text=True,
                 check=True,
             )
-        # Seed the two required decisions BEFORE the aggregated watcher
+        # Seed the three required decisions BEFORE the aggregated watcher
         # component event, mirroring watcher_gated_cycle.sh's real-world
         # ordering (per-pair reconciler events, then the aggregated cycle
         # outcome). Note: emitting a decision also overwrites

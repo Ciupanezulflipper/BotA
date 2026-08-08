@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# shellcheck shell=bash
 # FILE: tools/market_open.sh
 # DESC: v2.1.0 server-clock FX market gate — London + NY sessions only
 # Active window: 07:00-20:00 UTC Mon-Fri
@@ -79,6 +80,9 @@ emit_closed() {
   exit 1
 }
 
+# DeepSource does not follow the indirect reference from `trap on_error ERR`.
+# This handler is intentionally invoked only by the ERR trap below.
+# skipcq
 on_error() {
   local exit_code=$?
   if [[ -n "$_final_reason" ]]; then
@@ -176,7 +180,28 @@ _server_count="${_server_count:-0}"
 _server_spread="${_server_spread:-NA}"
 _server_epoch="${_server_epoch:-0}"
 
-if [[ "$_utc_dow" = "0" || "$_utc_hm" = "0000" ]]; then
+# Validate the probe structurally instead of treating HHMM=0000 as a sentinel.
+# Midnight (00:00 UTC) is a valid clock value and must reach the Asian-session
+# gate below, where it is classified as MARKET_CLOSED_ASIAN_PRE_0700.
+_clock_fields_valid=1
+case "$_utc_dow" in
+  1|2|3|4|5|6|7) ;;
+  *) _clock_fields_valid=0 ;;
+esac
+case "$_utc_hm" in
+  [0-1][0-9][0-5][0-9]|2[0-3][0-5][0-9]) ;;
+  *) _clock_fields_valid=0 ;;
+esac
+case "$_server_epoch" in
+  ''|*[!0-9]*) _clock_fields_valid=0 ;;
+  *)
+    if (( _server_epoch <= 1000000000 )); then
+      _clock_fields_valid=0
+    fi
+    ;;
+esac
+
+if (( _clock_fields_valid == 0 )); then
   # Preserves the historical "server_clock_unavailable ... Closed fail_closed"
   # phrase so existing fail-closed source-regression tests keep tripping if
   # anyone tries to weaken this branch.

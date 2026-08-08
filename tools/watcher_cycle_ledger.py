@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Safe production default. Consulted only when neither the PAIRS/TIMEFRAMES
+# Safe production default. Consulted when neither a complete PAIRS/TIMEFRAMES
 # environment nor BOTA_REQUIRED_DECISIONS provides a scope. Kept in sync with
 # tools/pipeline_health.DEFAULT_PAIRS / DEFAULT_TIMEFRAMES so a mismatch
 # between what the watcher reconciles and what the health evaluator expects
@@ -43,8 +43,12 @@ def expected_scope() -> tuple[tuple[str, str], ...]:
 
     Precedence:
         1. ``BOTA_REQUIRED_DECISIONS`` — explicit ``PAIR:TIMEFRAME`` list.
-        2. Cartesian product of ``PAIRS`` x ``TIMEFRAMES`` env.
+        2. Cartesian product of ``PAIRS`` x ``TIMEFRAMES`` when BOTH are set.
         3. ``DEFAULT_EXPECTED`` (three-pair production scope).
+
+    A partial PAIRS/TIMEFRAMES environment is treated as incomplete and falls
+    back to the full safe production scope. This keeps reconciliation aligned
+    with pipeline health instead of silently inventing a missing dimension.
     """
     explicit = os.environ.get("BOTA_REQUIRED_DECISIONS", "").strip()
     if explicit:
@@ -60,13 +64,9 @@ def expected_scope() -> tuple[tuple[str, str], ...]:
 
     pairs = _split_scope(os.environ.get("PAIRS", ""))
     timeframes = _split_scope(os.environ.get("TIMEFRAMES", ""))
-    if not pairs and not timeframes:
-        return DEFAULT_EXPECTED
-    if not pairs:
-        pairs = tuple(pair for pair, _ in DEFAULT_EXPECTED)
-    if not timeframes:
-        timeframes = tuple({tf for _, tf in DEFAULT_EXPECTED})
-    return tuple((pair, tf) for pair in pairs for tf in timeframes)
+    if pairs and timeframes:
+        return tuple((pair, tf) for pair in pairs for tf in timeframes)
+    return DEFAULT_EXPECTED
 
 
 # Backward-compatible name for callers/tests that still import EXPECTED.

@@ -11,9 +11,9 @@ These tests pin the following contract:
   stale hardcode,
 * the safe default matches the current three-pair production scope,
 * an explicit ``BOTA_REQUIRED_DECISIONS`` override wins,
-* ``PAIRS`` and ``TIMEFRAMES`` expand to a Cartesian product,
-* a malformed / empty configuration falls back to the safe production
-  default (never returns an empty tuple),
+* complete ``PAIRS`` and ``TIMEFRAMES`` expand to a Cartesian product,
+* partial / malformed configuration falls back to the full safe production
+  default (never an accidental narrowed scope),
 * pipeline_health flags open-market health as unhealthy when USDJPY is
   missing, and healthy when all three M15 decisions are present,
 * watcher_cycle_ledger reconciles USDJPY inside the same cycle as EURUSD
@@ -98,8 +98,6 @@ class ScopeDerivationTests(unittest.TestCase):
     def test_empty_pairs_env_falls_back_to_safe_default(self) -> None:
         os.environ["PAIRS"] = "   "
         os.environ["TIMEFRAMES"] = ""
-        # Must not silently return an empty tuple — that would make health
-        # "pass" by evaluating zero decisions.
         self.assertEqual(
             pipeline_health.required_decisions(),
             ("EURUSD:M15", "GBPUSD:M15", "USDJPY:M15"),
@@ -109,20 +107,29 @@ class ScopeDerivationTests(unittest.TestCase):
             (("EURUSD", "M15"), ("GBPUSD", "M15"), ("USDJPY", "M15")),
         )
 
-    def test_partial_env_still_expands_to_non_empty_scope(self) -> None:
+    def test_partial_pairs_env_falls_back_to_full_safe_default(self) -> None:
         os.environ["PAIRS"] = "EURUSD"
         self.assertEqual(
             pipeline_health.required_decisions(),
-            ("EURUSD:M15",),
+            ("EURUSD:M15", "GBPUSD:M15", "USDJPY:M15"),
         )
         self.assertEqual(
             watcher_cycle_ledger.expected_scope(),
-            (("EURUSD", "M15"),),
+            (("EURUSD", "M15"), ("GBPUSD", "M15"), ("USDJPY", "M15")),
+        )
+
+    def test_partial_timeframes_env_falls_back_to_full_safe_default(self) -> None:
+        os.environ["TIMEFRAMES"] = "H1"
+        self.assertEqual(
+            pipeline_health.required_decisions(),
+            ("EURUSD:M15", "GBPUSD:M15", "USDJPY:M15"),
+        )
+        self.assertEqual(
+            watcher_cycle_ledger.expected_scope(),
+            (("EURUSD", "M15"), ("GBPUSD", "M15"), ("USDJPY", "M15")),
         )
 
     def test_module_level_backcompat_names_use_defaults(self) -> None:
-        # These are consumed by tools/scripts that expect a stable module
-        # attribute at import time, not a callable.
         self.assertIn("USDJPY:M15", pipeline_health.REQUIRED_DECISIONS)
         self.assertIn(("USDJPY", "M15"), watcher_cycle_ledger.EXPECTED)
 
@@ -149,7 +156,8 @@ class HealthEvaluatorFailsWhenUsdjpyMissingTests(unittest.TestCase):
         self.env.stop()
         self.tmp.cleanup()
 
-    def _seed_pair(self, pair: str) -> None:
+    @staticmethod
+    def _seed_pair(pair: str) -> None:
         subprocess.run(
             [
                 sys.executable,
@@ -173,8 +181,8 @@ class HealthEvaluatorFailsWhenUsdjpyMissingTests(unittest.TestCase):
             text=True,
         )
 
-    def _seed_supporting_components(self) -> None:
-        # Fresh updater + shadow so the component freshness arm is satisfied.
+    @staticmethod
+    def _seed_supporting_components() -> None:
         for component in ("updater", "shadow"):
             subprocess.run(
                 [
@@ -193,7 +201,8 @@ class HealthEvaluatorFailsWhenUsdjpyMissingTests(unittest.TestCase):
                 text=True,
             )
 
-    def _seed_watcher_terminal(self) -> None:
+    @staticmethod
+    def _seed_watcher_terminal() -> None:
         subprocess.run(
             [
                 sys.executable,
@@ -219,7 +228,6 @@ class HealthEvaluatorFailsWhenUsdjpyMissingTests(unittest.TestCase):
         self._seed_supporting_components()
         self._seed_pair("EURUSD")
         self._seed_pair("GBPUSD")
-        # USDJPY intentionally omitted.
         self._seed_watcher_terminal()
         result = pipeline_health.evaluate(market_open=True)
         self.assertFalse(result["healthy"])
@@ -288,9 +296,6 @@ class WatcherCycleLedgerReconcilesThreePairsTests(unittest.TestCase):
             text=True,
             check=False,
         )
-        # rc 3 is expected because nothing terminal was actually emitted for
-        # the pairs in this fixture; the important assertion is that all
-        # three configured pairs were reconciled.
         payload = json.loads(result.stdout)
         pairs = sorted(item["pair"] for item in payload["results"])
         timeframes = sorted({item["timeframe"] for item in payload["results"]})
@@ -305,9 +310,6 @@ class ConfigurationAndHealthCannotDivergeTests(unittest.TestCase):
         wrapper = (REPO / "ops" / "runit" / "bota-watcher.run").read_text(
             encoding="utf-8"
         )
-        # The wrapper's exported PAIRS scope must be a superset of the
-        # default expected scope; otherwise pipeline_health would demand a
-        # pair the wrapper never runs.
         for pair in ("EURUSD", "GBPUSD", "USDJPY"):
             with self.subTest(pair=pair):
                 self.assertIn(pair, wrapper)

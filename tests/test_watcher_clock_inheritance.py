@@ -14,19 +14,16 @@ tests pin the new contract:
   * missing / invalid inherited epoch combined with a failed probe still
     fails closed (BOTA_SERVER_EPOCH="0" and no pair processing).
 
-The behavior tests drive scan_once by sourcing signal_watcher_pro.sh with
-`SIGNAL_WATCHER_PRO_NO_MAIN=1` (see the guard added at the bottom of the
-script) and stub out compute_server_clock_epoch / process_pair_tf so we can
-observe how the trusted epoch was resolved without doing any live network
-work or side-effects.
+The behavior tests drive scan_once by extracting the function body from
+signal_watcher_pro.sh and stub out compute_server_clock_epoch /
+process_pair_tf so we can observe how the trusted epoch was resolved without
+doing any live network work or side-effects.
 """
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import tempfile
-import textwrap
 import unittest
 from pathlib import Path
 
@@ -97,14 +94,14 @@ class ScanOnceInheritsTrustedEpochTests(unittest.TestCase):
         harness = self._write_harness(probe_body)
         merged = os.environ.copy()
         merged.update(env)
-        result = subprocess.run(
+        subprocess.run(
             ["bash", str(harness)],
             env=merged,
             capture_output=True,
             text=True,
             check=False,
         )
-        log = (self.root / "state" / "scan.log")
+        log = self.root / "state" / "scan.log"
         return log.read_text(encoding="utf-8") if log.exists() else ""
 
     def test_valid_inherited_epoch_is_reused_without_probing(self) -> None:
