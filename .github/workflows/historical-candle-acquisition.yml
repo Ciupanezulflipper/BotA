@@ -15,6 +15,7 @@ on:
       - "tools/classify_replay_match_gaps.py"
       - "tools/production_signal_policy.py"
       - "tools/sync_d1_trend_cache.py"
+      - "tools/deploy_weekend_production.py"
       - "tools/scoring_engine.sh"
       - "tools/m15_h1_fusion.sh"
       - "tools/build_indicators.py"
@@ -29,6 +30,7 @@ on:
       - "tests/test_compare_replay_outcomes.py"
       - "tests/test_classify_replay_match_gaps.py"
       - "tests/test_weekend_production_readiness.py"
+      - "tests/test_weekend_production_deployer.py"
       - "audits/fixtures/supabase_bota_m15_20260601_20260801.json"
   pull_request:
     paths:
@@ -42,6 +44,7 @@ on:
       - "tools/classify_replay_match_gaps.py"
       - "tools/production_signal_policy.py"
       - "tools/sync_d1_trend_cache.py"
+      - "tools/deploy_weekend_production.py"
       - "tools/scoring_engine.sh"
       - "tools/m15_h1_fusion.sh"
       - "tools/build_indicators.py"
@@ -56,6 +59,7 @@ on:
       - "tests/test_compare_replay_outcomes.py"
       - "tests/test_classify_replay_match_gaps.py"
       - "tests/test_weekend_production_readiness.py"
+      - "tests/test_weekend_production_deployer.py"
       - "audits/fixtures/supabase_bota_m15_20260601_20260801.json"
 
 permissions:
@@ -79,7 +83,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Compile acquisition replay and production-policy tools
+      - name: Compile acquisition replay production and deployment tools
         run: |
           python -m py_compile \
             tools/fetch_historical_candles.py \
@@ -90,17 +94,20 @@ jobs:
             tools/classify_replay_match_gaps.py \
             tools/production_signal_policy.py \
             tools/sync_d1_trend_cache.py \
+            tools/deploy_weekend_production.py \
             tests/test_fetch_historical_candles.py \
             tests/test_verify_replay_dataset.py \
             tests/test_deterministic_replay.py \
             tests/test_compare_replay_outcomes.py \
             tests/test_classify_replay_match_gaps.py \
-            tests/test_weekend_production_readiness.py
-      - name: Validate shell entrypoints
+            tests/test_weekend_production_readiness.py \
+            tests/test_weekend_production_deployer.py
+      - name: Validate shell entrypoints and deployment self-check
         run: |
           bash -n tools/run_phase2_determinism.sh
           bash -n tools/m15_h1_fusion.sh
           bash tools/run_phase2_determinism.sh --self-check
+          python tools/deploy_weekend_production.py --self-check
       - name: Run focused offline tests
         run: |
           python -m unittest -v \
@@ -109,7 +116,8 @@ jobs:
             tests/test_deterministic_replay.py \
             tests/test_compare_replay_outcomes.py \
             tests/test_classify_replay_match_gaps.py \
-            tests/test_weekend_production_readiness.py
+            tests/test_weekend_production_readiness.py \
+            tests/test_weekend_production_deployer.py
       - name: Prove preview is no-network and non-mutating
         run: |
           python tools/fetch_historical_candles.py \
