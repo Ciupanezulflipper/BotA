@@ -21,9 +21,6 @@ import re
 import shutil
 import subprocess
 import tempfile
-import time
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -104,29 +101,42 @@ def _git_blob(path: Path, root: Path) -> str:
     return value
 
 
-def _download(url: str, destination: Path) -> None:
-    request = urllib.request.Request(
-        url,
-        headers={"User-Agent": "BotA-reviewed-production-deployer"},
-        method="GET",
+def _download(relative_path: str, destination: Path) -> None:
+    url = (
+        f"https://raw.githubusercontent.com/{REPOSITORY}/{SOURCE_COMMIT}/"
+        f"{relative_path}"
     )
-    last_error = ""
-    for attempt in range(1, 5):
-        try:
-            with urllib.request.urlopen(request, timeout=30) as response:
-                if response.status != 200:
-                    raise DeploymentError(f"HTTP {response.status}")
-                payload = response.read()
-            if not payload:
-                raise DeploymentError("empty response")
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(payload)
-            return
-        except (OSError, urllib.error.URLError, DeploymentError) as exc:
-            last_error = type(exc).__name__
-            if attempt < 4:
-                time.sleep(attempt)
-    raise DeploymentError(f"download failed: {destination.name}:{last_error}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    completed = _run(
+        [
+            "curl",
+            "--proto",
+            "=https",
+            "--proto-redir",
+            "=https",
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--location",
+            "--retry",
+            "4",
+            "--retry-delay",
+            "1",
+            "--retry-all-errors",
+            "--connect-timeout",
+            "15",
+            "--max-time",
+            "90",
+            "--output",
+            str(destination),
+            url,
+        ],
+        timeout=120,
+    )
+    if completed.returncode != 0 or not destination.is_file():
+        raise DeploymentError(f"download failed: {relative_path}")
+    if destination.stat().st_size <= 0:
+        raise DeploymentError(f"download returned empty file: {relative_path}")
 
 
 def _validate_manifest() -> None:
@@ -143,7 +153,7 @@ def _validate_manifest() -> None:
 
 
 def _required_commands() -> tuple[str, ...]:
-    return ("bash", "crontab", "git", "python3", "timeout")
+    return ("bash", "crontab", "curl", "git", "python3", "timeout")
 
 
 def _validate_commands() -> None:
@@ -153,10 +163,9 @@ def _validate_commands() -> None:
 
 
 def _download_and_verify(stage: Path, root: Path) -> None:
-    base = f"https://raw.githubusercontent.com/{REPOSITORY}/{SOURCE_COMMIT}"
     for item in FILES:
         destination = stage / item.path
-        _download(f"{base}/{item.path}", destination)
+        _download(item.path, destination)
         actual = _git_blob(destination, root)
         print(f"SOURCE_BLOB={item.path}|expected={item.blob}|actual={actual}")
         if actual != item.blob:
@@ -201,6 +210,24 @@ def _load_module(path: Path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _strict_json_cli_probe(policy_path: Path) -> None:
+    completed = _run(
+        ["python3", str(policy_path)],
+        input_text='{"score":NaN}',
+        timeout=15,
+    )
+    if completed.returncode != 0:
+        raise DeploymentError("strict JSON CLI probe process failed")
+    try:
+        payload = json.loads(completed.stdout)
+    except ValueError as exc:
+        raise DeploymentError("strict JSON CLI probe emitted invalid JSON") from exc
+    if payload.get("filter_rejected") is not True:
+        raise DeploymentError("strict JSON NaN probe did not fail closed")
+    if "production_policy_error_ValueError" not in str(payload.get("reasons", "")):
+        raise DeploymentError("strict JSON NaN probe reason mismatch")
 
 
 def _policy_probes(policy_path: Path) -> None:
@@ -271,12 +298,7 @@ def _policy_probes(policy_path: Path) -> None:
         if normalized.get("risk_pip_size") != 0.01:
             raise DeploymentError("USDJPY pip-size probe incorrect")
 
-        try:
-            module._decode('{"score":NaN}')
-        except ValueError:
-            pass
-        else:
-            raise DeploymentError("strict JSON NaN probe failed")
+        _strict_json_cli_probe(policy_path)
     finally:
         for key, value in prior.items():
             if value is None:
@@ -638,7 +660,7 @@ def deploy() -> int:
             if not _fusion_smoke(root):
                 raise DeploymentError("fusion integration smoke failed")
             print("FUSION_INTEGRATION=PASS")
-        except (DeploymentError, OSError, ValueError, json.JSONDecodeError) as exc:
+        except (DeploymentError, OSError, ValueError) as exc:
             print(f"TRANSACTION_GATE=FAIL|reason={type(exc).__name__}:{exc}")
             if mutated:
                 _restore(root, backup, had_crontab)
