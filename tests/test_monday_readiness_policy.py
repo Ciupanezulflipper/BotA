@@ -14,6 +14,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 PIPELINE = ROOT / "tools" / "pipeline_health.py"
+WATCHER_LEDGER = ROOT / "tools" / "watcher_cycle_ledger.py"
 WORKER = ROOT / "tools" / "profitlab_delivery.py"
 D1_SYNC = ROOT / "tools" / "sync_d1_trend_cache.py"
 READINESS = ROOT / "tools" / "monday_readiness.py"
@@ -82,12 +83,15 @@ def write_pipeline_state(
 
 
 class PipelineReadinessTests(unittest.TestCase):
-    def evaluate(self, root: Path, market_open: bool):
+    @staticmethod
+    def evaluate(root: Path, market_open: bool):
         module = load_pipeline_module()
-        with mock.patch.dict(os.environ, {"BOTA_ROOT": str(root)}, clear=False):
-            with mock.patch.object(module, "boot_id", return_value=BOOT):
-                with mock.patch.object(module, "monotonic_ns", return_value=NOW_NS):
-                    return module.evaluate(market_open=market_open)
+        with (
+            mock.patch.dict(os.environ, {"BOTA_ROOT": str(root)}, clear=False),
+            mock.patch.object(module, "boot_id", return_value=BOOT),
+            mock.patch.object(module, "monotonic_ns", return_value=NOW_NS),
+        ):
+            return module.evaluate(market_open=market_open)
 
     def test_market_open_requires_usdjpy_decision(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -264,6 +268,13 @@ class ReadinessSourcePolicyTests(unittest.TestCase):
         self.assertIn("POLICY_B_ENABLED=1", source)
         self.assertIn("POLICY_B_SCORE_MIN=70", source)
         self.assertIn("POLICY_B_ADX_MAX=30", source)
+
+    def test_watcher_reconciliation_scope_matches_three_pair_production(self) -> None:
+        source = WATCHER_LEDGER.read_text(encoding="utf-8")
+        self.assertIn(
+            'EXPECTED = (("EURUSD", "M15"), ("GBPUSD", "M15"), ("USDJPY", "M15"))',
+            source,
+        )
 
 
 if __name__ == "__main__":
