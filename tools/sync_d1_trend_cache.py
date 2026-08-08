@@ -157,10 +157,12 @@ def _parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = _parser().parse_args()
-    record_progress("started", f"pairs={' '.join(args.pairs)}")
+    requested = tuple(args.pairs)
+    full_production_scope = set(requested) == set(DEFAULT_PAIRS)
+    record_progress("started", f"pairs={' '.join(requested)}")
     failures = 0
     completed: list[str] = []
-    for pair in args.pairs:
+    for pair in requested:
         try:
             result = sync_pair(pair)
             completed.append(pair)
@@ -172,12 +174,24 @@ def main() -> int:
             failures += 1
             print(f"D1_SYNC_FAIL={pair}|error={type(exc).__name__}")
 
-    status = "completed" if failures == 0 else "failed"
+    if failures:
+        health_status = "failed"
+    elif full_production_scope:
+        health_status = "completed"
+    else:
+        # A successful ad-hoc subset sync is valid as a command, but it must not
+        # refresh the production D1 health gate for all three live pairs.
+        health_status = "partial"
+
     record_progress(
-        status,
-        f"pairs={' '.join(args.pairs)};completed={' '.join(completed)};failures={failures}",
+        health_status,
+        (
+            f"pairs={' '.join(requested)};completed={' '.join(completed)};"
+            f"failures={failures};full_production_scope={full_production_scope}"
+        ),
     )
     print(f"D1_SYNC_STATUS={'PASS' if failures == 0 else 'FAIL'}")
+    print(f"D1_SYNC_PRODUCTION_SCOPE={'FULL' if full_production_scope else 'PARTIAL'}")
     return 0 if failures == 0 else 1
 
 
