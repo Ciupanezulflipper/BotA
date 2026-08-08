@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import re
+import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -19,7 +20,7 @@ POLICY_FIELDS = {
     "B": "policy_b_score70_adx_lt30",
     "C": "policy_c_score70_adx_lt30_no_extreme",
 }
-SCORE_RE = re.compile(r"\bscore=([0-9]+(?:\.[0-9]+)?)\b")
+SCORE_RE = re.compile(r"\bscore=(\d+(?:\.\d+)?)\b")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -473,21 +474,15 @@ def compare(
     )
 
 
-def _validate_output_path(output: Path, events: Path, outcomes: Path) -> None:
-    if output in {events, outcomes}:
-        raise ValueError("comparison output must not overwrite an input file")
-
-
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Offline conservative matcher between deterministic BotA replay "
+            "Read-only conservative matcher between deterministic BotA replay "
             "events and a frozen published-outcome snapshot"
         )
     )
     parser.add_argument("--events", required=True)
     parser.add_argument("--outcomes", required=True)
-    parser.add_argument("--output", required=True)
     parser.add_argument("--expected-events-sha256")
     parser.add_argument("--max-time-minutes", type=float, default=45.0)
     parser.add_argument("--max-entry-pips", type=float, default=5.0)
@@ -496,51 +491,63 @@ def _parser() -> argparse.ArgumentParser:
 
 def _print_console(result: dict[str, Any]) -> None:
     counts = result["counts"]
-    print(f"MATCH_GATE={result['match_gate']}")
-    print(f"MATCH_STATUS={result['status']}")
-    print(f"REPLAY_EVENTS={counts['replay_events']}")
-    print(f"PUBLISHED_OUTCOMES={counts['published_outcomes']}")
-    print(f"MATCHED_OUTCOMES={counts['matched_outcomes']}")
-    print(f"UNMATCHED_OUTCOMES={counts['unmatched_outcomes']}")
-    print(f"AMBIGUOUS_OUTCOMES={counts['ambiguous_outcomes']}")
-    print(f"MATCH_RATE_PERCENT={counts['match_rate_percent']:.2f}")
+    print(f"MATCH_GATE={result['match_gate']}", file=sys.stderr)
+    print(f"MATCH_STATUS={result['status']}", file=sys.stderr)
+    print(f"REPLAY_EVENTS={counts['replay_events']}", file=sys.stderr)
+    print(f"PUBLISHED_OUTCOMES={counts['published_outcomes']}", file=sys.stderr)
+    print(f"MATCHED_OUTCOMES={counts['matched_outcomes']}", file=sys.stderr)
+    print(f"UNMATCHED_OUTCOMES={counts['unmatched_outcomes']}", file=sys.stderr)
+    print(f"AMBIGUOUS_OUTCOMES={counts['ambiguous_outcomes']}", file=sys.stderr)
+    print(
+        f"MATCH_RATE_PERCENT={counts['match_rate_percent']:.2f}",
+        file=sys.stderr,
+    )
     replay_counts = counts["replay_policy_acceptance"]
     for policy in ("A", "B", "C"):
         stats = result["policy_observed_published_outcomes"][policy]
-        print(f"POLICY_{policy}_REPLAY_ACCEPTED={replay_counts[policy]}")
-        print(f"POLICY_{policy}_MATCHED_OUTCOME_N={stats['matched_n']}")
-        print(f"POLICY_{policy}_WINS={stats['wins']}")
-        print(f"POLICY_{policy}_LOSSES={stats['losses']}")
-        print(f"POLICY_{policy}_CANCELLED={stats['cancelled']}")
-        print(f"POLICY_{policy}_TOTAL_PIPS={stats['total_pips']:.2f}")
+        print(
+            f"POLICY_{policy}_REPLAY_ACCEPTED={replay_counts[policy]}",
+            file=sys.stderr,
+        )
+        print(
+            f"POLICY_{policy}_MATCHED_OUTCOME_N={stats['matched_n']}",
+            file=sys.stderr,
+        )
+        print(f"POLICY_{policy}_WINS={stats['wins']}", file=sys.stderr)
+        print(f"POLICY_{policy}_LOSSES={stats['losses']}", file=sys.stderr)
+        print(
+            f"POLICY_{policy}_CANCELLED={stats['cancelled']}",
+            file=sys.stderr,
+        )
+        print(
+            f"POLICY_{policy}_TOTAL_PIPS={stats['total_pips']:.2f}",
+            file=sys.stderr,
+        )
     if result["match_gate"] == "PASS":
-        print("NEXT_ACTION=ROBUSTNESS_AND_FULL_REPLAY_OUTCOME_RESOLUTION")
+        print(
+            "NEXT_ACTION=ROBUSTNESS_AND_FULL_REPLAY_OUTCOME_RESOLUTION",
+            file=sys.stderr,
+        )
     else:
-        print("NEXT_ACTION=CLASSIFY_MATCH_GAPS_DO_NOT_TUNE_STRATEGY")
+        print(
+            "NEXT_ACTION=CLASSIFY_MATCH_GAPS_DO_NOT_TUNE_STRATEGY",
+            file=sys.stderr,
+        )
 
 
 def main() -> int:
     args = _parser().parse_args()
-    events_path = Path(args.events).resolve()
-    outcomes_path = Path(args.outcomes).resolve()
-    output = Path(args.output).resolve()
-    _validate_output_path(output, events_path, outcomes_path)
     result = compare(
-        events_path=events_path,
-        outcomes_path=outcomes_path,
+        events_path=Path(args.events).resolve(),
+        outcomes_path=Path(args.outcomes).resolve(),
         expected_events_sha256=args.expected_events_sha256,
         max_time_minutes=args.max_time_minutes,
         max_entry_pips=args.max_entry_pips,
     )
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        json.dumps(result, sort_keys=True, indent=2) + "\n",
-        encoding="utf-8",
-    )
     _print_console(result)
-    print(f"COMPARISON_OUTPUT={output}")
-    print("NETWORK_USED=NO")
-    print("PRODUCTION_MUTATION=NO")
+    print("NETWORK_USED=NO", file=sys.stderr)
+    print("PRODUCTION_MUTATION=NO", file=sys.stderr)
+    sys.stdout.write(json.dumps(result, sort_keys=True, indent=2) + "\n")
     return 0
 
 
