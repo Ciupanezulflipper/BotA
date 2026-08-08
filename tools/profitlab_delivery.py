@@ -18,6 +18,34 @@ import sys
 from pathlib import Path
 from typing import Any
 
+ALERT_FIELDS = [
+    "ts",
+    "pair",
+    "tf",
+    "direction",
+    "score",
+    "confidence",
+    "entry",
+    "sl",
+    "tp",
+    "provider",
+    "filter_rejected",
+    "filter_reasons",
+    "reasons",
+    "ema_comp",
+    "rsi_comp",
+    "macd_comp",
+    "adx_comp",
+    "adx_raw",
+    "rsi_raw",
+    "macd_hist_raw",
+    "macro6",
+    "h1_trend",
+    "tier",
+    "session",
+    "adx_regime",
+]
+
 
 def root_path() -> Path:
     return Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA"))).expanduser().resolve()
@@ -72,39 +100,23 @@ def write_state(path: Path, offset: int, source_size: int) -> None:
     os.replace(temporary, path)
 
 
-def header_fields(alerts: Path) -> list[str]:
-    with alerts.open("rb") as handle:
-        first = handle.readline()
-    if not first:
-        raise ValueError("alerts.csv header missing")
-    text = first.decode("utf-8", "replace").rstrip("\r\n")
-    fields = next(csv.reader([text]))
-    required = {
-        "pair",
-        "tf",
-        "direction",
-        "score",
-        "entry",
-        "sl",
-        "tp",
-        "filter_rejected",
-        "tier",
-    }
-    missing = sorted(required.difference(fields))
-    if missing:
-        raise ValueError(f"alerts.csv missing fields: {','.join(missing)}")
-    return fields
+def source_has_header(alerts: Path) -> bool:
+    try:
+        with alerts.open("rb") as handle:
+            return bool(handle.readline())
+    except OSError:
+        return False
 
 
-def parse_row(raw: bytes, fields: list[str]) -> dict[str, str] | None:
+def parse_row(raw: bytes) -> dict[str, str] | None:
     try:
         text = raw.decode("utf-8", "replace").rstrip("\r\n")
         values = next(csv.reader([text]))
     except (csv.Error, StopIteration):
         return None
-    if len(values) != len(fields):
+    if len(values) != len(ALERT_FIELDS):
         return None
-    return dict(zip(fields, values))
+    return dict(zip(ALERT_FIELDS, values))
 
 
 def is_true(value: Any) -> bool:
@@ -125,7 +137,10 @@ def eligible(row: dict[str, str]) -> bool:
         tp = float(row.get("tp", ""))
     except (TypeError, ValueError, OverflowError):
         return False
-    return math.isfinite(score) and entry > 0 and sl > 0 and tp > 0
+    values = (score, entry, sl, tp)
+    return all(math.isfinite(value) for value in values) and all(
+        value > 0 for value in (entry, sl, tp)
+    )
 
 
 def publish(row: dict[str, str], publisher: Path) -> bool:
@@ -174,6 +189,9 @@ def run(*, bootstrap: bool = False) -> int:
     if not alerts.exists():
         print("PROFITLAB_DELIVERY_SOURCE=MISSING")
         return 0
+    if not source_has_header(alerts):
+        print("PROFITLAB_DELIVERY_SOURCE=EMPTY")
+        return 0
 
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+", encoding="utf-8") as lock_handle:
@@ -209,12 +227,6 @@ def run(*, bootstrap: bool = False) -> int:
             print("PROFITLAB_DELIVERY=NO_NEW_ROWS")
             return 0
 
-        try:
-            fields = header_fields(alerts)
-        except (OSError, UnicodeError, ValueError) as exc:
-            print(f"PROFITLAB_DELIVERY_HEADER_ERROR={type(exc).__name__}", file=sys.stderr)
-            return 1
-
         with alerts.open("rb") as handle:
             handle.seek(offset)
             while True:
@@ -228,7 +240,7 @@ def run(*, bootstrap: bool = False) -> int:
                     print(f"PROFITLAB_DELIVERY_PARTIAL_ROW offset={row_start}")
                     return 0
 
-                row = parse_row(raw, fields)
+                row = parse_row(raw)
                 if row is None:
                     write_state(state_path, row_end, source_size)
                     print(f"PROFITLAB_DELIVERY_SKIP=MALFORMED offset={row_start}")
