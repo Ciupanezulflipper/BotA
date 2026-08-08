@@ -174,7 +174,30 @@ LIVE_PUBLISHED_BUT_REPLAY_NOT_ACCEPTED_WITHIN_45M
 REPLAY_ACCEPTED_WITHIN_45M_BUT_ENTRY_DIFF_GT_5P
 ```
 
-If a genuine Policy-A event satisfying the original 45-minute + 5-pip contract is found for an outcome the canonical matcher called unmatched, the classifier fails closed as a matcher inconsistency.
+If a genuine unconsumed Policy-A event satisfying the original 45-minute + 5-pip contract is found for an outcome the canonical matcher called unmatched, the classifier fails closed as a matcher inconsistency.
+
+## One-to-one assignment integrity
+
+Code review identified an important diagnostic edge case before merge: the canonical matcher already consumed one replay event for each of its nine successful one-to-one matches. A gap classifier that blindly rescans all 8618 replay rows could therefore see an otherwise valid event that was already assigned to another published outcome and falsely report a matcher inconsistency.
+
+The classifier now preserves the canonical one-to-one assignment semantics without modifying the immutable comparison artifact:
+
+```text
+CANONICAL_MATCHED_ROWS_REQUIRED=9
+MATCHED_EVENT_IDENTITY=(pair,decision_time)
+MATCHED_EVENT_PAYLOAD_EQUALITY=REQUIRED
+MATCHED_EVENT_IDENTITIES_UNIQUE=REQUIRED
+CONSUMED_MATCHED_EVENT_COUNT=9
+CONSUMED_MATCHED_EVENTS_EXCLUDED_FROM_GAP_SCAN=YES
+CANONICAL_COMPARISON_REWRITTEN=NO
+CANONICAL_COMPARISON_RERUN=NO
+```
+
+For each canonical `matched` row, the classifier locates the exact replay-ledger event by `(pair, decision_time)`, then requires full event-payload equality. Missing, duplicate, or payload-mismatched consumed events fail closed. The resulting nine consumed ledger indices are excluded before the classifier computes the frozen 45-minute candidate set, the 5-pip exact-candidate check, or the separate 180-minute diagnostic window.
+
+A focused regression test proves that an exact replay event already consumed by a successful canonical match cannot trigger a false matcher-inconsistency error for an unmatched outcome.
+
+This change is diagnostic integrity only. It does not add a match, remove a canonical match, widen a tolerance, change a replay event, or alter any A/B/C policy.
 
 ## Scope lock
 
@@ -196,4 +219,4 @@ DO_NOT_FIX_H1_ADX_OVERRIDE_IN_PRODUCTION_YET=YES
 
 Run the reviewed gap classifier once against the already-preserved canonical `events.jsonl`, `outcome_comparison.json`, and frozen Supabase fixture, with both local SHA-256 values enforced.
 
-Use the result to determine which live-vs-replay gate caused each of the four missing reconstructions. Do not rerun the historical acquisition or deterministic replay.
+Use the result to determine which live-vs-replay gate caused each of the four missing reconstructions. Do not rerun the historical acquisition, deterministic replay, or canonical outcome matcher.
