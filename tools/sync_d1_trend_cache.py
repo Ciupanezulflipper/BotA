@@ -30,6 +30,8 @@ PAIR_FILES = {
 
 
 def _finite(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
     try:
         number = float(value)
     except (TypeError, ValueError):
@@ -64,6 +66,12 @@ def sync_pair(pair: str) -> dict[str, Any]:
     data = json.loads(source.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"D1 indicator bundle is not an object: {source}")
+    if str(data.get("pair", "")).upper() != pair or str(
+        data.get("timeframe", "")
+    ).upper() != "D1":
+        raise ValueError(
+            f"D1 indicator bundle failed identity/timeframe validation: {source}"
+        )
     if data.get("tf_ok", True) is False or data.get("error") == "tf_mismatch":
         raise ValueError(f"D1 indicator bundle failed timeframe validation: {source}")
 
