@@ -119,9 +119,7 @@ class ProductionSignalPolicyTests(unittest.TestCase):
 class D1TrendCacheSyncTests(unittest.TestCase):
     def test_sync_pair_derives_trend_from_local_indicator_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            cache = root / "cache"
-            cache.mkdir()
+            cache = Path(temp)
             source = cache / "indicators_USDJPY_D1.json"
             source.write_text(
                 json.dumps(
@@ -136,7 +134,8 @@ class D1TrendCacheSyncTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            result = d1_sync.sync_pair(root, "USDJPY")
+            with mock.patch.object(d1_sync, "CACHE_DIR", cache):
+                result = d1_sync.sync_pair("USDJPY")
             self.assertEqual(result["trend"], "BUY")
             target = json.loads(
                 (cache / "d1_trend_USDJPY.json").read_text(encoding="utf-8")
@@ -146,15 +145,18 @@ class D1TrendCacheSyncTests(unittest.TestCase):
 
     def test_invalid_d1_bundle_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            cache = root / "cache"
-            cache.mkdir()
+            cache = Path(temp)
             (cache / "indicators_EURUSD_D1.json").write_text(
                 json.dumps({"tf_ok": False, "error": "tf_mismatch"}),
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(ValueError, "timeframe validation"):
-                d1_sync.sync_pair(root, "EURUSD")
+            with mock.patch.object(d1_sync, "CACHE_DIR", cache):
+                with self.assertRaisesRegex(ValueError, "timeframe validation"):
+                    d1_sync.sync_pair("EURUSD")
+
+    def test_unsupported_pair_is_rejected_before_path_construction(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unsupported production pair"):
+            d1_sync._cache_paths("EURJPY")
 
 
 class ProductionConfigurationTests(unittest.TestCase):
