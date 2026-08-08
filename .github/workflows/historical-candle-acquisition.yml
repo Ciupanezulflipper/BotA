@@ -23,12 +23,14 @@ on:
       - "tools/market_open.sh"
       - "tools/emit_snapshot.py"
       - "ops/bota_crontab.canonical"
+      - "ops/runit/bota-watcher.run"
       - "tests/test_fetch_historical_candles.py"
       - "tests/test_verify_replay_dataset.py"
       - "tests/test_deterministic_replay.py"
       - "tests/test_compare_replay_outcomes.py"
       - "tests/test_classify_replay_match_gaps.py"
       - "tests/test_weekend_production_readiness.py"
+      - "tests/test_persistent_watcher_scope.py"
       - "audits/fixtures/supabase_bota_m15_20260601_20260801.json"
   pull_request:
     paths:
@@ -50,12 +52,14 @@ on:
       - "tools/market_open.sh"
       - "tools/emit_snapshot.py"
       - "ops/bota_crontab.canonical"
+      - "ops/runit/bota-watcher.run"
       - "tests/test_fetch_historical_candles.py"
       - "tests/test_verify_replay_dataset.py"
       - "tests/test_deterministic_replay.py"
       - "tests/test_compare_replay_outcomes.py"
       - "tests/test_classify_replay_match_gaps.py"
       - "tests/test_weekend_production_readiness.py"
+      - "tests/test_persistent_watcher_scope.py"
       - "audits/fixtures/supabase_bota_m15_20260601_20260801.json"
 
 permissions:
@@ -95,11 +99,13 @@ jobs:
             tests/test_deterministic_replay.py \
             tests/test_compare_replay_outcomes.py \
             tests/test_classify_replay_match_gaps.py \
-            tests/test_weekend_production_readiness.py
+            tests/test_weekend_production_readiness.py \
+            tests/test_persistent_watcher_scope.py
       - name: Validate shell entrypoints
         run: |
           bash -n tools/run_phase2_determinism.sh
           bash -n tools/m15_h1_fusion.sh
+          bash -n ops/runit/bota-watcher.run
           bash tools/run_phase2_determinism.sh --self-check
       - name: Run focused offline tests
         run: |
@@ -109,7 +115,8 @@ jobs:
             tests/test_deterministic_replay.py \
             tests/test_compare_replay_outcomes.py \
             tests/test_classify_replay_match_gaps.py \
-            tests/test_weekend_production_readiness.py
+            tests/test_weekend_production_readiness.py \
+            tests/test_persistent_watcher_scope.py
       - name: Prove preview is no-network and non-mutating
         run: |
           python tools/fetch_historical_candles.py \
