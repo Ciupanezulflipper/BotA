@@ -21,20 +21,11 @@
 #     with macro6 fields).
 #   - Otherwise:
 #       * If H1 shows a strong trend in the SAME direction → tag as confirmed.
-#       * If H1 shows a strong trend in the OPPOSITE direction → veto the trade:
-#           - Set filter_rejected = true
-#           - Add "H1_trend_opposite" to filter_reasons
-#           - Append "vetoed_by_H1" to reasons
-#       * If H1 is HOLD / weak / unclear / rejected → treat as NEUTRAL (no veto).
+#       * If H1 shows a strong trend in the OPPOSITE direction → veto the trade.
+#       * If H1 is HOLD / weak / unclear / rejected → apply the existing neutral
+#         handling and override rules.
 #   - Any payload that survives current fusion is passed through the final
 #     production policy. Policy failure is fail-closed.
-#
-# JSON INPUT / OUTPUT CONTRACT
-#   • INPUT:  NONE via stdin. This script internally calls:
-#       scoring_engine.sh <PAIR> M15 | quality_filter.py
-#       scoring_engine.sh <PAIR> H1  | quality_filter.py
-#       news_sentiment.py <PAIR>     (JSON mode; Termux-safe RSS macro engine)
-#   • OUTPUT: EXACTLY ONE JSON OBJECT to stdout.
 ###############################################################################
 
 set -euo pipefail
@@ -176,7 +167,13 @@ m15_json="$(printf '%s\n' "${m15_json}" | jq \
   .macro6 = $macro6
   | .macro_score = (try ($macro_score|tonumber) catch 0.0)
   | .macro_provider = $macro_provider
-  | .filter_reasons = ((.filter_reasons // []) + [$macro_tag])
+  | .filter_reasons |= (
+      if type == "array" then .
+      elif . == null or . == "" then []
+      else [tostring]
+      end
+    )
+  | .filter_reasons |= (. + [$macro_tag])
   ')"
 
 m15_dir="$(jq_field "${m15_json}" '.direction // "HOLD"')"
