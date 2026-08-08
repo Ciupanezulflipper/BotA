@@ -64,6 +64,7 @@ for pattern in \
   "alerts_to_trades.py" \
   "pause_guard.py" \
   "autostatus.sh" \
+  "profitlab_delivery.py" \
   "signal_accuracy.py" \
   "clock_drift_check.sh" \
   "daily_summary_server_gate.sh" \
