@@ -58,7 +58,7 @@ class WeekendProductionDeployerTests(unittest.TestCase):
         self.assertNotIn(deployer.BOTA_BEGIN, preserved)
 
     def test_invalid_existing_cron_markers_fail_closed(self) -> None:
-        with self.assertRaisesRegex(deployer.DeploymentError, "invalid existing"):
+        with self.assertRaisesRegex(deployer.DeploymentError, "nested BotA cron block"):
             deployer._strip_bota_block(
                 deployer.BOTA_BEGIN + "\nold\n" + deployer.BOTA_BEGIN + "\n"
             )
