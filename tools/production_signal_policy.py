@@ -10,9 +10,9 @@ It also corrects JPY-pair risk distances to use a 0.01 pip. The legacy scoring
 engine uses a 0.0001 cap for every pair; that is harmless for EURUSD/GBPUSD but
 would produce malformed USDJPY SL/TP distances.
 
-The program is stdin/stdout JSON only. It performs no network I/O and no file
-writes. Invalid policy or JPY risk inputs fail closed for otherwise accepted
-M15 trades.
+The program is stdin/stdout strict JSON only. It performs no network I/O and no
+file writes. Invalid policy, JSON, or JPY risk inputs fail closed for otherwise
+accepted M15 trades.
 """
 
 from __future__ import annotations
@@ -200,9 +200,31 @@ def _fallback(reason: str) -> dict[str, Any]:
     }
 
 
-def _emit(output: Mapping[str, Any]) -> None:
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-standard JSON constant: {value}")
+
+
+def _decode(raw: str) -> dict[str, Any]:
+    value = json.loads(raw, parse_constant=_reject_json_constant)
+    if not isinstance(value, dict):
+        raise ValueError("payload is not an object")
+    return value
+
+
+def _encode(output: Mapping[str, Any]) -> str:
+    return json.dumps(dict(output), separators=(",", ":"), allow_nan=False)
+
+
+def _safe_encode(output: Mapping[str, Any]) -> str:
     try:
-        sys.stdout.write(json.dumps(dict(output), separators=(",", ":")))
+        return _encode(output)
+    except (TypeError, ValueError):
+        return _encode(_fallback("production_policy_error_serialization"))
+
+
+def _emit(text: str) -> None:
+    try:
+        sys.stdout.write(text)
     except BrokenPipeError:
         pass
 
@@ -215,13 +237,10 @@ def main() -> None:
 
     raw = sys.stdin.read()
     try:
-        payload = json.loads(raw)
-        if not isinstance(payload, dict):
-            raise ValueError("payload is not an object")
-        output = apply_policy(payload)
+        output = apply_policy(_decode(raw))
     except Exception as exc:
         output = _fallback(f"production_policy_error_{type(exc).__name__}")
-    _emit(output)
+    _emit(_safe_encode(output))
 
 
 if __name__ == "__main__":
