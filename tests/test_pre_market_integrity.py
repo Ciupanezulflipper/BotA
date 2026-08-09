@@ -210,7 +210,12 @@ class BootTests(unittest.TestCase):
 
 class ProgressTests(unittest.TestCase):
     @staticmethod
-    def write_progress(root: Path, boot: str, now_ns: int) -> None:
+    def write_progress(
+        root: Path,
+        boot: str,
+        now_ns: int,
+        shadow_status: str = "failed",
+    ) -> None:
         state = {
             "boot_id": boot,
             "components": {
@@ -221,9 +226,9 @@ class ProgressTests(unittest.TestCase):
                     "event_id": "u1",
                 },
                 "shadow": {
-                    "status": "failed",
+                    "status": shadow_status,
                     "monotonic_ns": now_ns - 300 * 1_000_000_000,
-                    "cycle_id": "s-failed",
+                    "cycle_id": "s-event",
                     "event_id": "s1",
                 },
             },
@@ -233,7 +238,7 @@ class ProgressTests(unittest.TestCase):
             json.dumps(state), encoding="utf-8"
         )
 
-    def test_closed_market_suspends_useful_progress_freshness_and_status(self) -> None:
+    def test_closed_market_suspends_stale_completed_but_keeps_failure_blocking(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             now_ns = 500000 * 1_000_000_000
@@ -245,13 +250,39 @@ class ProgressTests(unittest.TestCase):
                 ),
             ):
                 result = integrity.progress_check(root, market_open=False)
-        self.assertTrue(result["healthy"])
+        self.assertFalse(result["healthy"])
         self.assertFalse(result["market_open"])
+        self.assertTrue(result["components"]["updater"]["healthy"])
         self.assertEqual(
-            result["components"]["shadow"]["evaluation"],
+            result["components"]["updater"]["evaluation"],
             "market_closed_freshness_suspended",
         )
-        self.assertEqual(result["components"]["shadow"]["status"], "failed")
+        self.assertFalse(result["components"]["shadow"]["healthy"])
+        self.assertEqual(
+            result["components"]["shadow"]["evaluation"],
+            "market_closed_explicit_failure",
+        )
+        self.assertTrue(
+            any(
+                reason.startswith("shadow_closed_market_operational_failure")
+                for reason in result["failure_reasons"]
+            )
+        )
+
+    def test_closed_market_allows_old_completed_events(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            now_ns = 500000 * 1_000_000_000
+            self.write_progress(root, "boot-a", now_ns, shadow_status="completed")
+            with (
+                mock.patch.object(integrity.pipeline_health, "boot_id", return_value="boot-a"),
+                mock.patch.object(
+                    integrity.pipeline_health, "monotonic_ns", return_value=now_ns
+                ),
+            ):
+                result = integrity.progress_check(root, market_open=False)
+        self.assertTrue(result["healthy"])
+        self.assertEqual(result["failure_reasons"], [])
 
     def test_open_market_keeps_stale_and_failed_progress_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -284,7 +315,7 @@ class ProgressTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             now_ns = 500000 * 1_000_000_000
-            self.write_progress(root, "old-boot", now_ns)
+            self.write_progress(root, "old-boot", now_ns, shadow_status="completed")
             with (
                 mock.patch.object(integrity.pipeline_health, "boot_id", return_value="new-boot"),
                 mock.patch.object(
