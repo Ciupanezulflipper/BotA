@@ -5,6 +5,7 @@ import contextlib
 import fcntl
 import io
 import os
+import select
 import subprocess
 import sys
 import tempfile
@@ -50,6 +51,10 @@ class _FlockChild:
             text=True,
         )
         assert self.proc.stdout is not None
+        ready, _, _ = select.select([self.proc.stdout], [], [], 10.0)
+        if not ready:
+            self.close()
+            raise RuntimeError("child did not signal READY within 10s")
         line = self.proc.stdout.readline().strip()
         if line != "READY":
             self.close()
