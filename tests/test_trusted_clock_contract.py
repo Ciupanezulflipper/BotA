@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from importlib import import_module
 import json
 import os
 from pathlib import Path
@@ -16,14 +17,13 @@ TOOLS = ROOT / "tools"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
-import calendar_guard  # noqa: E402
-import news_filter_real  # noqa: E402
-from trusted_time import (  # noqa: E402
-    TrustedTimeUnavailable,
-    session_component,
-    trusted_epoch,
-    trusted_utc,
-)
+calendar_guard = import_module("calendar_guard")
+news_filter_real = import_module("news_filter_real")
+trusted_time = import_module("trusted_time")
+TrustedTimeUnavailable = trusted_time.TrustedTimeUnavailable
+session_component = trusted_time.session_component
+trusted_epoch = trusted_time.trusted_epoch
+trusted_utc = trusted_time.trusted_utc
 
 UTC = timezone.utc
 
@@ -44,7 +44,9 @@ def reference_session_component(value: int) -> tuple[float, str]:
     return 0.0, "session_edge"
 
 
-def test_trusted_time_never_falls_back_to_wall_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_trusted_time_never_falls_back_to_wall_clock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("BOTA_SERVER_EPOCH", raising=False)
     with pytest.raises(TrustedTimeUnavailable):
         trusted_epoch()
@@ -56,8 +58,12 @@ def test_trusted_time_never_falls_back_to_wall_clock(monkeypatch: pytest.MonkeyP
         trusted_epoch()
 
 
-def test_explicit_epoch_wins_for_replay_and_tests(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("BOTA_SERVER_EPOCH", str(epoch("2026-08-10T19:00:00Z")))
+def test_explicit_epoch_wins_for_replay_and_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "BOTA_SERVER_EPOCH", str(epoch("2026-08-10T19:00:00Z"))
+    )
     explicit = epoch("2026-08-10T12:00:00Z")
     assert trusted_epoch(explicit) == explicit
     assert session_component(explicit) == (5.0, "session_overlap")
@@ -106,7 +112,9 @@ def test_seeded_clock_fault_matrix_is_host_timezone_invariant(
         assert int(trusted_utc().timestamp()) == value
 
 
-def run_market_gate(tmp_path: Path, stamp: str) -> subprocess.CompletedProcess[str]:
+def run_market_gate(
+    tmp_path: Path, stamp: str
+) -> tuple[subprocess.CompletedProcess[str], str, int]:
     reason_file = tmp_path / "reason.txt"
     epoch_file = tmp_path / "epoch.txt"
 
@@ -137,9 +145,9 @@ def run_market_gate(tmp_path: Path, stamp: str) -> subprocess.CompletedProcess[s
         env=env,
         check=False,
     )
-    proc.reason = reason_file.read_text(encoding="utf-8").strip()  # type: ignore[attr-defined]
-    proc.recorded_epoch = int(epoch_file.read_text(encoding="utf-8").strip())  # type: ignore[attr-defined]
-    return proc
+    reason = reason_file.read_text(encoding="utf-8").strip()
+    recorded_epoch = int(epoch_file.read_text(encoding="utf-8").strip())
+    return proc, reason, recorded_epoch
 
 
 @pytest.mark.parametrize(
@@ -148,11 +156,26 @@ def run_market_gate(tmp_path: Path, stamp: str) -> subprocess.CompletedProcess[s
         ("2026-08-08T12:00:00Z", "Closed", 1, "MARKET_CLOSED_SATURDAY"),
         ("2026-08-09T12:00:00Z", "Closed", 1, "MARKET_CLOSED_SUNDAY"),
         ("2026-08-14T19:59:59Z", "Open", 0, "MARKET_OPEN"),
-        ("2026-08-14T20:00:00Z", "Closed", 1, "MARKET_CLOSED_FRIDAY_POST_2000"),
-        ("2026-08-10T06:59:59Z", "Closed", 1, "MARKET_CLOSED_ASIAN_PRE_0700"),
+        (
+            "2026-08-14T20:00:00Z",
+            "Closed",
+            1,
+            "MARKET_CLOSED_FRIDAY_POST_2000",
+        ),
+        (
+            "2026-08-10T06:59:59Z",
+            "Closed",
+            1,
+            "MARKET_CLOSED_ASIAN_PRE_0700",
+        ),
         ("2026-08-10T07:00:00Z", "Open", 0, "MARKET_OPEN"),
         ("2026-08-10T19:59:59Z", "Open", 0, "MARKET_OPEN"),
-        ("2026-08-10T20:00:00Z", "Closed", 1, "MARKET_CLOSED_POST_NY"),
+        (
+            "2026-08-10T20:00:00Z",
+            "Closed",
+            1,
+            "MARKET_CLOSED_POST_NY",
+        ),
     ],
 )
 def test_market_gate_reuses_inherited_epoch_without_network(
@@ -162,11 +185,11 @@ def test_market_gate_reuses_inherited_epoch_without_network(
     returncode: int,
     reason: str,
 ) -> None:
-    proc = run_market_gate(tmp_path, stamp)
+    proc, actual_reason, recorded_epoch = run_market_gate(tmp_path, stamp)
     assert proc.stdout.strip() == stdout
     assert proc.returncode == returncode
-    assert proc.reason == reason  # type: ignore[attr-defined]
-    assert proc.recorded_epoch == epoch(stamp)  # type: ignore[attr-defined]
+    assert actual_reason == reason
+    assert recorded_epoch == epoch(stamp)
 
 
 def event(minutes_from_now: int, *, importance: str = "high") -> dict:
@@ -229,7 +252,9 @@ def test_news_gate_requires_trusted_time_when_calendar_is_active(
     assert note == "clock_unavailable"
 
 
-def test_news_gate_keeps_provider_absence_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_news_gate_keeps_provider_absence_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("NEWS_BLOCK_ENABLED", "true")
     monkeypatch.delenv("FINNHUB_API_KEY", raising=False)
     monkeypatch.delenv("BOTA_SERVER_EPOCH", raising=False)
@@ -238,7 +263,9 @@ def test_news_gate_keeps_provider_absence_policy(monkeypatch: pytest.MonkeyPatch
     assert note == "no_calendar_api"
 
 
-def test_scoring_engine_session_score_tracks_trusted_epoch(tmp_path: Path) -> None:
+def test_scoring_engine_session_score_tracks_trusted_epoch(
+    tmp_path: Path,
+) -> None:
     """Run the real scorer at 11:59 and 12:00 with identical indicators."""
     root = tmp_path / "BotA"
     tools = root / "tools"
