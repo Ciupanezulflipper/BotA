@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # shellcheck shell=bash
 # FILE: tools/market_open.sh
-# DESC: v2.1.0 server-clock FX market gate — London + NY sessions only
+# DESC: v2.2.0 trusted-clock FX market gate — London + NY sessions only
 # Active window: 07:00-20:00 UTC Mon-Fri
 # Output: "Open" or "Closed" only on stdout
 # Exit: 0 when Open, 1 when Closed
@@ -21,13 +21,14 @@
 # callers distinguish "market truly closed" from "we could not determine the
 # time" without weakening the fail-closed trading behavior.
 #
-# When BOTA_SERVER_EPOCH_FILE is set AND the clock probe succeeds, the trusted
-# server-epoch integer is written to that path. Callers can then reuse the
-# trusted time without re-probing.
+# When BOTA_SERVER_EPOCH_FILE is set AND trusted time is available, the epoch
+# integer is written to that path. If BOTA_SERVER_EPOCH already contains a
+# structurally valid trusted epoch, it is reused and no network clock probe is
+# performed. Otherwise the existing multi-source HTTP Date probe is used.
 #
-# Why server clock:
+# Why trusted server time:
 # On cruise/ship mode, Android local time/UTC can drift when ship time is
-# changed manually. This gate must not trust device UTC for trading decisions.
+# changed manually. Market/session semantics must not trust device wall time.
 
 set -euo pipefail
 
@@ -97,6 +98,28 @@ on_error() {  # skipcq
 trap on_error ERR
 
 compute_server_utc_fields() {
+  local inherited_epoch="${BOTA_SERVER_EPOCH:-}"
+
+  # A parent gated watcher cycle already paid the network cost and established
+  # trusted time. Reuse that exact epoch so every nested scorer observes one
+  # coherent instant and cannot be affected by Android wall-clock drift.
+  if [[ "$inherited_epoch" =~ ^[0-9]+$ ]] && (( inherited_epoch > 1000000000 )); then
+    BOTA_TRUSTED_EPOCH="$inherited_epoch" python3 - <<'PY'
+import os
+from datetime import datetime, timezone
+
+epoch = int(os.environ["BOTA_TRUSTED_EPOCH"])
+dt = datetime.fromtimestamp(epoch, timezone.utc)
+print(
+    f"{dt.isoweekday()} "
+    f"{dt.strftime('%H%M')} "
+    f"{dt.strftime('%Y-%m-%dT%H:%M:%SZ')} "
+    f"1 0 {epoch}"
+)
+PY
+    return 0
+  fi
+
   python3 - <<'PY'
 import urllib.request
 import urllib.error
@@ -180,9 +203,8 @@ _server_count="${_server_count:-0}"
 _server_spread="${_server_spread:-NA}"
 _server_epoch="${_server_epoch:-0}"
 
-# Validate the probe structurally instead of treating HHMM=0000 as a sentinel.
-# Midnight (00:00 UTC) is a valid clock value and must reach the Asian-session
-# gate below, where it is classified as MARKET_CLOSED_ASIAN_PRE_0700.
+# Validate trusted time structurally instead of treating HHMM=0000 as a
+# sentinel. Midnight UTC is valid and must reach the Asian-session gate.
 _clock_fields_valid=1
 case "$_utc_dow" in
   1|2|3|4|5|6|7) ;;
@@ -213,7 +235,7 @@ write_server_epoch_file "$_server_epoch"
 
 _utc_int="$((10#$_utc_hm))"
 
-debug "server_utc=${_server_iso} dow=${_utc_dow} hm=${_utc_hm} count=${_server_count} spread=${_server_spread} epoch=${_server_epoch}"
+debug "trusted_utc=${_server_iso} dow=${_utc_dow} hm=${_utc_hm} count=${_server_count} spread=${_server_spread} epoch=${_server_epoch}"
 
 # Saturday UTC: closed all day
 if [[ "$_utc_dow" -eq 6 ]]; then
