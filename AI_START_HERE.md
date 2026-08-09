@@ -7,8 +7,8 @@ Read this before proposing BotA commands, code, service, strategy, Telegram, pro
 ## Current authoritative truth
 
 ```text
-GITHUB_MAIN_AT_DEPLOYMENT=f52f326cdbc9e9a16dd60666808a35fb839f10ad
-PHONE_DEPLOYED_RELEASE=f52f326cdbc9e9a16dd60666808a35fb839f10ad
+GITHUB_MAIN_AT_PACKAGE1_DEPLOYMENT=8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0
+PHONE_DEPLOYED_RELEASE=8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0
 DEPLOYED_TO_PHONE=PASS
 RUNTIME_FILE_PARITY=PASS
 ACTIVE_RUNIT_WRAPPER=PASS
@@ -18,73 +18,118 @@ PAIRS=EURUSD GBPUSD USDJPY
 TIMEFRAMES=M15
 TELEGRAM_ENABLED=1
 DRY_RUN_MODE=0
-SEVEN_SERVICES_RUNNING=PASS
-WATCHER_CRON_DUPLICATE=NONE
+PACKAGE_1_CLOCK_SESSION=PASS
+CURRENT_CONTROL_PLANE=HEALTHY
+CURRENT_REQUIRED_SERVICES_OWNED=7/7
+CURRENT_REQUIRED_SERVICES_RUNNING=7/7
+CURRENT_ORPHANED_RUNSV=0
+CURRENT_DUPLICATE_SERVICE_ROWS=0
+CURRENT_LIVE_CROND_COUNT=1
+ACTIVE_WATCHER_CRON=0
+ACTIVE_PROFITLAB_CRON=1
 PROFITLAB_CURSOR_PRESERVED=PASS
 LIVE_CLOSED_MARKET_CYCLE=PASS
-ISOLATED_MONDAY_HARNESS=PASS
+PERSISTENT_WATCHDOG_HARDENING=PENDING
+PRE_MARKET_PRODUCTION_INTEGRITY=PENDING
 OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
 MONDAY_READY=NO
 ```
 
-BotA is **deployed and weekend-verified**, not yet Monday-ready.
+BotA has completed **Package #1 — Clock & Session Time** and the present control plane has been repaired to a clean 7/7 single-manager topology. It is not yet Monday-ready because Package #2 persistent recovery/pre-market integrity and the genuine open-market three-pair proof remain outstanding.
 
-The only remaining production-readiness gate is a genuine `MARKET_OPEN` cycle proving fresh EURUSD, GBPUSD, and USDJPY M15 decisions in the same authoritative watcher cycle, together with fresh supporting updater/shadow evidence and current single-owner proof. Three legitimate rejected decisions are acceptable; a Telegram signal is not required.
+## Package #1 — completed and live-proven
+
+PR #84 bound strategy/event time to one trusted server epoch per watcher cycle.
+
+Deployed runtime files:
+
+```text
+tools/calendar_guard.py
+tools/market_open.sh
+tools/news_filter_real.py
+tools/scoring_engine.sh
+tools/trusted_time.py
+```
+
+Key fixed failure classes:
+
+- session score no longer depends on Android wall clock;
+- nested market gates reuse inherited `BOTA_SERVER_EPOCH`;
+- economic-calendar distance uses trusted epoch;
+- Finnhub calendar date uses trusted epoch when active;
+- pre-existing calendar before/after exclusion-window sign bug corrected;
+- CLOCK_BOOTTIME/monotonic remains the elapsed-time/cooldown domain.
+
+Validation included deterministic boundary tests, real scorer integration, no-network inherited-clock tests, ShellCheck/Python compile, cloud regression, and a 2,000-case seeded time/timezone fault matrix.
+
+Latest live Package #1 proof:
+
+```text
+cycle_id=b32a66a6-1a91-4b61-b759-c32851cbae6b:144452448476926
+terminal_outcome=MARKET_CLOSED
+market_reason=MARKET_CLOSED_SUNDAY
+time_source=server_epoch
+server_epoch=1786245830
+timestamp_utc=2026-08-09T03:23:50+00:00
+```
+
+No score threshold, pair scope, wrapper, crontab, or ProfitLab state was changed by Package #1.
+
+## Package #2 — live incident repaired, engineering hardening pending
+
+The first Package #1 deploy attempt safely aborted before mutation because `crond` appeared down. Forensics proved the real condition was more subtle:
+
+```text
+current manager PID=4398
+current runsv crond PID=24583
+stale live crond PID=4107
+stale crond parent=1
+stale crond held $PREFIX/var/run/crond.pid
+replacement crond attempts failed every ~1s on pidfile lock
+```
+
+The stale daemon was identity-checked and terminated; runit then started exactly one replacement:
+
+```text
+new crond PID=17994
+new crond parent runsv=24583
+live crond count=1
+crond stability=PASS
+```
+
+The same incident exposed six surviving PID-1-orphaned BotA `runsv` supervisors. Final reconciled topology:
+
+```text
+manager_count=1
+manager_pid=4398
+owned=7/7
+running=7/7
+orphaned=0
+duplicate_service_rows=0
+```
+
+Important: this is a **successful live repair**, not completion of Package #2. The phone boot launcher still explicitly disables persistent recovery (`RUNSVDIR_GUARD_START=DISABLED`). The watchdog source matches GitHub and a one-shot healthy-topology run passed, but persistent boot/runtime recovery and the exact stale-live-singleton-child case still require reviewed hardening and fault-injection tests.
 
 ## Phone deployment model
 
-The Android Git checkout is intentionally not the deployment identity:
+The Android Git checkout remains intentionally separate from runtime identity:
 
 ```text
 PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
-UNTRACKED_FILES_PRESERVED=782
 ```
 
 Do not infer production version from the phone worktree HEAD. Production identity is the verified bounded runtime manifest from the immutable approved GitHub commit.
 
-The active watcher wrapper is physically outside the repository worktree:
+Active watcher wrapper:
 
 ```text
 /data/data/com.termux/files/home/.config/bota-sv/bota-watcher/run
+blob=25b240dc6913bf9cde82ab79a62ea6cddd73bc8e
+mode=755
 ```
-
-It was verified against Git blob `25b240dc6913bf9cde82ab79a62ea6cddd73bc8e` with mode `755`.
-
-## Latest real production evidence
-
-Fresh post-deployment watcher event:
-
-```text
-cycle_id=b32a66a6-1a91-4b61-b759-c32851cbae6b:135481210634879
-terminal_outcome=MARKET_CLOSED
-market_reason=MARKET_CLOSED_SUNDAY
-status=skipped_market_closed
-time_source=server_epoch
-server_epoch=1786236858
-timestamp_utc=2026-08-09T00:54:18+00:00
-```
-
-This is stronger evidence than `sv status=run`: the deployed watcher actually executed the gated path and persisted an authoritative terminal outcome.
-
-## Clock warning
-
-The Android wall clock was about one hour behind trusted server time during the post-deployment audit:
-
-```text
-drift_seconds=-3621
-local_clock_unsafe=true
-server_clock_ok=true
-server_sources_count=4
-server_spread_seconds=1
-status=DRIFT_WARN
-```
-
-The production watcher proof remains valid because it used trusted `server_epoch`, not the Android wall clock. Do not hide this warning: wall-clock-driven scheduled jobs may still be affected until device time is corrected or those jobs are independently shown to be insensitive to the drift.
 
 ## ProfitLab state
-
-The independent ProfitLab worker remains active once per minute and its cursor was preserved:
 
 ```text
 cursor_offset=897734
@@ -96,8 +141,6 @@ Do **not** run `profitlab_delivery.py --bootstrap` on the current production sta
 
 ## Current strategy scope
 
-The weekend production candidate intentionally uses:
-
 ```text
 PAIRS=EURUSD GBPUSD USDJPY
 TIMEFRAMES=M15
@@ -107,35 +150,15 @@ POLICY_B_ADX_MAX=30
 NEWS_ON=0
 ```
 
-Do not loosen score, ADX, H1/H4/D1, Telegram, cooldown, or eligibility rules to manufacture signals. The next gate is operational proof, not strategy optimization.
-
-## Historical evidence remains frozen
-
-The June-July forensic dataset, deterministic replay, outcome matcher, and match-gap classification remain preserved evidence. Do not rerun or rewrite them unless their canonical evidence is proven invalid.
-
-Key prior facts remain:
-
-```text
-PUBLISHED_OUTCOMES=13
-WINS=3
-LOSSES=9
-CANCELLED=1
-TOTAL_PIPS=-71.40
-MATCHED_OUTCOMES=9
-UNMATCHED_OUTCOMES=4
-UNEXPLAINED_GAP_COUNT=0
-POLICY_B_RECONSTRUCTED_SUBSET=N5_W3_L2_PIPS_PLUS54.50
-```
-
-These historical findings do not substitute for current live runtime proof.
+Do not loosen score, ADX, H1/H4/D1, Telegram, cooldown, or eligibility rules to manufacture signals.
 
 ## Read first
 
-1. `CONTINUITY_CURRENT.md` — current status and exactly one next action.
-2. `audits/PHONE_DEPLOYMENT_WEEKEND_PROOF_2026-08-09.md` — immutable deployment/runtime proof.
-3. `ANDROID_TERMUX_TOOLCHAIN.md` — Android/Termux engineering-tool baseline and usage boundaries.
-4. `audits/WEEKEND_PRODUCTION_READINESS_2026-08-08.md` — pre-deployment production-candidate contract.
-5. `audits/REPLAY_OUTCOME_MATCH_GAP_RESULT_2026-08-08.md` — frozen historical replay/outcome evidence.
+1. `CONTINUITY_CURRENT.md` — current status and exactly one next engineering action.
+2. `audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md` — immutable Package #1 deployment proof and Package #2 incident/recovery record.
+3. `audits/PHONE_DEPLOYMENT_WEEKEND_PROOF_2026-08-09.md` — earlier immutable deployment/runtime proof.
+4. `ANDROID_TERMUX_TOOLCHAIN.md` — Android/Termux engineering-tool baseline and usage boundaries.
+5. `DECISIONS.md` and `ERRORS.md` — current locked decisions and failure/prevention register.
 6. `docs/FORENSIC_OPERATING_MODEL.md` — connector-first operating model.
 
 Older dated audits remain evidence. Current-state files may supersede their operational status but must not rewrite historical results.
@@ -148,11 +171,9 @@ Supabase connector -> published signal/outcome/database truth
 Phone/Termux       -> runtime-only state, credentials, local persistent state/results
 ```
 
-Do not ask for phone probes for facts already available through connectors. Use the phone only for runtime facts that GitHub cannot prove.
+## Deployment and service discipline
 
-## Deployment discipline
-
-Never equate these states:
+Never equate:
 
 ```text
 CODE_READY
@@ -161,38 +182,40 @@ DEPLOYMENT_READY
 DEPLOYED_TO_PHONE
 RUNTIME_PARITY_VERIFIED
 LIVE_PIPELINE_VERIFIED
+PRE_MARKET_PRODUCTION_INTEGRITY
 MONDAY_READY
 ```
 
-Each is a separate gate.
+Production process health must separately prove **running** and **correct ownership**. A live stale daemon or PID-1-orphaned supervisor is not healthy merely because work is still happening.
 
-For production deployment:
+For production deployment/recovery:
 
 - pin an immutable GitHub SHA;
-- recheck `main` before mutation;
 - verify exact file blobs and executable modes;
-- back up every overwritten runtime file and phone-specific config;
-- preserve logs, state, untracked runtime evidence, and unrelated cron;
-- restart only the service that must change;
-- verify the actual external runit wrapper, not merely the repository copy;
-- require runtime evidence after service activation;
-- rollback on activation/parity failure.
+- back up overwritten runtime files/config;
+- preserve logs, state, untracked evidence, ProfitLab cursor, and unrelated cron;
+- keep exactly one native `runsvdir` manager;
+- require all seven service supervisors to be owned by that manager;
+- distinguish stale live singleton/resource owners from stale pidfiles with dead processes;
+- restart only the component that must change;
+- require post-change runtime evidence;
+- rollback or stop when topology/release invariants fail.
 
-Never push directly to `main`. Use branch -> complete-file writes -> verified diff -> PR -> exact-head gates -> merge.
+Never push directly to `main`. Use branch -> verified changes -> PR -> exact-head gates -> merge -> separate deployment gate when runtime files changed.
 
 ## Current freeze
 
 ```text
-DO_NOT_REDEPLOY_SAME_RELEASE_WITHOUT_CONTRADICTORY_EVIDENCE=YES
-DO_NOT_RESTART_SERVICES_FOR_COSMETIC_REASONS=YES
 DO_NOT_BOOTSTRAP_PROFITLAB=YES
 DO_NOT_LOWER_THRESHOLDS=YES
 DO_NOT_FORCE_SIGNAL_COUNT=YES
+DO_NOT_FORCE_TELEGRAM_TEST_SIGNAL=YES
+DO_NOT_DECLARE_PACKAGE2_COMPLETE_FROM_LIVE_REPAIR=YES
 DO_NOT_DECLARE_MONDAY_READY_FROM_WEEKEND_PROOF=YES
 ```
 
-## Exactly one next action
+## Exactly one next engineering action
 
-Preserve the current deployed state until the first genuine `MARKET_OPEN` production cycle. Then verify, from the append-only runtime evidence, that the same current cycle contains EURUSD:M15, GBPUSD:M15, and USDJPY:M15 decisions; that updater and shadow evidence is fresh; that the watcher ends in a legitimate terminal outcome; and that current watcher ownership remains singular with no active direct watcher cron and no second watcher owner.
+Complete **Package #2 — Pre-Market Production Integrity** before another production mutation. Audit and fault-inject the native manager/watchdog/boot/recovery path, including PID-1 orphan handoff, down-service recovery, dead stale pidfile, duplicate supervisor, and the exact `manager-owned runsv + stale live singleton child/resource owner` condition seen with `crond`. Add immutable release/config/data-path readiness checks. Only after reviewed tests pass should the persistent watchdog/boot behavior be changed on the phone.
 
-If those conditions pass, advance the readiness gate. If any pair/evidence is missing or stale, ownership is ambiguous, or the terminal outcome is absent, classify the operational failure before changing strategy.
+After Package #2 passes, the final production-readiness gate is the first genuine `MARKET_OPEN` cycle proving EURUSD:M15, GBPUSD:M15, and USDJPY:M15 in the same current cycle with fresh updater/shadow/data evidence, one authoritative terminal outcome, trusted time, and unique ownership. Three legitimate rejects are acceptable; Telegram delivery is not required.
