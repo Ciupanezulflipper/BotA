@@ -2,10 +2,10 @@
 """Fail-closed BotA pre-market production integrity gate.
 
 This gate is read-only. It verifies control-plane ownership, watchdog/boot
-persistence, cron ownership, immutable runtime content, production scope,
-ProfitLab cursor preservation, trusted server clock availability, and fresh
-updater/shadow progress. It does not run the watcher, send Telegram, bootstrap
-ProfitLab, or change strategy/configuration.
+persistence, cron ownership, immutable runtime content, effective production
+scope, ProfitLab cursor preservation, trusted server clock availability, and
+market-aware updater/shadow progress. It does not run the watcher, send
+Telegram, bootstrap ProfitLab, or change strategy/configuration.
 """
 from __future__ import annotations
 
@@ -87,7 +87,7 @@ def env_int(name: str, default: str) -> int:
 
 
 def parse_safe_env(path: Path) -> dict[str, str]:
-    """Parse only non-secret production-scope keys from the runtime env file."""
+    """Parse only non-secret production-scope keys from one shell/env file."""
     wanted = set(SAFE_CONFIG_KEYS)
     result: dict[str, str] = {}
     for raw_line in path.read_text(encoding="utf-8").splitlines():
@@ -105,22 +105,46 @@ def parse_safe_env(path: Path) -> dict[str, str]:
         try:
             tokens = shlex.split(raw_value, comments=True, posix=True)
         except ValueError as exc:
-            raise IntegrityError(f"runtime_env_parse_failed:{key}") from exc
+            raise IntegrityError(f"config_parse_failed:{path.name}:{key}") from exc
         result[key] = " ".join(tokens).strip()
     return result
 
 
-def config_check(path: Path) -> dict[str, Any]:
+def config_check(runtime_path: Path, watcher_path: Path | None = None) -> dict[str, Any]:
+    """Validate the effective watcher config without sourcing executable shell.
+
+    The runit watcher sources .env.runtime and then deliberately exports its
+    production policy values. Therefore literal safe-key exports in the active
+    wrapper override the runtime-env values, matching the real execution order.
+    """
     try:
-        values = parse_safe_env(path)
+        runtime_values = parse_safe_env(runtime_path)
+        wrapper_values = parse_safe_env(watcher_path) if watcher_path else {}
     except (OSError, IntegrityError) as exc:
-        return {"healthy": False, "values": {}, "failure_reasons": [str(exc)]}
+        return {
+            "healthy": False,
+            "values": {},
+            "sources": {},
+            "failure_reasons": [str(exc)],
+        }
+
+    values = dict(runtime_values)
+    sources = {key: "runtime_env" for key in runtime_values}
+    for key, value in wrapper_values.items():
+        values[key] = value
+        sources[key] = "watcher_wrapper"
+
     failures = [
         f"config_mismatch:{key}:actual={values.get(key)!r}:expected={expected!r}"
         for key, expected in EXPECTED_CONFIG.items()
         if values.get(key) != expected
     ]
-    return {"healthy": not failures, "values": values, "failure_reasons": failures}
+    return {
+        "healthy": not failures,
+        "values": values,
+        "sources": sources,
+        "failure_reasons": failures,
+    }
 
 
 def active_cron_lines(text: str) -> list[str]:
@@ -201,7 +225,7 @@ def boot_check(text: str) -> dict[str, Any]:
     }
 
 
-def run_text(argv: list[str], timeout: int = 15) -> str:
+def run_text(argv: list[str], timeout: int = 15, env: dict[str, str] | None = None) -> str:
     try:
         result = subprocess.run(
             argv,
@@ -209,6 +233,7 @@ def run_text(argv: list[str], timeout: int = 15) -> str:
             capture_output=True,
             check=False,
             timeout=timeout,
+            env=env,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise IntegrityError(f"command_error:{argv[0]}:{type(exc).__name__}") from exc
@@ -303,7 +328,38 @@ def profitlab_check(root: Path) -> dict[str, Any]:
     }
 
 
-def progress_check(root: Path) -> dict[str, Any]:
+def observed_component(
+    name: str,
+    components: dict[str, Any],
+    now_ns: int,
+    start_grace: int,
+) -> dict[str, Any]:
+    """Return closed-market evidence without hiding explicit operational failure."""
+    event = pipeline_health.event_map(components, name)
+    age = pipeline_health.age_seconds(event, now_ns)
+    status = str(event.get("status") or "missing")
+    if status == "failed":
+        healthy = False
+        evaluation = "market_closed_explicit_failure"
+    elif status == "started" and (age is None or age > start_grace):
+        healthy = False
+        evaluation = "market_closed_stuck_started"
+    else:
+        healthy = True
+        evaluation = "market_closed_freshness_suspended"
+    return {
+        "component": name,
+        "healthy": healthy,
+        "age_seconds": age,
+        "status": status,
+        "evaluation": evaluation,
+        "cycle_id": event.get("cycle_id"),
+        "event_id": event.get("event_id"),
+    }
+
+
+def progress_check(root: Path, market_open: bool | None = True) -> dict[str, Any]:
+    """Validate useful progress with market-aware pre-market failure semantics."""
     path = root / "state/pipeline_progress.json"
     try:
         state = json.loads(path.read_text(encoding="utf-8"))
@@ -319,12 +375,47 @@ def progress_check(root: Path) -> dict[str, Any]:
     if state.get("boot_id") != current_boot:
         failures.append("pipeline_progress_missing_for_current_boot")
     components = state.get("components") if isinstance(state.get("components"), dict) else {}
-    results: dict[str, Any] = {}
+
+    if market_open is None:
+        failures.append("market_state_unavailable")
+        return {
+            "healthy": False,
+            "market_open": None,
+            "boot_id": current_boot,
+            "components": {},
+            "failure_reasons": failures,
+        }
+
     thresholds = {
         "updater": env_int("MAX_UPDATER_PROGRESS_AGE_SECS", "1500"),
         "shadow": env_int("MAX_SHADOW_PROGRESS_AGE_SECS", "1500"),
     }
     start_grace = env_int("MAX_COMPONENT_START_GRACE_SECS", "300")
+
+    if not market_open:
+        results = {
+            name: observed_component(name, components, now_ns, start_grace)
+            for name in thresholds
+        }
+        for name, result in results.items():
+            if not result["healthy"]:
+                failures.append(
+                    f"{name}_closed_market_operational_failure:"
+                    f"{result['age_seconds']}:{result['status']}:{result['evaluation']}"
+                )
+        return {
+            "healthy": not failures,
+            "market_open": False,
+            "boot_id": current_boot,
+            "components": results,
+            "note": (
+                "freshness is suspended while the trusted market gate is closed, "
+                "but explicit failed or stuck-started component states still block"
+            ),
+            "failure_reasons": failures,
+        }
+
+    results: dict[str, Any] = {}
     for name, maximum in thresholds.items():
         event = pipeline_health.event_map(components, name)
         result = pipeline_health.component_health(
@@ -349,6 +440,7 @@ def progress_check(root: Path) -> dict[str, Any]:
                 failures.append(f"{name}_{counter}:{numeric}")
     return {
         "healthy": not failures,
+        "market_open": True,
         "boot_id": current_boot,
         "components": results,
         "failure_reasons": failures,
@@ -370,6 +462,72 @@ def clock_check(timeout: int) -> dict[str, Any]:
         "server_spread_seconds": result.spread_seconds,
         "reason": result.reason,
         "failure_reasons": failures,
+    }
+
+
+def market_gate_check(root: Path, clock_result: dict[str, Any]) -> dict[str, Any]:
+    """Classify market state using the reviewed market gate and trusted epoch."""
+    epoch = clock_result.get("server_epoch")
+    if not clock_result.get("healthy") or epoch is None:
+        return {
+            "healthy": False,
+            "market_open": None,
+            "status": "unknown",
+            "failure_reasons": ["trusted_epoch_unavailable"],
+        }
+    gate = root / "tools/market_open.sh"
+    if not gate.is_file() or not os.access(gate, os.X_OK):
+        return {
+            "healthy": False,
+            "market_open": None,
+            "status": "unknown",
+            "failure_reasons": [f"market_gate_not_executable:{gate}"],
+        }
+    env = os.environ.copy()
+    env["BOTA_SERVER_EPOCH"] = str(epoch)
+    try:
+        result = subprocess.run(
+            [str(gate)],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=10,
+            env=env,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {
+            "healthy": False,
+            "market_open": None,
+            "status": "unknown",
+            "failure_reasons": [f"market_gate_error:{type(exc).__name__}"],
+        }
+    status = (result.stdout or result.stderr).strip()
+    if result.returncode not in (0, 1) or status not in {"Open", "Closed"}:
+        return {
+            "healthy": False,
+            "market_open": None,
+            "status": status or "unknown",
+            "returncode": result.returncode,
+            "failure_reasons": [
+                f"market_gate_unclassified:rc={result.returncode}:status={status!r}"
+            ],
+        }
+    market_open = result.returncode == 0 and status == "Open"
+    if (result.returncode == 0) != (status == "Open"):
+        return {
+            "healthy": False,
+            "market_open": None,
+            "status": status,
+            "returncode": result.returncode,
+            "failure_reasons": ["market_gate_output_rc_mismatch"],
+        }
+    return {
+        "healthy": True,
+        "market_open": market_open,
+        "status": status,
+        "returncode": result.returncode,
+        "trusted_epoch": epoch,
+        "failure_reasons": [],
     }
 
 
@@ -434,20 +592,24 @@ def collect(root: Path, prefix: Path, source_commit: str, clock_timeout: int) ->
         "snapshot": control,
         "failure_reasons": list(control.get("failure_reasons") or []),
     }
+    wrapper_path = Path.home() / ".config/bota-sv/bota-watcher/run"
+    trusted_clock = clock_check(clock_timeout)
+    market_gate = market_gate_check(root, trusted_clock)
     checks = {
         "control_plane": control_result,
         "watchdog_ownership": process_ownership_check(root),
         "boot_persistence": boot_result,
         "cron_ownership": cron_result,
         "runtime_parity": parity_check(root, source_commit),
-        "production_config": config_check(root / ".env.runtime"),
+        "production_config": config_check(root / ".env.runtime", wrapper_path),
         "profitlab": profitlab_check(root),
-        "progress": progress_check(root),
-        "trusted_clock": clock_check(clock_timeout),
+        "market_gate": market_gate,
+        "progress": progress_check(root, market_gate.get("market_open")),
+        "trusted_clock": trusted_clock,
     }
     failures = flatten_failures(checks)
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "healthy": not failures,
         "source_commit": source_commit,
         "root": str(root),
@@ -481,7 +643,7 @@ def main() -> int:
         )
     except IntegrityError as exc:
         result = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "healthy": False,
             "failure_reasons": [str(exc)],
             "mutated": False,
