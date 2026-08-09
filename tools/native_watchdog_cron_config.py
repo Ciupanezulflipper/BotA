@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import shlex
 from pathlib import Path
 
 BEGIN = "# BEGIN BOTA_NATIVE_WATCHDOG_GUARD"
@@ -12,6 +13,18 @@ GUARD_TOKEN = "native_watchdog_guard.py"
 
 class CronConfigError(RuntimeError):
     """Raised when guardian cron ownership is ambiguous."""
+
+
+def _shell_safe_path(kind: str, value: Path) -> str:
+    """Return a shell-safe quoted representation of ``value``.
+
+    Rejects paths that contain CR or LF (which would break out of the
+    crontab line) and defers all other quoting to :func:`shlex.quote`.
+    """
+    text = str(value)
+    if "\r" in text or "\n" in text:
+        raise CronConfigError(f"path_contains_newline:{kind}={text!r}")
+    return shlex.quote(text)
 
 
 def _managed_range(lines: list[str]) -> tuple[int, int] | None:
@@ -59,9 +72,13 @@ def render_crontab(
             "unmanaged_guard_present:" + ",".join(str(i + 1) for i in unmanaged)
         )
 
+    root_q = _shell_safe_path("root", root)
+    python_q = _shell_safe_path("python", python)
+    guard_q = _shell_safe_path("guard", guard)
+    log_q = _shell_safe_path("log", log)
     command = (
-        f'* * * * * cd "{root}" && "{python}" "{guard}" --ensure '
-        f'>> "{log}" 2>&1'
+        f"* * * * * cd {root_q} && {python_q} {guard_q} --ensure "
+        f">> {log_q} 2>&1"
     )
     block = [BEGIN, command, END]
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 import unittest
 from pathlib import Path
 
@@ -7,13 +8,17 @@ from tools import native_watchdog_cron_config as cron
 
 
 class WatchdogCronConfigTests(unittest.TestCase):
-    def render(self, text: str) -> str:
+    @staticmethod
+    def render(
+        text: str,
+        *,
+        python: Path = Path("/prefix/bin/python3"),
+        guard: Path = Path("/home/BotA/tools/native_watchdog_guard.py"),
+        root: Path = Path("/home/BotA"),
+        log: Path = Path("/home/BotA/logs/native_watchdog_guard.cron.log"),
+    ) -> str:
         return cron.render_crontab(
-            text,
-            python=Path("/prefix/bin/python3"),
-            guard=Path("/home/BotA/tools/native_watchdog_guard.py"),
-            root=Path("/home/BotA"),
-            log=Path("/home/BotA/logs/native_watchdog_guard.cron.log"),
+            text, python=python, guard=guard, root=root, log=log
         )
 
     def test_adds_one_managed_guard_block(self) -> None:
@@ -61,6 +66,39 @@ class WatchdogCronConfigTests(unittest.TestCase):
     def test_refuses_malformed_managed_markers(self) -> None:
         with self.assertRaisesRegex(cron.CronConfigError, "managed_block_invalid"):
             self.render(f"{cron.END}\n{cron.BEGIN}\n")
+
+    def test_rejects_paths_containing_carriage_return(self) -> None:
+        with self.assertRaisesRegex(cron.CronConfigError, "path_contains_newline"):
+            self.render("", root=Path("/home/BotA\rrm -rf /"))
+
+    def test_rejects_paths_containing_newline(self) -> None:
+        with self.assertRaisesRegex(cron.CronConfigError, "path_contains_newline"):
+            self.render("", log=Path("/tmp/log\nrm -rf /"))
+
+    def test_paths_with_shell_metacharacters_are_quoted(self) -> None:
+        tricky = Path("/tmp/has space and $var and \"quote\"")
+        rendered = self.render("", root=tricky)
+        managed = [
+            line
+            for line in rendered.splitlines()
+            if "native_watchdog_guard.py" in line
+            and not line.lstrip().startswith("#")
+        ]
+        self.assertEqual(len(managed), 1)
+        expected = shlex.quote(str(tricky))
+        self.assertIn(f"cd {expected}", managed[0])
+
+    def test_paths_with_single_quote_are_shell_quoted(self) -> None:
+        awkward = Path("/tmp/it's-fine")
+        rendered = self.render("", guard=awkward)
+        quoted = shlex.quote(str(awkward))
+        managed = [
+            line for line in rendered.splitlines() if quoted in line
+        ]
+        self.assertEqual(len(managed), 1)
+        # shlex.quote wraps single-quoted segments and escapes embedded
+        # apostrophes; the literal path substring must not appear naked.
+        self.assertNotIn(" /tmp/it's-fine ", managed[0])
 
 
 if __name__ == "__main__":
