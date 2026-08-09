@@ -1,0 +1,379 @@
+name: Native watchdog guardian
+
+on:
+  pull_request:
+    paths:
+      - "tools/native_watchdog_guard.py"
+      - "tools/native_watchdog_cron_config.py"
+      - "tests/test_native_watchdog_guard.py"
+      - "tests/test_native_watchdog_cron_config.py"
+      - ".github/workflows/native-watchdog-guardian.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guardian:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Compile guardian modules
+        run: |
+          python -m py_compile \
+            tools/native_watchdog_guard.py \
+            tools/native_watchdog_cron_config.py
+      - name: Run focused guardian tests
+        run: |
+          python -m unittest -v \
+            tests.test_native_watchdog_guard \
+            tests.test_native_watchdog_cron_config
+      - name: AST no-termination validator
+        run: |
+          python - <<'PY'
+          """AST-based validator: catch process/service termination in the
+          two guardian modules. Also runs its own negative fixtures so a
+          regression in the validator itself would fail CI.
+          """
+          from __future__ import annotations
+
+          import ast
+          import sys
+          import textwrap
+          from pathlib import Path
+
+          BANNED_ATTR = {
+              ("os", "kill"),
+              ("os", "killpg"),
+              ("signal", "pthread_kill"),
+          }
+          BANNED_TOKEN_CMDS = {"pkill", "killall", "kill"}
+          # {tool: {banned-first-arg tokens}}
+          BANNED_TOOL_ACTIONS = {
+              "sv": {"stop", "down", "kill", "force-stop", "exit"},
+              "systemctl": {"stop", "kill"},
+              "service": {"stop", "kill", "force-stop"},
+              "runit": {"stop", "down"},
+              "runsvctrl": {"d", "x", "k"},
+          }
+
+          def scan(source: str) -> list[str]:
+              tree = ast.parse(source)
+              module_alias: dict[str, str] = {}
+              name_import: dict[str, tuple[str, str]] = {}
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Import):
+                      for a in node.names:
+                          module_alias[a.asname or a.name] = a.name
+                  elif isinstance(node, ast.ImportFrom):
+                      mod = node.module or ""
+                      for a in node.names:
+                          name_import[a.asname or a.name] = (mod, a.name)
+
+              violations: list[str] = []
+
+              def resolve_module_chain(node: ast.expr) -> str | None:
+                  if isinstance(node, ast.Name):
+                      return module_alias.get(node.id, node.id)
+                  if isinstance(node, ast.Attribute):
+                      base = resolve_module_chain(node.value)
+                      if base is None:
+                          return None
+                      return f"{base}.{node.attr}"
+                  return None
+
+              def command_arrays(call: ast.Call):
+                  """Yield argv-style token arrays for each string, list, or
+                  tuple argument, so a list like ["sv", "down", ...] can be
+                  tested atomically as a command line."""
+                  items = list(call.args) + [kw.value for kw in call.keywords]
+                  for item in items:
+                      if isinstance(item, ast.Constant) and isinstance(
+                          item.value, str
+                      ):
+                          pieces = item.value.replace("&&", " ; ").replace(
+                              "||", " ; "
+                          )
+                          for segment in pieces.split(";"):
+                              tokens = segment.split()
+                              if tokens:
+                                  yield tokens
+                      elif isinstance(item, (ast.List, ast.Tuple)):
+                          tokens = []
+                          for element in item.elts:
+                              if isinstance(element, ast.Constant) and isinstance(
+                                  element.value, str
+                              ):
+                                  tokens.append(element.value)
+                          if tokens:
+                              yield tokens
+                      elif isinstance(item, ast.JoinedStr):
+                          buf = []
+                          for part in item.values:
+                              if isinstance(part, ast.Constant) and isinstance(
+                                  part.value, str
+                              ):
+                                  buf.append(part.value)
+                              else:
+                                  buf.append(" ")
+                          text = "".join(buf).replace("&&", " ; ").replace(
+                              "||", " ; "
+                          )
+                          for segment in text.split(";"):
+                              tokens = segment.split()
+                              if tokens:
+                                  yield tokens
+
+              for node in ast.walk(tree):
+                  if not isinstance(node, ast.Call):
+                      continue
+                  func = node.func
+                  # Attribute style: os.kill(...), _os.kill(...), signal.pthread_kill(...)
+                  if isinstance(func, ast.Attribute):
+                      chain = resolve_module_chain(func.value)
+                      if chain is not None:
+                          root = chain.split(".", 1)[0]
+                          if (root, func.attr) in BANNED_ATTR:
+                              violations.append(
+                                  f"line {node.lineno}: banned call {chain}.{func.attr}"
+                              )
+                  # Name style: from os import kill; kill(pid, sig)
+                  if isinstance(func, ast.Name) and func.id in name_import:
+                      mod, attr = name_import[func.id]
+                      if (mod, attr) in BANNED_ATTR:
+                          violations.append(
+                              f"line {node.lineno}: banned aliased call {mod}.{attr} "
+                              f"(local name {func.id})"
+                          )
+                  # Shell/subprocess argv arrays.
+                  for tokens in command_arrays(node):
+                      cmd = tokens[0].rsplit("/", 1)[-1]
+                      if cmd in BANNED_TOKEN_CMDS:
+                          violations.append(
+                              f"line {node.lineno}: banned shell command {cmd!r}"
+                          )
+                          continue
+                      if cmd in BANNED_TOOL_ACTIONS:
+                          banned_actions = BANNED_TOOL_ACTIONS[cmd]
+                          for tok in tokens[1:]:
+                              if tok.startswith("-"):
+                                  continue
+                              if tok in banned_actions:
+                                  violations.append(
+                                      f"line {node.lineno}: banned {cmd} {tok}"
+                                  )
+                                  break
+              return violations
+
+          targets = [
+              Path("tools/native_watchdog_guard.py"),
+              Path("tools/native_watchdog_cron_config.py"),
+          ]
+          failed = False
+          for target in targets:
+              found = scan(target.read_text(encoding="utf-8"))
+              if found:
+                  print(f"AST_NO_TERMINATION={target}=FAIL")
+                  for line in found:
+                      print(f"  {line}")
+                  failed = True
+              else:
+                  print(f"AST_NO_TERMINATION={target}=PASS")
+
+          # Negative fixtures — validator must catch each.
+          NEGATIVE_FIXTURES = {
+              "direct_os_kill": textwrap.dedent(
+                  """
+                  import os
+                  os.kill(1234, 15)
+                  """
+              ),
+              "os_killpg": textwrap.dedent(
+                  """
+                  import os
+                  os.killpg(1234, 9)
+                  """
+              ),
+              "aliased_os": textwrap.dedent(
+                  """
+                  import os as _os
+                  _os.kill(1234, 15)
+                  """
+              ),
+              "from_import_kill": textwrap.dedent(
+                  """
+                  from os import kill
+                  kill(1234, 15)
+                  """
+              ),
+              "signal_pthread_kill": textwrap.dedent(
+                  """
+                  import signal
+                  signal.pthread_kill(1, 9)
+                  """
+              ),
+              "subprocess_pkill": textwrap.dedent(
+                  """
+                  import subprocess
+                  subprocess.run(["pkill", "-9", "-f", "watchdog"])
+                  """
+              ),
+              "subprocess_killall": textwrap.dedent(
+                  """
+                  import subprocess
+                  subprocess.run(["killall", "watchdog"])
+                  """
+              ),
+              "subprocess_sv_down": textwrap.dedent(
+                  """
+                  import subprocess
+                  subprocess.run(["sv", "down", "watchdog"])
+                  """
+              ),
+              "subprocess_systemctl_stop": textwrap.dedent(
+                  """
+                  import subprocess
+                  subprocess.run(["systemctl", "stop", "watchdog"])
+                  """
+              ),
+              "subprocess_service_stop": textwrap.dedent(
+                  """
+                  import subprocess
+                  subprocess.run(["service", "watchdog", "stop"])
+                  """
+              ),
+              "shell_string_pkill": textwrap.dedent(
+                  """
+                  import subprocess
+                  subprocess.run("pkill -9 -f watchdog", shell=True)
+                  """
+              ),
+              "shell_string_systemctl_stop": textwrap.dedent(
+                  """
+                  import subprocess
+                  subprocess.run("systemctl stop watchdog && echo done", shell=True)
+                  """
+              ),
+              "subprocess_bare_kill": textwrap.dedent(
+                  """
+                  import subprocess
+                  subprocess.run(["kill", "-9", "1234"])
+                  """
+              ),
+              "shell_string_bare_kill": textwrap.dedent(
+                  """
+                  import subprocess
+                  subprocess.run("kill -TERM 1234", shell=True)
+                  """
+              ),
+          }
+          missed = []
+          for name, src in NEGATIVE_FIXTURES.items():
+              if not scan(src):
+                  missed.append(name)
+                  print(f"AST_NEGATIVE_FIXTURE={name}=FAIL (not detected)")
+              else:
+                  print(f"AST_NEGATIVE_FIXTURE={name}=PASS")
+
+          if failed or missed:
+              print("AST_NO_TERMINATION_VALIDATOR=FAIL")
+              sys.exit(1)
+          print("AST_NO_TERMINATION_VALIDATOR=PASS")
+          PY
+      - name: Rendered crontab validation
+        run: |
+          python - <<'PY'
+          """Render the actual crontab via the guardian module and validate
+          the fully rendered output — not source substrings — for exactly one
+          active managed guardian invocation, the exact expected command,
+          --ensure on that invocation, and no additional active guardian.
+          """
+          from __future__ import annotations
+
+          import shlex
+          import sys
+          import tempfile
+          from pathlib import Path
+
+          sys.path.insert(0, ".")
+          from tools import native_watchdog_cron_config as cron
+
+          PYTHON = Path("/opt/venv/bin/python3")
+          GUARD = Path("/srv/BotA/tools/native_watchdog_guard.py")
+          ROOT = Path("/srv/BotA")
+          LOG = Path("/srv/BotA/logs/native_watchdog_guard.cron.log")
+
+          # Fully render against an empty source.
+          rendered = cron.render_crontab("", python=PYTHON, guard=GUARD, root=ROOT, log=LOG)
+
+          active = [
+              line
+              for line in rendered.splitlines()
+              if "native_watchdog_guard.py" in line
+              and line.strip()
+              and not line.lstrip().startswith("#")
+          ]
+          if len(active) != 1:
+              print(f"RENDERED_CRONTAB=FAIL:active_count={len(active)}:{active!r}")
+              sys.exit(1)
+          line = active[0]
+          expected = (
+              f"* * * * * cd {shlex.quote(str(ROOT))} && "
+              f"{shlex.quote(str(PYTHON))} {shlex.quote(str(GUARD))} --ensure "
+              f">> {shlex.quote(str(LOG))} 2>&1"
+          )
+          if line != expected:
+              print("RENDERED_CRONTAB=FAIL:mismatch")
+              print(f"  expected: {expected!r}")
+              print(f"  actual:   {line!r}")
+              sys.exit(1)
+          if "--ensure" not in line:
+              print("RENDERED_CRONTAB=FAIL:missing_ensure")
+              sys.exit(1)
+
+          # Idempotence: rendering an already-rendered crontab must not add another.
+          again = cron.render_crontab(
+              rendered, python=PYTHON, guard=GUARD, root=ROOT, log=LOG
+          )
+          active_again = [
+              line
+              for line in again.splitlines()
+              if "native_watchdog_guard.py" in line
+              and line.strip()
+              and not line.lstrip().startswith("#")
+          ]
+          if len(active_again) != 1:
+              print(
+                  f"RENDERED_CRONTAB=FAIL:idempotence_active_count={len(active_again)}"
+              )
+              sys.exit(1)
+
+          # Merging into a non-empty user crontab must preserve unrelated lines
+          # AND still yield exactly one active managed guardian invocation.
+          merged = cron.render_crontab(
+              "@reboot echo hello\n0 0 * * * echo daily\n",
+              python=PYTHON, guard=GUARD, root=ROOT, log=LOG,
+          )
+          active_merged = [
+              line
+              for line in merged.splitlines()
+              if "native_watchdog_guard.py" in line
+              and line.strip()
+              and not line.lstrip().startswith("#")
+          ]
+          if len(active_merged) != 1:
+              print(
+                  f"RENDERED_CRONTAB=FAIL:merged_active_count={len(active_merged)}"
+              )
+              sys.exit(1)
+          if "@reboot echo hello" not in merged or "0 0 * * * echo daily" not in merged:
+              print("RENDERED_CRONTAB=FAIL:merged_lost_unrelated_lines")
+              sys.exit(1)
+
+          print("RENDERED_CRONTAB=PASS")
+          PY
