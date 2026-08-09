@@ -22,8 +22,8 @@ def service_rows() -> dict[str, dict]:
 
 
 class ControlPlaneFailureTests(unittest.TestCase):
+    @staticmethod
     def failures(
-        self,
         *,
         rows=None,
         live_crond=None,
@@ -64,7 +64,10 @@ class ControlPlaneFailureTests(unittest.TestCase):
         self.assertIn("crond_pidfile_not_live_crond", self.failures(pidfile=999))
 
     def test_missing_crond_pidfile_fails(self) -> None:
-        self.assertIn("crond_pidfile:missing", self.failures(pidfile=None, pidfile_error="missing"))
+        self.assertIn(
+            "crond_pidfile:missing",
+            self.failures(pidfile=None, pidfile_error="missing"),
+        )
 
     def test_multiple_live_crond_fails(self) -> None:
         failures = self.failures(
