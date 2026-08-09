@@ -7,40 +7,85 @@ Read this first in any new AI session before proposing BotA changes.
 ## Current grounded answer
 
 ```text
-DEPLOYED_RELEASE=8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0
+CHECKPOINT_BASE_MAIN=810441fd772e1330db7de670c3eae95606981742
+PHONE_RUNTIME_SOURCE_BASELINE=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
+PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
+PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
+PHONE_WORKTREE_DIRTY=YES
+
 PACKAGE_1_CLOCK_SESSION=PASS
+PACKAGE_2_CONTROL_PLANE_RECOVERY=PASS
+PACKAGE_2_FINALIZER_DEPLOY=PASS
+PR87_PR88_PHONE_DEPLOY=PASS
+RUNTIME_DEPENDENCY_CONTRACT=PASS
 CURRENT_CONTROL_PLANE=HEALTHY
 CURRENT_REQUIRED_SERVICES_OWNED=7/7
 CURRENT_REQUIRED_SERVICES_RUNNING=7/7
 CURRENT_ORPHANED_RUNSV=0
 CURRENT_DUPLICATE_SERVICE_ROWS=0
-CURRENT_LIVE_CROND_COUNT=1
-PRE_MARKET_PRODUCTION_INTEGRITY=PENDING
+WATCHDOG_SINGLETON=PASS
+BOOT_PERSISTENCE=PASS
+PROFITLAB_PRESERVED=PASS
+NATURAL_SHADOW_CYCLE=PASS
+PRE_MARKET_PRODUCTION_INTEGRITY=PASS
+PR89_WATCHDOG_GUARDIAN=BLOCKED_REVIEW_AND_CI
 OPEN_MARKET_THREE_PAIR_PROOF=PENDING
 MONDAY_READY=NO
 ```
 
-Package #1 is complete and live-proven. Package #2 has already produced important live findings and repairs, but its persistent recovery/pre-market hardening is not complete.
+The phone checkout HEAD is not production identity. Runtime acceptance is based on immutable reviewed source blobs, deployed file parity, runtime state, and bounded postconditions.
 
-## Production release identity
+## Latest verified phone evidence
 
-```text
-APPROVED_AND_DEPLOYED_SHA=8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0
-PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
-PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
-```
-
-The phone worktree HEAD is not production identity. Use immutable approved SHA + deployed blob/mode parity + active wrapper + runtime configuration + live evidence.
-
-Active physical watcher wrapper:
+The PR #87 / #88 deployment and subsequent natural runtime proof passed:
 
 ```text
-/data/data/com.termux/files/home/.config/bota-sv/bota-watcher/run
-blob=25b240dc6913bf9cde82ab79a62ea6cddd73bc8e
-mode=755
+requests==2.34.2
+DEPENDENCY_CONTRACT=PASS
+PIP_BASELINE_REGRESSION=NO
+CONTROL_PLANE=7_OF_7_HEALTHY
+WATCHDOG_SINGLETON=PASS
+PROFITLAB_PRESERVED=PASS
+SERVICE_RESTARTED=NO
+SHADOW_MANUALLY_EXECUTED=NO
+STRATEGY_CHANGED=NO
 ```
 
-## Runtime configuration
+A later natural runit-owned shadow cycle completed successfully:
+
+```text
+SHADOW_STATUS=completed
+SHADOW_DETAILS=exit_code=0
+LATEST_SHADOW_HEARTBEAT=OK | 0 active signals
+LATEST_SHADOW_DONE_LOG=Shadow Manager done | 0 active signals
+NATURAL_SHADOW_ACCEPTANCE=PASS
+```
+
+The corrected pre-market integrity gate then passed all nine checks with zero failures:
+
+```text
+CHECK_CONTROL_PLANE=PASS
+CHECK_WATCHDOG_OWNERSHIP=PASS
+CHECK_BOOT_PERSISTENCE=PASS
+CHECK_CRON_OWNERSHIP=PASS
+CHECK_RUNTIME_PARITY=PASS
+CHECK_PRODUCTION_CONFIG=PASS
+CHECK_PROFITLAB=PASS
+CHECK_PROGRESS=PASS
+CHECK_TRUSTED_CLOCK=PASS
+FAILURE_COUNT=0
+PRE_MARKET_INTEGRITY_ACCEPTANCE=PASS
+```
+
+Therefore:
+
+```text
+INFRASTRUCTURE_AND_CLOSED_MARKET_READINESS=PASS
+```
+
+Do **not** translate that into `MONDAY_READY=YES` yet.
+
+## Current production scope
 
 ```text
 PAIRS=EURUSD GBPUSD USDJPY
@@ -53,162 +98,69 @@ TELEGRAM_ENABLED=1
 DRY_RUN_MODE=0
 ```
 
-Do not loosen strategy thresholds to manufacture signals.
+Do not lower thresholds or change signal eligibility to manufacture activity.
 
-## Package #1 — completed trusted-time package
+## Current blocker — PR #89
 
-PR #84 deployed exactly five runtime files:
-
-```text
-tools/calendar_guard.py
-tools/market_open.sh
-tools/news_filter_real.py
-tools/scoring_engine.sh
-tools/trusted_time.py
-```
-
-It fixed:
-
-- scorer session time reading unsafe Android wall clock;
-- nested market-gate time reprobes instead of inherited cycle epoch;
-- calendar event-window calculations using wall clock;
-- Finnhub calendar-date selection using wall clock when active;
-- reversed before/after economic-calendar block semantics.
-
-One watcher cycle now reuses one `BOTA_SERVER_EPOCH` for strategy/event-time semantics. CLOCK_BOOTTIME/monotonic remains for elapsed-duration health/cooldowns.
-
-Validation passed deterministic boundaries, real scorer integration, ShellCheck, Python compile, no-network inherited-clock checks, and a 2,000-case seeded time/timezone fault matrix.
-
-Fresh live Package #1 evidence:
+PR #89 `fix: persist native watchdog with fail-closed cron guardian` is still open. Current head at this checkpoint:
 
 ```text
-cycle_id=b32a66a6-1a91-4b61-b759-c32851cbae6b:144452448476926
-terminal_outcome=MARKET_CLOSED
-market_reason=MARKET_CLOSED_SUNDAY
-time_source=server_epoch
-server_epoch=1786245830
-timestamp_utc=2026-08-09T03:23:50+00:00
+PR89_HEAD=4f73a999634bc83c52defb0d31bfb72291ac83b9
+PR89_MERGEABLE=true
+GITHUB_ACTIONS_SECURITY_SCAN=PASS
+GITHUB_ACTIONS_NATIVE_WATCHDOG_GUARDIAN=PASS
+DEEPSOURCE_PYTHON=FAIL
+UNRESOLVED_REVIEW_THREADS=9
 ```
 
-## Package #2 — findings already discovered
+The unresolved findings are concentrated in the five PR files:
 
-### 1. Stale live `crond` blocked the manager-owned replacement
+- `.github/workflows/native-watchdog-guardian.yml`
+- `tools/native_watchdog_guard.py`
+- `tools/native_watchdog_cron_config.py`
+- `tests/test_native_watchdog_guard.py`
+- `tests/test_native_watchdog_cron_config.py`
 
-The first Package #1 deployment attempt aborted before mutation because `crond` looked down. Root cause:
+Required fixes:
+
+1. active advisory `FLOCK` ownership rather than open-descriptor inference;
+2. shell-safe quoted cron paths plus CR/LF rejection;
+3. controlled guardian failure even if event logging itself fails;
+4. AST-based no-termination validator with negative fixtures;
+5. full rendered-crontab validation with exactly one managed active `--ensure` line;
+6. finite timeout validation (`NaN` / infinities rejected);
+7. `persist-credentials: false` on checkout;
+8. unused-variable cleanup;
+9. staticmethod cleanup in cron tests.
+
+No phone deployment of PR #89 is allowed until exact-head review/static/CI gates pass.
+
+## Remaining Monday gates
 
 ```text
-native manager PID=4398
-current runsv crond PID=24583
-stale crond PID=4107
-stale crond PPID=1
-stale crond still held crond.pid
-new crond attempts failed every ~1 second on pidfile lock
+PR89_REVIEW_CLEAN=PENDING
+PR89_EXACT_HEAD_STATIC_AND_CI=PASS_REQUIRED
+PR89_MERGE=PENDING
+GUARDIAN_PHONE_DEPLOY=PENDING
+GUARDIAN_WATCHDOG_ONLY_FAULT_INJECTION=PENDING
+OPEN_MARKET_EURUSD_M15=PENDING
+OPEN_MARKET_GBPUSD_M15=PENDING
+OPEN_MARKET_USDJPY_M15=PENDING
+MONDAY_READY=NO
 ```
 
-The old process was still executing cron jobs, so apparent business activity did not mean correct control-plane ownership.
+Three legitimate current-cycle rejects are acceptable for the market-open proof. A Telegram signal is not required.
 
-Repair result:
+## Canonical current sources
 
-```text
-old crond PID=4107 terminated after identity/parent verification
-new crond PID=17994
-new crond PPID=24583
-live crond count=1
-stability=PASS
-```
+1. `CONTINUITY_CURRENT.md`
+2. `AI_START_HERE.md`
+3. `audits/PRE_MARKET_READINESS_CHECKPOINT_2026-08-09.md`
+4. GitHub issue #9
+5. this file
 
-### 2. Six `runsv` supervisors were PID-1 orphans
-
-Immediately after the cron repair, `control_plane_status.py` found:
-
-```text
-running=7/7
-owned=1/7
-orphaned=6
-```
-
-Final reconciled topology:
-
-```text
-manager_count=1
-manager_pid=4398
-running=7/7
-owned=7/7
-orphaned=0
-duplicate_service_rows=0
-```
-
-Never treat `sv status=run` or process presence alone as proof of correct control-plane ownership.
-
-### 3. Persistent watchdog is still disabled
-
-Phone boot launcher currently records:
-
-```text
-RUNSVDIR_GUARD_START=DISABLED
-```
-
-The watchdog files match GitHub and a one-shot healthy-topology run passed, but persistent startup/recovery is not proven. Package #2 must automate and fault-test the exact stale-live-singleton-child condition rather than relying on manual repair.
-
-## ProfitLab
-
-```text
-cursor_offset=897734
-alerts_csv_size=897734
-pending_bytes=0
-```
-
-Do not run `profitlab_delivery.py --bootstrap`.
-
-## What Package #2 must prove
-
-Before persistent phone changes, fault-inject in isolation:
-
-```text
-manager loss
-PID-1 orphaned runsv handoff
-single service down
-dead stale pidfile
-live stale singleton child/resource owner
-duplicate runsv supervisor
-multiple manager attempt
-watchdog duplicate attempt
-release/blob/config drift
-missing/stale updater or shadow evidence
-```
-
-The final design must preserve one native `runsvdir`, one supervisor per service, one live singleton child where applicable, one watcher owner, and immutable release/config provenance.
-
-## Canonical evidence
-
-Read:
-
-1. `audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md`
-2. `CONTINUITY_CURRENT.md`
-3. `DECISIONS.md`
-4. `ERRORS.md`
-5. GitHub issue #9
-
-Older dated audits remain historical evidence and should not be rewritten to look current.
-
-## Final readiness gate after Package #2
-
-The first genuine `MARKET_OPEN` production cycle must prove in one current cycle:
-
-```text
-EURUSD:M15 decision present
-GBPUSD:M15 decision present
-USDJPY:M15 decision present
-fresh updater/data evidence
-fresh shadow evidence
-one authoritative watcher terminal outcome
-trusted server time
-no duplicate watcher owner
-7/7 services correctly owned and running
-```
-
-Three legitimate rejected decisions are acceptable. A Telegram signal is not required.
+`ERRORS.md`, `RESOLVED.md`, and older dated audits preserve historical failure and repair context; current gate truth must follow the sources above when historical wording differs.
 
 ## Exactly one next action
 
-Finish **Package #2 — Pre-Market Production Integrity** in reviewed code/tests before changing the phone again. Do not merge stale signal-closer PR #7 into this package and do not change strategy thresholds to compensate for operational failures.
+Fix every still-valid unresolved PR #89 review finding on branch `fix/watchdog-persistence-guardian-20260809`, run focused validation, and stop for human confirmation before commit/push. Do not mutate the phone/runtime while fixing the GitHub PR.
