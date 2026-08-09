@@ -77,6 +77,15 @@ def valid_commit(value: str) -> bool:
     return len(value) == 40 and all(char in "0123456789abcdef" for char in value)
 
 
+def env_int(name: str, default: str) -> int:
+    """Read one integer threshold while preserving machine-readable failures."""
+    raw = os.environ.get(name, default)
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise IntegrityError(f"invalid_threshold:{name}:{raw!r}") from exc
+
+
 def parse_safe_env(path: Path) -> dict[str, str]:
     """Parse only non-secret production-scope keys from the runtime env file."""
     wanted = set(SAFE_CONFIG_KEYS)
@@ -312,10 +321,10 @@ def progress_check(root: Path) -> dict[str, Any]:
     components = state.get("components") if isinstance(state.get("components"), dict) else {}
     results: dict[str, Any] = {}
     thresholds = {
-        "updater": int(os.environ.get("MAX_UPDATER_PROGRESS_AGE_SECS", "1500")),
-        "shadow": int(os.environ.get("MAX_SHADOW_PROGRESS_AGE_SECS", "1500")),
+        "updater": env_int("MAX_UPDATER_PROGRESS_AGE_SECS", "1500"),
+        "shadow": env_int("MAX_SHADOW_PROGRESS_AGE_SECS", "1500"),
     }
-    start_grace = int(os.environ.get("MAX_COMPONENT_START_GRACE_SECS", "300"))
+    start_grace = env_int("MAX_COMPONENT_START_GRACE_SECS", "300")
     for name, maximum in thresholds.items():
         event = pipeline_health.event_map(components, name)
         result = pipeline_health.component_health(
@@ -350,7 +359,7 @@ def clock_check(timeout: int) -> dict[str, Any]:
     result = clock_drift_check.compute_server_clock(
         clock_drift_check.DEFAULT_URLS,
         timeout=timeout,
-        max_spread_seconds=int(os.environ.get("CLOCK_SERVER_MAX_SPREAD_SECS", "120")),
+        max_spread_seconds=env_int("CLOCK_SERVER_MAX_SPREAD_SECS", "120"),
     )
     failures = [] if result.ok else [f"trusted_server_clock:{result.reason}"]
     return {
