@@ -11,6 +11,8 @@ on:
       - "tools/native_service_boot_config.py"
       - "tools/control_plane_status.py"
       - "tools/pre_market_integrity.py"
+      - "tools/clock_drift_check.py"
+      - "tools/pipeline_health.py"
       - "ops/phone_migrate_native_service_daemon.sh"
       - "ops/phone_migrate_native_service_daemon_partial.sh"
       - "ops/phone_finalize_native_service_daemon_watchdog.sh"
@@ -45,6 +47,8 @@ jobs:
             tools/native_service_boot_config.py \
             tools/control_plane_status.py \
             tools/pre_market_integrity.py \
+            tools/clock_drift_check.py \
+            tools/pipeline_health.py \
             tests/test_native_service_daemon_watchdog.py \
             tests/test_native_service_daemon_migration.py \
             tests/test_native_service_daemon_partial_migration.py \
