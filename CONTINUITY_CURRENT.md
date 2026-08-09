@@ -11,29 +11,40 @@ CODE_READY=PASS
 MERGED_TO_MAIN=PASS
 DEPLOYED_TO_PHONE=PASS
 RUNTIME_PARITY_VERIFIED=PASS
-RUNIT_ACTIVATION=PASS
-CLOSED_MARKET_LIVE_CYCLE=PASS
-ISOLATED_MONDAY_HARNESS=PASS
+PACKAGE_1_CLOCK_SESSION=PASS
+CURRENT_CONTROL_PLANE=HEALTHY
+CURRENT_REQUIRED_SERVICES_OWNED=7/7
+CURRENT_REQUIRED_SERVICES_RUNNING=7/7
+CURRENT_ORPHANED_RUNSV=0
+CURRENT_DUPLICATE_SERVICE_ROWS=0
+CURRENT_LIVE_CROND_COUNT=1
 PROFITLAB_STATE=PASS
+PRE_MARKET_PRODUCTION_INTEGRITY=PENDING
 OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
 MONDAY_READY=NO
 ```
 
-BotA is **DEPLOYED_AND_WEEKEND_VERIFIED**. The remaining gate is live open-market proof, not more weekend coding.
+Package #1 is complete. Package #2 has a repaired live topology but its persistent recovery/boot hardening is not yet complete.
 
-## Authoritative release identity
+## Authoritative deployed release
 
 ```text
-DEPLOYED_GITHUB_SHA=f52f326cdbc9e9a16dd60666808a35fb839f10ad
+DEPLOYED_GITHUB_SHA=8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0
 PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
-PHONE_TRACKED_DIRTY_BEFORE_DEPLOY=0
-PHONE_UNTRACKED_PRESERVED=782
 ```
 
-The phone Git checkout was intentionally not reset/cleaned to `main`. Runtime identity is proven from the bounded deployed file hashes, active wrapper hash/mode, runtime configuration, and live cycle evidence. Do not use the phone checkout HEAD as the production release identifier.
+The phone worktree is not the deployment identity. Production identity is proven by the immutable release SHA, deployed file blobs/modes, active wrapper parity, runtime configuration, and live watcher evidence.
 
-## Deployed runtime scope
+Active wrapper:
+
+```text
+/data/data/com.termux/files/home/.config/bota-sv/bota-watcher/run
+blob=25b240dc6913bf9cde82ab79a62ea6cddd73bc8e
+mode=755
+```
+
+## Deployed production scope
 
 ```text
 PAIRS=EURUSD GBPUSD USDJPY
@@ -46,68 +57,104 @@ TELEGRAM_ENABLED=1
 DRY_RUN_MODE=0
 ```
 
-Only the existing `PAIRS` assignment in `.env.runtime` was changed during the successful deployment. Secrets and unrelated runtime variables were preserved.
+No Package #1 threshold or pair-scope changes were made.
 
-The active watcher wrapper is:
+## Package #1 — trusted clock/session proof
+
+PR #84 deployed exactly these five runtime files:
 
 ```text
-/data/data/com.termux/files/home/.config/bota-sv/bota-watcher/run
-blob=25b240dc6913bf9cde82ab79a62ea6cddd73bc8e
-mode=755
+tools/calendar_guard.py
+tools/market_open.sh
+tools/news_filter_real.py
+tools/scoring_engine.sh
+tools/trusted_time.py
 ```
 
-## Service/control-plane proof
+Fixed semantics:
 
-Post-deployment topology:
+- one inherited `BOTA_SERVER_EPOCH` controls market/session/event-time truth within a watcher cycle;
+- scorer session component no longer reads Android wall clock;
+- economic-calendar distance uses trusted epoch;
+- Finnhub date selection uses trusted epoch when active;
+- the calendar before/after exclusion-window sign bug is corrected;
+- CLOCK_BOOTTIME/monotonic remains the elapsed-time health/cooldown domain.
 
-```text
-runsvdir_managers=1
-required_services_running=7/7
-active_watcher_cron=0
-active_profitlab_cron=1
-```
+Pre-deployment gates passed deterministic boundaries, real scorer integration, ShellCheck, Python compile, no-network inherited-clock checks, and a 2,000-case seeded time/timezone fault matrix.
 
-Services verified running:
-
-```text
-bota-updater
-bota-watcher
-bota-closer
-bota-shadow
-bota-heartbeat
-bota-supervisor
-crond
-```
-
-The watcher is runit-owned. Do not restore a direct watcher cron entry.
-
-## Live post-deployment watcher proof
-
-Fresh real production terminal event:
+Fresh production proof after deployment:
 
 ```text
-cycle_id=b32a66a6-1a91-4b61-b759-c32851cbae6b:135481210634879
+cycle_id=b32a66a6-1a91-4b61-b759-c32851cbae6b:144452448476926
 status=skipped_market_closed
 terminal_outcome=MARKET_CLOSED
 market_reason=MARKET_CLOSED_SUNDAY
 time_source=server_epoch
-server_epoch=1786236858
-timestamp_utc=2026-08-09T00:54:18+00:00
+server_epoch=1786245830
+timestamp_utc=2026-08-09T03:23:50+00:00
 ```
 
-This proves the approved deployed wrapper executed `watcher_gated_cycle.sh` and persisted an authoritative terminal outcome after the service restart.
-
-## Isolated readiness harness
-
-Post-deployment `tools/monday_readiness_check.py` result:
+Backup created before Package #1 mutation:
 
 ```text
-healthy=true
-return_code=0
-scenarios_passed=8/8
+/data/data/com.termux/files/home/BotA-backups/clock-pkg1-20260809T022316Z
 ```
 
-The harness verified closed-session reasons, clock-gate failures, and an isolated open-market rejected outcome. It uses a temporary `BOTA_ROOT`; it did not mutate production, send Telegram, write Supabase, restart services, or change crontab.
+## Package #2 findings and live repairs
+
+### Stale live `crond` singleton owner
+
+The first Package #1 deployment attempt safely stopped before mutation because `crond` failed the seven-service gate. Forensics proved:
+
+```text
+manager_pid=4398
+runsv_crond_pid=24583
+stale_live_crond_pid=4107
+stale_live_crond_ppid=1
+pidfile_owner=4107
+failure=second crond repeatedly unable to lock crond.pid
+```
+
+The stale daemon was identity-checked, the failed restart loop was quiesced, PID 4107 was terminated, and runit started one replacement:
+
+```text
+new_crond_pid=17994
+new_crond_parent_runsv=24583
+live_crond_count=1
+crond_stability=PASS
+```
+
+### PID-1-orphaned BotA supervisors
+
+Immediately after the cron repair, control-plane inspection exposed six live BotA `runsv` supervisors parented by PID 1 rather than the current native manager. Final topology was reconciled and verified stable:
+
+```text
+manager_count=1
+manager_pid=4398
+owned=7/7
+running=7/7
+orphaned=0
+duplicate_service_rows=0
+```
+
+This proves why `running=7/7` alone is insufficient; correct owner lineage is a separate readiness invariant.
+
+### Persistent recovery remains pending
+
+The phone boot launcher currently records:
+
+```text
+RUNSVDIR_GUARD_START=DISABLED
+```
+
+The watchdog source files match GitHub and a one-shot healthy-topology execution returned RC 0, but the watchdog is not yet proven persistent across boot/runtime manager replacement. The exact stale-live-singleton-child condition seen with `crond` is not yet an automated reviewed recovery case.
+
+Therefore:
+
+```text
+LIVE_CONTROL_PLANE_REPAIR=PASS
+PACKAGE_2_ENGINEERING_HARDENING=PENDING
+```
 
 ## ProfitLab state
 
@@ -117,76 +164,33 @@ alerts_csv_size=897734
 pending_bytes=0
 ```
 
-ProfitLab state was preserved through deployment. Do not run `profitlab_delivery.py --bootstrap` on this production state.
+Do not run `profitlab_delivery.py --bootstrap`.
 
-## Clock warning
+## Residual observations
 
-Post-deployment clock audit:
+- `pipeline_progress.json` can retain a legacy top-level schema label while newer events use schema 1.1; treat as bookkeeping debt unless it affects behavior.
+- A stale compact shadow failure record predates the current production state; require fresh shadow evidence at the open-market gate.
+- The Android wall clock remains an operational warning, but Package #1 removed its use from the audited market/session/calendar paths. Wall-clock cron scheduling risk must still be treated separately.
 
-```text
-local_utc=2026-08-08T23:55:00Z
-server_utc=2026-08-09T00:55:21Z
-drift_seconds=-3621
-local_clock_unsafe=true
-server_clock_ok=true
-server_sources_count=4
-server_spread_seconds=1
-status=DRIFT_WARN
-```
+## Canonical dated evidence
 
-The watcher remains fail-closed and used `server_epoch`, so the live watcher proof is valid. Device wall-clock drift remains operational debt because cron-style schedules can still be shifted in real time.
+- `audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md`
+- `audits/PHONE_DEPLOYMENT_WEEKEND_PROOF_2026-08-09.md`
 
-## Residual state observations
-
-These are recorded but are not reasons to churn the production release tonight:
-
-- `state/pipeline_progress.json` retained a legacy top-level schema label `1.0` while new watcher events are schema `1.1`; current ledger code preserves an existing state label with `setdefault`.
-- Compact decision state still contains pre-deployment EURUSD/GBPUSD decisions and no USDJPY decision because the only new real cycle was Sunday market-closed.
-- The compact `shadow` event showing `status=failed, exit_code=1` predates the successful deployment; the current `bota-shadow` runit service was verified running. Fresh updater/shadow evidence is required when the market opens.
-
-Do not cosmetically mutate production to erase these observations before the live gate.
-
-## Deployment failures learned from, not hidden
-
-The successful release was preceded by controlled failures that improved the deployment contract:
-
-1. GitHub `main` moved after an earlier release pin; the deployer aborted before mutation.
-2. The approved runit wrapper was stored as Git mode `100644`; activation failed and rollback restored the previous watcher. PR #81 corrected it to `100755`.
-3. A verification script incorrectly looked for `crond` under `${HOME}/.config/bota-sv`; it aborted before mutation. Correct topology uses `$PREFIX/var/service`.
-4. The final corrected deployment used the exact 12-file parity-audit manifest plus the one approved `.env.runtime` `PAIRS` correction.
-
-Full evidence is in `audits/PHONE_DEPLOYMENT_WEEKEND_PROOF_2026-08-09.md`.
-
-## Historical strategy evidence remains preserved
-
-The June-July historical acquisition/replay/matching work remains closed evidence. Do not rerun it merely because production has now been deployed.
-
-The controlled production candidate remains Policy B (`current acceptance AND score >=70 AND ADX <30`) with USDJPY pair-aware risk handling and `NEWS_ON=0`. Do not loosen thresholds to force signals.
+The first file is current for Package #1/#2 findings. The second remains immutable evidence of the earlier deployment baseline.
 
 ## Current freeze
 
 ```text
-DO_NOT_REDEPLOY_WITHOUT_NEW_CONTRADICTORY_EVIDENCE=YES
-DO_NOT_RESTART_SERVICES_FOR_COSMETIC_STATE=YES
 DO_NOT_BOOTSTRAP_PROFITLAB=YES
-DO_NOT_FORCE_TELEGRAM_TEST_SIGNAL=YES
 DO_NOT_LOWER_THRESHOLDS=YES
-DO_NOT_DECLARE_MONDAY_READY_FROM_WEEKEND_PROOF=YES
+DO_NOT_FORCE_TELEGRAM_TEST_SIGNAL=YES
+DO_NOT_DECLARE_PACKAGE2_COMPLETE_FROM_MANUAL_REPAIR=YES
+DO_NOT_DECLARE_MONDAY_READY_FROM_CLOSED_MARKET_PROOF=YES
 ```
 
-## Exactly one next action
+## Exactly one next engineering action
 
-Preserve this known-good deployed state until the first genuine `MARKET_OPEN` production cycle. Then verify the append-only runtime evidence for the same current cycle:
+Complete **Package #2 — Pre-Market Production Integrity** in reviewed code/tests before another phone mutation. Fault-inject manager loss, PID-1 orphan handoff, down service, dead stale pidfile, duplicate supervisors, and the exact `current runsv + stale live singleton child/resource owner` condition. Add persistent single-instance watchdog/boot behavior and immutable release/config/data-path readiness checks.
 
-```text
-EURUSD:M15 decision present
-GBPUSD:M15 decision present
-USDJPY:M15 decision present
-fresh updater progress present
-fresh shadow progress present
-watcher terminal outcome is legitimate and persisted
-provider/data failure is visible if one occurred
-delivery evidence is checked only if a signal genuinely qualifies
-```
-
-Three legitimate rejected decisions are a valid PASS. A Telegram signal is not required. A missing/stale pair, hidden operational failure, duplicate owner, or missing terminal outcome is a FAIL and must be diagnosed before any strategy mutation.
+After Package #2 passes, wait for the first genuine `MARKET_OPEN` cycle and prove current EURUSD:M15, GBPUSD:M15, and USDJPY:M15 decisions in the same authoritative cycle with fresh updater/shadow/data evidence, one legitimate terminal outcome, trusted time, and unique ownership. Three legitimate rejected decisions are acceptable; a Telegram signal is not required.
