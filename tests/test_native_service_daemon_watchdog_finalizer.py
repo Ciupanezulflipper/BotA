@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tools import native_service_daemon_watchdog as watchdog
 from tools import native_service_daemon_watchdog_finalizer as finalizer
@@ -85,6 +86,46 @@ class FinalizerPreflightTests(unittest.TestCase):
 
     def test_rejects_legacy_guard(self) -> None:
         self.assert_rejected("preflight_legacy_guard_count:1", legacy_guard_count=1)
+
+
+class CrondOwnershipTests(unittest.TestCase):
+    def test_accepts_healthy_crond_ownership(self) -> None:
+        evidence = {
+            "healthy": True,
+            "failure_reasons": [],
+            "live_crond": [{"pid": 777, "ppid": 207}],
+        }
+        with mock.patch.object(watchdog, "crond_ownership", return_value=evidence):
+            result = finalizer.require_crond_ownership(
+                ROOT, 100, Path("/tmp/crond.pid")
+            )
+        self.assertEqual(result, evidence)
+
+    def test_rejects_stale_crond_ownership(self) -> None:
+        evidence = {
+            "healthy": False,
+            "failure_reasons": ["parent_mismatch:1:207"],
+        }
+        with (
+            mock.patch.object(watchdog, "crond_ownership", return_value=evidence),
+            self.assertRaisesRegex(finalizer.MigrationError, "crond_ownership_invalid"),
+        ):
+            finalizer.require_crond_ownership(
+                ROOT, 100, Path("/tmp/crond.pid")
+            )
+
+    def test_unreadable_crond_pidfile_is_explicit(self) -> None:
+        with (
+            mock.patch.object(
+                watchdog,
+                "crond_ownership",
+                side_effect=watchdog.WatchdogError("crond_pidfile_invalid"),
+            ),
+            self.assertRaisesRegex(finalizer.MigrationError, "crond_ownership_unreadable"),
+        ):
+            finalizer.require_crond_ownership(
+                ROOT, 100, Path("/tmp/crond.pid")
+            )
 
 
 if __name__ == "__main__":

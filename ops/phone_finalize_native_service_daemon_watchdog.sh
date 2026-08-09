@@ -62,6 +62,9 @@ PATHS=(
     tools/start_native_service_daemon_watchdog.sh
     tools/native_service_daemon_migration.py
     tools/native_service_daemon_watchdog_finalizer.py
+    tools/native_service_boot_config.py
+    tools/control_plane_status.py
+    tools/pre_market_integrity.py
 )
 
 restore_files() {
@@ -105,12 +108,30 @@ done
     printf 'FINALIZER_ABORTED=BOOT_FILE_MISSING:%s\n' "${BOOT}"
     exit 8
 }
-OLD_COUNT="$(grep -Foc 'start_runsvdir_guard.sh' "${BOOT}" || true)"
-NEW_COUNT="$(grep -Foc 'start_native_service_daemon_watchdog.sh' "${BOOT}" || true)"
-[[ "${OLD_COUNT}" = 1 && "${NEW_COUNT}" = 0 ]] || {
-    printf 'FINALIZER_ABORTED=BOOT_LAUNCHER_COUNTS:OLD=%s:NEW=%s\n' \
-        "${OLD_COUNT}" "${NEW_COUNT}"
-    exit 9
+
+BOOT_NEW="${AUDIT}/00-termux-services.sh.new"
+python3 "${STAGE}/tools/native_service_boot_config.py" \
+    --source "${BOOT}" \
+    --output "${BOOT_NEW}" \
+    --launcher "${ROOT}/tools/start_native_service_daemon_watchdog.sh" \
+    --log "${ROOT}/logs/native_service_daemon_watchdog.boot.log" || {
+        printf 'FINALIZER_ABORTED=BOOT_RENDER_FAILED\n'
+        exit 9
+    }
+[[ "$(grep -Foc '# BEGIN BOTA_NATIVE_SERVICE_WATCHDOG' "${BOOT_NEW}" || true)" = 1 ]] || {
+    printf 'FINALIZER_ABORTED=BOOT_BEGIN_COUNT\n'
+    exit 10
+}
+[[ "$(grep -Foc '# END BOTA_NATIVE_SERVICE_WATCHDOG' "${BOOT_NEW}" || true)" = 1 ]] || {
+    printf 'FINALIZER_ABORTED=BOOT_END_COUNT\n'
+    exit 10
+}
+ACTIVE_LEGACY_COUNT="$(grep -v '^[[:space:]]*#' "${BOOT_NEW}" | grep -Fc 'start_runsvdir_guard.sh' || true)"
+ACTIVE_WATCHDOG_COUNT="$(grep -v '^[[:space:]]*#' "${BOOT_NEW}" | grep -Fc 'start_native_service_daemon_watchdog.sh' || true)"
+[[ "${ACTIVE_LEGACY_COUNT}" = 0 && "${ACTIVE_WATCHDOG_COUNT}" = 1 ]] || {
+    printf 'FINALIZER_ABORTED=BOOT_ACTIVE_COUNTS:LEGACY=%s:WATCHDOG=%s\n' \
+        "${ACTIVE_LEGACY_COUNT}" "${ACTIVE_WATCHDOG_COUNT}"
+    exit 10
 }
 
 cp -p "${BOOT}" "${BACKUP}/00-termux-services.sh"
@@ -124,14 +145,6 @@ for path in "${PATHS[@]}"; do
     name="${path##*/}"
     install -m 0755 "${STAGE}/tools/${name}" "${ROOT}/tools/${name}"
 done
-
-BOOT_NEW="${AUDIT}/00-termux-services.sh.new"
-sed 's/start_runsvdir_guard\.sh/start_native_service_daemon_watchdog.sh/' \
-    "${BOOT}" > "${BOOT_NEW}"
-[[ "$(grep -Foc 'start_native_service_daemon_watchdog.sh' "${BOOT_NEW}" || true)" = 1 ]] || {
-    printf 'FINALIZER_ABORTED=BOOT_REWRITE_FAILED\n'
-    exit 10
-}
 install -m 0755 "${BOOT_NEW}" "${BOOT}"
 
 python3 "${ROOT}/tools/native_service_daemon_watchdog_finalizer.py" \
@@ -139,6 +152,9 @@ python3 "${ROOT}/tools/native_service_daemon_watchdog_finalizer.py" \
     --audit-dir "${AUDIT}"
 
 trap - EXIT
+printf 'BOOT_WATCHDOG_MANAGED_BLOCK=PASS\n'
+printf 'BOOT_ACTIVE_LEGACY_GUARD=0\n'
+printf 'BOOT_ACTIVE_NATIVE_WATCHDOG=1\n'
 printf 'BOOT_LAUNCHER_FINALIZATION=PASS\n'
 printf 'AUDIT_DIRECTORY=%s\n' "${AUDIT}"
 printf 'RUNTIME_MUTATION_PERFORMED=WATCHDOG_START_AND_BOOT_FINALIZATION\n'

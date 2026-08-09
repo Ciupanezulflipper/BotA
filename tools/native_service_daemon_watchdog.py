@@ -56,6 +56,14 @@ def runsv_rows(table, service):
             and (row.get("argv") or [])[-1:] == [service]]
 
 
+def crond_rows(table):
+    """Return exact foreground crond rows used by the runit service."""
+    return [(pid, row) for pid, row in table.items()
+            if name(row) == "crond"
+            and "-n" in (row.get("argv") or [])
+            and "-s" in (row.get("argv") or [])]
+
+
 def topology(table, root):
     manager_set = managers(table, root)
     manager = manager_set[0] if len(manager_set) == 1 else None
@@ -90,6 +98,35 @@ def read_pidfile(path):
     if pid <= 0:
         raise WatchdogError(f"native_pidfile_invalid:{pid}")
     return pid
+
+
+def read_runtime_pidfile(path, label):
+    """Read one runtime pidfile without ever deleting it implicitly."""
+    if not path.exists():
+        return None
+    try:
+        pid = int(path.read_text().strip())
+    except (OSError, ValueError) as exc:
+        raise WatchdogError(f"{label}_pidfile_invalid:{path}") from exc
+    if pid <= 0:
+        raise WatchdogError(f"{label}_pidfile_invalid:{pid}")
+    return pid
+
+
+def supervised_pid(root, service):
+    """Return the child PID recorded by runsv supervise state."""
+    path = root / service / "supervise" / "pid"
+    try:
+        value = path.read_text().strip()
+        pid = int(value) if value else 0
+    except (OSError, ValueError):
+        return None
+    return pid if pid > 0 else None
+
+
+def terminate_pid(pid):
+    """Terminate only the exact PID already proven safe by a caller."""
+    os.kill(pid, signal.SIGTERM)
 
 
 def run(argv, timeout):
@@ -198,29 +235,183 @@ def manager_owned(service, manager, root, pidfile, table_fn):
     return row["runsv_count"] == 1 and row["owner"] == "manager"
 
 
-def reconcile_service(service, manager, root, pidfile, sv, timeout, table_fn,
-                      sv_fn, running_fn, wait_fn):
-    if require_native(root, pidfile, table_fn) != manager:
-        raise WatchdogError("manager_changed")
-    row = topology(table_fn(), root)["services"][service]
-    if row["runsv_count"] > 1:
-        raise WatchdogError(f"duplicate_runsv:{service}")
+def wait_for_manager_ownership(service, manager, root, pidfile, timeout,
+                               table_fn, wait_fn):
+    """Wait for exactly one service supervisor to belong to the native manager."""
+    def ready():
+        return manager_owned(service, manager, root, pidfile, table_fn)
 
-    handed = False
-    if row["owner"] == "pid1_orphan":
-        handoff(service, manager, root, sv, timeout, table_fn, sv_fn,
-                running_fn, wait_fn)
-        handed = True
-    elif row["owner"] != "manager":
-        def ownership_ready():
-            return manager_owned(service, manager, root, pidfile, table_fn)
+    if not wait_fn(ready, timeout):
+        row = topology(table_fn(), root)["services"][service]
+        raise WatchdogError(f"service_not_manager_owned:{service}:{row['owner']}")
 
-        if not wait_fn(ownership_ready, timeout):
-            raise WatchdogError(
-                f"service_not_manager_owned:{service}:{row['owner']}")
 
-    if running_fn(sv, root, service):
-        return handed, False
+def crond_ownership(root, manager, crond_pidfile, table_fn, child_pid_fn):
+    """Return fail-closed ownership evidence for the singleton crond child."""
+    table = table_fn()
+    row = topology(table, root)["services"]["crond"]
+    live = crond_rows(table)
+    child = child_pid_fn(root, "crond")
+    pidfile_pid = read_runtime_pidfile(crond_pidfile, "crond")
+    failures = []
+
+    if row["runsv_count"] != 1 or row["owner"] != "manager":
+        failures.append(f"runsv_owner:{row['owner']}:count={row['runsv_count']}")
+    if len(live) != 1:
+        failures.append(f"live_count:{len(live)}")
+    if child is None:
+        failures.append("supervised_child_missing")
+    if pidfile_pid is None:
+        failures.append("pidfile_missing")
+
+    if len(live) == 1:
+        live_pid, live_row = live[0]
+        if child is not None and child != live_pid:
+            failures.append(f"supervised_child_mismatch:{child}:{live_pid}")
+        if row["runsv_pid"] is not None and live_row["ppid"] != row["runsv_pid"]:
+            failures.append(f"parent_mismatch:{live_row['ppid']}:{row['runsv_pid']}")
+        if pidfile_pid is not None and pidfile_pid != live_pid:
+            failures.append(f"pidfile_mismatch:{pidfile_pid}:{live_pid}")
+
+    return {
+        "healthy": not failures,
+        "runsv_pid": row["runsv_pid"],
+        "runsv_owner": row["owner"],
+        "supervised_child_pid": child,
+        "pidfile_pid": pidfile_pid,
+        "live_crond": [
+            {"pid": pid, "ppid": item["ppid"], "argv": item.get("argv") or []}
+            for pid, item in live
+        ],
+        "failure_reasons": failures,
+        "manager_pid": manager,
+    }
+
+
+def crond_is_healthy(root, manager, crond_pidfile, table_fn, child_pid_fn):
+    """Return whether all singleton crond ownership evidence agrees."""
+    try:
+        return crond_ownership(
+            root, manager, crond_pidfile, table_fn, child_pid_fn
+        )["healthy"]
+    except WatchdogError:
+        return False
+
+
+def require_crond_healthy(root, manager, crond_pidfile, table_fn, child_pid_fn):
+    """Raise with exact ownership failures when crond is not correctly supervised."""
+    evidence = crond_ownership(
+        root, manager, crond_pidfile, table_fn, child_pid_fn
+    )
+    if not evidence["healthy"]:
+        raise WatchdogError(
+            "crond_ownership_invalid:" + ",".join(evidence["failure_reasons"])
+        )
+    return evidence
+
+
+def _stale_crond_candidate(root, manager, crond_pidfile, table_fn, child_pid_fn):
+    """Return the exact stale PID-1 crond candidate or fail closed on ambiguity."""
+    table = table_fn()
+    row = topology(table, root)["services"]["crond"]
+    live = crond_rows(table)
+    child = child_pid_fn(root, "crond")
+    pidfile_pid = read_runtime_pidfile(crond_pidfile, "crond")
+
+    if row["runsv_count"] != 1 or row["owner"] != "manager":
+        raise WatchdogError(
+            f"crond_repair_runsv_not_manager_owned:{row['owner']}:count={row['runsv_count']}"
+        )
+    if len(live) != 1:
+        raise WatchdogError(f"crond_live_process_ambiguous:count={len(live)}")
+
+    stale_pid, stale_row = live[0]
+    if stale_row["ppid"] != 1:
+        raise WatchdogError(
+            f"crond_live_process_ambiguous:pid={stale_pid}:ppid={stale_row['ppid']}"
+        )
+    if child == stale_pid:
+        raise WatchdogError(f"crond_repair_refuses_supervised_child:{stale_pid}")
+    if child is not None:
+        raise WatchdogError(
+            f"crond_live_process_ambiguous:supervised_child={child}:stale={stale_pid}"
+        )
+    if pidfile_pid != stale_pid:
+        raise WatchdogError(
+            f"crond_pidfile_not_stale_candidate:pidfile={pidfile_pid}:candidate={stale_pid}"
+        )
+    if manager is None:
+        raise WatchdogError("crond_repair_manager_missing")
+    return stale_pid, row["runsv_pid"], list(stale_row.get("argv") or [])
+
+
+def reconcile_stale_crond(manager, root, native_pidfile, crond_pidfile, sv,
+                          timeout, table_fn, sv_fn, running_fn, wait_fn,
+                          child_pid_fn, terminate_fn):
+    """Repair only the production-proven stale PID-1 crond singleton state."""
+    if require_native(root, native_pidfile, table_fn) != manager:
+        raise WatchdogError("manager_changed_before_crond_repair")
+    stale_pid, runsv_pid, stale_argv = _stale_crond_candidate(
+        root, manager, crond_pidfile, table_fn, child_pid_fn
+    )
+
+    down = sv_fn(sv, root, "crond", "down", timeout)
+    if down.returncode:
+        detail = (down.stdout or down.stderr).strip()
+        raise WatchdogError(f"sv_down_failed:crond:rc={down.returncode}:{detail}")
+
+    if require_native(root, native_pidfile, table_fn) != manager:
+        raise WatchdogError("manager_changed_during_crond_repair")
+    confirm_pid, confirm_runsv, confirm_argv = _stale_crond_candidate(
+        root, manager, crond_pidfile, table_fn, child_pid_fn
+    )
+    if (confirm_pid, confirm_runsv, confirm_argv) != (stale_pid, runsv_pid, stale_argv):
+        raise WatchdogError("crond_stale_identity_changed_after_quiesce")
+
+    try:
+        terminate_fn(stale_pid)
+    except OSError as exc:
+        raise WatchdogError(
+            f"crond_stale_sigterm_failed:{stale_pid}:{type(exc).__name__}"
+        ) from exc
+
+    def stale_gone():
+        return stale_pid not in table_fn()
+
+    if not wait_fn(stale_gone, timeout):
+        raise WatchdogError(f"crond_stale_term_timeout:{stale_pid}")
+
+    remaining_pidfile = read_runtime_pidfile(crond_pidfile, "crond")
+    if remaining_pidfile is not None:
+        raise WatchdogError(f"crond_pidfile_not_cleared_after_term:{remaining_pidfile}")
+
+    up = sv_fn(sv, root, "crond", "up", timeout)
+    if up.returncode:
+        detail = (up.stdout or up.stderr).strip()
+        raise WatchdogError(f"sv_up_failed:crond:rc={up.returncode}:{detail}")
+
+    def crond_ready():
+        return running_fn(sv, root, "crond") and crond_is_healthy(
+            root, manager, crond_pidfile, table_fn, child_pid_fn
+        )
+
+    if not wait_fn(crond_ready, timeout):
+        raise WatchdogError("crond_replacement_ownership_timeout")
+    evidence = require_crond_healthy(
+        root, manager, crond_pidfile, table_fn, child_pid_fn
+    )
+    return {
+        "stale_pid": stale_pid,
+        "runsv_pid": runsv_pid,
+        "replacement_pid": evidence["live_crond"][0]["pid"],
+        "replacement_parent": evidence["live_crond"][0]["ppid"],
+        "pidfile_pid": evidence["pidfile_pid"],
+    }
+
+
+def start_service(service, manager, root, crond_pidfile, sv, timeout,
+                  table_fn, sv_fn, running_fn, wait_fn, child_pid_fn):
+    """Start one manager-owned service and prove readiness before returning."""
     result = sv_fn(sv, root, service, "up", timeout)
     if result.returncode:
         detail = (result.stdout or result.stderr).strip()
@@ -232,39 +423,101 @@ def reconcile_service(service, manager, root, pidfile, sv, timeout, table_fn,
 
     if not wait_fn(service_ready, timeout):
         raise WatchdogError(f"service_up_timeout:{service}")
-    return handed, True
+    if service != "crond":
+        return
+
+    def ownership_ready():
+        return crond_is_healthy(
+            root, manager, crond_pidfile, table_fn, child_pid_fn
+        )
+
+    if not wait_fn(ownership_ready, timeout):
+        raise WatchdogError("crond_ownership_timeout_after_start")
 
 
-def reconcile_services(manager, root, pidfile, sv, timeout, table_fn, sv_fn,
-                       running_fn, wait_fn):
+def reconcile_service(service, manager, root, pidfile, crond_pidfile, sv,
+                      timeout, table_fn, sv_fn, running_fn, wait_fn,
+                      child_pid_fn, terminate_fn):
+    """Reconcile one service while keeping ownership and singleton logic explicit."""
+    if require_native(root, pidfile, table_fn) != manager:
+        raise WatchdogError("manager_changed")
+    row = topology(table_fn(), root)["services"][service]
+    if row["runsv_count"] > 1:
+        raise WatchdogError(f"duplicate_runsv:{service}")
+
+    handed = row["owner"] == "pid1_orphan"
+    if handed:
+        handoff(service, manager, root, sv, timeout, table_fn, sv_fn,
+                running_fn, wait_fn)
+    elif row["owner"] != "manager":
+        wait_for_manager_ownership(
+            service, manager, root, pidfile, timeout, table_fn, wait_fn
+        )
+
+    if running_fn(sv, root, service):
+        if service == "crond":
+            require_crond_healthy(
+                root, manager, crond_pidfile, table_fn, child_pid_fn
+            )
+        return handed, False, None
+
+    if service == "crond" and crond_rows(table_fn()):
+        repair = reconcile_stale_crond(
+            manager, root, pidfile, crond_pidfile, sv, timeout, table_fn,
+            sv_fn, running_fn, wait_fn, child_pid_fn, terminate_fn
+        )
+        return handed, True, repair
+
+    start_service(
+        service, manager, root, crond_pidfile, sv, timeout,
+        table_fn, sv_fn, running_fn, wait_fn, child_pid_fn
+    )
+    return handed, True, None
+
+
+def reconcile_services(manager, root, pidfile, crond_pidfile, sv, timeout,
+                       table_fn, sv_fn, running_fn, wait_fn, child_pid_fn,
+                       terminate_fn):
     restarted, handed = [], []
+    singleton_repairs = {}
     for service in SERVICES:
-        was_handed, was_restarted = reconcile_service(
-            service, manager, root, pidfile, sv, timeout, table_fn, sv_fn,
-            running_fn, wait_fn)
+        was_handed, was_restarted, singleton_repair = reconcile_service(
+            service, manager, root, pidfile, crond_pidfile, sv, timeout,
+            table_fn, sv_fn, running_fn, wait_fn, child_pid_fn, terminate_fn)
         if was_handed:
             handed.append(service)
         if was_restarted:
             restarted.append(service)
+        if singleton_repair is not None:
+            singleton_repairs[service] = singleton_repair
 
     final = topology(table_fn(), root)
     down = [s for s in SERVICES if not running_fn(sv, root, s)]
+    crond_evidence = crond_ownership(
+        root, manager, crond_pidfile, table_fn, child_pid_fn
+    )
     if (require_native(root, pidfile, table_fn) != manager
             or final["owned"] != 7 or final["orphaned"]
-            or final["invalid"] or final["duplicates"] or down):
+            or final["invalid"] or final["duplicates"] or down
+            or not crond_evidence["healthy"]):
         raise WatchdogError(
             "topology_not_healthy:"
             f"owned={final['owned']}/7;orphaned={final['orphaned']};"
             f"invalid={final['invalid']};duplicates={final['duplicates']};"
-            f"down={','.join(down)}")
+            f"down={','.join(down)};"
+            f"crond={','.join(crond_evidence['failure_reasons'])}")
     final.update(running=7, restarted_services=restarted,
-                 handed_off_services=handed)
+                 handed_off_services=handed,
+                 singleton_repairs=singleton_repairs,
+                 crond_ownership=crond_evidence)
     return final
 
 
 def reconcile_once(root, daemon, pidfile, sv, settle, timeout,
                    table_fn=process_table, command_fn=run, run_sv_fn=sv_cmd,
-                   service_running_fn=running, wait_fn=wait):
+                   service_running_fn=running, wait_fn=wait,
+                   crond_pidfile=None, child_pid_fn=supervised_pid,
+                   terminate_fn=terminate_pid):
     initial = topology(table_fn(), root)
     if initial["manager_count"] > 1:
         raise WatchdogError(f"multiple_managers:{initial['manager_count']}")
@@ -277,8 +530,12 @@ def reconcile_once(root, daemon, pidfile, sv, settle, timeout,
         started = True
     else:
         manager = require_native(root, pidfile, table_fn)
-    final = reconcile_services(manager, root, pidfile, sv, timeout, table_fn,
-                               run_sv_fn, service_running_fn, wait_fn)
+
+    if crond_pidfile is None:
+        crond_pidfile = pidfile.parent / "crond.pid"
+    final = reconcile_services(
+        manager, root, pidfile, crond_pidfile, sv, timeout, table_fn,
+        run_sv_fn, service_running_fn, wait_fn, child_pid_fn, terminate_fn)
     final.update(native_manager_started=started, stale_pidfile_removed=stale)
     return final
 
@@ -316,6 +573,8 @@ def arguments():
                         default=prefix / "etc/init.d/service-daemon")
     parser.add_argument("--pidfile", type=Path,
                         default=prefix / "var/run/service-daemon.pid")
+    parser.add_argument("--crond-pidfile", type=Path,
+                        default=prefix / "var/run/crond.pid")
     parser.add_argument("--sv", type=Path, default=prefix / "bin/sv")
     parser.add_argument("--lock", type=Path,
                         default=root / "state/native_service_daemon_watchdog.lock")
@@ -354,15 +613,22 @@ def main():
         event(args.log, "watchdog_started", pid=os.getpid())
         while not stop:
             try:
-                final = reconcile_once(args.service_root, args.service_daemon,
-                                       args.pidfile, args.sv, args.settle,
-                                       args.timeout)
-                state = ("healthy", final["manager_pid"])
+                final = reconcile_once(
+                    args.service_root, args.service_daemon, args.pidfile,
+                    args.sv, args.settle, args.timeout,
+                    crond_pidfile=args.crond_pidfile)
+                state = (
+                    "healthy", final["manager_pid"],
+                    json.dumps(final.get("singleton_repairs", {}), sort_keys=True),
+                )
                 if state != last:
-                    event(args.log, "topology_healthy",
-                          manager_pid=final["manager_pid"], owned=7, running=7,
-                          native_manager_started=final["native_manager_started"],
-                          stale_pidfile_removed=final["stale_pidfile_removed"])
+                    event(
+                        args.log, "topology_healthy",
+                        manager_pid=final["manager_pid"], owned=7, running=7,
+                        native_manager_started=final["native_manager_started"],
+                        stale_pidfile_removed=final["stale_pidfile_removed"],
+                        singleton_repairs=final.get("singleton_repairs", {}),
+                    )
                 last = state
             except WatchdogError as exc:
                 state = ("failed", str(exc))
