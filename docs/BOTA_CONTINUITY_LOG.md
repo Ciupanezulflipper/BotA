@@ -1,3 +1,7 @@
+# BotA Historical Continuity Log
+
+> Historical record only. This file preserves April 2026 continuity evidence and does **not** define current production state. For current truth use `AI_START_HERE.md`, `CONTINUITY_CURRENT.md`, `CHAT_HANDOFF_BOTA.md`, and `audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md`.
+
 ## [2026-04-08] Shadow Manager + Cron Fixes (PROVEN PARTIAL)
 
 ### Fixed
@@ -72,12 +76,12 @@
   - D1 cache timestamps refreshed
   - D1 cache contents now refresh correctly from inside tools/indicators_updater.sh
 
-### Current Live Strategy State (most important)
-- After D1 refresh fix, scorer still returns:
+### Current Live Strategy State (historical 2026-04-09 snapshot)
+- After D1 refresh fix, scorer still returned:
   - EURUSD -> HOLD / no_signal|phase=Open
   - GBPUSD -> HOLD / no_signal|phase=Open
-- Live proof shows this is NOT caused by D1 veto and NOT caused by ADX gate
-- Current live M15 gate result:
+- That historical snapshot showed this was NOT caused by D1 veto and NOT caused by ADX gate.
+- Historical live M15 gate result:
   - EURUSD:
     - bullish_trend=False
     - bearish_trend=False
@@ -91,21 +95,39 @@
     - pullback_sell=False
     - direction_before_d1=HOLD
 
-### Conclusion
-- BotA silence is no longer explained by dead cron, boot failure, or stale D1 cache corruption
-- Current no-signal state is now grounded in live scoring rules:
-  - there is no valid M15 trend/pullback setup under current entry logic
-- D1 trend remains SELL for both:
-  - EURUSD
-  - GBPUSD
-- But D1 is not the active blocker in the current snapshot because direction is already HOLD before D1 filter is applied
+### Historical conclusion
+- At that April snapshot, silence was no longer explained by dead cron, boot failure, or stale D1 cache corruption.
+- The no-signal state at that time was grounded in the then-current scoring rules and market snapshot.
+- These statements must not be treated as the current August 2026 root cause or readiness gate.
 
-### Next Proof Step
+### Historical next proof step
 - Audit tools/scoring_engine.sh entry logic only:
   - bullish_trend
   - bearish_trend
   - pullback_buy
   - pullback_sell
-- Determine whether current no-signal behavior is:
-  - intended strict regime behavior
-  - or over-restrictive calibration
+- Determine whether that April no-signal behavior was intended strict regime behavior or over-restrictive calibration.
+
+---
+
+## [2026-08-09] Current-status pointer
+
+Current production has moved from cron-owned core jobs to a runit-owned seven-service control plane and from two-pair historical snapshots to `EURUSD GBPUSD USDJPY` M15 production scope.
+
+Current Package #1/#2 status is intentionally **not duplicated in full here**. Use:
+
+- `AI_START_HERE.md`
+- `CONTINUITY_CURRENT.md`
+- `CHAT_HANDOFF_BOTA.md`
+- `state/STATE.json`
+- `audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md`
+
+Current classification:
+
+```text
+PACKAGE_1_CLOCK_SESSION=PASS
+LIVE_CONTROL_PLANE_REPAIR=PASS
+PACKAGE_2_PERSISTENT_HARDENING=PENDING
+OPEN_MARKET_THREE_PAIR_PROOF=PENDING
+MONDAY_READY=NO
+```
