@@ -1,0 +1,42 @@
+name: Native watchdog guardian
+
+on:
+  pull_request:
+    paths:
+      - "tools/native_watchdog_guard.py"
+      - "tools/native_watchdog_cron_config.py"
+      - "tests/test_native_watchdog_guard.py"
+      - "tests/test_native_watchdog_cron_config.py"
+      - ".github/workflows/native-watchdog-guardian.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guardian:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Compile guardian modules
+        run: |
+          python -m py_compile \
+            tools/native_watchdog_guard.py \
+            tools/native_watchdog_cron_config.py
+      - name: Run focused guardian tests
+        run: |
+          python -m unittest -v \
+            tests.test_native_watchdog_guard \
+            tests.test_native_watchdog_cron_config
+      - name: Prohibit direct service or process termination
+        run: |
+          ! grep -En '\b(os\.kill|pkill|killall|SIGKILL|sv[[:space:]]+(down|exit|force-stop))\b' \
+            tools/native_watchdog_guard.py \
+            tools/native_watchdog_cron_config.py
+      - name: Require exact ensure-only cron command
+        run: |
+          grep -F 'native_watchdog_guard.py' tools/native_watchdog_cron_config.py
+          grep -F -- '--ensure' tools/native_watchdog_cron_config.py
