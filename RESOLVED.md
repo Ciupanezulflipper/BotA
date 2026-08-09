@@ -131,7 +131,7 @@
 ## 2026-08-09 — Package #2 live control-plane repairs
 
 ### Stale live `crond` singleton owner
-- Status: **LIVE INCIDENT RESOLVED; AUTOMATED HARDENING STILL OPEN**
+- Status: **LIVE INCIDENT RESOLVED**
 - Root cause:
   - old live `crond` PID `4107`, PPID `1`, still held `$PREFIX/var/run/crond.pid`;
   - current manager-owned `runsv crond` PID `24583` retried a second daemon every ~1 second;
@@ -147,21 +147,73 @@
 - ProfitLab state changed: NO.
 
 ### PID-1-orphaned BotA `runsv` supervisors
-- Status: **LIVE TOPOLOGY RESOLVED; PERSISTENT RECOVERY STILL OPEN**
+- Status: **LIVE TOPOLOGY RESOLVED**
 - Discovered state:
   - `running=7/7`;
   - `owned=1/7`;
   - `orphaned=6`.
 - Final repaired state:
   - manager count `1`;
-  - manager PID `4398`;
   - `owned=7/7`;
   - `running=7/7`;
   - `orphaned=0`;
   - duplicate service rows `0`.
-- Remaining Package #2 requirement:
-  - persistent single-instance watchdog startup/recovery;
-  - automated safe handling of stale live singleton-child/resource-owner conditions;
-  - fault-injected pre-market release/config/data readiness.
 
-Canonical evidence: `audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md`.
+Canonical incident evidence: `audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md`.
+
+## 2026-08-09 — Package #2 finalization, PR #87/#88 deploy, and pre-market proof
+
+Status: **RESOLVED / DEPLOYED / NATURALLY PROVEN / PRE-MARKET GATE PASS**
+
+Verified phone acceptance:
+
+```text
+PACKAGE_2_FINALIZER_DEPLOY=PASS
+CURRENT_CONTROL_PLANE=HEALTHY
+CURRENT_REQUIRED_SERVICES_OWNED=7/7
+CURRENT_REQUIRED_SERVICES_RUNNING=7/7
+CURRENT_ORPHANED_RUNSV=0
+CURRENT_DUPLICATE_SERVICE_ROWS=0
+WATCHDOG_SINGLETON=PASS
+BOOT_PERSISTENCE=PASS
+PR87_PR88_PHONE_DEPLOY=PASS
+RUNTIME_DEPENDENCY_CONTRACT=PASS
+REQUESTS_VERSION=2.34.2
+PIP_BASELINE_REGRESSION=NO
+PROFITLAB_PRESERVED=PASS
+NATURAL_SHADOW_CYCLE=PASS
+PRE_MARKET_PRODUCTION_INTEGRITY=PASS
+```
+
+Natural shadow proof:
+
+```text
+SHADOW_STATUS=completed
+SHADOW_DETAILS=exit_code=0
+SHADOW_HEARTBEAT=OK | 0 active signals
+SHADOW_LOG=Shadow Manager done | 0 active signals
+```
+
+Corrected pre-market integrity proof:
+
+```text
+CHECK_CONTROL_PLANE=PASS
+CHECK_WATCHDOG_OWNERSHIP=PASS
+CHECK_BOOT_PERSISTENCE=PASS
+CHECK_CRON_OWNERSHIP=PASS
+CHECK_RUNTIME_PARITY=PASS
+CHECK_PRODUCTION_CONFIG=PASS
+CHECK_PROFITLAB=PASS
+CHECK_PROGRESS=PASS
+CHECK_TRUSTED_CLOCK=PASS
+FAILURE_COUNT=0
+PRE_MARKET_INTEGRITY_ACCEPTANCE=PASS
+```
+
+No service restart, manual shadow execution, strategy change, or ProfitLab cursor mutation was required by the PR #87/#88 dependency deployment.
+
+Canonical proof: `audits/PRE_MARKET_READINESS_CHECKPOINT_2026-08-09.md`.
+
+### Still not resolved by this entry
+
+PR #89 is a separate watchdog-liveness follow-up. It must pass review/static gates and then phone guardian/fault-injection acceptance. Genuine open-market same-cycle proof for EURUSD:M15, GBPUSD:M15, and USDJPY:M15 is also still pending. Therefore `MONDAY_READY=NO`.
