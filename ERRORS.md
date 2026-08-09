@@ -216,8 +216,11 @@ MERGEABLE=true
 GITHUB_ACTIONS_SECURITY_SCAN=PASS
 GITHUB_ACTIONS_NATIVE_WATCHDOG_GUARDIAN=PASS
 DEEPSOURCE_PYTHON=FAIL
-UNRESOLVED_REVIEW_THREADS=9
+UNRESOLVED_REVIEW_THREADS=10
+DISTINCT_REMEDIATION_ITEMS=9
 ```
+
+Two unresolved threads report the same unused-variable cleanup; the current connector view therefore contains 10 open threads representing 9 distinct fixes.
 
 Still-valid review requirements:
 
