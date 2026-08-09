@@ -5,12 +5,15 @@ This checkpoint records verified phone/runtime evidence after the Package #2 fin
 ## Repository baseline
 
 ```text
-GITHUB_MAIN=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
+CHECKPOINT_BASE_MAIN=163eae4ee7a0d651ed0ad3516dba7eaef4c09cbe
+PHONE_RUNTIME_SOURCE_BASELINE=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
 PR87_PR88_BASELINE=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
 PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
 PHONE_WORKTREE_DIRTY=YES
 ```
+
+`CHECKPOINT_BASE_MAIN` is the main commit used as the documentation base. The documentation merge containing this file advances `main`; issue #9 carries the live current-main SHA. The phone runtime acceptance remains pinned to reviewed runtime source baseline `5cbfbf11...`.
 
 The phone checkout HEAD is not the production deployment identity; deployment acceptance is based on exact reviewed blobs, runtime state, and bounded postconditions.
 
@@ -48,7 +51,7 @@ The managed Termux:Boot watchdog block also passed finalization.
 
 ## PR #87 / PR #88 phone deployment
 
-The following reviewed runtime artifacts were deployed from exact GitHub commit `5cbfbf11fd98d9a40b1d5ea28995f584ec9da080`:
+The following reviewed runtime artifacts were deployed from exact GitHub runtime source commit `5cbfbf11fd98d9a40b1d5ea28995f584ec9da080`:
 
 ```text
 tools/pre_market_integrity.py
@@ -105,7 +108,7 @@ No manual shadow execution and no service restart were used for this proof.
 
 ## Corrected pre-market integrity gate
 
-The corrected PR #87 gate was run read-only against current GitHub `main` and returned:
+The corrected PR #87 gate was run read-only against runtime source baseline `5cbfbf11...` and returned:
 
 ```text
 INTEGRITY_HEALTHY=True

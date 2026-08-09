@@ -7,7 +7,8 @@ Read this before proposing BotA commands, code, service, strategy, Telegram, pro
 ## Current authoritative truth
 
 ```text
-GITHUB_MAIN=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
+CHECKPOINT_BASE_MAIN=163eae4ee7a0d651ed0ad3516dba7eaef4c09cbe
+PHONE_RUNTIME_SOURCE_BASELINE=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
 PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
 PHONE_WORKTREE_DIRTY=YES
@@ -45,13 +46,15 @@ OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
 MONDAY_READY=NO
 ```
 
+`CHECKPOINT_BASE_MAIN` is the GitHub main commit used as the documentation base. The documentation merge containing this file advances `main`; GitHub issue #9 carries the live current-main SHA. The reviewed phone runtime source baseline remains `5cbfbf11...`.
+
 ## What has been proven on the phone
 
 The control plane recovered from the observed orphan-supervisor failure class and currently satisfies the production ownership contract: one native manager, seven manager-owned required supervisors, seven running services, zero orphans, and zero duplicate service rows.
 
 The native watchdog finalizer passed and left one watchdog process holding the watchdog lock. The managed Termux:Boot watchdog block is installed.
 
-PR #87 and PR #88 production fixes were deployed from exact GitHub commit `5cbfbf11fd98d9a40b1d5ea28995f584ec9da080`. `requests==2.34.2` is installed and importable under Python 3.14.6. The installation did not change any previously installed Python distribution and did not worsen the pre-existing Termux `pip check` baseline.
+PR #87 and PR #88 production fixes were deployed from exact runtime source commit `5cbfbf11fd98d9a40b1d5ea28995f584ec9da080`. `requests==2.34.2` is installed and importable under Python 3.14.6. The installation did not change any previously installed Python distribution and did not worsen the pre-existing Termux `pip check` baseline.
 
 A subsequent **natural** runit shadow cycle completed with `exit_code=0`, wrote an `OK` heartbeat, and logged `Shadow Manager done | 0 active signals`. It was not manually executed and no service was restarted for that proof.
 
@@ -121,7 +124,7 @@ Never push directly to `main`. Work on the existing PR branch, run tests, inspec
 
 1. `CONTINUITY_CURRENT.md` — current operational status and next action.
 2. `audits/PRE_MARKET_READINESS_CHECKPOINT_2026-08-09.md` — latest phone proof and remaining blocker.
-3. GitHub issue #9 — authoritative readiness tracker.
+3. GitHub issue #9 — authoritative readiness tracker and live current-main SHA.
 4. PR #89 — guardian implementation and unresolved review findings.
 5. `ERRORS.md` and `audits/ERROR_LOG.md` — historical failure/prevention record.
 

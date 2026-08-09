@@ -7,7 +7,8 @@ This file is the current operational handoff. Historical audits and `ERRORS.md` 
 ## Current authoritative status
 
 ```text
-GITHUB_MAIN=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
+CHECKPOINT_BASE_MAIN=163eae4ee7a0d651ed0ad3516dba7eaef4c09cbe
+PHONE_RUNTIME_SOURCE_BASELINE=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
 PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
 PHONE_WORKTREE_DIRTY=YES
@@ -41,6 +42,8 @@ PR89_WATCHDOG_GUARDIAN=BLOCKED_REVIEW_AND_CI
 OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
 MONDAY_READY=NO
 ```
+
+`CHECKPOINT_BASE_MAIN` is the GitHub main commit on which this continuity correction was based. The documentation merge that contains this file will necessarily advance `main`; GitHub issue #9 carries the live current-main SHA. The phone runtime source baseline for PR #87/#88 acceptance remains `5cbfbf11...`.
 
 ## Latest phone proofs
 
@@ -106,7 +109,7 @@ NATURAL_SHADOW_ACCEPTANCE=PASS
 
 ### Corrected pre-market integrity gate
 
-The corrected PR #87 gate ran against `5cbfbf11fd98d9a40b1d5ea28995f584ec9da080` and returned:
+The corrected PR #87 gate ran against runtime source baseline `5cbfbf11fd98d9a40b1d5ea28995f584ec9da080` and returned:
 
 ```text
 CHECK_CONTROL_PLANE=PASS
