@@ -63,6 +63,8 @@ PATHS=(
     tools/native_service_daemon_migration.py
     tools/native_service_daemon_watchdog_finalizer.py
     tools/native_service_boot_config.py
+    tools/control_plane_status.py
+    tools/pre_market_integrity.py
 )
 
 restore_files() {
