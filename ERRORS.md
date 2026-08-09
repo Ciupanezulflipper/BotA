@@ -9,37 +9,35 @@ Canonical current sources:
 - `CONTINUITY_CURRENT.md`
 - `AI_START_HERE.md`
 - `CHAT_HANDOFF_BOTA.md`
-- `DECISIONS.md`
-- `audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md`
+- `audits/PRE_MARKET_READINESS_CHECKPOINT_2026-08-09.md`
 - `audits/ERROR_LOG.md`
 - GitHub issue #9
 
 ## Current verdict
 
 ```text
-DEPLOYED_RELEASE=8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0
+PHONE_RUNTIME_SOURCE_BASELINE=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
 PACKAGE_1_CLOCK_SESSION=PASS
-RUNTIME_FILE_PARITY=PASS
-ACTIVE_WRAPPER_MODE=755
+PACKAGE_2_CONTROL_PLANE_RECOVERY=PASS
+PACKAGE_2_FINALIZER_DEPLOY=PASS
+PR87_PR88_PHONE_DEPLOY=PASS
+RUNTIME_DEPENDENCY_CONTRACT=PASS
 CURRENT_CONTROL_PLANE=HEALTHY
-CURRENT_MANAGER_COUNT=1
-CURRENT_MANAGER_PID=4398
 CURRENT_OWNED_SERVICES=7/7
 CURRENT_RUNNING_SERVICES=7/7
 CURRENT_ORPHANED_RUNSV=0
 CURRENT_DUPLICATE_SERVICE_ROWS=0
-CURRENT_LIVE_CROND_COUNT=1
-ACTIVE_WATCHER_CRON=0
-ACTIVE_PROFITLAB_CRON=1
-PAIRS=EURUSD GBPUSD USDJPY
-TIMEFRAMES=M15
-PROFITLAB_CURSOR=PRESERVED_AT_EOF
-PRE_MARKET_PRODUCTION_INTEGRITY=PENDING
+WATCHDOG_SINGLETON=PASS
+BOOT_PERSISTENCE=PASS
+PROFITLAB_CURSOR=PRESERVED
+NATURAL_SHADOW_CYCLE=PASS
+PRE_MARKET_PRODUCTION_INTEGRITY=PASS
+PR89_WATCHDOG_GUARDIAN=BLOCKED_REVIEW_AND_CI
 OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
 MONDAY_READY=NO
 ```
 
-Package #1 is fixed and deployed. Package #2 has repaired the live topology but still requires persistent recovery/boot hardening and fault-injected pre-market readiness checks.
+Package #1 and Package #2 closed-market infrastructure are deployed and proven. The active blocker is the separate PR #89 watchdog-liveness guardian plus the later genuine market-open three-pair proof.
 
 ## E001 — Scope branching / mixed phases
 
@@ -65,24 +63,19 @@ Package #1 is fixed and deployed. Package #2 has repaired the live topology but 
 
 **Failure:** `runsv` supervisors can survive manager loss and become PID-1 orphans while services continue running.
 
-**Observed during Package #2:** six BotA `runsv` supervisors were alive with PPID 1 while the current manager owned only `crond`.
+**Observed during Package #2:** live services remained while manager ownership was split or absent.
+
+**Final verified state:**
 
 ```text
-running=7/7
-owned=1/7
-orphaned=6
-```
-
-**Live fix:** topology reconciled to current native manager PID 4398.
-
-```text
+manager_count=1
 owned=7/7
 running=7/7
 orphaned=0
 duplicate_service_rows=0
 ```
 
-**Remaining prevention work:** persistent watchdog/boot recovery must automate and test orphan handoff.
+**Status:** core recovery/finalizer path deployed and pre-market gate PASS. Independent watchdog-liveness after unexpected watchdog death is tracked separately in PR #89.
 
 ## E005 — Device wall-clock leakage into trading semantics
 
@@ -120,8 +113,6 @@ duplicate_service_rows=0
 
 **Fix:** gated cycle + coherent cycle ID + append-only ledger + authoritative terminal outcome.
 
-**Latest proof:** cycle `...:144452448476926` -> `MARKET_CLOSED / MARKET_CLOSED_SUNDAY`, `time_source=server_epoch`.
-
 ## E010 — Moving GitHub release target during deployment
 
 **Failure:** deploy against branch state while `main` moves.
@@ -152,11 +143,7 @@ duplicate_service_rows=0
 
 **Failure:** bootstrap/reset could replay historical alert rows.
 
-```text
-cursor_offset=897734
-alerts_csv_size=897734
-pending_bytes=0
-```
+**Current state:** preserved through PR #87/#88 deployment and pre-market gate.
 
 **Prevention:** preserve cursor; do not run `--bootstrap` on current production.
 
@@ -170,7 +157,7 @@ pending_bytes=0
 
 **Observation:** an older shadow failure can remain in compact state after deployment.
 
-**Prevention:** compare timestamp/cycle against deployment and require fresh updater/shadow evidence at the open-market gate.
+**Prevention:** compare timestamp/cycle against deployment and require fresh updater/shadow evidence. A natural post-deploy shadow cycle now passes; the same principle remains required for the market-open gate.
 
 ## E017 — Stale overlapping PRs
 
@@ -184,62 +171,71 @@ pending_bytes=0
 
 **Package #1 fix:** positive `minutes_away` is treated as before-event; negative as after-event. Boundary tests cover HIGH and MEDIUM windows on both sides.
 
-**Prevention:** deterministic signed-boundary tests for every asymmetric event-time window.
-
 ## E019 — Nested components established inconsistent cycle time
 
 **Failure:** outer gate could use trusted server time while nested scorer/gates independently re-probed or read another clock.
 
-**Consequence:** one logical watcher cycle could classify market/session/news using different instants.
-
 **Package #1 fix:** inherited `BOTA_SERVER_EPOCH` is reused through the audited strategy/event-time path.
-
-**Prevention:** one immutable event-time reference per production cycle; no silent wall-clock fallback.
 
 ## E020 — Stale live singleton daemon blocked manager-owned service
 
 **Failure:** current runit reported `crond` down while an old live PID-1-owned `crond` still executed jobs and held `/var/run/crond.pid`.
 
-Verified incident:
+**Live repair:** identity-check stale daemon -> quiesce failed restart loop -> terminate only stale daemon -> manager-owned runsv starts replacement -> verify one stable live `crond`.
 
-```text
-manager_pid=4398
-current_runsv_crond_pid=24583
-stale_crond_pid=4107
-stale_crond_ppid=1
-replacement_failure=can't lock crond.pid, otherpid may be 4107
-```
-
-This produced a dangerous split-brain-looking state: scheduled business work continued from the stale daemon, but the current control plane could not own the service.
-
-**Live fix:** quiesce failed restart loop -> verify PID/command/parent -> terminate only stale PID 4107 -> let current `runsv` start replacement PID 17994 -> verify PPID 24583 and one stable live `crond`.
-
-**Package #2 remaining fix:** automate safe reconciliation of `manager-owned supervisor + stale live singleton child/resource owner`; distinguish from dead stale pidfile.
+**Status:** resolved in live incident and incorporated into reviewed Package #2 hardening; current pre-market cron ownership PASS.
 
 ## E021 — Health gate checked service liveness without owner lineage
 
-**Failure:** seven services could all report `run` while six `runsv` supervisors were PID-1 orphans.
+**Failure:** seven services could all report `run` while supervisors were PID-1 orphans.
 
-**Live discovery:** `running=7/7` coexisted with `owned=1/7` and `orphaned=6`.
+**Fix:** production health now requires manager count, supervisor lineage, duplicate count, service liveness, and singleton child ownership where applicable.
 
-**Live fix:** supervisors were reconciled to the current manager; final `owned=7/7`, `orphaned=0`.
+**Current proof:** `owned=7/7`, `running=7/7`, `orphaned=0`, duplicates `0`.
 
-**Prevention:** production health must require manager count, supervisor lineage, duplicate count, service liveness, and singleton child ownership where applicable.
+## E022 — Watchdog source existed while persistent startup was unproven
 
-## E022 — Watchdog code present but persistent recovery disabled
+**Historical failure:** watchdog source files matched GitHub, but persistent startup had not yet been finalized/proven.
 
-**Failure:** watchdog source files matched GitHub, but no persistent watchdog process was running and phone boot launcher explicitly recorded `RUNSVDIR_GUARD_START=DISABLED`.
+**Resolution:** Package #2 finalizer and managed Termux:Boot watchdog block are deployed; one watchdog process holds the watchdog lock; `CHECK_BOOT_PERSISTENCE=PASS` and `CHECK_WATCHDOG_OWNERSHIP=PASS` in the corrected pre-market gate.
 
-**What passed:** a one-shot watchdog execution on the healthy final topology returned RC 0.
+**Status:** RESOLVED for boot persistence.
 
-**What is still missing:** persistent single-instance startup, manager-loss recovery, and automated stale-live-singleton reconciliation.
+## E023 — Independent watchdog-liveness guardian still review-blocked
 
-**Package #2 status:** PENDING.
+**Failure class being addressed:** the watchdog can disappear after boot while `crond` survives. A one-shot boot launcher alone does not guarantee watchdog liveness for the rest of the boot.
+
+**PR #89 design:** a narrow once-per-minute cron guardian may invoke only the already-reviewed watchdog launcher when the watchdog is exactly absent and lock ownership is unambiguous. It must never signal services or reconcile topology itself.
+
+**Current PR #89 state:**
+
+```text
+HEAD=4f73a999634bc83c52defb0d31bfb72291ac83b9
+STATE=OPEN
+MERGEABLE=true
+GITHUB_ACTIONS_SECURITY_SCAN=PASS
+GITHUB_ACTIONS_NATIVE_WATCHDOG_GUARDIAN=PASS
+DEEPSOURCE_PYTHON=FAIL
+UNRESOLVED_REVIEW_THREADS=9
+```
+
+Still-valid review requirements:
+
+1. active advisory `FLOCK` ownership, not open-descriptor inference;
+2. shell-safe path quoting and CR/LF rejection in rendered cron;
+3. controlled status/RC when event logging itself fails;
+4. AST-based no-termination validation plus negative fixtures;
+5. complete rendered-crontab validation and exactly one active managed `--ensure` guardian line;
+6. reject non-finite timeout values;
+7. disable checkout credential persistence;
+8. unused-value cleanup;
+9. staticmethod cleanup in tests.
+
+**Prevention:** do not deploy PR #89 until exact-head review/static/CI gates pass and phone fault injection proves watchdog-only termination is repaired by exactly one guardian-driven watchdog recreation.
 
 ## Package #1 fixed-solution summary
 
 ```text
-DEPLOYED_RELEASE=8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0
 TRUSTED_TIME_HELPER=DEPLOYED
 MARKET_GATE_TRUSTED_EPOCH=DEPLOYED
 SESSION_SCORE_TRUSTED_EPOCH=DEPLOYED
@@ -251,21 +247,19 @@ THRESHOLDS_CHANGED=NO
 PAIR_SCOPE_CHANGED=NO
 ```
 
-## Package #2 required hardening tests
-
-Before persistent phone mutation, isolate and fault-inject:
+## Package #2 fixed-solution summary
 
 ```text
-manager loss
-PID-1 orphaned runsv handoff
-single service down
-dead stale pidfile
-live stale singleton child/resource owner
-duplicate supervisor
-multiple manager attempt
-watchdog duplicate attempt
-release/blob/config drift
-missing/stale updater/shadow/data readiness
+CONTROL_PLANE_RECOVERY=PASS
+FINALIZER_DEPLOY=PASS
+BOOT_PERSISTENCE=PASS
+WATCHDOG_SINGLETON=PASS
+PR87_PR88_PHONE_DEPLOY=PASS
+RUNTIME_DEPENDENCY_CONTRACT=PASS
+NATURAL_SHADOW_CYCLE=PASS
+PRE_MARKET_PRODUCTION_INTEGRITY=PASS
+PROFITLAB_PRESERVED=PASS
+STRATEGY_CHANGED=NO
 ```
 
 ## Historical strategy-quality evidence remains separate
@@ -275,16 +269,15 @@ The June-July replay/outcome evidence remains preserved. Current readiness is an
 ## Current open risks
 
 ```text
-PACKAGE_2_PERSISTENT_WATCHDOG=OPEN
-PACKAGE_2_STALE_SINGLETON_AUTORECOVERY=OPEN
-PACKAGE_2_PREMARKET_RELEASE_CONFIG_DATA_GATE=OPEN
+PR89_WATCHDOG_LIVENESS_GUARDIAN=BLOCKED_REVIEW_AND_CI
 ANDROID_WALL_CLOCK_CRON_SCHEDULING=OPEN_WARN
 OPEN_MARKET_THREE_PAIR_PROOF=PENDING
 SIGNAL_CLOSER_LIFECYCLE=SEPARATE_WORK
 H1_ADX_OVERRIDE_CONTRACT=SEPARATE_APPROVAL
 COMPACT_STATE_SCHEMA_NORMALIZATION=DEFERRED
+MONDAY_READY=NO
 ```
 
 ## Exactly one next engineering action
 
-Complete Package #2 in reviewed code/tests. Do not change the phone again until its fault matrix covers the control-plane failure classes above and the persistent watchdog/boot design preserves exactly one native manager and one supervisor per required service. After Package #2 passes, require the natural open-market three-pair cycle with fresh data/updater/shadow evidence and one authoritative terminal outcome.
+Fix every still-valid unresolved PR #89 review finding on `fix/watchdog-persistence-guardian-20260809`, run focused validation, and stop for human confirmation before commit/push. Do not mutate the phone while fixing the GitHub PR.
