@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
+import http.client
 import json
 import os
 from typing import Tuple
 from urllib.parse import urlencode
-from urllib.request import urlopen
 
 from trusted_time import TrustedTimeUnavailable, trusted_utc
 
 UTC = timezone.utc
+FINNHUB_HOST = "finnhub.io"
+FINNHUB_PATH = "/api/v1/calendar/economic"
 
 # Basic symbol → currency map (extend as needed)
 PAIR_TO_CCY = {
@@ -22,6 +24,31 @@ PAIR_TO_CCY = {
 
 def _needs_block(imp: str) -> bool:
     return imp.lower() in {"high", "red", "3", "3_high"}
+
+
+def _fetch_finnhub_calendar(
+    start: str,
+    end: str,
+    key: str,
+    timeout: int,
+) -> dict:
+    """Fetch Finnhub calendar over a fixed HTTPS endpoint only."""
+    query = urlencode({"from": start, "to": end, "token": key})
+    connection = http.client.HTTPSConnection(FINNHUB_HOST, timeout=timeout)
+    try:
+        connection.request(
+            "GET",
+            f"{FINNHUB_PATH}?{query}",
+            headers={"Accept": "application/json", "User-Agent": "BotA/1.0"},
+        )
+        response = connection.getresponse()
+        raw = response.read()
+        if response.status < 200 or response.status >= 300:
+            raise RuntimeError(f"finnhub_http_{response.status}")
+        data = json.loads(raw.decode("utf-8"))
+        return data if isinstance(data, dict) else {}
+    finally:
+        connection.close()
 
 
 def news_risk_gate(
@@ -57,13 +84,12 @@ def news_risk_gate(
     end = (now + timedelta(minutes=window_min)).strftime("%Y-%m-%d")
 
     try:
-        url = "https://finnhub.io/api/v1/calendar/economic?" + urlencode(
-            {"from": start, "to": end, "token": key}
+        data = _fetch_finnhub_calendar(
+            start,
+            end,
+            key,
+            int(os.getenv("HTTP_TIMEOUT_SEC", "8")),
         )
-        with urlopen(
-            url, timeout=int(os.getenv("HTTP_TIMEOUT_SEC", "8"))
-        ) as response:
-            data = json.loads(response.read().decode("utf-8"))
         events = data.get("economicCalendar", [])
         watch_ccy = PAIR_TO_CCY.get(pair.upper(), [])
         for event in events:
