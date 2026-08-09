@@ -15,7 +15,7 @@ OPEN_MARKET_THREE_PAIR_PROOF=PENDING
 MONDAY_READY=NO
 ```
 
-Do not infer current production state from old backtests, `BOTLOG.md`, historical continuity entries, or the Android Git worktree HEAD.
+Do not infer current production state from old backtests, `BOTLOG.md`, `BOOTLOG.md`, historical continuity entries, or the Android Git worktree HEAD.
 
 ## Start here
 
