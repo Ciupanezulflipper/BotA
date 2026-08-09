@@ -1,488 +1,192 @@
 # BotA Current Continuity State
 
-Last updated: **2026-08-08 01:37 UTC**
+Last updated: **2026-08-09 UTC**
 
-## Authoritative identifiers
+This file is the current operational handoff. Dated audit files preserve historical evidence; do not reconstruct current production state from older continuity snapshots.
+
+## Current status
 
 ```text
-RECORDED_DATE=2026-08-08
-PHONE_BRANCH=deploy/repaired-core-20260802T215531Z
-PHONE_HEAD=73b2306b5843f3396823ce815e96051abf78cf50
-PHASE1_REPLAY_PR=64
-PHASE1_REPLAY_MERGE=6b437179cc58021aa358b1d0b04c121d9304c660
-PHASE2_RUNNER_PR=66
-PHASE2_RUNNER_MERGE=91f81ddf28e6b0fadfa2e87a3f71f9464c962073
-PHASE2_DOCS_PR=67
-PHASE2_DOCS_MERGE=c6637b2e13ee856f84f2bfa7706ba84becbb9c5f
-OUTCOME_MATCHER_PR=68
-OUTCOME_MATCHER_FINAL_HEAD=49ff1d2341cb9157acafb223950e79cb66883a1a
-OUTCOME_MATCHER_MERGE=bfa7f69ef430000994ea06aa7a3ba713a4144d90
-OUTCOME_MATCHER_BLOB=a5453fa6d17b447eb87072e2f2685453e2d4d067
-OUTCOME_FIXTURE_BLOB=8f321dddb645130d9be01a22f8ba14e8f2f81501
-MATCH_GAP_CLASSIFIER_PR=69
-MATCH_GAP_CLASSIFIER_FINAL_HEAD=440def4e9781ba60a55c625046ca0795e536987d
-MATCH_GAP_CLASSIFIER_MERGE=cbd0c3126ecac7b3b03e060eb81c144711b786f2
-MATCH_GAP_CLASSIFIER_BLOB=126ab302e246d8e4a9e254ccf77c80f92bd2b979
-GAP_RESULT_SHA256=5cbf0537a5bc3800e3a3353843d440d04a8e98b10287b81a525a106bf2aae471
-CURRENT_NATIVE_MANAGER_PID=31140
-CURRENT_SERVICE_DAEMON_PIDFILE=31140
+CODE_READY=PASS
+MERGED_TO_MAIN=PASS
+DEPLOYED_TO_PHONE=PASS
+RUNTIME_PARITY_VERIFIED=PASS
+RUNIT_ACTIVATION=PASS
+CLOSED_MARKET_LIVE_CYCLE=PASS
+ISOLATED_MONDAY_HARNESS=PASS
+PROFITLAB_STATE=PASS
+OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
+MONDAY_READY=NO
 ```
 
-## Current investigation state
+BotA is **DEPLOYED_AND_WEEKEND_VERIFIED**. The remaining gate is live open-market proof, not more weekend coding.
+
+## Authoritative release identity
 
 ```text
-HISTORICAL_DATA_PHASE=CLOSED_PASS
-DETERMINISTIC_REPLAY_HARNESS_PHASE=CLOSED_PASS
-FULL_JUNE_JULY_REPLAY_EXECUTION_PHASE=CLOSED_PASS
-PUBLISHED_OUTCOME_MATCH_GATE=FAIL_9_OF_13
-MATCH_GAP_CLASSIFICATION_PHASE=CLOSED_PASS
-UNEXPLAINED_MATCH_GAPS=0
-ROBUSTNESS_FINAL_VERDICT_PHASE=NEXT
-PRODUCTION_STRATEGY_MUTATION_ALLOWED=NO
+DEPLOYED_GITHUB_SHA=f52f326cdbc9e9a16dd60666808a35fb839f10ad
+PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
+PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
+PHONE_TRACKED_DIRTY_BEFORE_DEPLOY=0
+PHONE_UNTRACKED_PRESERVED=782
 ```
 
-BotA can emit signals. The active investigation is signal quality/calibration, not Telegram transport, historical-data availability, or replay determinism.
+The phone Git checkout was intentionally not reset/cleaned to `main`. Runtime identity is proven from the bounded deployed file hashes, active wrapper hash/mode, runtime configuration, and live cycle evidence. Do not use the phone checkout HEAD as the production release identifier.
 
-## Runtime and live scope
-
-Latest verified effective settings remain:
+## Deployed runtime scope
 
 ```text
-manager_count=1
-required_services_running=7/7
-owned_services=6/7
-orphan_service=crond
-watcher=RUNNING
-PAIRS=EURUSD GBPUSD
+PAIRS=EURUSD GBPUSD USDJPY
 TIMEFRAMES=M15
-FILTER_SCORE_MIN_ALL=65
-H1_TREND_MIN_SCORE=40
-H1_VETO_OVERRIDE_SCORE=75
-H1_VETO_OVERRIDE_ADX=40
-TELEGRAM_MIN_SCORE=70
-TELEGRAM_TIER_YELLOW_MIN=70
-TELEGRAM_TIER_GREEN_MIN=75
-TELEGRAM_COOLDOWN_SECONDS=1800
-DRY_RUN_MODE=0
+POLICY_B_ENABLED=1
+POLICY_B_SCORE_MIN=70
+POLICY_B_ADX_MAX=30
+NEWS_ON=0
 TELEGRAM_ENABLED=1
+DRY_RUN_MODE=0
 ```
 
-Runtime ownership remains degraded but is not the current signal-quality bottleneck. Only two pairs are live.
+Only the existing `PAIRS` assignment in `.env.runtime` was changed during the successful deployment. Secrets and unrelated runtime variables were preserved.
 
-## Proven historical signal funnel
+The active watcher wrapper is:
 
 ```text
-1427 valid BUY/SELL
-  -> 903 rejected by M15 score gate
-  -> 410 rejected by H1-neutral veto
-  -> 4 rejected by H4+D1 opposition
-  -> 110 strategy-accepted
+/data/data/com.termux/files/home/.config/bota-sv/bota-watcher/run
+blob=25b240dc6913bf9cde82ab79a62ea6cddd73bc8e
+mode=755
 ```
 
-Retained accepted-to-Telegram outcomes:
+## Service/control-plane proof
+
+Post-deployment topology:
 
 ```text
-61 sent
-38 cooldown-suppressed
-6 Telegram score-gated
-1 send failure
+runsvdir_managers=1
+required_services_running=7/7
+active_watcher_cron=0
+active_profitlab_cron=1
 ```
 
-Cooldown audit showed all 38 retained cooldown blocks were non-exact updates. This does not prove independent trades and does not justify removing cooldown wholesale.
-
-## Frozen candidate policies
-
-Selected before the full June-July replay result was observed:
+Services verified running:
 
 ```text
-A = current production acceptance
-B = A AND score >=70 AND ADX <30
-C = B AND no extreme RSI
-SELL extreme RSI <=30
-BUY  extreme RSI >=70
+bota-updater
+bota-watcher
+bota-closer
+bota-shadow
+bota-heartbeat
+bota-supervisor
+crond
 ```
 
-Do not move these thresholds after seeing replay results and describe the result as the original test.
+The watcher is runit-owned. Do not restore a direct watcher cron entry.
 
-## Historical-data phase — CLOSED PASS
+## Live post-deployment watcher proof
 
-Canonical replay input:
+Fresh real production terminal event:
 
 ```text
-DATASET_ID=oanda-warmup-20240101-20260801-20260807-r3
-RAW_RANGE=[2024-01-01T00:00:00Z,2026-08-01T00:00:00Z)
-EVALUATION_RANGE=[2026-06-01T00:00:00Z,2026-08-01T00:00:00Z)
-REPLAY_DATASET_ELIGIBLE=YES
-DATASET_MANIFEST_SHA256=e0033c797fc561935beebd27eaa275c0c659ccaac93acfaa2309abf8354ecf2f
+cycle_id=b32a66a6-1a91-4b61-b759-c32851cbae6b:135481210634879
+status=skipped_market_closed
+terminal_outcome=MARKET_CLOSED
+market_reason=MARKET_CLOSED_SUNDAY
+time_source=server_epoch
+server_epoch=1786236858
+timestamp_utc=2026-08-09T00:54:18+00:00
 ```
 
-Final r3 integrity verdict:
+This proves the approved deployed wrapper executed `watcher_gated_cycle.sh` and persisted an authoritative terminal outcome after the service restart.
+
+## Isolated readiness harness
+
+Post-deployment `tools/monday_readiness_check.py` result:
 
 ```text
-COLLECTOR_EXECUTION=PASS
-VERIFIER_STATUS=PASS
-MANIFEST_STATUS=COMPLETE
-STREAM_COUNT=8
-ARTIFACT_COUNT=128
-ARTIFACT_HASH_FAILURES=0
-OFFLINE_VERIFICATION=PASS
-PRODUCTION_CACHE_UNCHANGED=YES
-TRACKED_WORKTREE_UNCHANGED=YES
-ACQUISITION_STATUS=PASS
+healthy=true
+return_code=0
+scenarios_passed=8/8
 ```
 
-Two earlier failed immutable roots remain forensic evidence and must not be deleted/reused:
+The harness verified closed-session reasons, clock-gate failures, and an isolated open-market rejected outcome. It uses a temporary `BOTA_ROOT`; it did not mutate production, send Telegram, write Supabase, restart services, or change crontab.
+
+## ProfitLab state
 
 ```text
-data/replay/oanda-20260601-20260801-20260807/
-data/replay/oanda-warmup-20240101-20260801-20260807-r2/
+cursor_offset=897734
+alerts_csv_size=897734
+pending_bytes=0
 ```
 
-Do not reacquire June-July unless r3 itself is proven corrupt.
+ProfitLab state was preserved through deployment. Do not run `profitlab_delivery.py --bootstrap` on this production state.
 
-## Deterministic replay — CLOSED PASS
+## Clock warning
 
-Reviewed replay source:
+Post-deployment clock audit:
 
 ```text
-PR64_FINAL_HEAD=ff77b2cc05b4c0bffe0ac13893ae6431264e08d8
-PR64_MERGE=6b437179cc58021aa358b1d0b04c121d9304c660
-REPLAY_GRADE=DETERMINISTIC_PRODUCTION_RULES_WITH_PROVIDER_SUBSTITUTION
+local_utc=2026-08-08T23:55:00Z
+server_utc=2026-08-09T00:55:21Z
+drift_seconds=-3621
+local_clock_unsafe=true
+server_clock_ok=true
+server_sources_count=4
+server_spread_seconds=1
+status=DRIFT_WARN
 ```
 
-PR #66 added the reviewed deterministic double-run wrapper. The phone verified its exact merged blob and every replay dependency before execution.
+The watcher remains fail-closed and used `server_epoch`, so the live watcher proof is valid. Device wall-clock drift remains operational debt because cron-style schedules can still be shifted in real time.
 
-Canonical execution proof:
+## Residual state observations
+
+These are recorded but are not reasons to churn the production release tonight:
+
+- `state/pipeline_progress.json` retained a legacy top-level schema label `1.0` while new watcher events are schema `1.1`; current ledger code preserves an existing state label with `setdefault`.
+- Compact decision state still contains pre-deployment EURUSD/GBPUSD decisions and no USDJPY decision because the only new real cycle was Sunday market-closed.
+- The compact `shadow` event showing `status=failed, exit_code=1` predates the successful deployment; the current `bota-shadow` runit service was verified running. Fresh updater/shadow evidence is required when the market opens.
+
+Do not cosmetically mutate production to erase these observations before the live gate.
+
+## Deployment failures learned from, not hidden
+
+The successful release was preceded by controlled failures that improved the deployment contract:
+
+1. GitHub `main` moved after an earlier release pin; the deployer aborted before mutation.
+2. The approved runit wrapper was stored as Git mode `100644`; activation failed and rollback restored the previous watcher. PR #81 corrected it to `100755`.
+3. A verification script incorrectly looked for `crond` under `${HOME}/.config/bota-sv`; it aborted before mutation. Correct topology uses `$PREFIX/var/service`.
+4. The final corrected deployment used the exact 12-file parity-audit manifest plus the one approved `.env.runtime` `PAIRS` correction.
+
+Full evidence is in `audits/PHONE_DEPLOYMENT_WEEKEND_PROOF_2026-08-09.md`.
+
+## Historical strategy evidence remains preserved
+
+The June-July historical acquisition/replay/matching work remains closed evidence. Do not rerun it merely because production has now been deployed.
+
+The controlled production candidate remains Policy B (`current acceptance AND score >=70 AND ADX <30`) with USDJPY pair-aware risk handling and `NEWS_ON=0`. Do not loosen thresholds to force signals.
+
+## Current freeze
 
 ```text
-DEVICE_UTC=2026-08-07 23:46:14 UTC
-RUN1_RC=0
-RUN2_RC=0
-RUN1_EVENTS_SHA256=05089e6d97e4ab9f3a522d9ec1188c24e69637bf048f1cd1403f23772ec8dabc
-RUN2_EVENTS_SHA256=05089e6d97e4ab9f3a522d9ec1188c24e69637bf048f1cd1403f23772ec8dabc
-EVENT_BYTES_IDENTICAL=YES
-RUN1_SUMMARY_SHA256=f00e42962dd08f7aef7f5e2ecb5d3475d57bbca8abc3bce9f4d2d0d70b903594
-RUN2_SUMMARY_SHA256=f00e42962dd08f7aef7f5e2ecb5d3475d57bbca8abc3bce9f4d2d0d70b903594
-SUMMARY_BYTES_IDENTICAL=YES
-PRODUCTION_SOURCE_BLOBS_MATCH=YES
-PRODUCTION_CACHE_UNCHANGED=YES
-TRACKED_WORKTREE_UNCHANGED=YES
-PHASE2_DETERMINISM_GATE=PASS
+DO_NOT_REDEPLOY_WITHOUT_NEW_CONTRADICTORY_EVIDENCE=YES
+DO_NOT_RESTART_SERVICES_FOR_COSMETIC_STATE=YES
+DO_NOT_BOOTSTRAP_PROFITLAB=YES
+DO_NOT_FORCE_TELEGRAM_TEST_SIGNAL=YES
+DO_NOT_LOWER_THRESHOLDS=YES
+DO_NOT_DECLARE_MONDAY_READY_FROM_WEEKEND_PROOF=YES
 ```
 
-Canonical local replay result:
+## Exactly one next action
+
+Preserve this known-good deployed state until the first genuine `MARKET_OPEN` production cycle. Then verify the append-only runtime evidence for the same current cycle:
 
 ```text
-CANONICAL_REPLAY_RESULT=data/replay_results/phase2-june-july-pr64
-DECISION_ROWS=8618
-POLICY_A_ACCEPTED=105
-POLICY_B_ACCEPTED=51
-POLICY_C_ACCEPTED=45
+EURUSD:M15 decision present
+GBPUSD:M15 decision present
+USDJPY:M15 decision present
+fresh updater progress present
+fresh shadow progress present
+watcher terminal outcome is legitimate and persisted
+provider/data failure is visible if one occurred
+delivery evidence is checked only if a signal genuinely qualifies
 ```
 
-Replay funnel:
-
-```text
-ACCEPTED=105
-H1_CONFIRM=461
-H4_D1_CONFIRM=10
-M15_SETUP_OR_SCORE=4104
-MARKET_CLOSED=3938
-TOTAL=8618
-```
-
-Known fidelity limits remain explicit: historical live `emit_snapshot.py` provider responses were not retained, so replay uses verified OANDA H4/D1 bundles with the same vote formula; historical D1 runtime-cache values are not established, so baseline preserves production fail-open `ANY` semantics.
-
-## Published outcome truth
-
-Supabase BotA M15 outcomes in `[2026-06-01,2026-08-01)` remain:
-
-```text
-TOTAL=13
-WINS=3
-LOSSES=9
-CANCELLED=1
-TOTAL_PIPS=-71.40
-```
-
-Supabase `created_at` is publication time and must never be the sole replay identity key.
-
-## Published-outcome matcher — PR #68 CLOSED PASS
-
-PR #68 added the reviewed offline matcher and frozen Supabase fixture.
-
-Final exact-head proof:
-
-```text
-FINAL_HEAD=49ff1d2341cb9157acafb223950e79cb66883a1a
-OFFLINE_REPLAY_TESTS=PASS
-SECURITY_SCAN=PASS
-DEEPSOURCE_PYTHON=PASS
-DEEPSOURCE_SHELL=PASS
-DEEPSOURCE_SECRETS=PASS
-SONAR_QUALITY_GATE=PASS
-SONAR_NEW_ISSUES=0
-SONAR_SECURITY_HOTSPOTS=0
-CODERABBIT_STATUS=SUCCESS_RATE_LIMITED_NOT_REVIEW_EVIDENCE
-MERGE_COMMIT=bfa7f69ef430000994ea06aa7a3ba713a4144d90
-```
-
-Frozen matching contract:
-
-```text
-POLICY_A_CURRENT=TRUE
-PAIR=EXACT
-DIRECTION=EXACT
-ENTRY_ABSOLUTE_DIFFERENCE<=5.0_PIPS
-ABS(PUBLISHED_CREATED_AT-REPLAY_DECISION_TIME)<=45_MINUTES
-CREATED_AT_AS_SOLE_KEY=FORBIDDEN
-AMBIGUOUS_MATCH=REPORT_NOT_FORCE
-ONE_TO_ONE_ASSIGNMENT=REQUIRED
-```
-
-## Canonical Phase 2.2 matching result — PARTIAL
-
-```text
-CANONICAL_COMPARISON_RESULT=data/replay_results/phase2-june-july-pr64/outcome_comparison.json
-COMPARISON_SHA256=6abb46288522b615e904ad67bc8e173786e1fddf560563b516e653b5b97f2274
-MATCHER_SOURCE_INTEGRITY=PASS
-MATCHER_RC=0
-COMPARISON_JSON=VALID
-NETWORK_USED=NO
-PRODUCTION_MUTATION=NO
-MATCH_GATE=FAIL
-MATCH_STATUS=PARTIAL_MATCH
-PUBLISHED_OUTCOMES=13
-MATCHED_OUTCOMES=9
-UNMATCHED_OUTCOMES=4
-AMBIGUOUS_OUTCOMES=0
-MATCH_RATE_PERCENT=69.23
-```
-
-Observed published-outcome subsets among the nine uniquely reconstructed trades:
-
-```text
-A: N=9 W=3 L=6 C=0 PIPS=-23.50
-B: N=5 W=3 L=2 C=0 PIPS=+54.50
-C: N=5 W=3 L=2 C=0 PIPS=+54.50
-```
-
-Interpretation remains limited:
-
-- B is materially better than A in the reconstructable subset.
-- C adds no incremental benefit over B in that subset.
-- These are observed published-outcome counterfactuals, not full replay PnL.
-- Production strategy mutation is not authorized.
-
-The four unmatched published outcomes were:
-
-```text
-78a0ad15-b53b-4eb3-ad8d-453bc7d667f1  EURUSD SELL score80 CLOSED    -13.50
-ed386a21-1431-4b05-9941-2017789297bb  GBPUSD SELL score75 CLOSED    -18.60
-0a95433f-6dbe-48c3-b6f3-e43fe996c8f9  EURUSD SELL score85 CLOSED    -15.80
-01f33b41-68cf-4975-a0d9-8ef4699c1d54  EURUSD SELL score75 CANCELLED   0.00
-```
-
-Combined:
-
-```text
-N=4
-WINS=0
-LOSSES=3
-CANCELLED=1
-PIPS=-47.90
-MATCHED_PIPS=-23.50
-ALL_13_PUBLISHED_PIPS=-71.40
-```
-
-## Match-gap classifier — PR #69 CLOSED PASS
-
-PR #69 introduced the reviewed gap classifier and one-to-one consumed-event protection.
-
-Final exact-head evidence:
-
-```text
-FINAL_HEAD=440def4e9781ba60a55c625046ca0795e536987d
-MERGE_COMMIT=cbd0c3126ecac7b3b03e060eb81c144711b786f2
-CLASSIFIER_BLOB=126ab302e246d8e4a9e254ccf77c80f92bd2b979
-HISTORICAL_REPLAY_CI=PASS
-SECURITY_SCAN=PASS
-DEEPSOURCE_PYTHON=PASS
-DEEPSOURCE_SHELL=PASS
-DEEPSOURCE_SECRETS=PASS
-SONAR_QUALITY_GATE=PASS
-SONAR_NEW_ISSUES=0
-SONAR_SECURITY_HOTSPOTS=0
-```
-
-Review found a real one-to-one edge case before merge. The classifier now reconstructs the nine already-consumed replay events from the canonical comparison and excludes them from all gap scans. Missing, duplicate, or payload-mismatched consumed events fail closed. The canonical comparison itself was not rewritten or rerun.
-
-## Phase 2.3 gap classification — CLOSED PASS
-
-Canonical local result:
-
-```text
-CANONICAL_GAP_RESULT=data/replay_results/phase2-june-july-pr64/match_gap_classification.json
-GAP_RESULT_SHA256=5cbf0537a5bc3800e3a3353843d440d04a8e98b10287b81a525a106bf2aae471
-SOURCE_INTEGRITY=PASS
-GAP_CLASSIFIER_STATUS=COMPLETE
-UNMATCHED_COUNT=4
-CONSUMED_MATCHED_EVENTS=9
-CLASSIFIER_RC=0
-GAP_RESULT_JSON=VALID
-TOLERANCE_WIDENED=NO
-NETWORK_USED=NO
-PRODUCTION_MUTATION=NO
-```
-
-Exact classifications:
-
-```text
-01f33b41-68cf-4975-a0d9-8ef4699c1d54
-EURUSD SELL
-LIVE_PUBLISHED_BUT_REPLAY_NOT_ACCEPTED_WITHIN_45M
-same_direction_within_45m=4
-policy_a_accepted_within_45m=0
-published_status=CANCELLED
-published_result_pips=0.00
-
-0a95433f-6dbe-48c3-b6f3-e43fe996c8f9
-EURUSD SELL
-LIVE_PUBLISHED_BUT_REPLAY_NOT_ACCEPTED_WITHIN_45M
-same_direction_within_45m=1
-policy_a_accepted_within_45m=0
-published_status=CLOSED
-published_result_pips=-15.80
-
-78a0ad15-b53b-4eb3-ad8d-453bc7d667f1
-EURUSD SELL
-REPLAY_ACCEPTED_WITHIN_45M_BUT_ENTRY_DIFF_GT_5P
-same_direction_within_45m=3
-policy_a_accepted_within_45m=1
-published_status=CLOSED
-published_result_pips=-13.50
-
-ed386a21-1431-4b05-9941-2017789297bb
-GBPUSD SELL
-LIVE_PUBLISHED_BUT_REPLAY_NOT_ACCEPTED_WITHIN_45M
-same_direction_within_45m=4
-policy_a_accepted_within_45m=0
-published_status=CLOSED
-published_result_pips=-18.60
-```
-
-The four prior match gaps are therefore fully classified:
-
-```text
-UNEXPLAINED_GAP_COUNT=0
-LIVE_VS_REPLAY_DECISION_STATE_DIVERGENCES=3
-LIVE_VS_REPLAY_ENTRY_DIVERGENCES=1
-MATCHER_BUG_AS_EXPLANATION=NOT_SUPPORTED
-TOLERANCE_WIDENING_NEEDED=NO
-```
-
-Interpretation:
-
-- Three real published outcomes had same-direction replay state in the frozen 45-minute window, but reconstructed Policy A rejected every candidate. These are live-vs-replay decision-state divergences, not missing data and not timestamp-tolerance failures.
-- One real published outcome had a reconstructed Policy-A acceptance in the frozen window, but the replay entry differed by more than 5 pips. This is a price/input reconstruction divergence.
-- The result is consistent with the explicit replay grade `DETERMINISTIC_PRODUCTION_RULES_WITH_PROVIDER_SUBSTITUTION`: deterministic replay does not imply exact recreation of every unretained historical live provider/cache input.
-- The three decision divergences cannot be credited as hypothetical Policy-B/C outcomes because B and C are subsets of reconstructed Policy A.
-- The one entry-divergent accepted replay event still requires its detailed score/ADX/RSI/policy flags from the already-preserved Phase 2.3 JSON before the robustness verdict.
-
-Detailed record:
-
-```text
-audits/REPLAY_OUTCOME_MATCH_GAP_RESULT_2026-08-08.md
-```
-
-## New live-code finding preserved by replay
-
-Current `m15_h1_fusion.sh` reads top-level `.adx // 0` for the H1-opposite override. Current `scoring_engine.sh` does not emit a top-level `adx` field. The intended `ADX>=40` opposite-trend override therefore receives zero and cannot activate under the inspected production contract.
-
-Replay reproduces this behavior. Production remains unchanged.
-
-## Scope lock
-
-Until robustness/holdout evidence completes:
-
-```text
-DO_NOT_WIDEN_MATCH_TOLERANCES=YES
-DO_NOT_RERUN_HISTORICAL_ACQUISITION=YES
-DO_NOT_RERUN_DETERMINISTIC_REPLAY=YES
-DO_NOT_RERUN_CANONICAL_OUTCOME_MATCHER=YES
-DO_NOT_RERUN_GAP_CLASSIFIER=YES
-DO_NOT_LOWER_SCORE_FLOOR=YES
-DO_NOT_LOWER_H1_FLOOR=YES
-DO_NOT_CHANGE_TELEGRAM_FLOORS=YES
-DO_NOT_REMOVE_COOLDOWN=YES
-DO_NOT_ADD_THIRD_PAIR=YES
-DO_NOT_MUTATE_ADX_RULE=YES
-DO_NOT_MUTATE_RSI_RULE=YES
-DO_NOT_FIX_H1_ADX_OVERRIDE_IN_PRODUCTION_YET=YES
-PRODUCTION_STRATEGY_MUTATION_ALLOWED=NO
-```
-
-`tools/backtest_bota.py` remains unsuitable as production-rule validation because its semantics differ from the live watcher.
-
-## Efficiency operating model
-
-Canonical workflow: `docs/FORENSIC_OPERATING_MODEL.md`.
-
-```text
-GitHub connector   -> code/history/docs/tests
-Supabase connector -> published signal/outcome/database truth
-Phone/Termux       -> runtime-only state, credentials, local-only immutable data/results
-```
-
-Reusable reviewed tools replace disposable probes. Do not re-probe facts already captured in canonical audits.
-
-## Key evidence
-
-- `audits/REPLAY_OUTCOME_MATCH_GAP_RESULT_2026-08-08.md`
-- `audits/REPLAY_OUTCOME_MATCH_GAP_CLASSIFICATION_2026-08-08.md`
-- `audits/REPLAY_OUTCOME_MATCHER_2026-08-07.md`
-- `audits/DETERMINISTIC_REPLAY_PHASE2_EXECUTION_2026-08-07.md`
-- `audits/DETERMINISTIC_REPLAY_PHASE1_PROOF_2026-08-07.md`
-- `audits/DETERMINISTIC_REPLAY_HARNESS_2026-08-07.md`
-- `audits/HISTORICAL_CANDLE_ACQUISITION_2026-08-07.md`
-- `audits/REPLAY_DATASET_VERIFIER_2026-08-07.md`
-- `audits/JUNE_JULY_ADX_RSI_TEMPORAL_CROSSCHECK_2026-08-07.md`
-- `audits/ADX_RSI_COUNTERFACTUAL_2026-08-07.md`
-- `audits/MARCH_COMPONENT_OUTCOMES_2026-08-07.md`
-- `docs/FORENSIC_OPERATING_MODEL.md`
-
-## Exactly one next action — read detailed Phase 2.3 state for robustness verdict
-
-Read the already-preserved local result once:
-
-```text
-data/replay_results/phase2-june-july-pr64/match_gap_classification.json
-GAP_RESULT_SHA256=5cbf0537a5bc3800e3a3353843d440d04a8e98b10287b81a525a106bf2aae471
-```
-
-Extract only:
-
-```text
-for the three decision divergences:
-  reject_stage
-  filter_reasons
-  H1 trend
-  H4 vote
-  D1 vote
-  score
-  ADX
-  RSI
-
-for the one entry-divergent accepted event:
-  decision_time
-  time_delta_minutes
-  replay entry
-  entry_diff_pips
-  score
-  ADX
-  RSI
-  Policy B flag
-  Policy C flag
-```
-
-This is a local read only. Do not rerun historical acquisition, deterministic replay, the canonical outcome matcher, or the gap classifier. No production strategy mutation before the robustness verdict.
+Three legitimate rejected decisions are a valid PASS. A Telegram signal is not required. A missing/stale pair, hidden operational failure, duplicate owner, or missing terminal outcome is a FAIL and must be diagnosed before any strategy mutation.
