@@ -112,5 +112,5 @@
     "lower_thresholds_to_force_signals": false,
     "declare_monday_ready_from_weekend_proof": false
   },
-  "next_action": "Wait for the first genuine MARKET_OPEN production cycle and prove current EURUSD:M15, GBPUSD:M15, and USDJPY:M15 decisions in the same authoritative cycle, with fresh updater/shadow evidence and one legitimate terminal watcher outcome. Three valid rejected decisions are acceptable; a Telegram signal is not required."
+  "next_action": "Wait for the first genuine MARKET_OPEN production cycle and prove current EURUSD:M15, GBPUSD:M15, and USDJPY:M15 decisions in the same authoritative cycle, with fresh updater/shadow evidence, one legitimate terminal watcher outcome, and current singular watcher ownership with no active direct watcher cron or second watcher owner. Three valid rejected decisions are acceptable; a Telegram signal is not required."
 }
