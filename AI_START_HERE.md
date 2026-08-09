@@ -29,7 +29,7 @@ MONDAY_READY=NO
 
 BotA is **deployed and weekend-verified**, not yet Monday-ready.
 
-The only remaining production-readiness gate is a genuine `MARKET_OPEN` cycle proving fresh EURUSD, GBPUSD, and USDJPY M15 decisions in the same authoritative watcher cycle, together with fresh supporting updater/shadow evidence. Three legitimate rejected decisions are acceptable; a Telegram signal is not required.
+The only remaining production-readiness gate is a genuine `MARKET_OPEN` cycle proving fresh EURUSD, GBPUSD, and USDJPY M15 decisions in the same authoritative watcher cycle, together with fresh supporting updater/shadow evidence and current single-owner proof. Three legitimate rejected decisions are acceptable; a Telegram signal is not required.
 
 ## Phone deployment model
 
@@ -193,6 +193,6 @@ DO_NOT_DECLARE_MONDAY_READY_FROM_WEEKEND_PROOF=YES
 
 ## Exactly one next action
 
-Preserve the current deployed state until the first genuine `MARKET_OPEN` production cycle. Then verify, from the append-only runtime evidence, that the same current cycle contains EURUSD:M15, GBPUSD:M15, and USDJPY:M15 decisions; that updater and shadow evidence is fresh; and that the watcher ends in a legitimate terminal outcome.
+Preserve the current deployed state until the first genuine `MARKET_OPEN` production cycle. Then verify, from the append-only runtime evidence, that the same current cycle contains EURUSD:M15, GBPUSD:M15, and USDJPY:M15 decisions; that updater and shadow evidence is fresh; that the watcher ends in a legitimate terminal outcome; and that current watcher ownership remains singular with no active direct watcher cron and no second watcher owner.
 
-If those conditions pass, advance the readiness gate. If any pair/evidence is missing or stale, classify the operational failure before changing strategy.
+If those conditions pass, advance the readiness gate. If any pair/evidence is missing or stale, ownership is ambiguous, or the terminal outcome is absent, classify the operational failure before changing strategy.
