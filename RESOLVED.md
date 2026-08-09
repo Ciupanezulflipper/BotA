@@ -94,3 +94,74 @@
 - [proven] Installed watcher SHA-256: `b8a3adf46582e3a69d5b22d12a4da070bc8be2ceff76a4aa99e9d6c96544a9ef`.
 - [proven] Strategy and production selection rules changed: NO.
 - [not proven] Whether any valid signal was missed during the historical June outage remains unresolved.
+
+---
+
+## 2026-08-09 — Package #1 Clock & Session Time
+
+### Android wall-clock leakage into strategy/event semantics
+- Status: **RESOLVED / DEPLOYED / LIVE-PROVEN**
+- Release: `8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0`
+- PR: #84
+- Root causes fixed:
+  - scorer session component could use Android wall clock;
+  - nested market gates could establish a different `now` from the outer watcher cycle;
+  - economic-calendar distance used wall clock;
+  - active Finnhub date selection used wall clock;
+  - economic-calendar before/after signed windows were reversed.
+- Fix:
+  - one inherited `BOTA_SERVER_EPOCH` controls market/session/calendar/news event-time semantics;
+  - CLOCK_BOOTTIME/monotonic remains elapsed-time/cooldown domain;
+  - signed calendar boundaries corrected.
+- Validation:
+  - deterministic trusted-time boundaries PASS;
+  - no-network inherited-epoch market boundaries PASS;
+  - real scorer session-boundary integration PASS;
+  - ShellCheck/Python compile PASS;
+  - 2,000-case seeded time/timezone fault matrix PASS.
+- Live proof:
+  - cycle `b32a66a6-1a91-4b61-b759-c32851cbae6b:144452448476926`;
+  - `MARKET_CLOSED / MARKET_CLOSED_SUNDAY`;
+  - `time_source=server_epoch`;
+  - `server_epoch=1786245830`.
+- Strategy thresholds changed: NO.
+- Pair scope changed: NO.
+- ProfitLab cursor changed: NO.
+
+## 2026-08-09 — Package #2 live control-plane repairs
+
+### Stale live `crond` singleton owner
+- Status: **LIVE INCIDENT RESOLVED; AUTOMATED HARDENING STILL OPEN**
+- Root cause:
+  - old live `crond` PID `4107`, PPID `1`, still held `$PREFIX/var/run/crond.pid`;
+  - current manager-owned `runsv crond` PID `24583` retried a second daemon every ~1 second;
+  - each replacement failed to lock the pidfile.
+- Repair:
+  - verified stale daemon PID/command/parent;
+  - quiesced failed restart loop;
+  - terminated only PID 4107;
+  - current runsv started replacement PID `17994`;
+  - verified replacement PPID `24583`, one live `crond`, and stability.
+- Crontab changed: NO.
+- Bot runtime files changed by repair: NO.
+- ProfitLab state changed: NO.
+
+### PID-1-orphaned BotA `runsv` supervisors
+- Status: **LIVE TOPOLOGY RESOLVED; PERSISTENT RECOVERY STILL OPEN**
+- Discovered state:
+  - `running=7/7`;
+  - `owned=1/7`;
+  - `orphaned=6`.
+- Final repaired state:
+  - manager count `1`;
+  - manager PID `4398`;
+  - `owned=7/7`;
+  - `running=7/7`;
+  - `orphaned=0`;
+  - duplicate service rows `0`.
+- Remaining Package #2 requirement:
+  - persistent single-instance watchdog startup/recovery;
+  - automated safe handling of stale live singleton-child/resource-owner conditions;
+  - fault-injected pre-market release/config/data readiness.
+
+Canonical evidence: `audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md`.

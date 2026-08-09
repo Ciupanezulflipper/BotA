@@ -6,30 +6,41 @@ Read this first in any new AI session before proposing BotA changes.
 
 ## Current grounded answer
 
-BotA is no longer merely a reviewed GitHub candidate. The approved Monday-readiness watcher release has been deployed to the Android/Termux phone and verified at runtime.
-
-Current classification:
-
 ```text
-DEPLOYED_AND_WEEKEND_VERIFIED=YES
+DEPLOYED_RELEASE=8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0
+PACKAGE_1_CLOCK_SESSION=PASS
+CURRENT_CONTROL_PLANE=HEALTHY
+CURRENT_REQUIRED_SERVICES_OWNED=7/7
+CURRENT_REQUIRED_SERVICES_RUNNING=7/7
+CURRENT_ORPHANED_RUNSV=0
+CURRENT_DUPLICATE_SERVICE_ROWS=0
+CURRENT_LIVE_CROND_COUNT=1
+PRE_MARKET_PRODUCTION_INTEGRITY=PENDING
+OPEN_MARKET_THREE_PAIR_PROOF=PENDING
 MONDAY_READY=NO
-REASON=REAL_OPEN_MARKET_THREE_PAIR_CYCLE_NOT_YET_PROVEN
 ```
 
-Do not add another package simply because the weekend checks passed. Preserve the known-good runtime until the first genuine open-market proof.
+Package #1 is complete and live-proven. Package #2 has already produced important live findings and repairs, but its persistent recovery/pre-market hardening is not complete.
 
 ## Production release identity
 
 ```text
-APPROVED_AND_DEPLOYED_SHA=f52f326cdbc9e9a16dd60666808a35fb839f10ad
+APPROVED_AND_DEPLOYED_SHA=8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0
 PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
-PHONE_UNTRACKED_FILES_PRESERVED=782
 ```
 
-The phone Git worktree is not the deployment identity. It deliberately remains on an older local deployment branch so persistent runtime/audit files were not destroyed. Production parity was established by exact Git blob verification of the bounded runtime manifest.
+The phone worktree HEAD is not production identity. Use immutable approved SHA + deployed blob/mode parity + active wrapper + runtime configuration + live evidence.
 
-## Live runtime configuration
+Active physical watcher wrapper:
+
+```text
+/data/data/com.termux/files/home/.config/bota-sv/bota-watcher/run
+blob=25b240dc6913bf9cde82ab79a62ea6cddd73bc8e
+mode=755
+```
+
+## Runtime configuration
 
 ```text
 PAIRS=EURUSD GBPUSD USDJPY
@@ -42,64 +53,102 @@ TELEGRAM_ENABLED=1
 DRY_RUN_MODE=0
 ```
 
-Do not loosen score, ADX, H1/H4/D1, Telegram, cooldown, or eligibility rules to manufacture signal volume.
+Do not loosen strategy thresholds to manufacture signals.
 
-## Active watcher ownership
+## Package #1 — completed trusted-time package
 
-Production watcher is runit-owned.
-
-Active physical wrapper:
+PR #84 deployed exactly five runtime files:
 
 ```text
-/data/data/com.termux/files/home/.config/bota-sv/bota-watcher/run
-Git blob=25b240dc6913bf9cde82ab79a62ea6cddd73bc8e
-mode=755
+tools/calendar_guard.py
+tools/market_open.sh
+tools/news_filter_real.py
+tools/scoring_engine.sh
+tools/trusted_time.py
 ```
 
-Post-deployment control plane:
+It fixed:
+
+- scorer session time reading unsafe Android wall clock;
+- nested market-gate time reprobes instead of inherited cycle epoch;
+- calendar event-window calculations using wall clock;
+- Finnhub calendar-date selection using wall clock when active;
+- reversed before/after economic-calendar block semantics.
+
+One watcher cycle now reuses one `BOTA_SERVER_EPOCH` for strategy/event-time semantics. CLOCK_BOOTTIME/monotonic remains for elapsed-duration health/cooldowns.
+
+Validation passed deterministic boundaries, real scorer integration, ShellCheck, Python compile, no-network inherited-clock checks, and a 2,000-case seeded time/timezone fault matrix.
+
+Fresh live Package #1 evidence:
 
 ```text
-runsvdir_managers=1
-services_running=7/7
-active_direct_watcher_cron=0
-active_profitlab_cron=1
-```
-
-Running services:
-
-```text
-bota-updater
-bota-watcher
-bota-closer
-bota-shadow
-bota-heartbeat
-bota-supervisor
-crond
-```
-
-Never assume the repository copy of a runit wrapper controls the live phone process. Resolve and verify the physical active wrapper.
-
-## Real production proof already obtained
-
-After the successful deployment, the restarted watcher emitted:
-
-```text
-cycle_id=b32a66a6-1a91-4b61-b759-c32851cbae6b:135481210634879
-status=skipped_market_closed
+cycle_id=b32a66a6-1a91-4b61-b759-c32851cbae6b:144452448476926
 terminal_outcome=MARKET_CLOSED
 market_reason=MARKET_CLOSED_SUNDAY
 time_source=server_epoch
-server_epoch=1786236858
-timestamp_utc=2026-08-09T00:54:18+00:00
+server_epoch=1786245830
+timestamp_utc=2026-08-09T03:23:50+00:00
 ```
 
-This proves the approved runtime executed the gated watcher cycle and wrote an authoritative terminal outcome. Service liveness alone was not accepted as deployment proof.
+## Package #2 — findings already discovered
 
-## Isolated Monday-readiness proof
+### 1. Stale live `crond` blocked the manager-owned replacement
 
-Post-deployment `tools/monday_readiness_check.py` returned `healthy=true`, RC 0, with 8/8 fixture scenarios matching the expected terminal outcomes.
+The first Package #1 deployment attempt aborted before mutation because `crond` looked down. Root cause:
 
-It is safe evidence because it uses a temporary `BOTA_ROOT` and does not consult the live market, send Telegram, write Supabase, mutate strategy, restart runit, change crontab, or write fake production signals.
+```text
+native manager PID=4398
+current runsv crond PID=24583
+stale crond PID=4107
+stale crond PPID=1
+stale crond still held crond.pid
+new crond attempts failed every ~1 second on pidfile lock
+```
+
+The old process was still executing cron jobs, so apparent business activity did not mean correct control-plane ownership.
+
+Repair result:
+
+```text
+old crond PID=4107 terminated after identity/parent verification
+new crond PID=17994
+new crond PPID=24583
+live crond count=1
+stability=PASS
+```
+
+### 2. Six `runsv` supervisors were PID-1 orphans
+
+Immediately after the cron repair, `control_plane_status.py` found:
+
+```text
+running=7/7
+owned=1/7
+orphaned=6
+```
+
+Final reconciled topology:
+
+```text
+manager_count=1
+manager_pid=4398
+running=7/7
+owned=7/7
+orphaned=0
+duplicate_service_rows=0
+```
+
+Never treat `sv status=run` or process presence alone as proof of correct control-plane ownership.
+
+### 3. Persistent watchdog is still disabled
+
+Phone boot launcher currently records:
+
+```text
+RUNSVDIR_GUARD_START=DISABLED
+```
+
+The watchdog files match GitHub and a one-shot healthy-topology run passed, but persistent startup/recovery is not proven. Package #2 must automate and fault-test the exact stale-live-singleton-child condition rather than relying on manual repair.
 
 ## ProfitLab
 
@@ -109,91 +158,57 @@ alerts_csv_size=897734
 pending_bytes=0
 ```
 
-The cursor survived deployment unchanged. Do not run `profitlab_delivery.py --bootstrap`.
+Do not run `profitlab_delivery.py --bootstrap`.
 
-## Clock warning
+## What Package #2 must prove
 
-The Android wall clock is currently unsafe relative to trusted server time:
+Before persistent phone changes, fault-inject in isolation:
 
 ```text
-drift_seconds=-3621
-local_clock_unsafe=true
-server_clock_ok=true
-server_sources_count=4
-server_spread_seconds=1
-status=DRIFT_WARN
+manager loss
+PID-1 orphaned runsv handoff
+single service down
+dead stale pidfile
+live stale singleton child/resource owner
+duplicate runsv supervisor
+multiple manager attempt
+watchdog duplicate attempt
+release/blob/config drift
+missing/stale updater or shadow evidence
 ```
 
-The watcher is protected because its market decision used `server_epoch`. Do not silently dismiss the device-clock drift because cron-style schedules can still be shifted in real time.
+The final design must preserve one native `runsvdir`, one supervisor per service, one live singleton child where applicable, one watcher owner, and immutable release/config provenance.
 
-## Residual observations
+## Canonical evidence
 
-- The compact `pipeline_progress.json` top-level schema label remains `1.0` from prior persisted state, while new watcher events are schema `1.1`. This is bookkeeping debt, not a weekend blocker.
-- Compact pair decisions are still old EURUSD/GBPUSD records; there is no post-deployment USDJPY decision yet because the real post-deploy cycle occurred while the FX market was closed.
-- A recorded `shadow status=failed, exit_code=1` event predates the successful deployment. The live `bota-shadow` runit service is running; require fresh shadow evidence during the open-market proof.
+Read:
 
-Do not mutate the stable runtime solely to clean these labels/history before Monday.
+1. `audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md`
+2. `CONTINUITY_CURRENT.md`
+3. `DECISIONS.md`
+4. `ERRORS.md`
+5. GitHub issue #9
 
-## Deployment lessons now part of the operating model
+Older dated audits remain historical evidence and should not be rewritten to look current.
 
-The deployment sequence itself caught important failure modes:
+## Final readiness gate after Package #2
 
-1. Moving GitHub `main` caused a safe pre-mutation abort.
-2. Git mode `100644` on the runit `run` file caused activation failure and automatic rollback; PR #81 fixed the mode to `100755`.
-3. A verifier incorrectly assumed the `crond` service path; that attempt aborted before mutation and the topology logic was corrected.
-4. The final deployment used the exact 12-file mismatch/missing manifest from the phone parity audit, corrected only the `PAIRS` assignment, and preserved persistent state.
-
-Full evidence: `audits/PHONE_DEPLOYMENT_WEEKEND_PROOF_2026-08-09.md`.
-
-## Historical evidence
-
-The historical acquisition, deterministic replay, published-outcome matcher, and match-gap classification remain closed evidence. Do not rerun them without contradictory evidence.
-
-Important prior result remains:
+The first genuine `MARKET_OPEN` production cycle must prove in one current cycle:
 
 ```text
-PUBLISHED_OUTCOMES=13
-WINS=3
-LOSSES=9
-CANCELLED=1
-TOTAL_PIPS=-71.40
-MATCHED_OUTCOMES=9
-UNMATCHED_OUTCOMES=4
-UNEXPLAINED_GAP_COUNT=0
-```
-
-Policy B was selected from the controlled evidence and is already the deployed quality guard. Current work is operational validation, not another threshold-search exercise.
-
-## What counts as Monday proof
-
-The first genuine `MARKET_OPEN` production cycle must show, from current append-only evidence:
-
-```text
-EURUSD:M15 decision in current cycle
-GBPUSD:M15 decision in current cycle
-USDJPY:M15 decision in current cycle
-fresh updater progress
-fresh shadow progress
+EURUSD:M15 decision present
+GBPUSD:M15 decision present
+USDJPY:M15 decision present
+fresh updater/data evidence
+fresh shadow evidence
 one authoritative watcher terminal outcome
+trusted server time
 no duplicate watcher owner
-provider/data failures surfaced rather than hidden
+7/7 services correctly owned and running
 ```
 
-If the strategy legitimately rejects all three pairs, that is acceptable. Do not require a Telegram signal to call the execution path healthy.
-
-## Working discipline
-
-1. Inspect before changing.
-2. Separate GitHub state, phone worktree state, deployed runtime state, and live-cycle state.
-3. Use immutable SHA + file hashes + executable modes for deployment identity.
-4. Preserve persistent logs/state and unrelated cron.
-5. One process owner per production job.
-6. Every watcher cycle must have an observable terminal outcome.
-7. Operational failure dominates healthy-looking business semantics.
-8. Do not use Android local time for trading decisions when trusted server time is available.
-9. Never push directly to `main`; use branch -> verified diff -> PR -> exact-head checks -> merge.
-10. Do not change strategy to compensate for missing operational proof.
+Three legitimate rejected decisions are acceptable. A Telegram signal is not required.
 
 ## Exactly one next action
 
-Wait for the first genuine `MARKET_OPEN` production cycle and verify the three current M15 decisions plus fresh updater/shadow evidence and the authoritative watcher terminal outcome. If that gate passes, advance readiness. If it fails, diagnose the operational failure before changing strategy.
+Finish **Package #2 — Pre-Market Production Integrity** in reviewed code/tests before changing the phone again. Do not merge stale signal-closer PR #7 into this package and do not change strategy thresholds to compensate for operational failures.

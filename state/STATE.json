@@ -1,54 +1,84 @@
 {
   "_meta": {
-    "schema_version": "2.0",
+    "schema_version": "2.1",
     "project": "BotA",
     "repository": "Ciupanezulflipper/BotA",
     "record_type": "repository_handoff_snapshot_not_live_runtime_state",
     "recorded_date_utc": "2026-08-09",
-    "authoritative_detail": "audits/PHONE_DEPLOYMENT_WEEKEND_PROOF_2026-08-09.md"
+    "authoritative_detail": "audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md"
   },
   "readiness": {
     "code_ready": true,
     "merged_to_main": true,
     "deployed_to_phone": true,
     "runtime_parity_verified": true,
-    "runit_activation_verified": true,
-    "closed_market_live_cycle_verified": true,
-    "isolated_monday_harness_verified": true,
+    "package_1_clock_session": "PASS",
+    "package_2_live_control_plane_repair": "PASS",
+    "package_2_persistent_hardening": "PENDING",
+    "pre_market_production_integrity": "PENDING",
     "open_market_three_pair_live_proof": false,
     "monday_ready": false,
-    "classification": "DEPLOYED_AND_WEEKEND_VERIFIED"
+    "classification": "PACKAGE1_PASS_PACKAGE2_HARDENING_PENDING"
   },
   "release": {
-    "deployed_github_sha": "f52f326cdbc9e9a16dd60666808a35fb839f10ad",
+    "deployed_github_sha": "8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0",
     "phone_local_branch": "deploy/repaired-core-20260802T215531Z",
     "phone_local_head": "4339543551aae2e2bcbf727aefe96e3eb103b665",
     "phone_worktree_is_deployment_identity": false,
-    "untracked_files_preserved": 782,
     "active_wrapper_path": "/data/data/com.termux/files/home/.config/bota-sv/bota-watcher/run",
     "active_wrapper_blob": "25b240dc6913bf9cde82ab79a62ea6cddd73bc8e",
-    "active_wrapper_mode": "755"
+    "active_wrapper_mode": "755",
+    "package_1_backup_path": "/data/data/com.termux/files/home/BotA-backups/clock-pkg1-20260809T022316Z"
   },
   "production_scope": {
-    "pairs": [
-      "EURUSD",
-      "GBPUSD",
-      "USDJPY"
-    ],
-    "timeframes": [
-      "M15"
-    ],
+    "pairs": ["EURUSD", "GBPUSD", "USDJPY"],
+    "timeframes": ["M15"],
     "policy_b_enabled": true,
     "policy_b_score_min": 70,
     "policy_b_adx_max": 30,
     "news_on": false,
     "telegram_enabled": true,
-    "dry_run_mode": false
+    "dry_run_mode": false,
+    "package_1_changed_strategy_thresholds": false
+  },
+  "package_1_clock_session": {
+    "pr": 84,
+    "deployed_release": "8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0",
+    "runtime_files": [
+      "tools/calendar_guard.py",
+      "tools/market_open.sh",
+      "tools/news_filter_real.py",
+      "tools/scoring_engine.sh",
+      "tools/trusted_time.py"
+    ],
+    "trusted_epoch_reused_per_cycle": true,
+    "session_score_uses_android_wall_clock": false,
+    "calendar_uses_trusted_epoch": true,
+    "news_calendar_date_uses_trusted_epoch_when_active": true,
+    "calendar_before_after_sign_bug_fixed": true,
+    "clock_boottime_for_elapsed_health_preserved": true,
+    "randomized_fault_cases": 2000,
+    "live_proof": {
+      "cycle_id": "b32a66a6-1a91-4b61-b759-c32851cbae6b:144452448476926",
+      "status": "skipped_market_closed",
+      "terminal_outcome": "MARKET_CLOSED",
+      "market_reason": "MARKET_CLOSED_SUNDAY",
+      "time_source": "server_epoch",
+      "server_epoch": 1786245830,
+      "timestamp_utc": "2026-08-09T03:23:50+00:00"
+    }
   },
   "control_plane": {
-    "runsvdir_managers": 1,
+    "manager_count": 1,
+    "manager_pid_at_latest_proof": 4398,
     "required_services": 7,
+    "owned_services": 7,
     "running_services": 7,
+    "orphaned_runsv": 0,
+    "duplicate_service_rows": 0,
+    "live_crond_count": 1,
+    "active_watcher_cron_count": 0,
+    "active_profitlab_cron_count": 1,
     "services": [
       "bota-updater",
       "bota-watcher",
@@ -57,25 +87,36 @@
       "bota-heartbeat",
       "bota-supervisor",
       "crond"
-    ],
-    "active_watcher_cron_count": 0,
-    "active_profitlab_cron_count": 1
+    ]
   },
-  "live_watcher_proof": {
-    "cycle_id": "b32a66a6-1a91-4b61-b759-c32851cbae6b:135481210634879",
-    "status": "skipped_market_closed",
-    "terminal_outcome": "MARKET_CLOSED",
-    "market_reason": "MARKET_CLOSED_SUNDAY",
-    "time_source": "server_epoch",
-    "server_epoch": 1786236858,
-    "timestamp_utc": "2026-08-09T00:54:18+00:00"
-  },
-  "monday_readiness_harness": {
-    "healthy": true,
-    "return_code": 0,
-    "scenarios_passed": 8,
-    "scenarios_total": 8,
-    "isolated_from_production": true
+  "package_2_findings": {
+    "stale_live_singleton_child": {
+      "service": "crond",
+      "stale_pid": 4107,
+      "stale_ppid": 1,
+      "current_runsv_pid": 24583,
+      "failure": "stale live crond held crond.pid while current manager-owned runsv retried a replacement",
+      "repair": "identity-check stale daemon, quiesce failed restart loop, terminate stale daemon, let current runsv start one replacement",
+      "replacement_pid": 17994,
+      "replacement_parent_runsv": 24583,
+      "live_repair_status": "PASS"
+    },
+    "pid1_orphaned_supervisors": {
+      "observed_running": 7,
+      "observed_owned_before_reconciliation": 1,
+      "observed_orphaned": 6,
+      "final_owned": 7,
+      "final_orphaned": 0,
+      "live_repair_status": "PASS"
+    },
+    "persistent_watchdog": {
+      "source_parity_with_github": true,
+      "one_shot_healthy_topology_run": "PASS",
+      "boot_launcher_guard_state": "DISABLED",
+      "persistent_recovery_proven": false,
+      "stale_live_singleton_recovery_automated": false,
+      "status": "PENDING"
+    }
   },
   "profitlab": {
     "cursor_offset": 897734,
@@ -84,33 +125,30 @@
     "bootstrap_required": false,
     "bootstrap_forbidden_on_current_state": true
   },
-  "clock": {
-    "status": "DRIFT_WARN",
-    "drift_seconds": -3621,
-    "local_clock_unsafe": true,
-    "server_clock_ok": true,
-    "server_sources_count": 4,
-    "server_spread_seconds": 1,
-    "watcher_uses_trusted_server_epoch": true
-  },
   "residual_observations": [
-    "Live pipeline_progress.json retained legacy top-level schema_version 1.0 while new watcher events use schema 1.1; do not mutate production solely to relabel it before the open-market proof.",
-    "Compact decision state has no post-deployment USDJPY decision because the only new real cycle was market-closed.",
-    "A compact shadow failure event predates the successful deployment; the live bota-shadow service is running and fresh open-market shadow evidence remains required."
+    "Android wall clock remains an operational warning, but Package #1 removed it from the audited market/session/calendar paths.",
+    "Wall-clock cron scheduling risk remains separate from strategy/event-time correctness.",
+    "Compact pipeline state may retain a legacy top-level schema label while newer events use schema 1.1.",
+    "Fresh updater/shadow/data evidence is still required for the genuine open-market proof."
   ],
-  "deployment_lessons": [
-    "Abort before mutation when GitHub main moves after release pinning.",
-    "Verify executable Git modes for runit run files; PR 81 corrected bota-watcher.run from 100644 to 100755.",
-    "Use $PREFIX/var/service for the seven-service Termux runit topology; resolve the external watcher wrapper separately.",
-    "Deploy only the exact parity-audited runtime manifest and explicitly approved phone configuration changes.",
-    "Require a post-restart terminal-cycle proof; service liveness alone is insufficient."
+  "package_2_required_tests": [
+    "manager loss",
+    "PID-1 orphaned runsv handoff",
+    "down-service recovery",
+    "dead stale pidfile",
+    "live stale singleton child/resource owner",
+    "duplicate supervisor",
+    "multiple manager attempt",
+    "watchdog duplicate attempt",
+    "release/blob/config drift",
+    "missing or stale updater/shadow/data readiness"
   ],
   "freeze": {
-    "redeploy_same_release_without_contradictory_evidence": false,
-    "restart_services_for_cosmetic_state": false,
     "bootstrap_profitlab": false,
     "lower_thresholds_to_force_signals": false,
-    "declare_monday_ready_from_weekend_proof": false
+    "force_telegram_test_signal": false,
+    "declare_package_2_complete_from_manual_repair": false,
+    "declare_monday_ready_from_closed_market_proof": false
   },
-  "next_action": "Wait for the first genuine MARKET_OPEN production cycle and prove current EURUSD:M15, GBPUSD:M15, and USDJPY:M15 decisions in the same authoritative cycle, with fresh updater/shadow evidence, one legitimate terminal watcher outcome, and current singular watcher ownership with no active direct watcher cron or second watcher owner. Three valid rejected decisions are acceptable; a Telegram signal is not required."
+  "next_action": "Complete Package #2 Pre-Market Production Integrity in reviewed code/tests: persistent single-instance watchdog/boot recovery, explicit stale-live-singleton-child reconciliation, orphan handoff, duplicate detection, immutable release/config/data-path readiness, and isolated fault injection. Only then mutate the phone. After Package #2 passes, require one natural MARKET_OPEN cycle proving EURUSD:M15, GBPUSD:M15, and USDJPY:M15 in the same current cycle with fresh updater/shadow/data evidence, trusted time, unique ownership, and one authoritative terminal watcher outcome."
 }
