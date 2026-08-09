@@ -4,7 +4,11 @@ set -euo pipefail
 ROOT="${HOME}/BotA"
 TOOLS="${ROOT}/tools"
 LOGS="${ROOT}/logs"
+RUNTIME_ERR_LOG="${LOGS}/shadow_runtime.stderr.log"
+DEPENDENCY_CHECK="${TOOLS}/runtime_dependency_check.py"
 cd "${ROOT}"
+
+mkdir -p "${LOGS}"
 
 if [[ -f "${ROOT}/.env.runtime" ]]; then
   set -a
@@ -32,13 +36,31 @@ ledger() {
     >/dev/null 2>>"${LOGS}/error.log" || true
 }
 
+runtime_error() {
+  local message="$1"
+  printf '[SHADOW_RUNTIME %s] %s\n' \
+    "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "${message}" >>"${RUNTIME_ERR_LOG}"
+}
+
 ledger started
+
+if dependency_output="$(python3 "${DEPENDENCY_CHECK}" 2>&1)"; then
+  :
+else
+  rc=$?
+  runtime_error "dependency_check_failed rc=${rc}"
+  printf '%s\n' "${dependency_output}" >>"${RUNTIME_ERR_LOG}"
+  ledger failed "dependency_check_exit_code=${rc}"
+  exit "${rc}"
+fi
+
 rc=0
-python3 "${TOOLS}/be_shadow_manager.py" || rc=$?
+python3 "${TOOLS}/be_shadow_manager.py" 2>>"${RUNTIME_ERR_LOG}" || rc=$?
 
 if (( rc == 0 )); then
   ledger completed "exit_code=0"
 else
+  runtime_error "be_shadow_manager_exit rc=${rc}"
   ledger failed "exit_code=${rc}"
 fi
 

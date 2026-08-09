@@ -1,0 +1,44 @@
+name: Runtime dependency contract
+
+on:
+  pull_request:
+    paths:
+      - "requirements-runtime.txt"
+      - "tools/runtime_dependency_check.py"
+      - "tools/run_shadow_manager.sh"
+      - "tests/test_runtime_dependency_check.py"
+      - ".github/workflows/runtime-dependency-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Compile standard-library dependency checker
+        run: |
+          python -m py_compile \
+            tools/runtime_dependency_check.py \
+            tests/test_runtime_dependency_check.py
+
+      - name: Check shadow shell syntax
+        run: bash -n tools/run_shadow_manager.sh
+
+      - name: Run focused dependency contract tests
+        run: python -m unittest -v tests/test_runtime_dependency_check.py
+
+      - name: Install exact production runtime manifest
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements-runtime.txt
+
+      - name: Verify actual Python 3.14 runtime imports
+        run: |
+          python tools/runtime_dependency_check.py
+          python -m pip check

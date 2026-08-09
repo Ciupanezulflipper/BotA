@@ -1,0 +1,3 @@
+# BotA production Python runtime dependencies.
+# Keep direct runtime dependencies exactly pinned; pip resolves their transitive dependencies.
+requests==2.34.2
