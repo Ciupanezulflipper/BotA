@@ -73,10 +73,10 @@ class WatchdogCronConfigTests(unittest.TestCase):
 
     def test_rejects_paths_containing_newline(self) -> None:
         with self.assertRaisesRegex(cron.CronConfigError, "path_contains_newline"):
-            self.render("", log=Path("/tmp/log\nrm -rf /"))
+            self.render("", log=Path("/srv/BotA/log\nrm -rf /"))
 
     def test_paths_with_shell_metacharacters_are_quoted(self) -> None:
-        tricky = Path("/tmp/has space and $var and \"quote\"")
+        tricky = Path("/srv/BotA/has space and $var and \"quote\"")
         rendered = self.render("", root=tricky)
         managed = [
             line
@@ -89,7 +89,7 @@ class WatchdogCronConfigTests(unittest.TestCase):
         self.assertIn(f"cd {expected}", managed[0])
 
     def test_paths_with_single_quote_are_shell_quoted(self) -> None:
-        awkward = Path("/tmp/it's-fine")
+        awkward = Path("/srv/BotA/it's-fine")
         rendered = self.render("", guard=awkward)
         quoted = shlex.quote(str(awkward))
         managed = [
@@ -98,7 +98,7 @@ class WatchdogCronConfigTests(unittest.TestCase):
         self.assertEqual(len(managed), 1)
         # shlex.quote wraps single-quoted segments and escapes embedded
         # apostrophes; the literal path substring must not appear naked.
-        self.assertNotIn(" /tmp/it's-fine ", managed[0])
+        self.assertNotIn(" /srv/BotA/it's-fine ", managed[0])
 
 
 if __name__ == "__main__":

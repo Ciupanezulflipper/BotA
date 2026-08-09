@@ -52,7 +52,7 @@ jobs:
               ("os", "killpg"),
               ("signal", "pthread_kill"),
           }
-          BANNED_TOKEN_CMDS = {"pkill", "killall"}
+          BANNED_TOKEN_CMDS = {"pkill", "killall", "kill"}
           # {tool: {banned-first-arg tokens}}
           BANNED_TOOL_ACTIONS = {
               "sv": {"stop", "down", "kill", "force-stop", "exit"},
@@ -257,6 +257,18 @@ jobs:
                   """
                   import subprocess
                   subprocess.run("systemctl stop watchdog && echo done", shell=True)
+                  """
+              ),
+              "subprocess_bare_kill": textwrap.dedent(
+                  """
+                  import subprocess
+                  subprocess.run(["kill", "-9", "1234"])
+                  """
+              ),
+              "shell_string_bare_kill": textwrap.dedent(
+                  """
+                  import subprocess
+                  subprocess.run("kill -TERM 1234", shell=True)
                   """
               ),
           }

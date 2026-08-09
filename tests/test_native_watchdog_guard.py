@@ -417,7 +417,7 @@ class WatchdogEmitFailureTests(unittest.TestCase):
             buf = io.StringIO()
             with contextlib.redirect_stderr(buf):
                 rc = guard._emit_failure(
-                    Path("/tmp/does-not-matter"), guard.GuardError("boom")
+                    Path("unused-log-path.jsonl"), guard.GuardError("boom")
                 )
             self.assertEqual(rc, 4)
             self.assertIn("WATCHDOG_GUARD=FAIL:boom", buf.getvalue())
