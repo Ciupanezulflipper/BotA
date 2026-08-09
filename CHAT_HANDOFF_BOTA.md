@@ -1,171 +1,199 @@
 # BotA Chat Handoff
 
-Last updated: 2026-08-07 18:58 UTC
+Last updated: **2026-08-09 UTC**
 
-Read this first in any new AI chat before proposing BotA changes.
+Read this first in any new AI session before proposing BotA changes.
 
 ## Current grounded answer
 
-BotA is not failing because it cannot generate BUY/SELL directions. The investigation now separates four layers:
+BotA is no longer merely a reviewed GitHub candidate. The approved Monday-readiness watcher release has been deployed to the Android/Termux phone and verified at runtime.
 
-1. strategy throughput is low because score and H1 gates reject most tradeable candidates;
-2. delivery policy suppresses additional strategy-accepted candidates;
-3. recent delivered M15 signal quality is poor, so simply sending more signals is not a valid repair;
-4. both March component/outcome evidence and the recoverable June-July subset point to ADX/late-entry score calibration as the strongest strategy concern.
-
-## Current live configuration
+Current classification:
 
 ```text
-PAIRS=EURUSD GBPUSD
+DEPLOYED_AND_WEEKEND_VERIFIED=YES
+MONDAY_READY=NO
+REASON=REAL_OPEN_MARKET_THREE_PAIR_CYCLE_NOT_YET_PROVEN
+```
+
+Do not add another package simply because the weekend checks passed. Preserve the known-good runtime until the first genuine open-market proof.
+
+## Production release identity
+
+```text
+APPROVED_AND_DEPLOYED_SHA=f52f326cdbc9e9a16dd60666808a35fb839f10ad
+PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
+PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
+PHONE_UNTRACKED_FILES_PRESERVED=782
+```
+
+The phone Git worktree is not the deployment identity. It deliberately remains on an older local deployment branch so persistent runtime/audit files were not destroyed. Production parity was established by exact Git blob verification of the bounded runtime manifest.
+
+## Live runtime configuration
+
+```text
+PAIRS=EURUSD GBPUSD USDJPY
 TIMEFRAMES=M15
-FILTER_SCORE_MIN_ALL=65
-H1_TREND_MIN_SCORE=40
-H1_VETO_OVERRIDE_SCORE=75
-H1_VETO_OVERRIDE_ADX=40
-TELEGRAM_MIN_SCORE=70
-TELEGRAM_TIER_YELLOW_MIN=70
-TELEGRAM_TIER_GREEN_MIN=75
-TELEGRAM_COOLDOWN_SECONDS=1800
-DRY_RUN_MODE=0
+POLICY_B_ENABLED=1
+POLICY_B_SCORE_MIN=70
+POLICY_B_ADX_MAX=30
+NEWS_ON=0
 TELEGRAM_ENABLED=1
+DRY_RUN_MODE=0
 ```
 
-Only EURUSD and GBPUSD are live. A third pair is not currently scanned.
+Do not loosen score, ADX, H1/H4/D1, Telegram, cooldown, or eligibility rules to manufacture signal volume.
 
-## Strategy funnel
+## Active watcher ownership
+
+Production watcher is runit-owned.
+
+Active physical wrapper:
 
 ```text
-1427 valid BUY/SELL
-  -> 903 rejected by M15 score gate
-  -> 524 survive score
-  -> 410 rejected by H1-neutral veto
-  -> 114 survive H1
-  -> 4 rejected by H4+D1 opposition
-  -> 110 strategy-accepted
+/data/data/com.termux/files/home/.config/bota-sv/bota-watcher/run
+Git blob=25b240dc6913bf9cde82ab79a62ea6cddd73bc8e
+mode=755
 ```
 
-## Accepted -> Telegram funnel
+Post-deployment control plane:
 
 ```text
-61 sent
-38 cooldown-suppressed
-6 Telegram score-gated
-1 send failure
+runsvdir_managers=1
+services_running=7/7
+active_direct_watcher_cron=0
+active_profitlab_cron=1
 ```
 
-Telegram transport works. Delivery is not the primary strategy-quality problem.
-
-## Recent signal quality
-
-Read-only Supabase outcome data for BotA M15 signals created on or after 2026-06-01:
+Running services:
 
 ```text
-TOTAL=13
+bota-updater
+bota-watcher
+bota-closer
+bota-shadow
+bota-heartbeat
+bota-supervisor
+crond
+```
+
+Never assume the repository copy of a runit wrapper controls the live phone process. Resolve and verify the physical active wrapper.
+
+## Real production proof already obtained
+
+After the successful deployment, the restarted watcher emitted:
+
+```text
+cycle_id=b32a66a6-1a91-4b61-b759-c32851cbae6b:135481210634879
+status=skipped_market_closed
+terminal_outcome=MARKET_CLOSED
+market_reason=MARKET_CLOSED_SUNDAY
+time_source=server_epoch
+server_epoch=1786236858
+timestamp_utc=2026-08-09T00:54:18+00:00
+```
+
+This proves the approved runtime executed the gated watcher cycle and wrote an authoritative terminal outcome. Service liveness alone was not accepted as deployment proof.
+
+## Isolated Monday-readiness proof
+
+Post-deployment `tools/monday_readiness_check.py` returned `healthy=true`, RC 0, with 8/8 fixture scenarios matching the expected terminal outcomes.
+
+It is safe evidence because it uses a temporary `BOTA_ROOT` and does not consult the live market, send Telegram, write Supabase, mutate strategy, restart runit, change crontab, or write fake production signals.
+
+## ProfitLab
+
+```text
+cursor_offset=897734
+alerts_csv_size=897734
+pending_bytes=0
+```
+
+The cursor survived deployment unchanged. Do not run `profitlab_delivery.py --bootstrap`.
+
+## Clock warning
+
+The Android wall clock is currently unsafe relative to trusted server time:
+
+```text
+drift_seconds=-3621
+local_clock_unsafe=true
+server_clock_ok=true
+server_sources_count=4
+server_spread_seconds=1
+status=DRIFT_WARN
+```
+
+The watcher is protected because its market decision used `server_epoch`. Do not silently dismiss the device-clock drift because cron-style schedules can still be shifted in real time.
+
+## Residual observations
+
+- The compact `pipeline_progress.json` top-level schema label remains `1.0` from prior persisted state, while new watcher events are schema `1.1`. This is bookkeeping debt, not a weekend blocker.
+- Compact pair decisions are still old EURUSD/GBPUSD records; there is no post-deployment USDJPY decision yet because the real post-deploy cycle occurred while the FX market was closed.
+- A recorded `shadow status=failed, exit_code=1` event predates the successful deployment. The live `bota-shadow` runit service is running; require fresh shadow evidence during the open-market proof.
+
+Do not mutate the stable runtime solely to clean these labels/history before Monday.
+
+## Deployment lessons now part of the operating model
+
+The deployment sequence itself caught important failure modes:
+
+1. Moving GitHub `main` caused a safe pre-mutation abort.
+2. Git mode `100644` on the runit `run` file caused activation failure and automatic rollback; PR #81 fixed the mode to `100755`.
+3. A verifier incorrectly assumed the `crond` service path; that attempt aborted before mutation and the topology logic was corrected.
+4. The final deployment used the exact 12-file mismatch/missing manifest from the phone parity audit, corrected only the `PAIRS` assignment, and preserved persistent state.
+
+Full evidence: `audits/PHONE_DEPLOYMENT_WEEKEND_PROOF_2026-08-09.md`.
+
+## Historical evidence
+
+The historical acquisition, deterministic replay, published-outcome matcher, and match-gap classification remain closed evidence. Do not rerun them without contradictory evidence.
+
+Important prior result remains:
+
+```text
+PUBLISHED_OUTCOMES=13
 WINS=3
 LOSSES=9
 CANCELLED=1
 TOTAL_PIPS=-71.40
-75-84_TOTAL_PIPS=-36.40
-85+_TOTAL_PIPS=-35.00
+MATCHED_OUTCOMES=9
+UNMATCHED_OUTCOMES=4
+UNEXPLAINED_GAP_COUNT=0
 ```
 
-High score has not protected recent signals from poor outcomes.
+Policy B was selected from the controlled evidence and is already the deployed quality guard. Current work is operational validation, not another threshold-search exercise.
 
-## March component evidence
+## What counts as Monday proof
 
-The 51 local March outcomes joined 100% to extended score-component rows:
+The first genuine `MARKET_OPEN` production cycle must show, from current append-only evidence:
 
 ```text
-BASELINE: N=51 W=13 L=38 PIPS=-264.1
-ADX<30: N=17 W=9 L=8 PIPS=+98.0
-SCORE>=70 + ADX<30: N=12 W=9 L=3 PIPS=+174.2
-SCORE>=70 + ADX<30 + NO_EXTREME: N=7 W=7 L=0 PIPS=+171.0
+EURUSD:M15 decision in current cycle
+GBPUSD:M15 decision in current cycle
+USDJPY:M15 decision in current cycle
+fresh updater progress
+fresh shadow progress
+one authoritative watcher terminal outcome
+no duplicate watcher owner
+provider/data failures surfaced rather than hidden
 ```
 
-The 7/7 result is in-sample and high-overfit risk. Do not treat it as a 100% strategy.
-
-## June-July temporal cross-check
-
-Nine of 13 published outcomes matched retained local component rows:
-
-```text
-PUBLISHED=13
-MATCHED=9
-UNMATCHED=4
-MATCH_RATE=69.2%
-A_CURRENT_MATCHED_BASELINE: N=9 W=2 L=7 PIPS=-70.2
-B_SCORE70_ADX_LT30: N=5 W=2 L=3 PIPS=+13.1
-C_SCORE70_ADX_LT30_NO_EXTREME: N=4 W=2 L=2 PIPS=+28.9
-ADX_30_39: N=3 W=0 L=3 PIPS=-57.4
-ADX_40_PLUS: N=1 W=0 L=1 PIPS=-25.9
-```
-
-This later subset points in the same direction as March: all matched ADX >=30 signals lost. However, 69.2% match coverage is not enough to change production.
-
-## Local retention gap — 2026-08-07 18:58 UTC
-
-The four unmatched June 23-26 outcomes were searched with wider local tolerances.
-
-```text
-TARGETS_TOTAL=4
-TARGETS_WITH_NEARBY_ROWS=1
-TARGETS_WITH_RELAXED_MATCH=0
-TARGETS_WITH_RELAXED_COMPONENT_MATCH=0
-VERDICT=LOCAL_RETENTION_GAP_CONFIRMED
-```
-
-Three targets had no same-pair/same-direction M15 candidate rows within +/-2 days. The fourth had nearby rows but no plausible identity match. The missing component rows are absent from current local retention.
-
-Therefore the full 13/13 component validation cannot be reconstructed from `logs/alerts.csv`. Stop tuning match tolerances; move to true replay.
-
-## Supabase timestamp caution
-
-Exact Supabase `created_at` values do not directly equal several known watcher decision timestamps. Do not join by Supabase `created_at` alone until publication/storage semantics are proven.
-
-## Closed/non-dominant causes
-
-- zero entry/SL/TP: HOLD-only symptom;
-- `macro6=3`: neutral;
-- RR text: advisory;
-- H4+D1 opposition: rare;
-- Telegram transport: functioning;
-- cooldown: coarse but no direction-reversal suppression observed;
-- missing June 23-26 component rows: confirmed local retention gap, not a matching-tolerance issue.
-
-## No-change rules
-
-```text
-FILTER_SCORE_CHANGED=NO
-H1_THRESHOLD_CHANGED=NO
-TELEGRAM_SCORE_CHANGED=NO
-COOLDOWN_CHANGED=NO
-PAIR_LIST_CHANGED=NO
-ADX_SCORING_CHANGED=NO
-RSI_SCORING_CHANGED=NO
-PROVIDER_CHANGED=NO
-SUPABASE_CHANGED=NO
-```
-
-Do not use `tools/backtest_bota.py` as validation of the production strategy because its scoring/pullback implementation is not the live watcher path.
-
-## Exactly one next proof
-
-Run a true historical replay from raw candles through the live production scoring/fusion semantics with frozen policies:
-
-```text
-A: current production baseline
-B: score >=70 AND ADX <30
-C: score >=70 AND ADX <30 AND no extreme RSI
-```
-
-Compare signal count, wins/losses, pips, and preferably MAE/MFE. Only then consider a strategy mutation.
+If the strategy legitimately rejects all three pairs, that is acceptable. Do not require a Telegram signal to call the execution path healthy.
 
 ## Working discipline
 
 1. Inspect before changing.
-2. Keep commands small and pager-proof.
-3. Validate schemas and time coverage before analysis.
-4. Separate runtime, strategy, delivery, and realized outcome quality.
-5. Date every material finding in UTC.
-6. Full-file replacement only for approved mutations.
-7. Branch -> complete content -> verified diff -> PR; never direct-main fallback.
+2. Separate GitHub state, phone worktree state, deployed runtime state, and live-cycle state.
+3. Use immutable SHA + file hashes + executable modes for deployment identity.
+4. Preserve persistent logs/state and unrelated cron.
+5. One process owner per production job.
+6. Every watcher cycle must have an observable terminal outcome.
+7. Operational failure dominates healthy-looking business semantics.
+8. Do not use Android local time for trading decisions when trusted server time is available.
+9. Never push directly to `main`; use branch -> verified diff -> PR -> exact-head checks -> merge.
+10. Do not change strategy to compensate for missing operational proof.
+
+## Exactly one next action
+
+Wait for the first genuine `MARKET_OPEN` production cycle and verify the three current M15 decisions plus fresh updater/shadow evidence and the authoritative watcher terminal outcome. If that gate passes, advance readiness. If it fails, diagnose the operational failure before changing strategy.
