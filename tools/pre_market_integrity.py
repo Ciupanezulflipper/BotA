@@ -333,22 +333,34 @@ def observed_component(
     name: str,
     components: dict[str, Any],
     now_ns: int,
+    start_grace: int,
 ) -> dict[str, Any]:
-    """Return non-gating last-event evidence while market freshness is suspended."""
+    """Return closed-market evidence without hiding explicit operational failure."""
     event = pipeline_health.event_map(components, name)
+    age = pipeline_health.age_seconds(event, now_ns)
+    status = str(event.get("status") or "missing")
+    if status == "failed":
+        healthy = False
+        evaluation = "market_closed_explicit_failure"
+    elif status == "started" and (age is None or age > start_grace):
+        healthy = False
+        evaluation = "market_closed_stuck_started"
+    else:
+        healthy = True
+        evaluation = "market_closed_freshness_suspended"
     return {
         "component": name,
-        "healthy": True,
-        "age_seconds": pipeline_health.age_seconds(event, now_ns),
-        "status": str(event.get("status") or "missing"),
-        "evaluation": "market_closed_freshness_suspended",
+        "healthy": healthy,
+        "age_seconds": age,
+        "status": status,
+        "evaluation": evaluation,
         "cycle_id": event.get("cycle_id"),
         "event_id": event.get("event_id"),
     }
 
 
 def progress_check(root: Path, market_open: bool | None = True) -> dict[str, Any]:
-    """Validate useful progress with the canonical market-open/closed contract."""
+    """Validate useful progress with market-aware pre-market failure semantics."""
     path = root / "state/pipeline_progress.json"
     try:
         state = json.loads(path.read_text(encoding="utf-8"))
@@ -383,17 +395,23 @@ def progress_check(root: Path, market_open: bool | None = True) -> dict[str, Any
 
     if not market_open:
         results = {
-            name: observed_component(name, components, now_ns)
+            name: observed_component(name, components, now_ns, start_grace)
             for name in thresholds
         }
+        for name, result in results.items():
+            if not result["healthy"]:
+                failures.append(
+                    f"{name}_closed_market_operational_failure:"
+                    f"{result['age_seconds']}:{result['status']}:{result['evaluation']}"
+                )
         return {
             "healthy": not failures,
             "market_open": False,
             "boot_id": current_boot,
             "components": results,
             "note": (
-                "useful-progress freshness/status gates are suspended while "
-                "the trusted configured market gate is closed"
+                "freshness is suspended while the trusted market gate is closed, "
+                "but explicit failed or stuck-started component states still block"
             ),
             "failure_reasons": failures,
         }
