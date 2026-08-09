@@ -112,7 +112,7 @@ def fetch_te_events() -> list:
             headers={"User-Agent": "Mozilla/5.0 (Linux; Android 13; Termux)"},
         )
         with urllib.request.urlopen(req, timeout=10) as response:
-            data = json.loads(response.read())
+            data = json.load(response)
 
         if not isinstance(data, list):
             return []
@@ -191,7 +191,7 @@ def fetch_rapidapi_events(currencies: set) -> list:
             },
         )
         with urllib.request.urlopen(req, timeout=10) as response:
-            data = json.loads(response.read())
+            data = json.load(response)
 
         normalized = []
         for event in data.get("data", []):
@@ -245,20 +245,25 @@ def check_events(events: list, currencies: set, now_ts: float) -> dict:
         "nearest_event": "",
         "minutes_away": 9999.0,
     }
+    nearest_abs_minutes = float("inf")
 
     for event in events:
         currency = event.get("currency", "")
         if currency not in currencies:
             continue
 
-        ts = event.get("timestamp", 0)
-        importance = event.get("importance", "low")
-        title = event.get("title", "")
+        try:
+            ts = float(event.get("timestamp", 0))
+        except (TypeError, ValueError):
+            continue
+        importance = str(event.get("importance", "low"))
+        title = str(event.get("title", ""))
         title_lower = title.lower()
 
         minutes_away = (ts - now_ts) / 60.0
 
-        if abs(minutes_away) < abs(result["minutes_away"]):
+        if abs(minutes_away) < nearest_abs_minutes:
+            nearest_abs_minutes = abs(minutes_away)
             result["minutes_away"] = round(minutes_away, 1)
             result["nearest_event"] = (
                 f"{currency} '{title}' ({minutes_away:+.0f}m)"
