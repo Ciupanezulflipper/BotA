@@ -141,27 +141,53 @@ def cron_check(text: str) -> dict[str, Any]:
     }
 
 
+def marker_positions(lines: list[str], marker: str) -> list[int]:
+    """Return exact marker positions without interpreting surrounding shell."""
+    return [index for index, line in enumerate(lines) if line.strip() == marker]
+
+
+def active_token_lines(active: list[str], token: str) -> list[str]:
+    """Return active non-comment lines containing one launcher token."""
+    return [line for line in active if token in line]
+
+
+def managed_boot_block_valid(begin: list[int], end: list[int]) -> bool:
+    """Return whether one ordered managed block is present."""
+    return len(begin) == 1 and len(end) == 1 and begin[0] < end[0]
+
+
+def boot_failures(
+    begin: list[int],
+    end: list[int],
+    legacy_count: int,
+    watchdog_count: int,
+) -> list[str]:
+    """Build deterministic boot persistence failures."""
+    failures: list[str] = []
+    if not managed_boot_block_valid(begin, end):
+        failures.append(f"boot_managed_block:begin={len(begin)}:end={len(end)}")
+    if legacy_count:
+        failures.append(f"boot_active_legacy_guard:{legacy_count}")
+    if watchdog_count != 1:
+        failures.append(f"boot_active_native_watchdog:{watchdog_count}")
+    return failures
+
+
 def boot_check(text: str) -> dict[str, Any]:
     lines = text.splitlines()
-    begin = [i for i, line in enumerate(lines) if line.strip() == BOOT_BEGIN]
-    end = [i for i, line in enumerate(lines) if line.strip() == BOOT_END]
+    begin = marker_positions(lines, BOOT_BEGIN)
+    end = marker_positions(lines, BOOT_END)
     active = active_cron_lines(text)
-    legacy = [line for line in active if "start_runsvdir_guard.sh" in line]
-    watchdog = [
-        line for line in active if "start_native_service_daemon_watchdog.sh" in line
-    ]
-    failures: list[str] = []
-    if len(begin) != 1 or len(end) != 1 or begin[0] >= end[0]:
-        failures.append(f"boot_managed_block:begin={len(begin)}:end={len(end)}")
-    if legacy:
-        failures.append(f"boot_active_legacy_guard:{len(legacy)}")
-    if len(watchdog) != 1:
-        failures.append(f"boot_active_native_watchdog:{len(watchdog)}")
+    legacy_count = len(active_token_lines(active, "start_runsvdir_guard.sh"))
+    watchdog_count = len(
+        active_token_lines(active, "start_native_service_daemon_watchdog.sh")
+    )
+    failures = boot_failures(begin, end, legacy_count, watchdog_count)
     return {
         "healthy": not failures,
-        "managed_block_count": 1 if not failures or (len(begin) == len(end) == 1) else 0,
-        "active_legacy_guard_count": len(legacy),
-        "active_native_watchdog_count": len(watchdog),
+        "managed_block_count": 1 if managed_boot_block_valid(begin, end) else 0,
+        "active_legacy_guard_count": legacy_count,
+        "active_native_watchdog_count": watchdog_count,
         "failure_reasons": failures,
     }
 
@@ -249,7 +275,7 @@ def profitlab_check(root: Path) -> dict[str, Any]:
         cursor = json.loads(cursor_path.read_text(encoding="utf-8"))
         offset = int(cursor.get("offset"))
         size = alerts.stat().st_size
-    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, TypeError) as exc:
         return {
             "healthy": False,
             "failure_reasons": [f"profitlab_state_unreadable:{type(exc).__name__}"],
@@ -375,7 +401,6 @@ def collect(root: Path, prefix: Path, source_commit: str, clock_timeout: int) ->
     try:
         crontab = run_text(["crontab", "-l"])
     except IntegrityError as exc:
-        crontab = ""
         cron_result = {
             "healthy": False,
             "active_direct_watcher_cron_count": None,
