@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import shlex
+import shutil
 import stat
 import subprocess
 import sys
@@ -458,11 +459,19 @@ def market_gate_check(root: Path, clock_result: dict[str, Any]) -> dict[str, Any
             "failure_reasons": ["trusted_epoch_unavailable"],
         }
     gate = root / "tools/market_open.sh"
+    bash = shutil.which("bash")
+    if not bash:
+        return {
+            "healthy": False,
+            "market_open": None,
+            "status": "unknown",
+            "failure_reasons": ["bash_executable_unavailable"],
+        }
     env = os.environ.copy()
     env["BOTA_SERVER_EPOCH"] = str(epoch)
     try:
         result = subprocess.run(
-            ["bash", str(gate)],
+            [bash, str(gate)],
             text=True,
             capture_output=True,
             check=False,
