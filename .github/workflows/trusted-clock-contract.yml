@@ -1,0 +1,63 @@
+name: Trusted clock contract
+
+on:
+  pull_request:
+    paths:
+      - 'tools/market_open.sh'
+      - 'tools/scoring_engine.sh'
+      - 'tools/calendar_guard.py'
+      - 'tools/news_filter_real.py'
+      - 'tools/trusted_time.py'
+      - 'tests/test_market_open_reasons.py'
+      - 'tests/test_watcher_clock_inheritance.py'
+      - 'tests/test_trusted_clock_contract.py'
+      - '.github/workflows/trusted-clock-contract.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/market_open.sh'
+      - 'tools/scoring_engine.sh'
+      - 'tools/calendar_guard.py'
+      - 'tools/news_filter_real.py'
+      - 'tools/trusted_time.py'
+      - 'tests/test_market_open_reasons.py'
+      - 'tests/test_watcher_clock_inheritance.py'
+      - 'tests/test_trusted_clock_contract.py'
+      - '.github/workflows/trusted-clock-contract.yml'
+
+jobs:
+  trusted-clock:
+    name: Trusted clock invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install focused test dependency
+        run: python -m pip install --quiet pytest
+
+      - name: Validate shell syntax
+        run: |
+          bash -n tools/market_open.sh
+          bash -n tools/scoring_engine.sh
+
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile \
+            tools/calendar_guard.py \
+            tools/news_filter_real.py \
+            tools/trusted_time.py \
+            tests/test_trusted_clock_contract.py
+
+      - name: Run trusted clock regression suite
+        run: |
+          python -m pytest -q \
+            tests/test_trusted_clock_contract.py \
+            tests/test_market_open_reasons.py \
+            tests/test_watcher_clock_inheritance.py
