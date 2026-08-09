@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,25 +15,107 @@ class ConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / ".env.runtime"
             path.write_text(
-                '\n'.join(
+                "\n".join(
                     [
                         'PAIRS="EURUSD GBPUSD USDJPY"',
                         'TIMEFRAMES="M15"',
-                        'POLICY_B_ENABLED=1',
-                        'POLICY_B_SCORE_MIN=70',
-                        'POLICY_B_ADX_MAX=30',
-                        'NEWS_ON=0',
-                        'TELEGRAM_ENABLED=1',
-                        'DRY_RUN_MODE=0',
-                        'TELEGRAM_BOT_TOKEN=secret-must-not-be-returned',
+                        "POLICY_B_ENABLED=1",
+                        "POLICY_B_SCORE_MIN=70",
+                        "POLICY_B_ADX_MAX=30",
+                        "NEWS_ON=0",
+                        "TELEGRAM_ENABLED=1",
+                        "DRY_RUN_MODE=0",
+                        "TELEGRAM_BOT_TOKEN=secret-must-not-be-returned",
                     ]
                 )
-                + '\n',
+                + "\n",
                 encoding="utf-8",
             )
             result = integrity.config_check(path)
         self.assertTrue(result["healthy"])
         self.assertNotIn("TELEGRAM_BOT_TOKEN", result["values"])
+
+    def test_effective_config_honors_watcher_exports_after_runtime_env(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            runtime = root / ".env.runtime"
+            wrapper = root / "run"
+            runtime.write_text(
+                '\n'.join(
+                    [
+                        'PAIRS="EURUSD GBPUSD USDJPY"',
+                        'TIMEFRAMES="M15"',
+                        'TELEGRAM_ENABLED="1"',
+                        'DRY_RUN_MODE="0"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            wrapper.write_text(
+                '\n'.join(
+                    [
+                        'export PAIRS="EURUSD GBPUSD USDJPY"',
+                        'export TIMEFRAMES="M15"',
+                        'export POLICY_B_ENABLED="1"',
+                        'export POLICY_B_SCORE_MIN="70"',
+                        'export POLICY_B_ADX_MAX="30"',
+                        'export NEWS_ON="0"',
+                        'export TELEGRAM_ENABLED="1"',
+                        'export DRY_RUN_MODE="0"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            result = integrity.config_check(runtime, wrapper)
+        self.assertTrue(result["healthy"])
+        self.assertEqual(result["sources"]["POLICY_B_ENABLED"], "watcher_wrapper")
+        self.assertEqual(result["values"]["POLICY_B_SCORE_MIN"], "70")
+        self.assertEqual(result["values"]["NEWS_ON"], "0")
+
+    def test_watcher_export_precedence_matches_execution_order(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            runtime = root / ".env.runtime"
+            wrapper = root / "run"
+            runtime.write_text(
+                '\n'.join(
+                    [
+                        'PAIRS="EURUSD GBPUSD"',
+                        'TIMEFRAMES="H1"',
+                        'POLICY_B_ENABLED="0"',
+                        'POLICY_B_SCORE_MIN="99"',
+                        'POLICY_B_ADX_MAX="1"',
+                        'NEWS_ON="1"',
+                        'TELEGRAM_ENABLED="0"',
+                        'DRY_RUN_MODE="1"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            wrapper.write_text(
+                '\n'.join(
+                    [
+                        'export PAIRS="EURUSD GBPUSD USDJPY"',
+                        'export TIMEFRAMES="M15"',
+                        'export POLICY_B_ENABLED="1"',
+                        'export POLICY_B_SCORE_MIN="70"',
+                        'export POLICY_B_ADX_MAX="30"',
+                        'export NEWS_ON="0"',
+                        'export TELEGRAM_ENABLED="1"',
+                        'export DRY_RUN_MODE="0"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            result = integrity.config_check(runtime, wrapper)
+        self.assertTrue(result["healthy"])
+        self.assertTrue(
+            all(source == "watcher_wrapper" for source in result["sources"].values())
+        )
 
     def test_partial_pair_scope_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -122,6 +206,117 @@ class BootTests(unittest.TestCase):
         )
         self.assertFalse(result["healthy"])
         self.assertEqual(result["managed_block_count"], 0)
+
+
+class ProgressTests(unittest.TestCase):
+    def write_progress(self, root: Path, boot: str, now_ns: int) -> None:
+        state = {
+            "boot_id": boot,
+            "components": {
+                "updater": {
+                    "status": "completed",
+                    "monotonic_ns": now_ns - 200000 * 1_000_000_000,
+                    "cycle_id": "u-old",
+                    "event_id": "u1",
+                },
+                "shadow": {
+                    "status": "failed",
+                    "monotonic_ns": now_ns - 300 * 1_000_000_000,
+                    "cycle_id": "s-failed",
+                    "event_id": "s1",
+                },
+            },
+        }
+        (root / "state").mkdir()
+        (root / "state/pipeline_progress.json").write_text(
+            json.dumps(state), encoding="utf-8"
+        )
+
+    def test_closed_market_suspends_useful_progress_freshness_and_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            now_ns = 500000 * 1_000_000_000
+            self.write_progress(root, "boot-a", now_ns)
+            with (
+                mock.patch.object(integrity.pipeline_health, "boot_id", return_value="boot-a"),
+                mock.patch.object(
+                    integrity.pipeline_health, "monotonic_ns", return_value=now_ns
+                ),
+            ):
+                result = integrity.progress_check(root, market_open=False)
+        self.assertTrue(result["healthy"])
+        self.assertFalse(result["market_open"])
+        self.assertEqual(
+            result["components"]["shadow"]["evaluation"],
+            "market_closed_freshness_suspended",
+        )
+        self.assertEqual(result["components"]["shadow"]["status"], "failed")
+
+    def test_open_market_keeps_stale_and_failed_progress_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            now_ns = 500000 * 1_000_000_000
+            self.write_progress(root, "boot-a", now_ns)
+            with (
+                mock.patch.object(integrity.pipeline_health, "boot_id", return_value="boot-a"),
+                mock.patch.object(
+                    integrity.pipeline_health, "monotonic_ns", return_value=now_ns
+                ),
+            ):
+                result = integrity.progress_check(root, market_open=True)
+        self.assertFalse(result["healthy"])
+        self.assertTrue(result["market_open"])
+        self.assertTrue(
+            any(reason.startswith("updater_progress_stale_or_failed") for reason in result["failure_reasons"])
+        )
+        self.assertTrue(
+            any(reason.startswith("shadow_progress_stale_or_failed") for reason in result["failure_reasons"])
+        )
+
+    def test_current_boot_is_still_required_when_market_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            now_ns = 500000 * 1_000_000_000
+            self.write_progress(root, "old-boot", now_ns)
+            with (
+                mock.patch.object(integrity.pipeline_health, "boot_id", return_value="new-boot"),
+                mock.patch.object(
+                    integrity.pipeline_health, "monotonic_ns", return_value=now_ns
+                ),
+            ):
+                result = integrity.progress_check(root, market_open=False)
+        self.assertFalse(result["healthy"])
+        self.assertIn("pipeline_progress_missing_for_current_boot", result["failure_reasons"])
+
+
+class MarketGateTests(unittest.TestCase):
+    def test_closed_market_is_valid_classification(self) -> None:
+        clock = {"healthy": True, "server_epoch": 1786278888}
+        completed = subprocess.CompletedProcess(
+            ["bash", "market_open.sh"], 1, stdout="Closed\n", stderr=""
+        )
+        with mock.patch.object(integrity.subprocess, "run", return_value=completed):
+            result = integrity.market_gate_check(Path("/x"), clock)
+        self.assertTrue(result["healthy"])
+        self.assertFalse(result["market_open"])
+        self.assertEqual(result["status"], "Closed")
+
+    def test_open_market_is_valid_classification(self) -> None:
+        clock = {"healthy": True, "server_epoch": 1786345200}
+        completed = subprocess.CompletedProcess(
+            ["bash", "market_open.sh"], 0, stdout="Open\n", stderr=""
+        )
+        with mock.patch.object(integrity.subprocess, "run", return_value=completed):
+            result = integrity.market_gate_check(Path("/x"), clock)
+        self.assertTrue(result["healthy"])
+        self.assertTrue(result["market_open"])
+
+    def test_untrusted_clock_blocks_market_classification(self) -> None:
+        result = integrity.market_gate_check(
+            Path("/x"), {"healthy": False, "server_epoch": None}
+        )
+        self.assertFalse(result["healthy"])
+        self.assertIsNone(result["market_open"])
 
 
 class ThresholdTests(unittest.TestCase):
