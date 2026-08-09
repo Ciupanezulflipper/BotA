@@ -7,7 +7,7 @@ Read this before proposing BotA commands, code, service, strategy, Telegram, pro
 ## Current authoritative truth
 
 ```text
-CURRENT_GITHUB_MAIN=163eae4ee7a0d651ed0ad3516dba7eaef4c09cbe
+CHECKPOINT_BASE_MAIN=163eae4ee7a0d651ed0ad3516dba7eaef4c09cbe
 PHONE_RUNTIME_SOURCE_BASELINE=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
 PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
@@ -46,7 +46,7 @@ OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
 MONDAY_READY=NO
 ```
 
-The documentation checkpoint merge advanced GitHub `main` to `163eae4...`; that docs-only merge did not change phone runtime code. The reviewed runtime source baseline used for the PR #87/#88 phone acceptance remains `5cbfbf11...`.
+`CHECKPOINT_BASE_MAIN` is the GitHub main commit used as the documentation base. The documentation merge containing this file advances `main`; GitHub issue #9 carries the live current-main SHA. The reviewed phone runtime source baseline remains `5cbfbf11...`.
 
 ## What has been proven on the phone
 
@@ -124,7 +124,7 @@ Never push directly to `main`. Work on the existing PR branch, run tests, inspec
 
 1. `CONTINUITY_CURRENT.md` — current operational status and next action.
 2. `audits/PRE_MARKET_READINESS_CHECKPOINT_2026-08-09.md` — latest phone proof and remaining blocker.
-3. GitHub issue #9 — authoritative readiness tracker.
+3. GitHub issue #9 — authoritative readiness tracker and live current-main SHA.
 4. PR #89 — guardian implementation and unresolved review findings.
 5. `ERRORS.md` and `audits/ERROR_LOG.md` — historical failure/prevention record.
 
