@@ -7,7 +7,8 @@ Read this before proposing BotA commands, code, service, strategy, Telegram, pro
 ## Current authoritative truth
 
 ```text
-GITHUB_MAIN=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
+CURRENT_GITHUB_MAIN=163eae4ee7a0d651ed0ad3516dba7eaef4c09cbe
+PHONE_RUNTIME_SOURCE_BASELINE=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
 PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
 PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
 PHONE_WORKTREE_DIRTY=YES
@@ -45,13 +46,15 @@ OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
 MONDAY_READY=NO
 ```
 
+The documentation checkpoint merge advanced GitHub `main` to `163eae4...`; that docs-only merge did not change phone runtime code. The reviewed runtime source baseline used for the PR #87/#88 phone acceptance remains `5cbfbf11...`.
+
 ## What has been proven on the phone
 
 The control plane recovered from the observed orphan-supervisor failure class and currently satisfies the production ownership contract: one native manager, seven manager-owned required supervisors, seven running services, zero orphans, and zero duplicate service rows.
 
 The native watchdog finalizer passed and left one watchdog process holding the watchdog lock. The managed Termux:Boot watchdog block is installed.
 
-PR #87 and PR #88 production fixes were deployed from exact GitHub commit `5cbfbf11fd98d9a40b1d5ea28995f584ec9da080`. `requests==2.34.2` is installed and importable under Python 3.14.6. The installation did not change any previously installed Python distribution and did not worsen the pre-existing Termux `pip check` baseline.
+PR #87 and PR #88 production fixes were deployed from exact runtime source commit `5cbfbf11fd98d9a40b1d5ea28995f584ec9da080`. `requests==2.34.2` is installed and importable under Python 3.14.6. The installation did not change any previously installed Python distribution and did not worsen the pre-existing Termux `pip check` baseline.
 
 A subsequent **natural** runit shadow cycle completed with `exit_code=0`, wrote an `OK` heartbeat, and logged `Shadow Manager done | 0 active signals`. It was not manually executed and no service was restarted for that proof.
 
