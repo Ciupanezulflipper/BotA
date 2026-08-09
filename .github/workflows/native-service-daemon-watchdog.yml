@@ -8,6 +8,9 @@ on:
       - "tools/native_service_daemon_migration.py"
       - "tools/native_service_daemon_partial_migration.py"
       - "tools/native_service_daemon_watchdog_finalizer.py"
+      - "tools/native_service_boot_config.py"
+      - "tools/control_plane_status.py"
+      - "tools/pre_market_integrity.py"
       - "ops/phone_migrate_native_service_daemon.sh"
       - "ops/phone_migrate_native_service_daemon_partial.sh"
       - "ops/phone_finalize_native_service_daemon_watchdog.sh"
@@ -15,6 +18,9 @@ on:
       - "tests/test_native_service_daemon_migration.py"
       - "tests/test_native_service_daemon_partial_migration.py"
       - "tests/test_native_service_daemon_watchdog_finalizer.py"
+      - "tests/test_native_service_boot_config.py"
+      - "tests/test_control_plane_status.py"
+      - "tests/test_pre_market_integrity.py"
       - ".github/workflows/native-service-daemon-watchdog.yml"
   workflow_dispatch:
 
@@ -36,10 +42,16 @@ jobs:
             tools/native_service_daemon_migration.py \
             tools/native_service_daemon_partial_migration.py \
             tools/native_service_daemon_watchdog_finalizer.py \
+            tools/native_service_boot_config.py \
+            tools/control_plane_status.py \
+            tools/pre_market_integrity.py \
             tests/test_native_service_daemon_watchdog.py \
             tests/test_native_service_daemon_migration.py \
             tests/test_native_service_daemon_partial_migration.py \
-            tests/test_native_service_daemon_watchdog_finalizer.py
+            tests/test_native_service_daemon_watchdog_finalizer.py \
+            tests/test_native_service_boot_config.py \
+            tests/test_control_plane_status.py \
+            tests/test_pre_market_integrity.py
       - name: Check shell syntax
         run: |
           bash -n tools/start_native_service_daemon_watchdog.sh
@@ -52,7 +64,10 @@ jobs:
             tests/test_native_service_daemon_watchdog.py \
             tests/test_native_service_daemon_migration.py \
             tests/test_native_service_daemon_partial_migration.py \
-            tests/test_native_service_daemon_watchdog_finalizer.py
+            tests/test_native_service_daemon_watchdog_finalizer.py \
+            tests/test_native_service_boot_config.py \
+            tests/test_control_plane_status.py \
+            tests/test_pre_market_integrity.py
       - name: Prevent direct runsvdir launch regression
         run: |
           ! grep -En 'runsvdir[^[:alnum:]_].*-P|Popen\(.*runsvdir|launch_manager' \
@@ -60,6 +75,9 @@ jobs:
             tools/native_service_daemon_migration.py \
             tools/native_service_daemon_partial_migration.py \
             tools/native_service_daemon_watchdog_finalizer.py \
+            tools/native_service_boot_config.py \
+            tools/control_plane_status.py \
+            tools/pre_market_integrity.py \
             tools/start_native_service_daemon_watchdog.sh \
             ops/phone_migrate_native_service_daemon.sh \
             ops/phone_migrate_native_service_daemon_partial.sh \
