@@ -248,3 +248,84 @@ Evidence:
 - Core BotA cron jobs preserved exactly once.
 
 Result: Phase 5 runtime-health push is functionally closed.
+
+---
+
+## 2026-08-09 — Package #1 deployment / Package #2 control-plane incident
+
+### Package #1 trusted-clock deployment
+
+- Deployed release: `8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0`.
+- Five trusted-time runtime files passed byte-for-byte parity.
+- Watcher wrapper remained unchanged and executable.
+- Session/calendar/news market semantics now reuse trusted `BOTA_SERVER_EPOCH` rather than Android wall clock.
+- Calendar before/after exclusion-window direction bug corrected.
+- Fresh live watcher proof: `MARKET_CLOSED / MARKET_CLOSED_SUNDAY`, `time_source=server_epoch`, cycle `...:144452448476926`.
+- Strategy thresholds changed: NO.
+- Pair scope changed: NO.
+- ProfitLab cursor changed: NO.
+
+### `crond` singleton-ownership failure discovered before mutation
+
+The first Package #1 deployment attempt aborted because runit reported `crond` down. Forensics showed the scheduler was actually split across generations:
+
+```text
+native_manager_pid=4398
+current_runsv_crond_pid=24583
+stale_live_crond_pid=4107
+stale_live_crond_ppid=1
+stale_live_crond_held_pidfile=YES
+replacement_start_result=pidfile_lock_failure_every_~1s
+```
+
+The stale PID-1-owned `crond` was still executing cron jobs. Therefore cron activity did not prove correct manager ownership.
+
+Safe repair:
+
+- quiesced current failed restart loop;
+- verified PID 4107 was the stale `crond -n -s` and not the current runsv child;
+- terminated only that stale daemon;
+- current runsv started PID 17994;
+- verified PID 17994 parent = runsv PID 24583;
+- verified exactly one stable live `crond`.
+
+### Six PID-1 orphaned BotA `runsv` supervisors
+
+Post-crond repair, topology check exposed:
+
+```text
+running=7/7
+owned=1/7
+orphaned=6
+```
+
+Final reconciled state:
+
+```text
+manager_count=1
+manager_pid=4398
+owned=7/7
+running=7/7
+orphaned=0
+duplicate_service_rows=0
+live_crond_count=1
+```
+
+### Remaining boot/recovery gap
+
+- Watchdog source files match GitHub.
+- One-shot healthy-topology watchdog run returned RC 0.
+- Phone boot launcher still records `RUNSVDIR_GUARD_START=DISABLED`.
+- Persistent single-instance watchdog/manager-loss recovery is not yet proven.
+- Exact stale-live-singleton-child/resource-owner recovery is not yet automated.
+
+Status:
+
+```text
+PACKAGE_1_CLOCK_SESSION=PASS
+LIVE_CONTROL_PLANE_REPAIR=PASS
+PACKAGE_2_PERSISTENT_HARDENING=PENDING
+MONDAY_READY=NO
+```
+
+Canonical detail: `audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md`.
