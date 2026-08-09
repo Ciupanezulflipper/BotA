@@ -41,7 +41,7 @@ class ConfigTests(unittest.TestCase):
             runtime = root / ".env.runtime"
             wrapper = root / "run"
             runtime.write_text(
-                '\n'.join(
+                "\n".join(
                     [
                         'PAIRS="EURUSD GBPUSD USDJPY"',
                         'TIMEFRAMES="M15"',
@@ -53,7 +53,7 @@ class ConfigTests(unittest.TestCase):
                 encoding="utf-8",
             )
             wrapper.write_text(
-                '\n'.join(
+                "\n".join(
                     [
                         'export PAIRS="EURUSD GBPUSD USDJPY"',
                         'export TIMEFRAMES="M15"',
@@ -80,7 +80,7 @@ class ConfigTests(unittest.TestCase):
             runtime = root / ".env.runtime"
             wrapper = root / "run"
             runtime.write_text(
-                '\n'.join(
+                "\n".join(
                     [
                         'PAIRS="EURUSD GBPUSD"',
                         'TIMEFRAMES="H1"',
@@ -96,7 +96,7 @@ class ConfigTests(unittest.TestCase):
                 encoding="utf-8",
             )
             wrapper.write_text(
-                '\n'.join(
+                "\n".join(
                     [
                         'export PAIRS="EURUSD GBPUSD USDJPY"',
                         'export TIMEFRAMES="M15"',
@@ -209,7 +209,8 @@ class BootTests(unittest.TestCase):
 
 
 class ProgressTests(unittest.TestCase):
-    def write_progress(self, root: Path, boot: str, now_ns: int) -> None:
+    @staticmethod
+    def write_progress(root: Path, boot: str, now_ns: int) -> None:
         state = {
             "boot_id": boot,
             "components": {
@@ -267,10 +268,16 @@ class ProgressTests(unittest.TestCase):
         self.assertFalse(result["healthy"])
         self.assertTrue(result["market_open"])
         self.assertTrue(
-            any(reason.startswith("updater_progress_stale_or_failed") for reason in result["failure_reasons"])
+            any(
+                reason.startswith("updater_progress_stale_or_failed")
+                for reason in result["failure_reasons"]
+            )
         )
         self.assertTrue(
-            any(reason.startswith("shadow_progress_stale_or_failed") for reason in result["failure_reasons"])
+            any(
+                reason.startswith("shadow_progress_stale_or_failed")
+                for reason in result["failure_reasons"]
+            )
         )
 
     def test_current_boot_is_still_required_when_market_closed(self) -> None:
