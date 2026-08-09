@@ -328,13 +328,24 @@ class ProgressTests(unittest.TestCase):
 
 
 class MarketGateTests(unittest.TestCase):
+    @staticmethod
+    def make_gate(root: Path) -> None:
+        tools = root / "tools"
+        tools.mkdir()
+        gate = tools / "market_open.sh"
+        gate.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        gate.chmod(0o755)
+
     def test_closed_market_is_valid_classification(self) -> None:
         clock = {"healthy": True, "server_epoch": 1786278888}
         completed = subprocess.CompletedProcess(
-            ["bash", "market_open.sh"], 1, stdout="Closed\n", stderr=""
+            ["market_open.sh"], 1, stdout="Closed\n", stderr=""
         )
-        with mock.patch.object(integrity.subprocess, "run", return_value=completed):
-            result = integrity.market_gate_check(Path("/x"), clock)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.make_gate(root)
+            with mock.patch.object(integrity.subprocess, "run", return_value=completed):
+                result = integrity.market_gate_check(root, clock)
         self.assertTrue(result["healthy"])
         self.assertFalse(result["market_open"])
         self.assertEqual(result["status"], "Closed")
@@ -342,10 +353,13 @@ class MarketGateTests(unittest.TestCase):
     def test_open_market_is_valid_classification(self) -> None:
         clock = {"healthy": True, "server_epoch": 1786345200}
         completed = subprocess.CompletedProcess(
-            ["bash", "market_open.sh"], 0, stdout="Open\n", stderr=""
+            ["market_open.sh"], 0, stdout="Open\n", stderr=""
         )
-        with mock.patch.object(integrity.subprocess, "run", return_value=completed):
-            result = integrity.market_gate_check(Path("/x"), clock)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.make_gate(root)
+            with mock.patch.object(integrity.subprocess, "run", return_value=completed):
+                result = integrity.market_gate_check(root, clock)
         self.assertTrue(result["healthy"])
         self.assertTrue(result["market_open"])
 
