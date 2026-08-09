@@ -1,340 +1,259 @@
 # BotA Runtime Reliability Path
 
-Last updated: 2026-07-08
+Last updated: **2026-08-09 UTC**
 
-Objective: make BotA unable to fail silently.
+Objective: make BotA unable to fail silently while preserving one production owner per job and keeping strategy changes outside reliability work.
 
-Non-objectives:
+Current detailed evidence: `audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md`.
 
-- Do not optimize trading strategy.
-- Do not change thresholds.
-- Do not change H1 confirmation/veto logic.
+## Non-objectives
+
+- Do not optimize the trading strategy.
+- Do not lower score/ADX/MTF/Telegram thresholds.
 - Do not change pair selection.
-- Do not redesign ProfitLab billing/subscription/RLS.
+- Do not force Telegram signals.
+- Do not replay ProfitLab history or reset its cursor.
+- Do not introduce a second runtime manager to improve apparent availability.
 
-## Path diagram
+## Current baseline
+
+```text
+DEPLOYED_RELEASE=8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0
+PACKAGE_1_CLOCK_SESSION=PASS
+PAIRS=EURUSD GBPUSD USDJPY
+TIMEFRAMES=M15
+NATIVE_RUNSVDIR_MANAGERS=1
+REQUIRED_SERVICES_OWNED=7/7
+REQUIRED_SERVICES_RUNNING=7/7
+ORPHANED_RUNSV=0
+DUPLICATE_SERVICE_ROWS=0
+LIVE_CROND_COUNT=1
+ACTIVE_DIRECT_WATCHER_CRON=0
+ACTIVE_PROFITLAB_CRON=1
+PACKAGE_2_PERSISTENT_HARDENING=PENDING
+OPEN_MARKET_THREE_PAIR_PROOF=PENDING
+MONDAY_READY=NO
+```
+
+## Reliability architecture now
+
+Core long-running components are runit-owned:
+
+```text
+bota-updater
+bota-watcher
+bota-closer
+bota-shadow
+bota-heartbeat
+bota-supervisor
+crond
+```
+
+`ops/bota_crontab.canonical` retains several old core entries as commented `#MIGRATED_TO_RUNIT` references. They are intentionally inactive and must not be restored as competing owners.
+
+Active cron remains for independent scheduled work such as ProfitLab delivery, clock drift checks, daily/status work, and runtime-health push. See `docs/BOTA_CANONICAL_CRONTAB.md` for the current ownership contract.
+
+## Reliability gates
 
 ```mermaid
 flowchart TD
-  P0[Phase 0: Incident freeze and evidence capture] --> G0{Gate 0: evidence archived?}
-  G0 -- no --> P0
-  G0 -- yes --> P1[Phase 1: C2 liveness proof after cron restore]
+  P1[Package #1 trusted clock/session] --> G1{Live trusted-time proof?}
+  G1 -- no --> F1[Stop: clock/session package failed]
+  G1 -- yes --> P2[Package #2 control-plane hardening]
 
-  P1 --> G1{Gate 1: watcher/updater/closer/supervisor fresh?}
-  G1 -- no --> F1[Stop: diagnose failed runtime line]
-  F1 --> P1
-  G1 -- yes --> P2[Phase 2: committed canonical crontab]
+  P2 --> G2{Fault matrix + persistent watchdog pass?}
+  G2 -- no --> F2[Stop: repair ownership/recovery contract]
+  G2 -- yes --> P3[Pre-market immutable readiness gate]
 
-  P2 --> G2{Gate 2: verify/install/hash all required lines?}
-  G2 -- no --> F2[Stop: fix canonical template]
-  F2 --> P2
-  G2 -- yes --> P3[Phase 3: Termux Boot recovery]
+  P3 --> G3{Release/config/services/data ready?}
+  G3 -- no --> F3[Stop: classify operational failure]
+  G3 -- yes --> P4[Natural MARKET_OPEN cycle]
 
-  P3 --> G3{Gate 3: reboot recovery proven?}
-  G3 -- no --> F3[Stop: fix boot/wake-lock/crond restore]
-  F3 --> P3
-  G3 -- yes --> P4[Phase 4: Daily Proof truth upgrade]
-
-  P4 --> G4{Gate 4: Daily Proof shows real liveness?}
-  G4 -- no --> F4[Stop: add missing truth fields]
-  F4 --> P4
-  G4 -- yes --> P5[Phase 5: runtime_health Supabase push]
-
-  P5 --> G5{Gate 5: Supabase health row current?}
-  G5 -- no --> F5[Stop: fix health push/retry/fail-closed]
-  F5 --> P5
-  G5 -- yes --> P6[Phase 6: ProfitLab Admin Health Panel]
-
-  P6 --> G6{Gate 6: ProfitLab shows BotA healthy/degraded/offline?}
-  G6 -- no --> F6[Stop: fix UI/query/stale logic]
-  F6 --> P6
-  G6 -- yes --> P7[Phase 7: cloud/VPS decision and migration proof]
-
-  P7 --> G7{Gate 7: VPS or Termux final runtime chosen and proven?}
-  G7 -- no --> F7[Stop: continue dual-run proof]
-  F7 --> P7
-  G7 -- yes --> DONE[Production reliability baseline reached]
+  P4 --> G4{3 pairs + fresh evidence + terminal outcome?}
+  G4 -- no --> F4[Stop: diagnose runtime before strategy]
+  G4 -- yes --> DONE[Monday readiness operational proof]
 ```
 
-## Phase 0 — incident freeze and evidence capture
+## Package #1 — trusted strategy/event time
 
-Purpose: prevent wrong assumptions.
+Status: **CLOSED / PASS**.
 
-Verified current incident:
+One watcher cycle now reuses one trusted `BOTA_SERVER_EPOCH` for market/session/calendar/news event-time semantics. CLOCK_BOOTTIME/monotonic remains the elapsed-time domain.
 
-- BotA runtime crontab was wiped/partially lost.
-- Daily Proof survived independently and masked the runtime stop.
-- Logs froze around 2026-06-22.
+Production proof:
 
-Cross-check before completion:
+```text
+cycle_id=b32a66a6-1a91-4b61-b759-c32851cbae6b:144452448476926
+terminal_outcome=MARKET_CLOSED
+market_reason=MARKET_CLOSED_SUNDAY
+time_source=server_epoch
+server_epoch=1786245830
+```
 
-- Paste `crontab -l`.
-- Paste mtimes for watcher/updater/closer/supervisor/API state.
-- Paste Supabase active/last signal status if available.
+Package #1 also corrected the signed before/after economic-calendar exclusion-window bug. No strategy threshold or pair-scope change occurred.
 
-Completion rule:
+## Package #2 — control-plane self-recovery
 
-- Only complete when evidence is archived in GitHub docs.
+Status: **LIVE INCIDENTS REPAIRED / PERSISTENT HARDENING PENDING**.
 
-## Phase 1 — C2 liveness proof after cron restore
+### Failure model A — manager loss with surviving supervisors
 
-Purpose: prove restored cron actually runs.
+Observed production evidence showed six required BotA `runsv` supervisors parented by PID 1 while all seven services still appeared to be running.
 
-Must verify after at least one cycle:
+```text
+running=7/7
+owned=1/7
+orphaned=6
+```
 
-- `logs/cron.signals.log` fresh.
-- `logs/cron.indicators.log` fresh.
-- `logs/cron.closer.log` fresh.
-- `logs/cron.shadow.log` fresh.
-- `logs/cron.supervisor.log` fresh.
-- `logs/api_credits.json` changed if updater fetched.
-- `state/runtime_health.json` updated.
-- Required crontab lines still exactly one each.
+Final manual reconciliation restored:
 
-Stop condition:
+```text
+manager_count=1
+manager_pid=4398
+owned=7/7
+running=7/7
+orphaned=0
+duplicate_service_rows=0
+```
+
+Reliability requirement: service health must include supervisor lineage, not merely `sv status=run`.
+
+### Failure model B — stale live singleton child/resource owner
+
+Observed `crond` case:
 
-- If any log is stale, diagnose that cron line before continuing.
+```text
+current runsv crond PID=24583
+stale live crond PID=4107
+stale crond PPID=1
+stale crond still held crond.pid
+current runsv replacement attempts failed every ~1 second
+```
+
+The stale daemon still executed scheduled jobs, proving that business activity does not establish correct ownership.
+
+Safe live repair verified identity/parentage, quiesced the failed restart loop, terminated only the stale child, and let the current supervisor start PID 17994. The replacement was verified as the child of runsv PID 24583 and remained stable as the only live `crond`.
+
+Reliability requirement: automated recovery must distinguish:
+
+1. stale pidfile + dead process;
+2. live correct child owned by current supervisor;
+3. live stale singleton child owned by an obsolete generation;
+4. ambiguous identity — fail safe and require operator evidence.
+
+Do not solve this with blind `rm pidfile`, `pkill`, or process-name-only matching.
+
+### Failure model C — watchdog activation gap
 
-## Phase 2 — committed canonical crontab
-
-Purpose: stop relying on ad-hoc crontab backups.
-
-Required deliverables:
-
-- A committed canonical crontab template.
-- A verify/install script.
-- Required line count checks.
-- Crontab hash generation.
-- Restore path that preserves other project blocks, including Dividend Capture Scanner.
-
-Cross-check:
-
-- Install script must not use `exit` in a way that closes the user's Termux session during interactive debugging.
-- Must not duplicate Dividend Capture Scanner lines.
-- Must keep BotA `CRON_TZ=UTC` separated from Dividend Scanner timezone.
-
-## Phase 3 — Termux:Boot recovery
-
-Purpose: recover after phone reboot or Android kill.
-
-Required deliverables:
-
-- Verify Termux:Boot app installed.
-- Verify `~/.termux/boot/` exists.
-- Boot script starts `termux-wake-lock`.
-- Boot script starts `crond`.
-- Boot script verifies/restores canonical BotA crontab if missing.
-- Boot script writes a boot marker log.
-
-Cross-check:
-
-- Reboot test or simulated boot-script run.
-- Confirm crond alive after boot.
-- Confirm required crontab line counts.
-
-## Phase 4 — Daily Proof truth upgrade
-
-Purpose: Daily Proof must prove the signal factory is alive, not only that cron exists.
-
-Required fields:
-
-- crond status
-- required cron line count status
-- crontab hash status
-- watcher log age
-- updater log age
-- closer log age
-- shadow log age
-- supervisor log age
-- runtime health mode
-- cache ages
-- API usage
-- server clock status
-- last Supabase signal timestamp
-- active signal count
-- oldest active signal age
-
-Cross-check:
-
-- Force/stage one stale component and verify Daily Proof turns red/degraded.
-- Ensure Telegram sends only one transition alert, not spam.
-
-
-### Phase 4C closure status
-
-Status: CLOSED / PASS.
-
-Commit:
-- `5744802` — `tools: strengthen BotA daily proof runtime reporting`
-
-Acceptance proof:
-- `tools/daily_summary.sh` now prints runtime truth fields:
-  - runtime status
-  - reported bot mode
-  - supervisor age and timestamp
-  - watcher/updater/closer/shadow ages
-  - cache ages available in `runtime_health.json`
-  - canonical crontab verification
-  - live hash match
-  - reasons
-- Missing, corrupt, stale health JSON and missing verifier cases are handled without crashing the Daily Proof.
-- Cron-like environment dry-run passed.
-- No Telegram send during tests.
-- No strategy, crontab, boot, Supabase, or ProfitLab changes.
-
-Gate 4 result:
-- Daily Proof shows real liveness: PASS.
-
-Next phase:
-- Phase 5 — runtime_health Supabase push.
-
-
-## Phase 5 — runtime_health Supabase push
-
-Purpose: make BotA status visible outside the phone.
-
-Required deliverables:
-
-- Supabase table or singleton row for BotA runtime health.
-- BotA supervisor push script.
-- Retry/backoff on network failure.
-- Local health still written even if Supabase unavailable.
-- No trading signal writes from the health path.
-
-Required fields:
-
-- `bot_id`
-- `last_heartbeat_utc`
-- `bot_mode`
-- `crond_running`
-- `required_cron_lines_ok`
-- `crontab_hash`
-- `watcher_log_age_min`
-- `updater_log_age_min`
-- `closer_log_age_min`
-- `shadow_log_age_min`
-- `supervisor_log_age_min`
-- `api_credits_used`
-- `api_credits_limit`
-- `server_clock_ok`
-- `clock_drift_seconds`
-- `market_gate_status`
-- `last_signal_created_at`
-- `active_signal_count`
-- `oldest_active_age_min`
-- `cache_age_summary`
-- `network_telegram_ok`
-- `network_supabase_ok`
-- `failure_reasons`
-
-Cross-check:
-
-- Supabase row updated within expected interval.
-- Stale row becomes OFFLINE in ProfitLab.
-
-## Phase 6 — ProfitLab Admin Health Panel
-
-Purpose: distinguish quiet market from dead signal factory.
-
-Required display fields:
-
-- BotA status: HEALTHY / DEGRADED / OFFLINE
-- Last heartbeat age
-- Watcher age
-- Updater age
-- Closer age
-- Supervisor age
-- API credits
-- Clock status
-- Last signal timestamp
-- Active signal count
-- Failure reasons
-
-Required reporting correction:
-
-- Rename `Today's P&L` if it is all-time pips, or implement a true daily filter.
-- Rename `30-Day Win Rate` if it is all-time win rate, or implement a true 30-day filter.
-
-Cross-check:
-
-- ProfitLab must show red if BotA heartbeat is stale.
-- ProfitLab must not imply that no active signals means BotA is healthy.
-
-## Phase 7 — cloud/VPS decision and migration proof
-
-Purpose: decide whether phone Termux remains primary or a VPS becomes primary.
-
-Decision options:
-
-1. Termux remains primary; VPS/ProfitLab only observes health.
-2. VPS becomes primary; Termux becomes backup/admin.
-3. Dual-run temporary validation, then choose one primary.
-
-Why a VPS helps:
-
-- Removes Android sleep/reboot/battery-optimization problems.
-- Removes dependence on mobile/ship internet.
-- Enables systemd timers, journald logs, and external monitoring.
-
-What a VPS does not solve:
-
-- Broker/data-provider outage.
-- Telegram/Supabase outage.
-- Bad credentials.
-- API credits exhausted.
-- Bad code or bad cron template.
-
-Cross-check:
-
-- If VPS is chosen, run BotA and Dividend Capture Scanner as separate services/timers with isolated env/logs.
-- Prove one full market session before cutting over.
-- Ensure no double-publishing to Supabase during dual-run.
-
-## Final release gate
-
-Production reliability baseline is reached only when:
-
-- C2 liveness passes.
-- Canonical crontab is committed and verified.
-- Boot recovery is proven.
-- Daily Proof reports real component freshness.
-- Runtime health reaches Supabase.
-- ProfitLab displays BotA health.
-- Silent failure produces a red state within the defined threshold.
-
-<!-- PHASE5_RUNTIME_HEALTH_PUSH_CLOSURE_20260708 -->
-## Phase 5 — Supabase Runtime Health Push
-
-Status: **DONE / PASS**
-
-Implemented:
-
-- `supabase/migrations/20260708_create_bot_runtime_health.sql`
-- `supabase/functions/bot-health-ingest/index.ts`
-- `tools/push_runtime_health_supabase.py`
-- `tools/run_runtime_health_push.sh`
-- canonical cron entry in `ops/bota_crontab.canonical`
-
-Runtime proof:
-
-- local runtime-health payload generated successfully;
-- Edge Function accepted payload with HTTP 200;
-- Supabase row updated for `bota-termux-primary`;
-- cron-safe wrapper passed manual real push;
-- cron job fired repeatedly and updated Supabase;
-- canonical crontab verifier passed after install.
-
-Security boundary:
-
-- Termux stores only the limited health-ingest secret;
-- Termux does not store Supabase service-role credentials;
-- payload is allowlisted/sanitized;
-- no raw environment dump or raw runtime JSON is sent.
-
-Reliability score after Phase 5: **78/100**.
-
-Still open:
-
-- reboot recovery proof;
-- ProfitLab Admin Health panel;
-- profitability/proof scoring remains separate.
+The current watchdog source files match GitHub, and a one-shot run on the final healthy topology returned RC 0. However, the phone boot launcher explicitly records:
+
+```text
+RUNSVDIR_GUARD_START=DISABLED
+```
+
+Therefore persistent recovery is not yet proven.
+
+Required design:
+
+- exactly one native Termux `runsvdir` manager;
+- exactly one watchdog instance protected by its lock;
+- watchdog starts only after the native manager/service tree is available;
+- manager loss/orphan handoff converges to the current manager;
+- down-service recovery is bounded;
+- duplicate supervisors/managers are detected, not normalized away silently;
+- stale-live-singleton child/resource-owner recovery is identity-safe;
+- every recovery action is logged with pre/post topology evidence.
+
+## Package #2 mandatory fault-injection matrix
+
+Before any persistent phone deployment, isolated tests must cover at least:
+
+```text
+manager loss
+PID-1 orphaned runsv handoff
+single required service down
+dead stale pidfile
+live stale singleton child/resource owner
+duplicate runsv supervisor
+multiple runsvdir manager attempt
+second watchdog attempt
+partial/incomplete recovery
+release blob drift
+active wrapper drift
+runtime config drift
+active direct watcher cron appears
+ProfitLab cron missing/duplicated
+updater/data stale or missing
+shadow evidence stale or missing
+trusted clock unavailable
+```
+
+A fault test passes only when the system either converges to one unambiguous healthy topology or fails closed with a machine-readable reason. “Something is running” is not a PASS criterion.
+
+## Pre-market immutable readiness gate
+
+After Package #2 recovery code/tests pass, a pre-market check must establish:
+
+```text
+approved deployed release identity
+runtime file blob/mode parity
+active wrapper blob/mode parity
+PAIRS=EURUSD GBPUSD USDJPY
+TIMEFRAMES=M15
+Policy B values unchanged
+TELEGRAM/DRY_RUN production configuration expected
+one native runsvdir manager
+7/7 supervisors owned by that manager
+7/7 services running
+zero orphaned supervisors
+zero duplicate service rows
+correct singleton-child ownership
+active direct watcher cron=0
+active ProfitLab cron=1
+ProfitLab cursor preserved
+trusted server time available
+updater/data readiness current
+shadow readiness current/observable
+operational failures surfaced explicitly
+```
+
+No strategy threshold mutation is permitted to turn a failed operational gate green.
+
+## Final natural MARKET_OPEN proof
+
+Once Package #2 and pre-market integrity pass, wait for a genuine production `MARKET_OPEN` cycle. Require same-cycle evidence for:
+
+```text
+EURUSD:M15
+GBPUSD:M15
+USDJPY:M15
+fresh updater/data evidence
+fresh shadow evidence
+trusted server epoch
+one authoritative watcher terminal outcome
+unique watcher owner
+7/7 correctly owned and running
+```
+
+Three legitimate rejected decisions are acceptable. A Telegram signal is not required.
+
+## External health reporting
+
+Existing Daily Proof and Supabase runtime-health reporting remain useful, but they must reflect the current runit ownership model. A remote green state must not be based solely on cron presence, service PIDs, or stale compact state.
+
+Future health payloads should expose or derive at least:
+
+- manager count/identity;
+- owned/running/orphaned/duplicate service counts;
+- watcher unique-owner status;
+- `crond` child ownership health;
+- deployed release/config identity;
+- trusted clock status;
+- updater/shadow/data freshness;
+- last authoritative watcher terminal outcome;
+- failure reasons.
+
+## Current next action
+
+Finish Package #2 in reviewed code/tests. Only then enable persistent watchdog/boot recovery on the phone. After that gate passes, run the immutable pre-market readiness proof and wait for the natural open-market three-pair cycle.
