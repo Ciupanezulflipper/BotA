@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tools import pre_market_integrity as integrity
 
@@ -41,7 +42,10 @@ class ConfigTests(unittest.TestCase):
             result = integrity.config_check(path)
         self.assertFalse(result["healthy"])
         self.assertTrue(
-            any(reason.startswith("config_mismatch:PAIRS") for reason in result["failure_reasons"])
+            any(
+                reason.startswith("config_mismatch:PAIRS")
+                for reason in result["failure_reasons"]
+            )
         )
 
 
@@ -81,6 +85,7 @@ class BootTests(unittest.TestCase):
         )
         result = integrity.boot_check(text)
         self.assertTrue(result["healthy"])
+        self.assertEqual(result["managed_block_count"], 1)
         self.assertEqual(result["active_legacy_guard_count"], 0)
         self.assertEqual(result["active_native_watchdog_count"], 1)
 
@@ -101,9 +106,40 @@ class BootTests(unittest.TestCase):
             '#!/bin/bash\n/x/start_native_service_daemon_watchdog.sh\n'
         )
         self.assertFalse(result["healthy"])
+        self.assertEqual(result["managed_block_count"], 0)
         self.assertTrue(
-            any(reason.startswith("boot_managed_block:") for reason in result["failure_reasons"])
+            any(
+                reason.startswith("boot_managed_block:")
+                for reason in result["failure_reasons"]
+            )
         )
+
+    def test_reversed_markers_report_zero_managed_blocks(self) -> None:
+        result = integrity.boot_check(
+            f'{integrity.BOOT_END}\n'
+            '/x/start_native_service_daemon_watchdog.sh\n'
+            f'{integrity.BOOT_BEGIN}\n'
+        )
+        self.assertFalse(result["healthy"])
+        self.assertEqual(result["managed_block_count"], 0)
+
+
+class ThresholdTests(unittest.TestCase):
+    def test_default_integer_threshold_is_returned(self) -> None:
+        with mock.patch.dict(integrity.os.environ, {}, clear=True):
+            self.assertEqual(integrity.env_int("EXAMPLE_THRESHOLD", "1500"), 1500)
+
+    def test_malformed_threshold_becomes_integrity_error(self) -> None:
+        with mock.patch.dict(
+            integrity.os.environ,
+            {"MAX_UPDATER_PROGRESS_AGE_SECS": "not-an-int"},
+            clear=False,
+        ):
+            with self.assertRaisesRegex(
+                integrity.IntegrityError,
+                "invalid_threshold:MAX_UPDATER_PROGRESS_AGE_SECS",
+            ):
+                integrity.env_int("MAX_UPDATER_PROGRESS_AGE_SECS", "1500")
 
 
 class FailureAggregationTests(unittest.TestCase):
