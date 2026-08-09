@@ -63,6 +63,29 @@ def finalizer_preflight(
     return state
 
 
+def require_crond_ownership(
+    service_root: Path,
+    manager: int,
+    crond_pidfile: Path,
+) -> dict[str, Any]:
+    """Require the live crond child, supervise pid, parent, and pidfile to agree."""
+    try:
+        evidence = watchdog.crond_ownership(
+            service_root,
+            manager,
+            crond_pidfile,
+            watchdog.process_table,
+            watchdog.supervised_pid,
+        )
+    except watchdog.WatchdogError as exc:
+        raise MigrationError(f"crond_ownership_unreadable:{exc}") from exc
+    if not evidence["healthy"]:
+        raise MigrationError(
+            "crond_ownership_invalid:" + ",".join(evidence["failure_reasons"])
+        )
+    return evidence
+
+
 def arguments() -> argparse.Namespace:
     prefix = Path(os.environ.get("PREFIX", "/data/data/com.termux/files/usr"))
     root = Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA")))
@@ -84,6 +107,7 @@ def main() -> int:
     prefix = args.prefix.resolve()
     service_root = prefix / "var/service"
     pidfile = prefix / "var/run/service-daemon.pid"
+    crond_pidfile = prefix / "var/run/crond.pid"
     sv_binary = prefix / "bin/sv"
     watchdog_script = root / "tools/native_service_daemon_watchdog.py"
     watchdog_launcher = root / "tools/start_native_service_daemon_watchdog.sh"
@@ -108,6 +132,9 @@ def main() -> int:
         len(migration.process_matches(root / "tools/runsvdir_guard_runtime.py")),
         running_services,
     )
+    before["crond_ownership"] = require_crond_ownership(
+        service_root, int(before["manager_pid"]), crond_pidfile
+    )
 
     try:
         migration.run_checked([str(watchdog_launcher)], 20)
@@ -122,6 +149,9 @@ def main() -> int:
             watchdog_script=watchdog_script,
             watchdog_lock=watchdog_lock,
             require_watchdog=True,
+        )
+        final["crond_ownership"] = require_crond_ownership(
+            service_root, int(final["manager_pid"]), crond_pidfile
         )
     except Exception:
         migration.stop_exact_watchdogs(watchdog_script)
@@ -144,6 +174,7 @@ def main() -> int:
         f"ORPHANED={final['orphaned']} DUPLICATES={final['duplicates']}"
     )
     print(f"WATCHDOG_PID={final['watchdog_pids'][0]}")
+    print("CROND_OWNERSHIP=PASS")
     print("NATIVE_WATCHDOG_FINALIZATION=PASS")
     return 0
 
