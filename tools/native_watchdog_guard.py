@@ -9,6 +9,7 @@ watchdog processes and zero lock holders. Ambiguous states fail closed.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import math
 import os
@@ -29,62 +30,143 @@ class GuardError(RuntimeError):
     """Raised when watchdog liveness cannot be proven or restored safely."""
 
 
-_PROC_LOCKS = Path("/proc/locks")
+def _fdinfo_flock_holder(lock_path: Path, pid: int) -> list[int]:
+    """Confirm ``pid`` actively holds a FLOCK on ``lock_path`` via fdinfo.
 
+    Walks ``/proc/<pid>/fd/*``, matches by device+inode against
+    ``os.stat(lock_path)``, and then requires an active ``lock:`` row in
+    ``/proc/<pid>/fdinfo/<fd>`` whose type is FLOCK and whose recorded pid
+    and dev:inode agree with the watchdog process and lock file.
 
-def _flock_holders(lock_path: Path) -> list[int]:
-    """Return PIDs currently holding an advisory FLOCK on ``lock_path``.
-
-    Reads ``/proc/locks`` and matches ``dev:inode`` against the lock file's
-    ``os.stat``. This proves active FLOCK ownership rather than merely
-    inferring it from an open lock-file descriptor.
-
-    Fails closed via :class:`GuardError` when ownership cannot be determined:
-    ``/proc/locks`` unreadable, unexpected stat failure, or a candidate line
-    matching the target inode that cannot be parsed.
+    Returns ``[pid]`` on confirmation. Raises :class:`GuardError` for every
+    other outcome — missing lock file, unreadable/denied fd or fdinfo,
+    malformed row, pid/dev/inode mismatch, or race disappearance. An open fd
+    without an active FLOCK row does not confirm ownership.
     """
     try:
         st = os.stat(lock_path)
-    except FileNotFoundError:
-        return []
+    except FileNotFoundError as exc:
+        raise GuardError(f"flock_lock_missing:{lock_path}") from exc
     except OSError as exc:
         raise GuardError(f"flock_stat_failed:{lock_path}:{exc}") from exc
-    target = (os.major(st.st_dev), os.minor(st.st_dev), st.st_ino)
+    target_dev = (os.major(st.st_dev), os.minor(st.st_dev))
+    target_inode = st.st_ino
+
+    fd_dir = Path(f"/proc/{pid}/fd")
     try:
-        raw = _PROC_LOCKS.read_text(encoding="utf-8", errors="replace")
+        entries = list(fd_dir.iterdir())
+    except FileNotFoundError as exc:
+        raise GuardError(f"flock_pid_disappeared:{pid}") from exc
     except OSError as exc:
-        raise GuardError(f"flock_proc_unreadable:{exc}") from exc
-    holders: list[int] = []
-    for line in raw.splitlines():
-        parts = line.split()
-        if len(parts) < 8:
-            continue
-        if parts[1] != "FLOCK":
-            continue
-        dev_inode = parts[5]
-        segments = dev_inode.split(":")
-        if len(segments) != 3:
-            continue
-        # Only parse dev:inode when the FLOCK line is a candidate; skip lines
-        # whose inode component obviously cannot match this file.
+        raise GuardError(f"flock_fd_scan_denied:{pid}:{exc}") from exc
+
+    for entry in entries:
         try:
-            candidate_inode = int(segments[2])
+            fd_num = int(entry.name)
         except ValueError:
-            # Skip unrelated malformed lines; only raise for lines targeting us.
-            continue
-        if candidate_inode != target[2]:
             continue
         try:
-            major = int(segments[0], 16)
-            minor = int(segments[1], 16)
-            pid = int(parts[4])
-        except ValueError as exc:
+            fd_st = os.stat(entry)
+        except FileNotFoundError:
+            # fd closed mid-scan; keep scanning other fds.
+            continue
+        except OSError as exc:
             raise GuardError(
-                f"flock_locks_malformed:{lock_path}:{line!r}"
+                f"flock_fd_stat_denied:{pid}:{fd_num}:{exc}"
             ) from exc
-        if (major, minor, candidate_inode) == target and pid > 0:
-            holders.append(pid)
-    return sorted(set(holders))
+        if fd_st.st_ino != target_inode:
+            continue
+        if (os.major(fd_st.st_dev), os.minor(fd_st.st_dev)) != target_dev:
+            continue
+
+        info_path = Path(f"/proc/{pid}/fdinfo/{fd_num}")
+        try:
+            info_text = info_path.read_text(encoding="utf-8", errors="replace")
+        except FileNotFoundError:
+            # fd closed between listing and fdinfo read; keep scanning.
+            continue
+        except OSError as exc:
+            raise GuardError(
+                f"flock_fdinfo_denied:{pid}:{fd_num}:{exc}"
+            ) from exc
+
+        for line in info_text.splitlines():
+            if not line.startswith("lock:"):
+                continue
+            parts = line.split()
+            # "lock: N: FLOCK ADVISORY WRITE <pid> maj:min:ino start end"
+            if len(parts) < 8:
+                raise GuardError(
+                    f"flock_fdinfo_malformed:{pid}:{fd_num}:{line!r}"
+                )
+            if parts[2] != "FLOCK":
+                continue
+            try:
+                lock_pid = int(parts[5])
+            except ValueError as exc:
+                raise GuardError(
+                    f"flock_fdinfo_malformed:{pid}:{fd_num}:{line!r}"
+                ) from exc
+            if lock_pid != pid:
+                raise GuardError(
+                    f"flock_pid_mismatch:{pid}:reported={lock_pid}"
+                )
+            segments = parts[6].split(":")
+            if len(segments) != 3:
+                raise GuardError(
+                    f"flock_fdinfo_malformed:{pid}:{fd_num}:{line!r}"
+                )
+            try:
+                major = int(segments[0], 16)
+                minor = int(segments[1], 16)
+                inode = int(segments[2])
+            except ValueError as exc:
+                raise GuardError(
+                    f"flock_fdinfo_malformed:{pid}:{fd_num}:{line!r}"
+                ) from exc
+            if (major, minor, inode) != (target_dev[0], target_dev[1], target_inode):
+                raise GuardError(
+                    f"flock_dev_inode_mismatch:{pid}:{fd_num}:{parts[6]}"
+                )
+            return [pid]
+        # Matching fd but no active FLOCK row — not this fd. Keep scanning.
+    raise GuardError(f"flock_owner_not_confirmed:pid={pid}:lock={lock_path}")
+
+
+def _probe_lock_free(lock_path: Path) -> None:
+    """Absence probe used only when no watchdog PID exists.
+
+    Missing lock file counts as absent. Otherwise opens the existing lock
+    (no create, no truncate) and attempts ``LOCK_EX | LOCK_NB``:
+
+    * acquired → immediately released and returned (absent);
+    * ``BlockingIOError`` → contended, fail-closed via :class:`GuardError`;
+    * any other ``OSError`` → fail-closed via :class:`GuardError`.
+
+    The probe never leaves the lock held: ``LOCK_UN`` is attempted, and the
+    file descriptor is closed unconditionally in ``finally``, which itself
+    releases any flock held on it.
+    """
+    try:
+        fd = os.open(lock_path, os.O_RDWR)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise GuardError(f"flock_probe_open_failed:{lock_path}:{exc}") from exc
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise GuardError(f"flock_probe_contended:{lock_path}") from exc
+        except OSError as exc:
+            raise GuardError(f"flock_probe_failed:{lock_path}:{exc}") from exc
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except OSError:
+            # Best-effort release; the close below drops the lock regardless.
+            pass
+    finally:
+        os.close(fd)
 
 
 def _finite_float(text: str) -> float:
@@ -187,7 +269,15 @@ def main(argv: list[str] | None = None) -> int:
 
     def snapshot() -> tuple[list[int], list[int], str]:
         pids = migration.process_matches(watchdog)
-        holders = _flock_holders(lock)
+        unique_pids = sorted(set(pids))
+        if len(unique_pids) > 1:
+            # state_for raises the ambiguous-process error; holders unused.
+            return pids, [], state_for(pids, [])
+        if unique_pids:
+            holders = _fdinfo_flock_holder(lock, unique_pids[0])
+        else:
+            _probe_lock_free(lock)
+            holders = []
         return pids, holders, state_for(pids, holders)
 
     try:
@@ -228,10 +318,15 @@ def main(argv: list[str] | None = None) -> int:
 
         if not wait_until(ready, args.timeout):
             final_pids = migration.process_matches(watchdog)
-            try:
-                final_holders: list[int] | str = _flock_holders(lock)
-            except GuardError as exc:
-                final_holders = f"unknown:{exc}"
+            final_unique = sorted(set(final_pids))
+            final_holders: list[int] | str
+            if len(final_unique) == 1:
+                try:
+                    final_holders = _fdinfo_flock_holder(lock, final_unique[0])
+                except GuardError as exc:
+                    final_holders = f"unknown:{exc}"
+            else:
+                final_holders = f"unknown:pid_count={len(final_unique)}"
             raise GuardError(
                 "watchdog_relaunch_timeout:"
                 f"pids={final_pids}:holders={final_holders}"
