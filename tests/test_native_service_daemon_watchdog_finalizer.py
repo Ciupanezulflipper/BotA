@@ -106,26 +106,26 @@ class CrondOwnershipTests(unittest.TestCase):
             "healthy": False,
             "failure_reasons": ["parent_mismatch:1:207"],
         }
-        with mock.patch.object(watchdog, "crond_ownership", return_value=evidence):
-            with self.assertRaisesRegex(
-                finalizer.MigrationError, "crond_ownership_invalid"
-            ):
-                finalizer.require_crond_ownership(
-                    ROOT, 100, Path("/tmp/crond.pid")
-                )
+        with (
+            mock.patch.object(watchdog, "crond_ownership", return_value=evidence),
+            self.assertRaisesRegex(finalizer.MigrationError, "crond_ownership_invalid"),
+        ):
+            finalizer.require_crond_ownership(
+                ROOT, 100, Path("/tmp/crond.pid")
+            )
 
     def test_unreadable_crond_pidfile_is_explicit(self) -> None:
-        with mock.patch.object(
-            watchdog,
-            "crond_ownership",
-            side_effect=watchdog.WatchdogError("crond_pidfile_invalid"),
+        with (
+            mock.patch.object(
+                watchdog,
+                "crond_ownership",
+                side_effect=watchdog.WatchdogError("crond_pidfile_invalid"),
+            ),
+            self.assertRaisesRegex(finalizer.MigrationError, "crond_ownership_unreadable"),
         ):
-            with self.assertRaisesRegex(
-                finalizer.MigrationError, "crond_ownership_unreadable"
-            ):
-                finalizer.require_crond_ownership(
-                    ROOT, 100, Path("/tmp/crond.pid")
-                )
+            finalizer.require_crond_ownership(
+                ROOT, 100, Path("/tmp/crond.pid")
+            )
 
 
 if __name__ == "__main__":
