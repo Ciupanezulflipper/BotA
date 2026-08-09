@@ -18,7 +18,7 @@ PROFITLAB_CURSOR_PRESERVED=PASS
 LIVE_CLOSED_MARKET_CYCLE=PASS
 ISOLATED_MONDAY_HARNESS=PASS
 OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
-MONDAY_READY=PENDING
+MONDAY_READY=NO
 ```
 
 BotA is **DEPLOYED_AND_WEEKEND_VERIFIED**. Do not call it Monday-ready until a genuine `MARKET_OPEN` production cycle proves current EURUSD, GBPUSD, and USDJPY M15 decisions in the same cycle with fresh supporting runtime evidence.
