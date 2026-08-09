@@ -130,16 +130,18 @@ class ThresholdTests(unittest.TestCase):
             self.assertEqual(integrity.env_int("EXAMPLE_THRESHOLD", "1500"), 1500)
 
     def test_malformed_threshold_becomes_integrity_error(self) -> None:
-        with mock.patch.dict(
-            integrity.os.environ,
-            {"MAX_UPDATER_PROGRESS_AGE_SECS": "not-an-int"},
-            clear=False,
-        ):
-            with self.assertRaisesRegex(
+        with (
+            mock.patch.dict(
+                integrity.os.environ,
+                {"MAX_UPDATER_PROGRESS_AGE_SECS": "not-an-int"},
+                clear=False,
+            ),
+            self.assertRaisesRegex(
                 integrity.IntegrityError,
                 "invalid_threshold:MAX_UPDATER_PROGRESS_AGE_SECS",
-            ):
-                integrity.env_int("MAX_UPDATER_PROGRESS_AGE_SECS", "1500")
+            ),
+        ):
+            integrity.env_int("MAX_UPDATER_PROGRESS_AGE_SECS", "1500")
 
 
 class FailureAggregationTests(unittest.TestCase):
