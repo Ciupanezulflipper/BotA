@@ -103,6 +103,21 @@ def wrapper_pid(service_root: Path, service: str) -> int | None:
         return None
 
 
+def runtime_pidfile(path: Path) -> tuple[int | None, str | None]:
+    """Return a positive runtime PID and a compact parse error when invalid."""
+    try:
+        value = path.read_text().strip()
+    except FileNotFoundError:
+        return None, "missing"
+    except OSError as exc:
+        return None, f"read_error:{type(exc).__name__}"
+    try:
+        pid = int(value)
+    except ValueError:
+        return None, "invalid"
+    return (pid, None) if pid > 0 else (None, "invalid")
+
+
 def inspect_service(
     table: dict[int, dict[str, Any]],
     sv_binary: Path,
@@ -163,6 +178,8 @@ def topology_failures(
     duplicates: int,
     rows: dict[str, Any],
     live_crond: list[dict[str, Any]],
+    crond_pidfile_pid: int | None,
+    crond_pidfile_error: str | None,
 ) -> list[str]:
     """Build compact acceptance failures from an inspected topology."""
     failures: list[str] = []
@@ -175,11 +192,18 @@ def topology_failures(
         (len(live_crond) != 1, f"live_crond_count:{len(live_crond)}"),
     )
     failures.extend(reason for failed, reason in checks if failed)
-    if (
-        len(live_crond) == 1
-        and rows.get("crond", {}).get("wrapper_pid") != live_crond[0]["pid"]
-    ):
-        failures.append("crond_not_owned_by_current_runsv")
+    if crond_pidfile_error is not None:
+        failures.append(f"crond_pidfile:{crond_pidfile_error}")
+
+    if len(live_crond) == 1:
+        crond = live_crond[0]
+        crond_service = rows.get("crond", {})
+        if crond_service.get("wrapper_pid") != crond["pid"]:
+            failures.append("crond_not_owned_by_current_runsv")
+        if crond_service.get("runsv_pid") != crond["ppid"]:
+            failures.append("crond_parent_not_current_runsv")
+        if crond_pidfile_pid is not None and crond_pidfile_pid != crond["pid"]:
+            failures.append("crond_pidfile_not_live_crond")
     return failures
 
 
@@ -206,6 +230,9 @@ def snapshot() -> dict[str, Any]:
     running = sum(bool(row["service_running"]) for row in rows.values())
     duplicates = sum(int(row["runsv_count"] > 1) for row in rows.values())
     live_crond = crond_processes(table)
+    crond_pidfile_pid, crond_pidfile_error = runtime_pidfile(
+        prefix / "var" / "run" / "crond.pid"
+    )
     failures = topology_failures(
         len(managers),
         owned,
@@ -214,9 +241,11 @@ def snapshot() -> dict[str, Any]:
         duplicates,
         rows,
         live_crond,
+        crond_pidfile_pid,
+        crond_pidfile_error,
     )
     return {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "healthy": not failures,
         "manager_count": len(managers),
         "manager_pid": manager,
@@ -227,6 +256,10 @@ def snapshot() -> dict[str, Any]:
         "duplicate_service_rows": duplicates,
         "services": rows,
         "live_crond": live_crond,
+        "crond_pidfile": {
+            "pid": crond_pidfile_pid,
+            "error": crond_pidfile_error,
+        },
         "failure_reasons": failures,
     }
 
