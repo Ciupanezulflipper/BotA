@@ -47,6 +47,12 @@ jobs:
           bash -n tools/market_open.sh
           bash -n tools/scoring_engine.sh
 
+      - name: Gate Bash dialect with ShellCheck
+        run: |
+          shellcheck --shell=bash --severity=warning \
+            tools/market_open.sh \
+            tools/scoring_engine.sh
+
       - name: Validate Python syntax
         run: |
           python -m py_compile \
