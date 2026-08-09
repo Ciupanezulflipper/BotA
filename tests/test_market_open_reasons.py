@@ -25,16 +25,17 @@ GATE = REPO / "tools" / "market_open.sh"
 
 
 def make_python_shim(shim_dir: Path, gate_line: str | None) -> Path:
-    """Create a python3 shim on PATH that returns a scripted gate line.
+    """Create a portable python3 shim on PATH that returns a scripted gate line.
 
     When ``gate_line`` is ``None`` the shim prints nothing, mimicking a
-    completely failed clock probe.
+    completely failed clock probe. The shim uses ``/usr/bin/env bash`` so the
+    same regression test runs on Termux and GitHub-hosted Linux runners.
     """
     shim = shim_dir / "python3"
     real_python = shutil.which("python3") or "/data/data/com.termux/files/usr/bin/python3"
     if gate_line is None:
         script = textwrap.dedent(
-            f"""            #!/data/data/com.termux/files/usr/bin/bash
+            f"""            #!/usr/bin/env bash
             # No-op shim: pretend python3 was invoked but produced no gate line.
             if [[ "${{1:-}}" = "-" ]]; then
               exit 0
@@ -44,7 +45,7 @@ def make_python_shim(shim_dir: Path, gate_line: str | None) -> Path:
         ).lstrip()
     else:
         script = textwrap.dedent(
-            f"""            #!/data/data/com.termux/files/usr/bin/bash
+            f"""            #!/usr/bin/env bash
             # Scripted-clock shim: intercept the here-doc invocation.
             if [[ "${{1:-}}" = "-" ]]; then
               printf '%s\\n' "{gate_line}"
@@ -81,6 +82,7 @@ class MarketOpenReasonTests(unittest.TestCase):
         env["PATH"] = f"{self.shim_dir}:{env.get('PATH','')}"
         env["MARKET_OPEN_REASON_FILE"] = str(self.reason_file)
         env["BOTA_SERVER_EPOCH_FILE"] = str(self.epoch_file)
+        env.pop("BOTA_SERVER_EPOCH", None)
         if skip_session:
             env["SKIP_SESSION_FILTER"] = "1"
         else:

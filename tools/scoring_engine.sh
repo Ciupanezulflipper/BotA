@@ -27,6 +27,11 @@ TF_RAW="${2:-M15}"
 
 log() { printf '%s\n' "$*" >&2; }
 
+trusted_epoch_valid() {
+  local value="${1:-}"
+  [[ "$value" =~ ^[0-9]+$ ]] && (( value > 1000000000 ))
+}
+
 emit_hold_json() {
   local pair="$1"
   local tf="$2"
@@ -186,19 +191,44 @@ TF="${TF_RAW}"
 # Market gate:
 # - If tools/market_open.sh says "Closed" => fail-closed HOLD.
 # - If "Open" => proceed.
-# - If missing/Unknown => proceed but tag in reasons (avoid silent blocking).
+# - If missing/Unknown => fail closed unless a trusted epoch already exists.
+#
+# A production watcher cycle normally inherits BOTA_SERVER_EPOCH. Standalone
+# scoring is also deterministic: market_open.sh writes the probed epoch to a
+# temporary file so session scoring can reuse the exact same trusted instant.
 PHASE="Unknown"
+_market_epoch_file=""
 if [[ -x "${TOOLS}/market_open.sh" ]]; then
-  _raw="$("${TOOLS}/market_open.sh" 2>/dev/null || true)"
+  _market_epoch_file="$(mktemp 2>/dev/null || true)"
+  if [[ -n "$_market_epoch_file" ]]; then
+    _raw="$(BOTA_SERVER_EPOCH_FILE="$_market_epoch_file" "${TOOLS}/market_open.sh" 2>/dev/null || true)"
+  else
+    _raw="$("${TOOLS}/market_open.sh" 2>/dev/null || true)"
+  fi
   _raw="$(printf %s "${_raw}" | head -n1 | tr -d '[:space:]')"
   if [[ "${_raw}" == "Open" || "${_raw}" == "Closed" ]]; then
     PHASE="${_raw}"
   fi
-  unset _raw
+
+  if ! trusted_epoch_valid "${BOTA_SERVER_EPOCH:-}" && [[ -n "$_market_epoch_file" && -s "$_market_epoch_file" ]]; then
+    _probed_epoch="$(head -n1 "$_market_epoch_file" 2>/dev/null | tr -d '[:space:]')"
+    if trusted_epoch_valid "$_probed_epoch"; then
+      export BOTA_SERVER_EPOCH="$_probed_epoch"
+    fi
+    unset _probed_epoch
+  fi
+
+  [[ -z "$_market_epoch_file" ]] || rm -f "$_market_epoch_file" 2>/dev/null || true
+  unset _raw _market_epoch_file
 fi
 if [[ "${PHASE}" == "Closed" ]]; then
   # ONLY CHANGE IN BEHAVIOR: preserve numeric context from indicators cache if present.
   emit_hold_closed_from_cache "${PAIR}" "${TF}" "market phase Closed" "scoring_engine_market"
+  exit 0
+fi
+
+if ! trusted_epoch_valid "${BOTA_SERVER_EPOCH:-}"; then
+  emit_hold_json "${PAIR}" "${TF}" "clock_unavailable" "scoring_engine_clock"
   exit 0
 fi
 
@@ -260,6 +290,31 @@ pair = os.environ.get("SCORING_PAIR","")
 tf = os.environ.get("SCORING_TF","")
 phase = os.environ.get("SCORING_MARKET_PHASE","Unknown")
 path = os.environ.get("SCORING_INDIC_PATH","")
+
+# Strategy/event time is inherited from the watcher cycle. Never use host wall
+# time here: Android ship-time drift previously moved session score by 2-5pts.
+tools_dir = os.path.join(
+    os.environ.get("BOTA_ROOT", os.path.expanduser("~/BotA")), "tools"
+)
+if tools_dir not in sys.path:
+    sys.path.insert(0, tools_dir)
+try:
+    from trusted_time import session_component, trusted_utc
+    strategy_now_utc = trusted_utc()
+except Exception:
+    out = {
+      "pair": pair, "tf": tf, "direction": "HOLD",
+      "entry": 0.0, "sl": 0.0, "tp": 0.0, "volatility": "unknown",
+      "score": 0, "confidence": 40,
+      "reasons": "clock_unavailable",
+      "price": 0.0, "provider": "scoring_engine_clock",
+      "atr": 0.0, "filter_rr": 0.0, "filter_atr": 0.0,
+      "filter_rejected": True,
+      "filter_reasons": ["fail_closed", "clock_unavailable"],
+      "pattern_delta": 0
+    }
+    json.dump(out, sys.stdout, separators=(",",":"))
+    sys.exit(0)
 
 ind = load(path)
 
@@ -443,9 +498,9 @@ if adx < 20.0:
     # SHADOW LANE — no production effect
     if adx >= 15.0:
         try:
-            import datetime as _sdt, json as _sj
+            import json as _sj
             _sp = {
-                "timestamp": _sdt.datetime.now(_sdt.timezone.utc).isoformat(),
+                "timestamp": strategy_now_utc.isoformat(),
                 "pair": pair,
                 "timeframe": tf,
                 "adx": round(adx, 2),
@@ -497,25 +552,11 @@ if bb_upper > 0 and bb_lower > 0 and bb_middle > 0:
         bb_comp = -5.0
         bb_tag = "bb_counter"
 
-# 6. Session quality component (pure datetime, zero API calls)
+# 6. Session quality component — same score/windows, trusted time source.
 # London+NY overlap (12:00-16:00 UTC) = +5 (highest quality)
 # London only (07:00-12:00 UTC) or NY only (16:00-20:00 UTC) = +2
-# Edges (07:00 open, 19:00-20:00 close) = 0
-import datetime as _dt
-_now_utc = _dt.datetime.now(_dt.timezone.utc)
-_h = _now_utc.hour + _now_utc.minute / 60.0
-if 12.0 <= _h < 16.0:
-    session_comp = 5.0
-    session_tag = "session_overlap"
-elif 7.0 <= _h < 12.0:
-    session_comp = 2.0
-    session_tag = "session_london"
-elif 16.0 <= _h < 20.0:
-    session_comp = 2.0
-    session_tag = "session_ny"
-else:
-    session_comp = 0.0
-    session_tag = "session_edge"
+# Edges/outside = 0
+session_comp, session_tag = session_component()
 
 # 7. Tick volume confirmation (uses OANDA candle volume field)
 # Current candle volume vs 20-period average
