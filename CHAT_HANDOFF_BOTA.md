@@ -1,91 +1,91 @@
 # BotA Chat Handoff
 
-Last updated: **2026-08-09 UTC**
+Last updated: **2026-08-10 UTC**
 
 Read this first in any new AI session before proposing BotA changes.
 
 ## Current grounded answer
 
 ```text
-CHECKPOINT_BASE_MAIN=810441fd772e1330db7de670c3eae95606981742
-PHONE_RUNTIME_SOURCE_BASELINE=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
-PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
-PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
-PHONE_WORKTREE_DIRTY=YES
-
-PACKAGE_1_CLOCK_SESSION=PASS
-PACKAGE_2_CONTROL_PLANE_RECOVERY=PASS
-PACKAGE_2_FINALIZER_DEPLOY=PASS
-PR87_PR88_PHONE_DEPLOY=PASS
-RUNTIME_DEPENDENCY_CONTRACT=PASS
-CURRENT_CONTROL_PLANE=HEALTHY
-CURRENT_REQUIRED_SERVICES_OWNED=7/7
-CURRENT_REQUIRED_SERVICES_RUNNING=7/7
-CURRENT_ORPHANED_RUNSV=0
-CURRENT_DUPLICATE_SERVICE_ROWS=0
-WATCHDOG_SINGLETON=PASS
-BOOT_PERSISTENCE=PASS
-PROFITLAB_PRESERVED=PASS
-NATURAL_SHADOW_CYCLE=PASS
-PRE_MARKET_PRODUCTION_INTEGRITY=PASS
-PR89_WATCHDOG_GUARDIAN=BLOCKED_REVIEW_AND_CI
-OPEN_MARKET_THREE_PAIR_PROOF=PENDING
-MONDAY_READY=NO
-```
-
-The phone checkout HEAD is not production identity. Runtime acceptance is based on immutable reviewed source blobs, deployed file parity, runtime state, and bounded postconditions.
-
-## Latest verified phone evidence
-
-The PR #87 / #88 deployment and subsequent natural runtime proof passed:
-
-```text
-requests==2.34.2
-DEPENDENCY_CONTRACT=PASS
-PIP_BASELINE_REGRESSION=NO
-CONTROL_PLANE=7_OF_7_HEALTHY
-WATCHDOG_SINGLETON=PASS
-PROFITLAB_PRESERVED=PASS
-SERVICE_RESTARTED=NO
-SHADOW_MANUALLY_EXECUTED=NO
+TRADING_ENGINE=PROVEN_CAPABLE
+CURRENT_LEGACY_RUNTIME=RUNIT_RUNSVDIR_ON_ANDROID
+CURRENT_LEGACY_RUNTIME_RELIABILITY=UNTRUSTED_OVER_TIME
+TARGET_ARCHITECTURE=OPTION_A_CONSTRAINED
+PERSISTENT_PROCESS_COUNT=2
+ONE_RESURRECTION_AUTHORITY=MINIMAL_OWNER_RESTARTER
+ORCHESTRATOR=LIGHTWEIGHT_PYTHON
+ENGINE_EXECUTION=EXISTING_SCRIPTS_AS_BOUNDED_SUBPROCESSES
+FINAL_GO_NO_GO=GO_BUILD
+PRODUCTION_CUTOVER=NOT_STARTED
+CLOUD_NOW=NO
 STRATEGY_CHANGED=NO
 ```
 
-A later natural runit-owned shadow cycle completed successfully:
+## Canonical final audit
+
+`audits/REPLACEMENT_RUNTIME_SIX_MODEL_ARCHITECTURE_AUDIT_2026-08-10.md`
+
+This records the six-model audit from Claude, Kimi, DeepSeek, Grok, Gemini, and Perplexity and the final synthesis.
+
+## Final architecture
 
 ```text
-SHADOW_STATUS=completed
-SHADOW_DETAILS=exit_code=0
-LATEST_SHADOW_HEARTBEAT=OK | 0 active signals
-LATEST_SHADOW_DONE_LOG=Shadow Manager done | 0 active signals
-NATURAL_SHADOW_ACCEPTANCE=PASS
+Termux:Boot
+    |
+    v
+minimal owner/restarter
+    |
+    v
+lightweight Python orchestrator
+    |
+    +-- existing BotA trading-engine entrypoints as transient subprocesses
 ```
 
-The corrected pre-market integrity gate then passed all nine checks with zero failures:
+Exactly one component may resurrect the runtime: the owner/restarter.
+
+The orchestrator must stay lightweight. Heavy pandas/indicator/trading logic remains in existing short-lived engine processes during migration.
+
+## What is being retired
+
+At successful cutover:
 
 ```text
-CHECK_CONTROL_PLANE=PASS
-CHECK_WATCHDOG_OWNERSHIP=PASS
-CHECK_BOOT_PERSISTENCE=PASS
-CHECK_CRON_OWNERSHIP=PASS
-CHECK_RUNTIME_PARITY=PASS
-CHECK_PRODUCTION_CONFIG=PASS
-CHECK_PROFITLAB=PASS
-CHECK_PROGRESS=PASS
-CHECK_TRUSTED_CLOCK=PASS
-FAILURE_COUNT=0
-PRE_MARKET_INTEGRITY_ACCEPTANCE=PASS
+runit=remove
+runsvdir=remove
+BotA cron restart authority=remove
+profile.d production launch=forbidden
+bare crond fallback=remove
+watchdogs watching watchdogs=remove
 ```
 
-Therefore:
+These may still exist in the legacy deployed phone before cutover. Do not confuse current legacy deployment with target architecture.
+
+## Health model
+
+PID/process existence is insufficient.
+
+Persisted useful-work state must prove actual progress:
 
 ```text
-INFRASTRUCTURE_AND_CLOSED_MARKET_READINESS=PASS
+runtime_instance_id
+runtime_start_utc
+heartbeat_write_utc
+last_market_data_success_utc
+last_indicator_update_utc
+last_watcher_cycle_complete_utc
+last_signal_decision_utc
+last_closer_cycle_complete_utc
+last_shadow_cycle_complete_utc
+last_clock_validation_utc
+last_external_delivery_attempt_utc
+clock_trust_state
+market_session_state
+last_cycle_error_class
 ```
 
-Do **not** translate that into `MONDAY_READY=YES` yet.
+A live PID with stale required progress is a living zombie and must be force-exited; the owner then restarts exactly one replacement.
 
-## Current production scope
+## Trading engine is frozen during migration
 
 ```text
 PAIRS=EURUSD GBPUSD USDJPY
@@ -98,72 +98,90 @@ TELEGRAM_ENABLED=1
 DRY_RUN_MODE=0
 ```
 
-Do not lower thresholds or change signal eligibility to manufacture activity.
+Do not lower thresholds or change strategy semantics to create more signals.
 
-## Current blocker — PR #89
+The replacement orchestrator must invoke the existing engine entrypoints and prove parity with fixed fixtures before cutover.
 
-PR #89 `fix: persist native watchdog with fail-closed cron guardian` is still open. Current head at this checkpoint:
+## Crash consistency
 
-```text
-PR89_HEAD=4f73a999634bc83c52defb0d31bfb72291ac83b9
-PR89_MERGEABLE=true
-GITHUB_ACTIONS_SECURITY_SCAN=PASS
-GITHUB_ACTIONS_NATIVE_WATCHDOG_GUARDIAN=PASS
-DEEPSOURCE_PYTHON=FAIL
-UNRESOLVED_REVIEW_THREADS=10
-DISTINCT_REMEDIATION_ITEMS=9
-```
-
-Two unresolved threads report the same unused-variable cleanup; there are therefore 10 open threads but 9 distinct fixes.
-
-The unresolved findings are concentrated in the five PR files:
-
-- `.github/workflows/native-watchdog-guardian.yml`
-- `tools/native_watchdog_guard.py`
-- `tools/native_watchdog_cron_config.py`
-- `tests/test_native_watchdog_guard.py`
-- `tests/test_native_watchdog_cron_config.py`
-
-Required fixes:
-
-1. active advisory `FLOCK` ownership rather than open-descriptor inference;
-2. shell-safe quoted cron paths plus CR/LF rejection;
-3. controlled guardian failure even if event logging itself fails;
-4. AST-based no-termination validator with negative fixtures;
-5. full rendered-crontab validation with exactly one managed active `--ensure` line;
-6. finite timeout validation (`NaN` / infinities rejected);
-7. `persist-credentials: false` on checkout;
-8. unused-variable cleanup;
-9. staticmethod cleanup in cron tests.
-
-No phone deployment of PR #89 is allowed until exact-head review/static/CI gates pass.
-
-## Remaining Monday gates
+External side effects use:
 
 ```text
-PR89_REVIEW_CLEAN=PENDING
-PR89_EXACT_HEAD_STATIC_AND_CI=PASS_REQUIRED
-PR89_MERGE=PENDING
-GUARDIAN_PHONE_DEPLOY=PENDING
-GUARDIAN_WATCHDOG_ONLY_FAULT_INJECTION=PENDING
-OPEN_MARKET_EURUSD_M15=PENDING
-OPEN_MARKET_GBPUSD_M15=PENDING
-OPEN_MARKET_USDJPY_M15=PENDING
-MONDAY_READY=NO
+persist intent
+-> execute action
+-> persist confirmation
 ```
 
-Three legitimate current-cycle rejects are acceptable for the market-open proof. A Telegram signal is not required.
+Unknown completion after a crash must be reconciled. Never blindly resend a possibly delivered signal.
 
-## Canonical current sources
+## Android resume rule
 
-1. `CONTINUITY_CURRENT.md`
-2. `AI_START_HERE.md`
-3. `audits/PRE_MARKET_READINESS_CHECKPOINT_2026-08-09.md`
-4. GitHub issue #9
-5. this file
+After suspend/Doze or scheduling gaps:
 
-`ERRORS.md`, `RESOLVED.md`, and older dated audits preserve historical failure and repair context; current gate truth must follow the sources above when historical wording differs.
+```text
+do_not_replay_missed_scans
+revalidate_trusted_clock
+refresh_market_data
+reject_stale_or_incomplete_candles
+resume_from_fresh_boundary_only
+```
+
+## Cutover gate
+
+The replacement must pass:
+
+1. static/unit validation;
+2. exact engine parity;
+3. SIGTERM/SIGKILL and hung-provider fault injection;
+4. crash-consistency tests;
+5. duplicate-prevention tests;
+6. living-zombie recovery;
+7. screen-off/background/reboot/unattended Android tests;
+8. minimum 7-day shadow-live run, preferably 10–14 days.
+
+No five-minute success is sufficient.
+
+## Strategy proof after runtime proof
+
+Runtime reliability and profitability are separate.
+
+Initial strategy evidence requires at least 100 closed signals; 200+ preferred. Evaluate >=60% win rate together with positive expectancy, average win/loss, R multiple, profit factor, drawdown, unknown outcomes, duplicates/exclusions, and sample-selection bias.
+
+## Cloud decision
+
+```text
+CLOUD_NOW=NO
+CLOUD_AFTER_STRATEGY_PROOF=YES
+```
+
+If Android cannot pass the simplified architecture's unattended shadow test, cloud/Linux becomes required as a proof host regardless of unfinished strategy statistics.
+
+## GitHub location
+
+```text
+BRANCH=docs/final-runtime-architecture-20260810
+PR=96
+```
+
+The architecture documentation is not a production deployment.
 
 ## Exactly one next action
 
-Fix every still-valid unresolved PR #89 review finding on branch `fix/watchdog-persistence-guardian-20260809`, run focused validation, and stop for human confirmation before commit/push. Do not mutate the phone/runtime while fixing the GitHub PR.
+**Package R1: build/test the minimal owner-restarter against a dummy runtime only.**
+
+R1 acceptance:
+
+```text
+exactly_one_owner
+at_most_one_runtime
+normal_exit_restart
+SIGTERM_restart
+SIGKILL_restart
+duplicate_owner_rejected
+duplicate_runtime_rejected
+stale_useful_progress_detected
+corrupt_or_missing_heartbeat_handled
+rapid_crash_loop_bounded_and_observable
+production_runtime_unchanged
+strategy_unchanged
+```
