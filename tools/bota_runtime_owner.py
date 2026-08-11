@@ -4,6 +4,7 @@ import argparse
 import contextlib
 import fcntl
 import json
+import math
 import os
 import signal
 import subprocess
@@ -59,8 +60,7 @@ def _append_event(path: Path, event: str, **fields: object) -> None:
 
 def _read_heartbeat(path: Path) -> dict[str, object] | None:
     try:
-        raw = path.read_text(encoding="utf-8")
-        payload = json.loads(raw)
+        payload = json.loads(path.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return None
     return payload if isinstance(payload, dict) else None
@@ -72,7 +72,7 @@ def heartbeat_is_stale(path: Path, stale_seconds: float, now: float | None = Non
     if payload is None:
         return True
     value = payload.get("heartbeat_write_utc")
-    if not isinstance(value, (int, float)):
+    if not isinstance(value, (int, float)) or not math.isfinite(float(value)):
         return True
     return now_value - float(value) > stale_seconds
 
@@ -127,6 +127,7 @@ def run_owner(config: OwnerConfig) -> int:
             with contextlib.suppress(FileNotFoundError):
                 config.heartbeat_path.unlink()
             proc = _start_runtime(config, instance_id)
+            runtime_started_monotonic = time.monotonic()
             _append_event(
                 config.events_path,
                 "runtime_started",
@@ -147,7 +148,11 @@ def run_owner(config: OwnerConfig) -> int:
                     )
                     break
 
-                if heartbeat_is_stale(config.heartbeat_path, config.stale_seconds):
+                runtime_age = time.monotonic() - runtime_started_monotonic
+                if runtime_age >= config.stale_seconds and heartbeat_is_stale(
+                    config.heartbeat_path,
+                    config.stale_seconds,
+                ):
                     _append_event(
                         config.events_path,
                         "runtime_zombie_detected",
@@ -176,8 +181,15 @@ def run_owner(config: OwnerConfig) -> int:
 
 def _positive_float(value: str) -> float:
     parsed = float(value)
-    if parsed <= 0 or not (parsed < float("inf")):
+    if parsed <= 0 or not math.isfinite(parsed):
         raise argparse.ArgumentTypeError("must be finite and > 0")
+    return parsed
+
+
+def _nonnegative_float(value: str) -> float:
+    parsed = float(value)
+    if parsed < 0 or not math.isfinite(parsed):
+        raise argparse.ArgumentTypeError("must be finite and >= 0")
     return parsed
 
 
@@ -187,7 +199,7 @@ def parse_args(argv: Sequence[str] | None = None) -> OwnerConfig:
     parser.add_argument("--poll-seconds", type=_positive_float, default=1.0)
     parser.add_argument("--stale-seconds", type=_positive_float, default=30.0)
     parser.add_argument("--terminate-grace-seconds", type=_positive_float, default=2.0)
-    parser.add_argument("--restart-backoff-seconds", type=float, default=1.0)
+    parser.add_argument("--restart-backoff-seconds", type=_nonnegative_float, default=1.0)
     parser.add_argument("--max-runtime-starts", type=int, default=-1)
     parser.add_argument("runtime_command", nargs=argparse.REMAINDER)
     ns = parser.parse_args(argv)
@@ -196,8 +208,6 @@ def parse_args(argv: Sequence[str] | None = None) -> OwnerConfig:
         runtime_command = runtime_command[1:]
     if not runtime_command:
         parser.error("runtime command is required after --")
-    if ns.restart_backoff_seconds < 0 or ns.restart_backoff_seconds == float("inf"):
-        parser.error("--restart-backoff-seconds must be finite and >= 0")
     if ns.max_runtime_starts == 0 or ns.max_runtime_starts < -1:
         parser.error("--max-runtime-starts must be -1 or >= 1")
     return OwnerConfig(
@@ -212,10 +222,7 @@ def parse_args(argv: Sequence[str] | None = None) -> OwnerConfig:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    try:
-        config = parse_args(argv)
-    except SystemExit:
-        raise
+    config = parse_args(argv)
     return run_owner(config)
 
 
