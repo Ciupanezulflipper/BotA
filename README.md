@@ -19,6 +19,8 @@ PRODUCTION_TRADING_READY=NO
 
 The trading engine has demonstrated that it can scan markets, produce actionable decisions, and deliver Telegram signals. The unresolved problem is runtime/control-plane persistence on Android/Termux.
 
+Canonical final audit: `audits/REPLACEMENT_RUNTIME_SIX_MODEL_ARCHITECTURE_AUDIT_2026-08-10.md`.
+
 Do not infer current production state from old backtests, `BOTLOG.md`, `BOOTLOG.md`, historical continuity entries, or an Android working-tree HEAD.
 
 ## Final runtime architecture decision — 10 August 2026
