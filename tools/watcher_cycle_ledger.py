@@ -4,6 +4,8 @@
 Only evidence produced by the current watcher cycle is considered. Historical
 ``alerts.csv`` files retain a legacy 13-column header while newer rows use the
 current 25-column schema, so appended rows are parsed by their actual width.
+Structured Telegram and Supabase results are accepted only from the exact
+bounded result files supplied by the current-cycle wrapper.
 """
 from __future__ import annotations
 
@@ -34,6 +36,12 @@ CANONICAL_ALERT_FIELDS_25 = CURRENT_ALERT_FIELDS_25
 VALID_SUPABASE_STATUSES = {
     "published", "skipped_active_exists", "skipped_non_green", "failed_missing_service_key",
     "failed_dedup_check", "failed_publish",
+}
+VALID_TELEGRAM_STATUSES = {
+    "sent", "reconciled_sent", "definite_failure", "unknown_outcome", "sent_local_reconcile_failed",
+}
+UNHEALTHY_OUTCOMES = {
+    "no_terminal_outcome", "telegram_unknown_outcome", "telegram_sent_local_reconcile_failed",
 }
 
 
@@ -195,7 +203,7 @@ def log_outcome(lines: list[str]) -> tuple[str, str, str, str]:
     return outcome, telegram, supabase, rejection
 
 
-def parse_supabase_results(path: Path | None) -> tuple[list[dict[str, str]], bool]:
+def _read_jsonl(path: Path | None) -> tuple[list[dict[str, Any]], bool]:
     if path is None:
         return [], False
     try:
@@ -204,7 +212,7 @@ def parse_supabase_results(path: Path | None) -> tuple[list[dict[str, str]], boo
         return [], False
     except OSError:
         return [], True
-    results = []
+    values: list[dict[str, Any]] = []
     malformed = False
     for line in text.splitlines():
         if not line.strip():
@@ -217,6 +225,14 @@ def parse_supabase_results(path: Path | None) -> tuple[list[dict[str, str]], boo
         if not isinstance(value, dict):
             malformed = True
             continue
+        values.append(value)
+    return values, malformed
+
+
+def parse_supabase_results(path: Path | None) -> tuple[list[dict[str, str]], bool]:
+    values, malformed = _read_jsonl(path)
+    results = []
+    for value in values:
         pair = str(value.get("pair") or "").upper()
         timeframe = str(value.get("timeframe") or "").upper()
         status = str(value.get("status") or "")
@@ -230,6 +246,56 @@ def parse_supabase_results(path: Path | None) -> tuple[list[dict[str, str]], boo
             "tier": str(value.get("tier") or "").upper(), "status": status,
         })
     return results, malformed
+
+
+def parse_telegram_results(path: Path | None) -> tuple[list[dict[str, str]], bool]:
+    values, malformed = _read_jsonl(path)
+    results = []
+    for value in values:
+        pair = str(value.get("pair") or "").upper()
+        timeframe = str(value.get("timeframe") or "").upper()
+        status = str(value.get("status") or "")
+        if not pair or not timeframe or status not in VALID_TELEGRAM_STATUSES:
+            malformed = True
+            continue
+        results.append({
+            "pair": pair,
+            "timeframe": timeframe,
+            "direction": str(value.get("direction") or "").upper(),
+            "score": str(value.get("score") or ""),
+            "entry": str(value.get("entry") or ""),
+            "sl": str(value.get("sl") or ""),
+            "tp": str(value.get("tp") or ""),
+            "status": status,
+        })
+    return results, malformed
+
+
+def _filter_for_row(candidates, row: dict[str, str] | None):
+    if not row:
+        return candidates
+    fields = (
+        ("direction", str(row.get("direction") or "").upper()),
+        ("score", str(row.get("score") or "")),
+        ("entry", str(row.get("entry") or "")),
+        ("sl", str(row.get("sl") or "")),
+        ("tp", str(row.get("tp") or "")),
+    )
+    filtered = candidates
+    for name, expected in fields:
+        if expected:
+            filtered = [item for item in filtered if not item.get(name) or item.get(name) == expected]
+    return filtered
+
+
+def telegram_for_decision(results, *, pair: str, timeframe: str, row: dict[str, str] | None):
+    candidates = [item for item in results if item["pair"] == pair and item["timeframe"] == timeframe]
+    candidates = _filter_for_row(candidates, row)
+    if not candidates:
+        return None, False
+    if len(candidates) != 1:
+        return None, True
+    return candidates[0]["status"], False
 
 
 def supabase_for_decision(results, *, pair: str, timeframe: str, row: dict[str, str] | None):
@@ -255,10 +321,23 @@ def extract_stale_fields(lines: list[str]) -> tuple[str, int | None]:
     return (ts_match[-1] if ts_match else "", int(age_match[-1]) if age_match else None)
 
 
+def apply_structured_telegram(outcome: str, telegram: str, status: str | None) -> tuple[str, str]:
+    if status in {"sent", "reconciled_sent"}:
+        return "telegram_sent", "sent"
+    if status == "definite_failure":
+        return "telegram_failed", "failed"
+    if status == "unknown_outcome":
+        return "telegram_unknown_outcome", "unknown_outcome"
+    if status == "sent_local_reconcile_failed":
+        return "telegram_sent_local_reconcile_failed", "sent"
+    return outcome, telegram
+
+
 def ledger_decision(*, cycle_id, server_epoch, pair, timeframe, row, lines,
-                    structured_supabase=None, evidence_invalid=False):
+                    structured_telegram=None, structured_supabase=None, evidence_invalid=False):
     row = row or {}
     outcome, telegram, supabase, rejection = log_outcome(lines)
+    outcome, telegram = apply_structured_telegram(outcome, telegram, structured_telegram)
     malformed = truthy(row.get("_malformed")) or evidence_invalid
     persisted = bool(row) and not malformed
     rejected = normalized_rejected(row)
@@ -274,9 +353,10 @@ def ledger_decision(*, cycle_id, server_epoch, pair, timeframe, row, lines,
     elif persisted and outcome == "no_terminal_outcome":
         outcome = "decision_persisted_no_delivery_evidence"
     candle_timestamp, candle_age = extract_stale_fields(lines)
+    decision_failed = malformed or outcome in UNHEALTHY_OUTCOMES
     command = [
         sys.executable, str(root_dir() / "tools" / "pipeline_ledger.py"), "decision",
-        "--component", "watcher", "--status", "failed" if malformed or outcome == "no_terminal_outcome" else "completed",
+        "--component", "watcher", "--status", "failed" if decision_failed else "completed",
         "--cycle-id", cycle_id, "--pair", pair, "--timeframe", timeframe, "--outcome", outcome,
         "--provider", row.get("provider", "unknown") or "unknown", "--candle-timestamp", candle_timestamp,
         "--filter-rejected", "true" if rejected else "false",
@@ -303,6 +383,7 @@ def main() -> int:
     parser.add_argument("--alerts-offset", type=int, required=True)
     parser.add_argument("--log-offset", type=int, default=0)
     parser.add_argument("--log-path", type=Path, default=None)
+    parser.add_argument("--telegram-result-path", type=Path, default=None)
     parser.add_argument("--supabase-result-path", type=Path, default=None)
     parser.add_argument("--server-epoch", type=int, default=0)
     args = parser.parse_args()
@@ -312,12 +393,15 @@ def main() -> int:
     log_path = args.log_path if args.log_path is not None else root / "logs" / "cron.signals.log"
     rows = parse_new_rows(alerts, args.alerts_offset)
     log_text = read_new_bytes(log_path, args.log_offset)
+    telegram_results, telegram_malformed = parse_telegram_results(args.telegram_result_path)
     supabase_results, supabase_malformed = parse_supabase_results(args.supabase_result_path)
     effective_epoch = trusted_server_epoch(args.server_epoch, log_text)
     csv_malformed = any(truthy(row.get("_malformed")) for row in rows)
 
     prepared = []
+    telegram_ambiguous = False
     supabase_ambiguous = False
+    evidence_contradiction = False
     for pair, timeframe in expected_scope():
         matching = [
             row for row in rows
@@ -325,25 +409,35 @@ def main() -> int:
             and str(row.get("tf", row.get("timeframe", ""))).upper() == timeframe
         ]
         selected_row = matching[-1] if matching else None
-        status, ambiguous = supabase_for_decision(
+        telegram_status, tg_ambiguous = telegram_for_decision(
+            telegram_results, pair=pair, timeframe=timeframe, row=selected_row
+        )
+        supabase_status, sb_ambiguous = supabase_for_decision(
             supabase_results, pair=pair, timeframe=timeframe, row=selected_row
         )
-        supabase_ambiguous = supabase_ambiguous or ambiguous
-        prepared.append((pair, timeframe, selected_row, status))
+        telegram_ambiguous = telegram_ambiguous or tg_ambiguous
+        supabase_ambiguous = supabase_ambiguous or sb_ambiguous
+        if selected_row and normalized_rejected(selected_row) and telegram_status is not None:
+            evidence_contradiction = True
+        prepared.append((pair, timeframe, selected_row, telegram_status, supabase_status))
 
-    evidence_invalid = csv_malformed or supabase_malformed or supabase_ambiguous
+    evidence_invalid = (
+        csv_malformed or telegram_malformed or supabase_malformed
+        or telegram_ambiguous or supabase_ambiguous or evidence_contradiction
+    )
     results = []
-    for pair, timeframe, selected_row, supabase_status in prepared:
+    for pair, timeframe, selected_row, telegram_status, supabase_status in prepared:
         row = {"_malformed": "true"} if evidence_invalid else selected_row
         results.append(ledger_decision(
             cycle_id=args.cycle_id, server_epoch=effective_epoch, pair=pair, timeframe=timeframe,
             row=row, lines=pair_lines(log_text, pair, timeframe),
-            structured_supabase=supabase_status, evidence_invalid=evidence_invalid,
+            structured_telegram=telegram_status, structured_supabase=supabase_status,
+            evidence_invalid=evidence_invalid,
         ))
 
     healthy = (
         not evidence_invalid
-        and all(item["outcome"] != "no_terminal_outcome" and item["ledger_rc"] == 0 for item in results)
+        and all(item["outcome"] not in UNHEALTHY_OUTCOMES and item["ledger_rc"] == 0 for item in results)
     )
     status = "completed" if healthy else "failed"
     subprocess.run([
