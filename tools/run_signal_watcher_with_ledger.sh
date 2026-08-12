@@ -6,7 +6,7 @@
 # identity and retains the legacy component-start/failure bookkeeping.
 #
 # Failed/interrupted cycles retain their bounded evidence files in state/ for
-# post-crash forensics. Successful cycles remove them on exit.
+# post-crash forensics. Successful cycles remove them explicitly at the end.
 
 set -euo pipefail
 
@@ -17,7 +17,7 @@ EVIDENCE_STATE="${ROOT}/state"
 WATCHER_STATE_RAW="${STATE:-}"
 if [[ -z "${WATCHER_STATE_RAW}" ]]; then
   DELIVERY_STATE="${ROOT}/logs/state"
-elif [[ "${WATCHER_STATE_RAW}" == /* ]]; then
+elif [[ "${WATCHER_STATE_RAW}" = /* ]]; then
   DELIVERY_STATE="${WATCHER_STATE_RAW}"
 else
   DELIVERY_STATE="${ROOT}/${WATCHER_STATE_RAW}"
@@ -54,8 +54,6 @@ export BOTA_DELIVERY_STATE_DIR="${DELIVERY_STATE}"
 cycle_log="$(mktemp "${EVIDENCE_STATE}/watcher_cycle.XXXXXX.log")"
 telegram_result_log="$(mktemp "${EVIDENCE_STATE}/watcher_telegram.XXXXXX.jsonl")"
 supabase_result_log="$(mktemp "${EVIDENCE_STATE}/watcher_supabase.XXXXXX.jsonl")"
-delete_evidence_on_exit=0
-trap 'if (( delete_evidence_on_exit == 1 )); then rm -f "${cycle_log}" "${telegram_result_log}" "${supabase_result_log}" 2>/dev/null || true; fi' EXIT
 
 server_epoch="${BOTA_SERVER_EPOCH:-0}"
 owns_cycle=0
@@ -83,13 +81,18 @@ watcher_rc=0
 bash "${TOOLS}/signal_watcher_pro.sh" --once 2>"${cycle_log}" || watcher_rc=$?
 
 # The watcher historically swallowed alerts.csv append failures. Enforce a
-# cycle-level persistence postcondition before health can be green.
+# cycle-level persistence postcondition before health can be green. Capture the
+# verifier output first; never read and append the same cycle log concurrently.
 persistence_rc=0
-python3 "${TOOLS}/watcher_persistence_gate.py" \
-  --alerts-path "${alerts}" \
-  --alerts-offset "${alerts_offset}" \
-  --log-path "${cycle_log}" \
-  >>"${cycle_log}" 2>&1 || persistence_rc=$?
+persistence_output="$({
+  python3 "${TOOLS}/watcher_persistence_gate.py" \
+    --alerts-path "${alerts}" \
+    --alerts-offset "${alerts_offset}" \
+    --log-path "${cycle_log}"
+} 2>&1)" || persistence_rc=$?
+if [[ -n "${persistence_output}" ]]; then
+  printf '%s\n' "${persistence_output}" >>"${cycle_log}"
+fi
 
 reconcile_rc=0
 python3 "${TOOLS}/watcher_cycle_ledger.py" \
@@ -128,5 +131,5 @@ if (( final_rc != 0 )); then
   exit "${final_rc}"
 fi
 
-delete_evidence_on_exit=1
+rm -f "${cycle_log}" "${telegram_result_log}" "${supabase_result_log}"
 exit 0
