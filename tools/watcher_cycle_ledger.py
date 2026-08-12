@@ -105,7 +105,7 @@ def _row_schema(values: list[str]) -> tuple[str, ...] | None:
 
 
 def parse_new_rows(path: Path, offset: int) -> list[dict[str, str]]:
-    """Parse appended rows by actual width; malformed widths fail closed."""
+    """Parse appended rows by actual width and surface malformed evidence."""
     header = read_header(path)
     segment = read_new_bytes(path, offset)
     if not segment.strip():
@@ -121,6 +121,14 @@ def parse_new_rows(path: Path, offset: int) -> list[dict[str, str]]:
             continue
         schema = _row_schema(values)
         if schema is None:
+            rows.append(
+                {
+                    "_malformed": "true",
+                    "_width": str(len(values)),
+                    "pair": values[1].upper() if len(values) > 1 else "",
+                    "tf": values[2].upper() if len(values) > 2 else "",
+                }
+            )
             continue
         rows.append(dict(zip(schema, values, strict=True)))
     return rows
@@ -131,15 +139,33 @@ def truthy(value: Any) -> bool:
 
 
 def normalized_rejected(row: dict[str, str]) -> bool:
-    """Normalize legacy/new rejection keys; never treat an explicit true as false."""
+    """Normalize legacy/new rejection keys; never turn explicit true into false."""
     if "filter_rejected" in row and str(row.get("filter_rejected", "")).strip() != "":
         return truthy(row.get("filter_rejected"))
     return truthy(row.get("rejected"))
 
 
 def pair_lines(log_text: str, pair: str, timeframe: str) -> list[str]:
-    token = f"{pair} {timeframe}"
-    return [line for line in log_text.splitlines() if token in line]
+    """Return the pair's contiguous cycle span, including unscoped send lines.
+
+    FILTER/STALE/etc. lines carry ``PAIR TIMEFRAME`` while the actual Telegram
+    ``SENT: via`` line does not. The watcher processes pair/timeframe scopes
+    sequentially, so unscoped lines after a target scope starts belong to that
+    scope until another configured pair/timeframe is observed.
+    """
+    target = (pair, timeframe)
+    scope = expected_scope()
+    current: tuple[str, str] | None = None
+    selected: list[str] = []
+    for line in log_text.splitlines():
+        matched = [item for item in scope if f"{item[0]} {item[1]}" in line]
+        if len(matched) == 1:
+            current = matched[0]
+        elif len(matched) > 1:
+            current = None
+        if current == target:
+            selected.append(line)
+    return selected
 
 
 def trusted_server_epoch(cli_epoch: int, log_text: str) -> int:
@@ -181,7 +207,12 @@ def log_outcome(lines: list[str]) -> tuple[str, str, str, str]:
         telegram = "sent"
     elif "send failed" in joined or "FAILED:" in joined:
         telegram = "failed"
-    elif outcome in {"telegram_score_gate", "telegram_tier_gate", "telegram_cooldown", "delivery_dedup"}:
+    elif outcome in {
+        "telegram_score_gate",
+        "telegram_tier_gate",
+        "telegram_cooldown",
+        "delivery_dedup",
+    }:
         telegram = outcome
 
     supabase = "not_attempted"
@@ -208,29 +239,62 @@ def extract_stale_fields(lines: list[str]) -> tuple[str, int | None]:
     return timestamp, age
 
 
-def ledger_decision(*, cycle_id: str, server_epoch: int, pair: str, timeframe: str,
-                    row: dict[str, str] | None, lines: list[str]) -> dict[str, Any]:
+def ledger_decision(
+    *,
+    cycle_id: str,
+    server_epoch: int,
+    pair: str,
+    timeframe: str,
+    row: dict[str, str] | None,
+    lines: list[str],
+) -> dict[str, Any]:
     row = row or {}
     outcome, telegram, supabase, rejection = log_outcome(lines)
-    persisted = bool(row)
+    malformed = truthy(row.get("_malformed"))
+    persisted = bool(row) and not malformed
     rejected = normalized_rejected(row)
-    if persisted and rejected:
+    if malformed:
+        outcome = "parse_error"
+        telegram = "not_attempted"
+        supabase = "not_attempted"
+    elif persisted and rejected:
         outcome = "filter_rejected"
     elif persisted and outcome == "no_terminal_outcome":
         outcome = "decision_persisted_no_delivery_evidence"
     candle_timestamp, candle_age = extract_stale_fields(lines)
 
     command = [
-        sys.executable, str(root_dir() / "tools" / "pipeline_ledger.py"), "decision",
-        "--component", "watcher", "--status", "completed" if outcome != "no_terminal_outcome" else "failed",
-        "--cycle-id", cycle_id, "--pair", pair, "--timeframe", timeframe,
-        "--outcome", outcome, "--provider", row.get("provider", "unknown") or "unknown",
-        "--candle-timestamp", candle_timestamp,
-        "--filter-rejected", "true" if rejected else "false",
-        "--rejection-gate", row.get("filter_reasons", "") or rejection,
-        "--alerts-csv-persisted", "true" if persisted else "false",
-        "--telegram-result", telegram, "--supabase-result", supabase,
-        "--server-epoch", str(server_epoch),
+        sys.executable,
+        str(root_dir() / "tools" / "pipeline_ledger.py"),
+        "decision",
+        "--component",
+        "watcher",
+        "--status",
+        "failed" if malformed or outcome == "no_terminal_outcome" else "completed",
+        "--cycle-id",
+        cycle_id,
+        "--pair",
+        pair,
+        "--timeframe",
+        timeframe,
+        "--outcome",
+        outcome,
+        "--provider",
+        row.get("provider", "unknown") or "unknown",
+        "--candle-timestamp",
+        candle_timestamp,
+        "--filter-rejected",
+        "true" if rejected else "false",
+        "--rejection-gate",
+        row.get("filter_reasons", "") or rejection,
+        "--alerts-csv-persisted",
+        "true" if persisted else "false",
+        "--telegram-result",
+        telegram,
+        "--supabase-result",
+        supabase,
+        "--server-epoch",
+        str(server_epoch),
     ]
     if candle_age is not None:
         command.extend(["--candle-age", str(candle_age)])
@@ -239,9 +303,14 @@ def ledger_decision(*, cycle_id: str, server_epoch: int, pair: str, timeframe: s
         command.extend(["--score", score])
     result = subprocess.run(command, text=True, capture_output=True, check=False)
     return {
-        "pair": pair, "timeframe": timeframe, "outcome": outcome,
-        "persisted": persisted, "telegram": telegram, "supabase": supabase,
-        "server_epoch": server_epoch, "ledger_rc": result.returncode,
+        "pair": pair,
+        "timeframe": timeframe,
+        "outcome": outcome,
+        "persisted": persisted,
+        "telegram": telegram,
+        "supabase": supabase,
+        "server_epoch": server_epoch,
+        "ledger_rc": result.returncode,
         "ledger_stderr": result.stderr.strip()[:500],
     }
 
@@ -251,8 +320,12 @@ def main() -> int:
     parser.add_argument("--cycle-id", required=True)
     parser.add_argument("--alerts-offset", type=int, required=True)
     parser.add_argument("--log-offset", type=int, default=0)
-    parser.add_argument("--log-path", type=Path, default=None,
-                        help="Exact current-cycle watcher stderr. Falls back to cron.signals.log for compatibility.")
+    parser.add_argument(
+        "--log-path",
+        type=Path,
+        default=None,
+        help="Exact current-cycle watcher stderr. Falls back to cron.signals.log for compatibility.",
+    )
     parser.add_argument("--server-epoch", type=int, default=0)
     args = parser.parse_args()
 
@@ -263,25 +336,67 @@ def main() -> int:
     log_text = read_new_bytes(log_path, args.log_offset)
     effective_epoch = trusted_server_epoch(args.server_epoch, log_text)
     results: list[dict[str, Any]] = []
+    malformed = any(truthy(row.get("_malformed")) for row in rows)
 
     for pair, timeframe in expected_scope():
-        matching = [row for row in rows
-                    if str(row.get("pair", "")).upper() == pair
-                    and str(row.get("tf", row.get("timeframe", ""))).upper() == timeframe]
-        results.append(ledger_decision(
-            cycle_id=args.cycle_id, server_epoch=effective_epoch, pair=pair, timeframe=timeframe,
-            row=matching[-1] if matching else None, lines=pair_lines(log_text, pair, timeframe)))
+        matching = [
+            row
+            for row in rows
+            if str(row.get("pair", "")).upper() == pair
+            and str(row.get("tf", row.get("timeframe", ""))).upper() == timeframe
+        ]
+        selected_row = {"_malformed": "true"} if malformed else (matching[-1] if matching else None)
+        results.append(
+            ledger_decision(
+                cycle_id=args.cycle_id,
+                server_epoch=effective_epoch,
+                pair=pair,
+                timeframe=timeframe,
+                row=selected_row,
+                lines=pair_lines(log_text, pair, timeframe),
+            )
+        )
 
-    healthy = all(item["outcome"] != "no_terminal_outcome" and item["ledger_rc"] == 0 for item in results)
+    healthy = (
+        not malformed
+        and all(
+            item["outcome"] != "no_terminal_outcome" and item["ledger_rc"] == 0
+            for item in results
+        )
+    )
     status = "completed" if healthy else "failed"
-    subprocess.run([
-        sys.executable, str(root / "tools" / "pipeline_ledger.py"), "component",
-        "--component", "watcher", "--status", status, "--cycle-id", args.cycle_id,
-        "--details", json.dumps(results, separators=(",", ":")),
-        "--server-epoch", str(effective_epoch),
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-    print(json.dumps({"healthy": healthy, "cycle_id": args.cycle_id,
-                      "server_epoch": effective_epoch, "results": results}, indent=2, sort_keys=True))
+    subprocess.run(
+        [
+            sys.executable,
+            str(root / "tools" / "pipeline_ledger.py"),
+            "component",
+            "--component",
+            "watcher",
+            "--status",
+            status,
+            "--cycle-id",
+            args.cycle_id,
+            "--details",
+            json.dumps(results, separators=(",", ":")),
+            "--server-epoch",
+            str(effective_epoch),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    print(
+        json.dumps(
+            {
+                "healthy": healthy,
+                "cycle_id": args.cycle_id,
+                "server_epoch": effective_epoch,
+                "results": results,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
     return 0 if healthy else 3
 
 
