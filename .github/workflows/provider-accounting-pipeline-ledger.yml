@@ -9,7 +9,10 @@ on:
       - "tools/pipeline_health.py"
       - "tools/control_plane_status.py"
       - "tools/watcher_cycle_ledger.py"
+      - "tools/watcher_persistence_gate.py"
       - "tools/run_signal_watcher_with_ledger.sh"
+      - "tools/telegram_delivery.py"
+      - "tools/telegram_send.sh"
       - "tools/supabase_publish.py"
       - "tools/data_fetch_candles.sh"
       - "tools/indicators_updater.sh"
@@ -19,6 +22,7 @@ on:
       - "tests/test_provider_accounting_pipeline_ledger.py"
       - "tests/test_watcher_cycle_observability.py"
       - "tests/test_supabase_cycle_evidence.py"
+      - "tests/test_predeploy_crash_consistency.py"
       - ".github/workflows/provider-accounting-pipeline-ledger.yml"
   workflow_dispatch:
 
@@ -43,12 +47,15 @@ jobs:
             tools/pipeline_health.py \
             tools/control_plane_status.py \
             tools/watcher_cycle_ledger.py \
+            tools/watcher_persistence_gate.py \
+            tools/telegram_delivery.py \
             tools/supabase_publish.py
       - name: Check shell syntax
         run: |
           bash -n tools/data_fetch_candles.sh
           bash -n tools/indicators_updater.sh
           bash -n tools/run_signal_watcher_with_ledger.sh
+          bash -n tools/telegram_send.sh
           bash -n tools/run_shadow_manager.sh
           bash -n tools/bota_supervisor.sh
           bash -n tools/heartbeat.sh
@@ -57,4 +64,5 @@ jobs:
           python -m unittest -v \
             tests.test_provider_accounting_pipeline_ledger \
             tests.test_watcher_cycle_observability \
-            tests.test_supabase_cycle_evidence
+            tests.test_supabase_cycle_evidence \
+            tests.test_predeploy_crash_consistency
