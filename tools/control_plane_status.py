@@ -224,13 +224,20 @@ def topology_failures(
     running: int,
     orphaned: int,
     duplicates: int,
-    zombie_runsv: list[dict[str, Any]],
     rows: dict[str, Any],
     live_crond: list[dict[str, Any]],
     crond_pidfile_pid: int | None,
     crond_pidfile_error: str | None,
+    *,
+    zombie_runsv: list[dict[str, Any]] | None = None,
 ) -> list[str]:
-    """Build compact acceptance failures from an inspected topology."""
+    """Build compact acceptance failures from an inspected topology.
+
+    Keep the historical positional call contract intact. Zombie evidence is a
+    backward-compatible keyword-only extension so older callers/tests cannot
+    silently shift arguments when this health dimension is enabled.
+    """
+    zombies = zombie_runsv or []
     failures: list[str] = []
     checks = (
         (manager_count != 1, f"manager_count:{manager_count}"),
@@ -238,7 +245,7 @@ def topology_failures(
         (running != len(SERVICES), f"running:{running}/{len(SERVICES)}"),
         (orphaned != 0, f"orphaned:{orphaned}"),
         (duplicates != 0, f"duplicate_service_rows:{duplicates}"),
-        (len(zombie_runsv) != 0, f"zombie_runsv_count:{len(zombie_runsv)}"),
+        (len(zombies) != 0, f"zombie_runsv_count:{len(zombies)}"),
         (len(live_crond) != 1, f"live_crond_count:{len(live_crond)}"),
     )
     failures.extend(reason for failed, reason in checks if failed)
@@ -296,11 +303,11 @@ def snapshot() -> dict[str, Any]:
         running,
         orphaned,
         duplicates,
-        zombies,
         rows,
         live_crond,
         crond_pidfile_pid,
         crond_pidfile_error,
+        zombie_runsv=zombies,
     )
     return {
         "schema_version": "1.3",
