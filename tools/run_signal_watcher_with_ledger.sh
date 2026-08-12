@@ -4,6 +4,9 @@
 # If BOTA_CYCLE_ID is supplied by a parent orchestrator, this runner MUST reuse
 # that exact cycle identity. When called standalone, it creates its own cycle
 # identity and retains the legacy component-start/failure bookkeeping.
+#
+# Failed/interrupted cycles retain their bounded evidence files in state/ for
+# post-crash forensics. Successful cycles remove them on exit.
 
 set -euo pipefail
 
@@ -18,7 +21,8 @@ alerts="${LOGS}/alerts.csv"
 alerts_offset="$(stat -c '%s' "${alerts}" 2>/dev/null || echo 0)"
 cycle_log="$(mktemp "${STATE}/watcher_cycle.XXXXXX.log")"
 supabase_result_log="$(mktemp "${STATE}/watcher_supabase.XXXXXX.jsonl")"
-trap 'rm -f "${cycle_log}" "${supabase_result_log}" 2>/dev/null || true' EXIT
+delete_evidence_on_exit=0
+trap 'if (( delete_evidence_on_exit == 1 )); then rm -f "${cycle_log}" "${supabase_result_log}" 2>/dev/null || true; fi' EXIT
 
 server_epoch="${BOTA_SERVER_EPOCH:-0}"
 owns_cycle=0
@@ -44,6 +48,15 @@ fi
 watcher_rc=0
 bash "${TOOLS}/signal_watcher_pro.sh" --once 2>"${cycle_log}" || watcher_rc=$?
 
+# The watcher historically swallowed alerts.csv append failures. Enforce a
+# cycle-level persistence postcondition before health can be green.
+persistence_rc=0
+python3 "${TOOLS}/watcher_persistence_gate.py" \
+  --alerts-path "${alerts}" \
+  --alerts-offset "${alerts_offset}" \
+  --log-path "${cycle_log}" \
+  >>"${cycle_log}" 2>&1 || persistence_rc=$?
+
 reconcile_rc=0
 python3 "${TOOLS}/watcher_cycle_ledger.py" \
   --cycle-id "${cycle_id}" \
@@ -54,19 +67,31 @@ python3 "${TOOLS}/watcher_cycle_ledger.py" \
   --server-epoch "${BOTA_SERVER_EPOCH:-${server_epoch}}" \
   || reconcile_rc=$?
 
-# Preserve the existing outward stderr contract so the parent gated cycle sees
-# the exact watcher evidence that the reconciler just classified.
+# Preserve the outward stderr contract so the parent gated cycle sees the exact
+# watcher evidence that the reconciler just classified.
 cat "${cycle_log}" >&2 || true
 
+final_rc=0
 if (( watcher_rc != 0 )); then
+  final_rc="${watcher_rc}"
+elif (( persistence_rc != 0 )); then
+  final_rc="${persistence_rc}"
+elif (( reconcile_rc != 0 )); then
+  final_rc="${reconcile_rc}"
+fi
+
+if (( final_rc != 0 )); then
+  printf '[WATCHER_EVIDENCE] retained cycle_log=%s supabase_log=%s\n' \
+    "${cycle_log}" "${supabase_result_log}" >&2
   if (( owns_cycle == 1 )); then
     python3 "${TOOLS}/pipeline_ledger.py" component \
       --component watcher --status failed --cycle-id "${cycle_id}" \
-      --details "watcher_exit_code=${watcher_rc};reconcile_exit_code=${reconcile_rc}" \
+      --details "watcher_exit_code=${watcher_rc};persistence_exit_code=${persistence_rc};reconcile_exit_code=${reconcile_rc}" \
       --server-epoch "${BOTA_SERVER_EPOCH:-${server_epoch}}" \
       >/dev/null 2>>"${LOGS}/error.log" || true
   fi
-  exit "${watcher_rc}"
+  exit "${final_rc}"
 fi
 
-exit "${reconcile_rc}"
+delete_evidence_on_exit=1
+exit 0
