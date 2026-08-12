@@ -45,11 +45,13 @@ class TelegramCrashConsistencyTests(unittest.TestCase):
         (self.root / "state").mkdir()
         alerts = self.root / "logs" / "alerts.csv"
         with alerts.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.writer(handle)
-            writer.writerow(telegram.CURRENT_FIELDS)
-            writer.writerow(canonical_row())
+            csv.writer(handle).writerow(telegram.CURRENT_FIELDS)
+        self.offset = alerts.stat().st_size
+        with alerts.open("a", encoding="utf-8", newline="") as handle:
+            csv.writer(handle).writerow(canonical_row())
         self.env = {
             "BOTA_ROOT": str(self.root),
+            "BOTA_ALERTS_OFFSET": str(self.offset),
             "TELEGRAM_BOT_TOKEN": "test-token",
             "TELEGRAM_CHAT_ID": "123",
         }
@@ -60,12 +62,32 @@ class TelegramCrashConsistencyTests(unittest.TestCase):
             "🛑 SL: 1.35222  🎯 TP: 1.35692"
         )
 
-    def test_blocks_external_send_when_decision_not_persisted(self):
-        (self.root / "logs" / "alerts.csv").write_text(
-            ",".join(telegram.CURRENT_FIELDS) + "\n", encoding="utf-8"
-        )
+    def test_blocks_external_send_when_current_cycle_decision_not_persisted(self):
+        alerts = self.root / "logs" / "alerts.csv"
+        with alerts.open("w", encoding="utf-8", newline="") as handle:
+            csv.writer(handle).writerow(telegram.CURRENT_FIELDS)
+        env = {**self.env, "BOTA_ALERTS_OFFSET": str(alerts.stat().st_size)}
         with mock.patch.object(telegram, "send_request") as send:
-            with mock.patch.dict(os.environ, self.env, clear=False):
+            with mock.patch.dict(os.environ, env, clear=False):
+                rc = telegram.deliver(self.message)
+        self.assertEqual(rc, 65)
+        send.assert_not_called()
+
+    def test_identical_historical_row_cannot_authorize_current_send(self):
+        alerts = self.root / "logs" / "alerts.csv"
+        # Move the cycle boundary to EOF: the identical row now exists only before this cycle.
+        env = {**self.env, "BOTA_ALERTS_OFFSET": str(alerts.stat().st_size)}
+        with mock.patch.object(telegram, "send_request") as send:
+            with mock.patch.dict(os.environ, env, clear=False):
+                rc = telegram.deliver(self.message)
+        self.assertEqual(rc, 65)
+        send.assert_not_called()
+
+    def test_missing_cycle_offset_fails_closed(self):
+        env = dict(self.env)
+        env.pop("BOTA_ALERTS_OFFSET")
+        with mock.patch.object(telegram, "send_request") as send:
+            with mock.patch.dict(os.environ, env, clear=True):
                 rc = telegram.deliver(self.message)
         self.assertEqual(rc, 65)
         send.assert_not_called()
@@ -83,6 +105,14 @@ class TelegramCrashConsistencyTests(unittest.TestCase):
         state = json.loads(state_files[0].read_text(encoding="utf-8"))
         self.assertEqual(state["status"], "sent")
         self.assertEqual(state["message_id"], 7812)
+        self.assertEqual(state["chat_id"], "123")
+
+    def test_delivery_identity_is_scoped_to_chat(self):
+        identity = telegram.parse_message(self.message)
+        self.assertNotEqual(
+            telegram.delivery_key(identity, "123"),
+            telegram.delivery_key(identity, "456"),
+        )
 
     def test_unknown_outcome_never_blindly_resends(self):
         with mock.patch.object(telegram, "send_request", return_value=("unknown_outcome", {})) as first:
@@ -195,6 +225,7 @@ class WrapperHardeningTests(unittest.TestCase):
         text = (HERE / "tools" / "run_signal_watcher_with_ledger.sh").read_text(encoding="utf-8")
         self.assertIn("watcher_persistence_gate.py", text)
         self.assertIn("persistence_exit_code=", text)
+        self.assertIn('export BOTA_ALERTS_OFFSET="${alerts_offset}"', text)
         self.assertIn("delete_evidence_on_exit=0", text)
         self.assertIn("delete_evidence_on_exit=1", text)
         self.assertNotIn("assert ", text)
