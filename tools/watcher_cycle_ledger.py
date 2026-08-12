@@ -181,6 +181,7 @@ def log_outcome(lines: list[str]) -> tuple[str, str, str, str]:
         (r"gate: score_int=.*TELEGRAM_MIN_SCORE", "telegram_score_gate"),
         (r"tier_skip", "telegram_tier_gate"), (r"cooldown active", "telegram_cooldown"),
         (r"already delivered", "delivery_dedup"), (r"SENT: via", "telegram_sent"),
+        (r"FAILED: tools/telegram_send\.sh error", "telegram_unknown_outcome"),
         (r"send failed|FAILED:", "telegram_failed"), (r"accepted score=", "accepted_no_delivery_evidence"),
     )
     outcome = "no_terminal_outcome"
@@ -191,6 +192,8 @@ def log_outcome(lines: list[str]) -> tuple[str, str, str, str]:
     telegram = "not_attempted"
     if "SENT: via" in joined:
         telegram = "sent"
+    elif outcome == "telegram_unknown_outcome":
+        telegram = "unknown_outcome"
     elif "send failed" in joined or "FAILED:" in joined:
         telegram = "failed"
     elif outcome in {"telegram_score_gate", "telegram_tier_gate", "telegram_cooldown", "delivery_dedup"}:
