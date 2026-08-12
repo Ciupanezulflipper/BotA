@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Reconcile one bounded watcher run into terminal pair/timeframe decisions.
 
-Only bytes appended after the wrapper-captured offsets are considered. This
-prevents historical log/CSV content from being mistaken for current evidence.
+Only evidence produced by the current watcher cycle is considered. Historical
+``alerts.csv`` files may contain legacy 13-column headers followed by newer
+25-column rows, so appended rows are parsed by their actual width rather than
+blindly by the first retained header.
 """
 from __future__ import annotations
 
@@ -17,11 +19,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Safe production default. Consulted when neither a complete PAIRS/TIMEFRAMES
-# environment nor BOTA_REQUIRED_DECISIONS provides a scope. Kept in sync with
-# tools/pipeline_health.DEFAULT_PAIRS / DEFAULT_TIMEFRAMES so a mismatch
-# between what the watcher reconciles and what the health evaluator expects
-# is impossible under default configuration.
 DEFAULT_EXPECTED = (
     ("EURUSD", "M15"),
     ("GBPUSD", "M15"),
@@ -29,9 +26,18 @@ DEFAULT_EXPECTED = (
 )
 MAX_NEW_BYTES = 262_144
 
+LEGACY_ALERT_FIELDS_13 = (
+    "ts_local", "pair", "tf", "direction", "score", "score_raw",
+    "entry", "sl", "tp", "provider", "rejected", "filter_reasons",
+    "features",
+)
+CANONICAL_ALERT_FIELDS_25 = LEGACY_ALERT_FIELDS_13 + (
+    "ema_comp", "rsi_comp", "macd_comp", "adx_comp", "adx", "rsi",
+    "macd_hist", "macro6", "h1_trend", "tier", "session", "regime",
+)
+
 
 def _split_scope(raw: str) -> tuple[str, ...]:
-    """Return upper-cased whitespace/comma-separated tokens of ``raw``."""
     if not raw:
         return ()
     tokens = [item.strip().upper() for item in raw.replace(",", " ").split()]
@@ -39,17 +45,6 @@ def _split_scope(raw: str) -> tuple[str, ...]:
 
 
 def expected_scope() -> tuple[tuple[str, str], ...]:
-    """Resolve the pair/timeframe reconciliation scope for this cycle.
-
-    Precedence:
-        1. ``BOTA_REQUIRED_DECISIONS`` — explicit ``PAIR:TIMEFRAME`` list.
-        2. Cartesian product of ``PAIRS`` x ``TIMEFRAMES`` when BOTH are set.
-        3. ``DEFAULT_EXPECTED`` (three-pair production scope).
-
-    A partial PAIRS/TIMEFRAMES environment is treated as incomplete and falls
-    back to the full safe production scope. This keeps reconciliation aligned
-    with pipeline health instead of silently inventing a missing dimension.
-    """
     explicit = os.environ.get("BOTA_REQUIRED_DECISIONS", "").strip()
     if explicit:
         entries: list[tuple[str, str]] = []
@@ -69,18 +64,15 @@ def expected_scope() -> tuple[tuple[str, str], ...]:
     return DEFAULT_EXPECTED
 
 
-# Backward-compatible name for callers/tests that still import EXPECTED.
 EXPECTED = DEFAULT_EXPECTED
 
 
 def root_dir() -> Path:
-    """Resolve BotA root."""
     value = os.environ.get("BOTA_ROOT", "").strip()
     return Path(value).expanduser() if value else Path(__file__).resolve().parent.parent
 
 
 def read_new_bytes(path: Path, offset: int) -> str:
-    """Read a bounded append-only segment starting at the recorded offset."""
     if not path.exists():
         return ""
     size = path.stat().st_size
@@ -97,7 +89,6 @@ def read_new_bytes(path: Path, offset: int) -> str:
 
 
 def read_header(path: Path) -> list[str]:
-    """Read only the first CSV record as the schema."""
     if not path.exists():
         return []
     with path.open("r", encoding="utf-8", errors="replace", newline="") as handle:
@@ -105,39 +96,79 @@ def read_header(path: Path) -> list[str]:
     return next(csv.reader([line]), []) if line else []
 
 
+def _row_schema(values: list[str]) -> tuple[str, ...] | None:
+    if len(values) == len(CANONICAL_ALERT_FIELDS_25):
+        return CANONICAL_ALERT_FIELDS_25
+    if len(values) == len(LEGACY_ALERT_FIELDS_13):
+        return LEGACY_ALERT_FIELDS_13
+    return None
+
+
 def parse_new_rows(path: Path, offset: int) -> list[dict[str, str]]:
-    """Parse only rows appended during the current cycle."""
+    """Parse appended rows by actual width and surface malformed evidence."""
     header = read_header(path)
     segment = read_new_bytes(path, offset)
-    if not header or not segment.strip():
+    if not segment.strip():
         return []
+
     rows: list[dict[str, str]] = []
     for values in csv.reader(io.StringIO(segment)):
-        if not values or values == header:
+        if not values:
             continue
-        padded = values + [""] * max(0, len(header) - len(values))
-        rows.append(
-            {
-                key: padded[index] if index < len(padded) else ""
-                for index, key in enumerate(header)
-            }
-        )
+        if header and values == header:
+            continue
+        if tuple(values) in {LEGACY_ALERT_FIELDS_13, CANONICAL_ALERT_FIELDS_25}:
+            continue
+        schema = _row_schema(values)
+        if schema is None:
+            rows.append(
+                {
+                    "_malformed": "true",
+                    "_width": str(len(values)),
+                    "pair": values[1].upper() if len(values) > 1 else "",
+                    "tf": values[2].upper() if len(values) > 2 else "",
+                }
+            )
+            continue
+        rows.append(dict(zip(schema, values, strict=True)))
     return rows
 
 
 def truthy(value: Any) -> bool:
-    """Interpret common truthy CSV values."""
     return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def normalized_rejected(row: dict[str, str]) -> bool:
+    """Normalize legacy/new rejection keys; never turn explicit true into false."""
+    if "filter_rejected" in row and str(row.get("filter_rejected", "")).strip() != "":
+        return truthy(row.get("filter_rejected"))
+    return truthy(row.get("rejected"))
+
+
 def pair_lines(log_text: str, pair: str, timeframe: str) -> list[str]:
-    """Return exact current-cycle lines for one configured pair/timeframe."""
-    token = f"{pair} {timeframe}"
-    return [line for line in log_text.splitlines() if token in line]
+    """Return the pair's contiguous cycle span, including unscoped send lines.
+
+    FILTER/STALE/etc. lines carry ``PAIR TIMEFRAME`` while the actual Telegram
+    ``SENT: via`` line does not. The watcher processes pair/timeframe scopes
+    sequentially, so unscoped lines after a target scope starts belong to that
+    scope until another configured pair/timeframe is observed.
+    """
+    target = (pair, timeframe)
+    scope = expected_scope()
+    current: tuple[str, str] | None = None
+    selected: list[str] = []
+    for line in log_text.splitlines():
+        matched = [item for item in scope if f"{item[0]} {item[1]}" in line]
+        if len(matched) == 1:
+            current = matched[0]
+        elif len(matched) > 1:
+            current = None
+        if current == target:
+            selected.append(line)
+    return selected
 
 
 def trusted_server_epoch(cli_epoch: int, log_text: str) -> int:
-    """Resolve the current cycle's server epoch from CLI or bounded log evidence."""
     if cli_epoch > 1_000_000_000:
         return cli_epoch
     matches = re.findall(r"BOTA_SERVER_EPOCH=(\d+)", log_text)
@@ -148,7 +179,6 @@ def trusted_server_epoch(cli_epoch: int, log_text: str) -> int:
 
 
 def log_outcome(lines: list[str]) -> tuple[str, str, str, str]:
-    """Classify the most specific terminal outcome and delivery results."""
     joined = "\n".join(lines)
     rules = (
         (r"raw_cache missing/invalid", "raw_cache_invalid"),
@@ -201,7 +231,6 @@ def log_outcome(lines: list[str]) -> tuple[str, str, str, str]:
 
 
 def extract_stale_fields(lines: list[str]) -> tuple[str, int | None]:
-    """Extract candle timestamp and age from exact stale evidence when present."""
     joined = "\n".join(lines)
     ts_match = re.findall(r"last=([^ ]+)", joined)
     age_match = re.findall(r"candle_stale age=(\d+)s", joined)
@@ -219,12 +248,16 @@ def ledger_decision(
     row: dict[str, str] | None,
     lines: list[str],
 ) -> dict[str, Any]:
-    """Write one decision event and return its classification."""
     row = row or {}
     outcome, telegram, supabase, rejection = log_outcome(lines)
-    persisted = bool(row)
-    rejected = truthy(row.get("filter_rejected"))
-    if persisted and rejected:
+    malformed = truthy(row.get("_malformed"))
+    persisted = bool(row) and not malformed
+    rejected = normalized_rejected(row)
+    if malformed:
+        outcome = "parse_error"
+        telegram = "not_attempted"
+        supabase = "not_attempted"
+    elif persisted and rejected:
         outcome = "filter_rejected"
     elif persisted and outcome == "no_terminal_outcome":
         outcome = "decision_persisted_no_delivery_evidence"
@@ -237,7 +270,7 @@ def ledger_decision(
         "--component",
         "watcher",
         "--status",
-        "completed" if outcome != "no_terminal_outcome" else "failed",
+        "failed" if malformed or outcome == "no_terminal_outcome" else "completed",
         "--cycle-id",
         cycle_id,
         "--pair",
@@ -283,21 +316,27 @@ def ledger_decision(
 
 
 def main() -> int:
-    """Reconcile and persist current-cycle terminal outcomes."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cycle-id", required=True)
     parser.add_argument("--alerts-offset", type=int, required=True)
-    parser.add_argument("--log-offset", type=int, required=True)
+    parser.add_argument("--log-offset", type=int, default=0)
+    parser.add_argument(
+        "--log-path",
+        type=Path,
+        default=None,
+        help="Exact current-cycle watcher stderr. Falls back to cron.signals.log for compatibility.",
+    )
     parser.add_argument("--server-epoch", type=int, default=0)
     args = parser.parse_args()
 
     root = root_dir()
     alerts = root / "logs" / "alerts.csv"
-    log_path = root / "logs" / "cron.signals.log"
+    log_path = args.log_path if args.log_path is not None else root / "logs" / "cron.signals.log"
     rows = parse_new_rows(alerts, args.alerts_offset)
     log_text = read_new_bytes(log_path, args.log_offset)
     effective_epoch = trusted_server_epoch(args.server_epoch, log_text)
     results: list[dict[str, Any]] = []
+    malformed = any(truthy(row.get("_malformed")) for row in rows)
 
     for pair, timeframe in expected_scope():
         matching = [
@@ -306,20 +345,24 @@ def main() -> int:
             if str(row.get("pair", "")).upper() == pair
             and str(row.get("tf", row.get("timeframe", ""))).upper() == timeframe
         ]
+        selected_row = {"_malformed": "true"} if malformed else (matching[-1] if matching else None)
         results.append(
             ledger_decision(
                 cycle_id=args.cycle_id,
                 server_epoch=effective_epoch,
                 pair=pair,
                 timeframe=timeframe,
-                row=matching[-1] if matching else None,
+                row=selected_row,
                 lines=pair_lines(log_text, pair, timeframe),
             )
         )
 
-    healthy = all(
-        item["outcome"] != "no_terminal_outcome" and item["ledger_rc"] == 0
-        for item in results
+    healthy = (
+        not malformed
+        and all(
+            item["outcome"] != "no_terminal_outcome" and item["ledger_rc"] == 0
+            for item in results
+        )
     )
     status = "completed" if healthy else "failed"
     subprocess.run(
