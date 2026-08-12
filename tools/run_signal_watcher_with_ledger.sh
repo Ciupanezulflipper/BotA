@@ -17,7 +17,8 @@ mkdir -p "${LOGS}" "${STATE}"
 alerts="${LOGS}/alerts.csv"
 alerts_offset="$(stat -c '%s' "${alerts}" 2>/dev/null || echo 0)"
 cycle_log="$(mktemp "${STATE}/watcher_cycle.XXXXXX.log")"
-trap 'rm -f "${cycle_log}" 2>/dev/null || true' EXIT
+supabase_result_log="$(mktemp "${STATE}/watcher_supabase.XXXXXX.jsonl")"
+trap 'rm -f "${cycle_log}" "${supabase_result_log}" 2>/dev/null || true' EXIT
 
 server_epoch="${BOTA_SERVER_EPOCH:-0}"
 owns_cycle=0
@@ -31,6 +32,7 @@ if [[ -z "${cycle_id}" ]]; then
 fi
 
 export BOTA_CYCLE_ID="${cycle_id}"
+export BOTA_SUPABASE_RESULT_LOG="${supabase_result_log}"
 
 if (( owns_cycle == 1 )); then
   python3 "${TOOLS}/pipeline_ledger.py" component \
@@ -48,6 +50,7 @@ python3 "${TOOLS}/watcher_cycle_ledger.py" \
   --alerts-offset "${alerts_offset}" \
   --log-path "${cycle_log}" \
   --log-offset 0 \
+  --supabase-result-path "${supabase_result_log}" \
   --server-epoch "${BOTA_SERVER_EPOCH:-${server_epoch}}" \
   || reconcile_rc=$?
 
