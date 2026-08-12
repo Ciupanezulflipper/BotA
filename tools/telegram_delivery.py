@@ -2,9 +2,10 @@
 """Crash-consistent Telegram delivery boundary for BotA watcher signals.
 
 Contract:
-- Prove the matching decision row already exists in logs/alerts.csv.
-- Persist a durable intent before the network request.
-- Persist Telegram confirmation (message_id/date) after an authoritative ok=true response.
+- Prove the matching decision row exists in the current watcher cycle's alerts.csv append segment.
+- Fsync the decision journal before any network side effect.
+- Persist a durable intent before the Telegram request.
+- Persist authoritative Telegram confirmation (message_id/date) after ok=true.
 - If a previous attempt is left in intent/unknown_outcome, never blindly resend it.
 """
 from __future__ import annotations
@@ -13,6 +14,7 @@ import argparse
 import csv
 import fcntl
 import hashlib
+import io
 import json
 import os
 import re
@@ -37,6 +39,7 @@ CURRENT_FIELDS = (
 PAIR_RE = re.compile(r"\bBotA\s+([A-Z]{6})\s+([A-Z0-9]+)\s+(BUY|SELL)\b")
 SCORE_RE = re.compile(r"(?:Score:\s*|score=)([0-9]+(?:\.[0-9]+)?)", re.I)
 ENTRY_RE = re.compile(r"Entry:\s*([0-9]+(?:\.[0-9]+)?)", re.I)
+ALERTS_OFFSET_ENV = "BOTA_ALERTS_OFFSET"
 
 
 def root_path() -> Path:
@@ -96,29 +99,23 @@ def decision_matches(row: dict[str, str], identity: dict[str, str]) -> bool:
     return True
 
 
-def prove_decision_persisted(identity: dict[str, str]) -> bool:
-    path = root_path() / "logs" / "alerts.csv"
-    try:
-        with path.open("r", encoding="utf-8", errors="replace", newline="") as handle:
-            rows = list(csv.reader(handle))
-    except OSError:
-        return False
-    for values in reversed(rows[1:] if rows else []):
-        row = row_dict(values)
-        if row is not None and decision_matches(row, identity):
-            return True
-    return False
+def cycle_alerts_offset() -> int:
+    raw = os.environ.get(ALERTS_OFFSET_ENV, "").strip()
+    if not raw or not raw.isdigit():
+        raise ValueError("alerts_offset_missing_or_invalid")
+    return int(raw)
 
 
-def delivery_key(identity: dict[str, str]) -> str:
-    canonical = "|".join(identity[key] for key in ("pair","timeframe","direction","score","entry"))
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-
-def state_paths(key: str) -> tuple[Path, Path]:
-    directory = root_path() / "state" / "telegram_delivery"
-    directory.mkdir(parents=True, exist_ok=True)
-    return directory / f"{key}.json", directory / f"{key}.lock"
+def read_cycle_rows(path: Path, offset: int) -> list[list[str]]:
+    size = path.stat().st_size
+    if offset < 0 or offset > size:
+        raise ValueError("alerts_offset_out_of_range")
+    with path.open("rb") as handle:
+        handle.seek(offset)
+        segment = handle.read(1_048_577)
+    if len(segment) > 1_048_576:
+        raise ValueError("alerts_cycle_segment_too_large")
+    return list(csv.reader(io.StringIO(segment.decode("utf-8", "replace"))))
 
 
 def fsync_directory(directory: Path) -> None:
@@ -127,6 +124,50 @@ def fsync_directory(directory: Path) -> None:
         os.fsync(fd)
     finally:
         os.close(fd)
+
+
+def fsync_file_and_parent(path: Path) -> None:
+    fd = os.open(str(path), os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    fsync_directory(path.parent)
+
+
+def prove_decision_persisted(identity: dict[str, str]) -> bool:
+    path = root_path() / "logs" / "alerts.csv"
+    try:
+        offset = cycle_alerts_offset()
+        rows = read_cycle_rows(path, offset)
+    except (OSError, ValueError):
+        return False
+    matched = False
+    for values in reversed(rows):
+        row = row_dict(values)
+        if row is not None and decision_matches(row, identity):
+            matched = True
+            break
+    if not matched:
+        return False
+    try:
+        fsync_file_and_parent(path)
+    except OSError:
+        return False
+    return True
+
+
+def delivery_key(identity: dict[str, str], chat_id: str) -> str:
+    canonical = "|".join(
+        [chat_id] + [identity[key] for key in ("pair","timeframe","direction","score","entry")]
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def state_paths(key: str) -> tuple[Path, Path]:
+    directory = root_path() / "state" / "telegram_delivery"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory / f"{key}.json", directory / f"{key}.lock"
 
 
 def write_json_durable(path: Path, payload: dict[str, Any]) -> None:
@@ -179,7 +220,9 @@ def send_request(message: str) -> tuple[str, dict[str, Any]]:
             exc.read()
         except Exception:
             pass
-        return "definite_failure", {"http_status": int(exc.code)}
+        if 400 <= int(exc.code) < 500:
+            return "definite_failure", {"http_status": int(exc.code)}
+        return "unknown_outcome", {"http_status": int(exc.code)}
     except (urllib.error.URLError, TimeoutError, OSError):
         return "unknown_outcome", {}
     try:
@@ -189,7 +232,10 @@ def send_request(message: str) -> tuple[str, dict[str, Any]]:
     if not isinstance(payload, dict):
         return "unknown_outcome", {}
     if payload.get("ok") is not True:
-        return "definite_failure", {"telegram_error_code": payload.get("error_code")}
+        code = payload.get("error_code")
+        if isinstance(code, int) and 400 <= code < 500:
+            return "definite_failure", {"telegram_error_code": code}
+        return "unknown_outcome", {"telegram_error_code": code}
     result = payload.get("result")
     if not isinstance(result, dict) or not isinstance(result.get("message_id"), int):
         return "unknown_outcome", {}
@@ -199,15 +245,16 @@ def send_request(message: str) -> tuple[str, dict[str, Any]]:
 def deliver(message: str) -> int:
     try:
         identity = parse_message(message)
+        _token, chat_id = telegram_credentials()
     except ValueError as exc:
         print(f"[telegram_delivery] BLOCK {exc}", file=sys.stderr)
         return 64
 
     if not prove_decision_persisted(identity):
-        print("[telegram_delivery] BLOCK decision_not_persisted", file=sys.stderr)
+        print("[telegram_delivery] BLOCK current_cycle_decision_not_durable", file=sys.stderr)
         return 65
 
-    key = delivery_key(identity)
+    key = delivery_key(identity, chat_id)
     state_path, lock_path = state_paths(key)
     with lock_path.open("a+", encoding="utf-8") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
@@ -228,6 +275,7 @@ def deliver(message: str) -> int:
             "schema_version": "1.0",
             "status": "intent",
             "identity": identity,
+            "chat_id": chat_id,
             "delivery_key": key,
             "pid": os.getpid(),
         }
@@ -245,7 +293,7 @@ def deliver(message: str) -> int:
             print("[telegram_delivery] FAILED definite_rejection", file=sys.stderr)
             return 1
 
-        unknown = {**intent, "status": "unknown_outcome", "reason": "no_authoritative_response"}
+        unknown = {**intent, **detail, "status": "unknown_outcome", "reason": "no_authoritative_response"}
         write_json_durable(state_path, unknown)
         print("[telegram_delivery] UNKNOWN_OUTCOME no_blind_resend", file=sys.stderr)
         return 75
