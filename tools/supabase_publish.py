@@ -157,38 +157,39 @@ def publish(pair, direction, entry, sl, tp, score, tf, tier) -> bool:
     return ok
 
 
-def cycle_result_path() -> Path | None:
-    """Validate the watcher-owned evidence path before allowing any append."""
+def cycle_result_path() -> tuple[Path | None, bool]:
+    """Return watcher-owned evidence path and validation status."""
     raw_path = os.environ.get(RESULT_LOG_ENV, "").strip()
     if not raw_path:
-        return None
+        return None, True
     try:
         path = Path(raw_path).expanduser().resolve(strict=True)
         state_dir = (root_path() / "state").resolve(strict=True)
         info = path.stat()
     except OSError as exc:
         print(f"[supabase_publish] invalid cycle evidence path: {type(exc).__name__}", file=sys.stderr)
-        return Path()
-    if (
-        path.parent != state_dir
-        or not path.name.startswith(RESULT_LOG_PREFIX)
-        or not path.name.endswith(RESULT_LOG_SUFFIX)
-        or not stat.S_ISREG(info.st_mode)
-        or info.st_uid != os.getuid()
-        or info.st_mode & 0o077
-    ):
+        return None, False
+    valid = (
+        path.parent == state_dir
+        and path.name.startswith(RESULT_LOG_PREFIX)
+        and path.name.endswith(RESULT_LOG_SUFFIX)
+        and stat.S_ISREG(info.st_mode)
+        and info.st_uid == os.getuid()
+        and not (info.st_mode & 0o077)
+    )
+    if not valid:
         print("[supabase_publish] invalid cycle evidence path ownership", file=sys.stderr)
-        return Path()
-    return path
+        return None, False
+    return path, True
 
 
 def emit_cycle_result(*, pair: str, direction: str, entry: str, tf: str, tier: str, status: str) -> bool:
     """Append one sanitized result to the validated watcher-owned evidence file."""
-    path = cycle_result_path()
+    path, path_valid = cycle_result_path()
+    if not path_valid:
+        return False
     if path is None:
         return True
-    if not str(path):
-        return False
     payload = {
         "schema_version": "1.0",
         "pair": pair.upper(),
@@ -222,12 +223,8 @@ def main() -> int:
         args.pair, args.direction, args.entry, args.sl, args.tp, args.score, args.tf, args.tier
     )
     evidence_ok = emit_cycle_result(
-        pair=args.pair,
-        direction=args.direction,
-        entry=args.entry,
-        tf=args.tf,
-        tier=args.tier,
-        status=status,
+        pair=args.pair, direction=args.direction, entry=args.entry,
+        tf=args.tf, tier=args.tier, status=status,
     )
     return 0 if ok and evidence_ok else 1
 
