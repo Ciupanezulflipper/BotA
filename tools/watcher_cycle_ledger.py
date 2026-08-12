@@ -2,9 +2,8 @@
 """Reconcile one bounded watcher run into terminal pair/timeframe decisions.
 
 Only evidence produced by the current watcher cycle is considered. Historical
-``alerts.csv`` files may contain legacy 13-column headers followed by newer
-25-column rows, so appended rows are parsed by their actual width rather than
-blindly by the first retained header.
+``alerts.csv`` files retain a legacy 13-column header while newer rows use the
+current 25-column schema, so appended rows are parsed by their actual width.
 """
 from __future__ import annotations
 
@@ -27,14 +26,25 @@ DEFAULT_EXPECTED = (
 MAX_NEW_BYTES = 262_144
 
 LEGACY_ALERT_FIELDS_13 = (
-    "ts_local", "pair", "tf", "direction", "score", "score_raw",
-    "entry", "sl", "tp", "provider", "rejected", "filter_reasons",
-    "features",
+    "timestamp", "pair", "tf", "direction", "score", "confidence",
+    "entry", "sl", "tp", "provider", "rejected", "filter_str", "reasons",
 )
-CANONICAL_ALERT_FIELDS_25 = LEGACY_ALERT_FIELDS_13 + (
-    "ema_comp", "rsi_comp", "macd_comp", "adx_comp", "adx", "rsi",
-    "macd_hist", "macro6", "h1_trend", "tier", "session", "regime",
+CURRENT_ALERT_FIELDS_25 = (
+    "ts", "pair", "tf", "direction", "score", "confidence",
+    "entry", "sl", "tp", "provider", "filter_rejected", "filter_reasons",
+    "reasons", "ema_comp", "rsi_comp", "macd_comp", "adx_comp", "adx_raw",
+    "rsi_raw", "macd_hist_raw", "macro6", "h1_trend", "tier", "session",
+    "adx_regime",
 )
+CANONICAL_ALERT_FIELDS_25 = CURRENT_ALERT_FIELDS_25  # compatibility for tests/importers
+VALID_SUPABASE_STATUSES = {
+    "published",
+    "skipped_active_exists",
+    "skipped_non_green",
+    "failed_missing_service_key",
+    "failed_dedup_check",
+    "failed_publish",
+}
 
 
 def _split_scope(raw: str) -> tuple[str, ...]:
@@ -97,8 +107,8 @@ def read_header(path: Path) -> list[str]:
 
 
 def _row_schema(values: list[str]) -> tuple[str, ...] | None:
-    if len(values) == len(CANONICAL_ALERT_FIELDS_25):
-        return CANONICAL_ALERT_FIELDS_25
+    if len(values) == len(CURRENT_ALERT_FIELDS_25):
+        return CURRENT_ALERT_FIELDS_25
     if len(values) == len(LEGACY_ALERT_FIELDS_13):
         return LEGACY_ALERT_FIELDS_13
     return None
@@ -112,12 +122,13 @@ def parse_new_rows(path: Path, offset: int) -> list[dict[str, str]]:
         return []
 
     rows: list[dict[str, str]] = []
+    known_headers = {tuple(LEGACY_ALERT_FIELDS_13), tuple(CURRENT_ALERT_FIELDS_25)}
     for values in csv.reader(io.StringIO(segment)):
         if not values:
             continue
         if header and values == header:
             continue
-        if tuple(values) in {LEGACY_ALERT_FIELDS_13, CANONICAL_ALERT_FIELDS_25}:
+        if tuple(values) in known_headers:
             continue
         schema = _row_schema(values)
         if schema is None:
@@ -145,14 +156,12 @@ def normalized_rejected(row: dict[str, str]) -> bool:
     return truthy(row.get("rejected"))
 
 
-def pair_lines(log_text: str, pair: str, timeframe: str) -> list[str]:
-    """Return the pair's contiguous cycle span, including unscoped send lines.
+def normalized_filter_reasons(row: dict[str, str]) -> str:
+    return str(row.get("filter_reasons") or row.get("filter_str") or "")
 
-    FILTER/STALE/etc. lines carry ``PAIR TIMEFRAME`` while the actual Telegram
-    ``SENT: via`` line does not. The watcher processes pair/timeframe scopes
-    sequentially, so unscoped lines after a target scope starts belong to that
-    scope until another configured pair/timeframe is observed.
-    """
+
+def pair_lines(log_text: str, pair: str, timeframe: str) -> list[str]:
+    """Return the pair's contiguous cycle span, including unscoped send lines."""
     target = (pair, timeframe)
     scope = expected_scope()
     current: tuple[str, str] | None = None
@@ -208,18 +217,13 @@ def log_outcome(lines: list[str]) -> tuple[str, str, str, str]:
     elif "send failed" in joined or "FAILED:" in joined:
         telegram = "failed"
     elif outcome in {
-        "telegram_score_gate",
-        "telegram_tier_gate",
-        "telegram_cooldown",
-        "delivery_dedup",
+        "telegram_score_gate", "telegram_tier_gate", "telegram_cooldown", "delivery_dedup",
     }:
         telegram = outcome
 
     supabase = "not_attempted"
     if "publish failed" in joined:
         supabase = "failed"
-    elif "published" in joined.lower():
-        supabase = "published"
     elif "skip non-GREEN" in joined:
         supabase = "skipped_non_green"
 
@@ -228,6 +232,73 @@ def log_outcome(lines: list[str]) -> tuple[str, str, str, str]:
     if match:
         rejection = match[-1][:1000]
     return outcome, telegram, supabase, rejection
+
+
+def parse_supabase_results(path: Path | None) -> tuple[list[dict[str, str]], bool]:
+    """Read watcher-owned structured Supabase results; malformed evidence fails closed."""
+    if path is None:
+        return [], False
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return [], False
+    except OSError:
+        return [], True
+
+    results: list[dict[str, str]] = []
+    malformed = False
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        try:
+            value = json.loads(line)
+        except ValueError:
+            malformed = True
+            continue
+        if not isinstance(value, dict):
+            malformed = True
+            continue
+        pair = str(value.get("pair") or "").upper()
+        timeframe = str(value.get("timeframe") or "").upper()
+        status = str(value.get("status") or "")
+        if not pair or not timeframe or status not in VALID_SUPABASE_STATUSES:
+            malformed = True
+            continue
+        results.append({
+            "pair": pair,
+            "timeframe": timeframe,
+            "direction": str(value.get("direction") or "").upper(),
+            "entry": str(value.get("entry") or ""),
+            "tier": str(value.get("tier") or "").upper(),
+            "status": status,
+        })
+    return results, malformed
+
+
+def supabase_for_decision(
+    results: list[dict[str, str]],
+    *,
+    pair: str,
+    timeframe: str,
+    row: dict[str, str] | None,
+) -> tuple[str | None, bool]:
+    """Return exact structured result and ambiguity flag for one decision."""
+    candidates = [
+        item for item in results
+        if item["pair"] == pair and item["timeframe"] == timeframe
+    ]
+    if row:
+        direction = str(row.get("direction") or "").upper()
+        entry = str(row.get("entry") or "")
+        if direction:
+            candidates = [item for item in candidates if not item["direction"] or item["direction"] == direction]
+        if entry:
+            candidates = [item for item in candidates if not item["entry"] or item["entry"] == entry]
+    if not candidates:
+        return None, False
+    if len(candidates) != 1:
+        return None, True
+    return candidates[0]["status"], False
 
 
 def extract_stale_fields(lines: list[str]) -> tuple[str, int | None]:
@@ -247,16 +318,25 @@ def ledger_decision(
     timeframe: str,
     row: dict[str, str] | None,
     lines: list[str],
+    structured_supabase: str | None = None,
+    supabase_ambiguous: bool = False,
 ) -> dict[str, Any]:
     row = row or {}
     outcome, telegram, supabase, rejection = log_outcome(lines)
-    malformed = truthy(row.get("_malformed"))
+    malformed = truthy(row.get("_malformed")) or supabase_ambiguous
     persisted = bool(row) and not malformed
     rejected = normalized_rejected(row)
+
+    if structured_supabase is not None:
+        if structured_supabase.startswith("failed_"):
+            supabase = "failed"
+        else:
+            supabase = structured_supabase
+
     if malformed:
         outcome = "parse_error"
         telegram = "not_attempted"
-        supabase = "not_attempted"
+        supabase = "not_attempted" if structured_supabase is None else supabase
     elif persisted and rejected:
         outcome = "filter_rejected"
     elif persisted and outcome == "no_terminal_outcome":
@@ -267,34 +347,20 @@ def ledger_decision(
         sys.executable,
         str(root_dir() / "tools" / "pipeline_ledger.py"),
         "decision",
-        "--component",
-        "watcher",
-        "--status",
-        "failed" if malformed or outcome == "no_terminal_outcome" else "completed",
-        "--cycle-id",
-        cycle_id,
-        "--pair",
-        pair,
-        "--timeframe",
-        timeframe,
-        "--outcome",
-        outcome,
-        "--provider",
-        row.get("provider", "unknown") or "unknown",
-        "--candle-timestamp",
-        candle_timestamp,
-        "--filter-rejected",
-        "true" if rejected else "false",
-        "--rejection-gate",
-        row.get("filter_reasons", "") or rejection,
-        "--alerts-csv-persisted",
-        "true" if persisted else "false",
-        "--telegram-result",
-        telegram,
-        "--supabase-result",
-        supabase,
-        "--server-epoch",
-        str(server_epoch),
+        "--component", "watcher",
+        "--status", "failed" if malformed or outcome == "no_terminal_outcome" else "completed",
+        "--cycle-id", cycle_id,
+        "--pair", pair,
+        "--timeframe", timeframe,
+        "--outcome", outcome,
+        "--provider", row.get("provider", "unknown") or "unknown",
+        "--candle-timestamp", candle_timestamp,
+        "--filter-rejected", "true" if rejected else "false",
+        "--rejection-gate", normalized_filter_reasons(row) or rejection,
+        "--alerts-csv-persisted", "true" if persisted else "false",
+        "--telegram-result", telegram,
+        "--supabase-result", supabase,
+        "--server-epoch", str(server_epoch),
     ]
     if candle_age is not None:
         command.extend(["--candle-age", str(candle_age)])
@@ -320,12 +386,8 @@ def main() -> int:
     parser.add_argument("--cycle-id", required=True)
     parser.add_argument("--alerts-offset", type=int, required=True)
     parser.add_argument("--log-offset", type=int, default=0)
-    parser.add_argument(
-        "--log-path",
-        type=Path,
-        default=None,
-        help="Exact current-cycle watcher stderr. Falls back to cron.signals.log for compatibility.",
-    )
+    parser.add_argument("--log-path", type=Path, default=None)
+    parser.add_argument("--supabase-result-path", type=Path, default=None)
     parser.add_argument("--server-epoch", type=int, default=0)
     args = parser.parse_args()
 
@@ -334,18 +396,24 @@ def main() -> int:
     log_path = args.log_path if args.log_path is not None else root / "logs" / "cron.signals.log"
     rows = parse_new_rows(alerts, args.alerts_offset)
     log_text = read_new_bytes(log_path, args.log_offset)
+    supabase_results, supabase_malformed = parse_supabase_results(args.supabase_result_path)
     effective_epoch = trusted_server_epoch(args.server_epoch, log_text)
     results: list[dict[str, Any]] = []
-    malformed = any(truthy(row.get("_malformed")) for row in rows)
+    malformed = any(truthy(row.get("_malformed")) for row in rows) or supabase_malformed
 
     for pair, timeframe in expected_scope():
         matching = [
-            row
-            for row in rows
+            row for row in rows
             if str(row.get("pair", "")).upper() == pair
             and str(row.get("tf", row.get("timeframe", ""))).upper() == timeframe
         ]
         selected_row = {"_malformed": "true"} if malformed else (matching[-1] if matching else None)
+        supabase_status, supabase_ambiguous = supabase_for_decision(
+            supabase_results,
+            pair=pair,
+            timeframe=timeframe,
+            row=selected_row,
+        )
         results.append(
             ledger_decision(
                 cycle_id=args.cycle_id,
@@ -354,8 +422,11 @@ def main() -> int:
                 timeframe=timeframe,
                 row=selected_row,
                 lines=pair_lines(log_text, pair, timeframe),
+                structured_supabase=supabase_status,
+                supabase_ambiguous=supabase_ambiguous,
             )
         )
+        malformed = malformed or supabase_ambiguous
 
     healthy = (
         not malformed
@@ -370,33 +441,21 @@ def main() -> int:
             sys.executable,
             str(root / "tools" / "pipeline_ledger.py"),
             "component",
-            "--component",
-            "watcher",
-            "--status",
-            status,
-            "--cycle-id",
-            args.cycle_id,
-            "--details",
-            json.dumps(results, separators=(",", ":")),
-            "--server-epoch",
-            str(effective_epoch),
+            "--component", "watcher",
+            "--status", status,
+            "--cycle-id", args.cycle_id,
+            "--details", json.dumps(results, separators=(",", ":")),
+            "--server-epoch", str(effective_epoch),
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         check=False,
     )
-    print(
-        json.dumps(
-            {
-                "healthy": healthy,
-                "cycle_id": args.cycle_id,
-                "server_epoch": effective_epoch,
-                "results": results,
-            },
-            indent=2,
-            sort_keys=True,
-        )
-    )
+    print(json.dumps(
+        {"healthy": healthy, "cycle_id": args.cycle_id, "server_epoch": effective_epoch, "results": results},
+        indent=2,
+        sort_keys=True,
+    ))
     return 0 if healthy else 3
 
 
