@@ -199,12 +199,13 @@ class WrapperHardeningTests(unittest.TestCase):
         self.assertIn("delete_evidence_on_exit=1", text)
         self.assertNotIn("assert ", text)
 
-    def test_watcher_prefers_versioned_canonical_sender(self):
+    def test_watcher_boundary_requires_canonical_sender(self):
         watcher = (HERE / "tools" / "signal_watcher_pro.sh").read_text(encoding="utf-8")
+        wrapper = (HERE / "tools" / "run_signal_watcher_with_ledger.sh").read_text(encoding="utf-8")
         self.assertIn('${TOOLS}/telegram_send.sh', watcher)
-        sender = HERE / "tools" / "telegram_send.sh"
-        self.assertTrue(sender.is_file())
-        self.assertTrue(os.access(sender, os.X_OK), "telegram_send.sh must be executable in git checkout")
+        self.assertIn('chmod 700 "${TOOLS}/telegram_send.sh"', wrapper)
+        self.assertIn('[[ ! -x "${TOOLS}/telegram_send.sh" ]]', wrapper)
+        self.assertTrue((HERE / "tools" / "telegram_send.sh").is_file())
         self.assertTrue((HERE / "tools" / "telegram_delivery.py").is_file())
 
 
