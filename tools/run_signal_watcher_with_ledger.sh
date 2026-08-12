@@ -32,6 +32,9 @@ fi
 
 alerts="${LOGS}/alerts.csv"
 alerts_offset="$(stat -c '%s' "${alerts}" 2>/dev/null || echo 0)"
+# Bind any external Telegram side effect to rows appended after this exact
+# cycle boundary. The sender fails closed if this offset is absent/invalid.
+export BOTA_ALERTS_OFFSET="${alerts_offset}"
 cycle_log="$(mktemp "${STATE}/watcher_cycle.XXXXXX.log")"
 supabase_result_log="$(mktemp "${STATE}/watcher_supabase.XXXXXX.jsonl")"
 delete_evidence_on_exit=0
