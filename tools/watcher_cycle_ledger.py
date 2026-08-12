@@ -18,55 +18,42 @@ import sys
 from pathlib import Path
 from typing import Any
 
-DEFAULT_EXPECTED = (
-    ("EURUSD", "M15"),
-    ("GBPUSD", "M15"),
-    ("USDJPY", "M15"),
-)
+DEFAULT_EXPECTED = (("EURUSD", "M15"), ("GBPUSD", "M15"), ("USDJPY", "M15"))
 MAX_NEW_BYTES = 262_144
-
 LEGACY_ALERT_FIELDS_13 = (
-    "timestamp", "pair", "tf", "direction", "score", "confidence",
-    "entry", "sl", "tp", "provider", "rejected", "filter_str", "reasons",
+    "timestamp", "pair", "tf", "direction", "score", "confidence", "entry", "sl", "tp",
+    "provider", "rejected", "filter_str", "reasons",
 )
 CURRENT_ALERT_FIELDS_25 = (
-    "ts", "pair", "tf", "direction", "score", "confidence",
-    "entry", "sl", "tp", "provider", "filter_rejected", "filter_reasons",
-    "reasons", "ema_comp", "rsi_comp", "macd_comp", "adx_comp", "adx_raw",
-    "rsi_raw", "macd_hist_raw", "macro6", "h1_trend", "tier", "session",
+    "ts", "pair", "tf", "direction", "score", "confidence", "entry", "sl", "tp", "provider",
+    "filter_rejected", "filter_reasons", "reasons", "ema_comp", "rsi_comp", "macd_comp",
+    "adx_comp", "adx_raw", "rsi_raw", "macd_hist_raw", "macro6", "h1_trend", "tier", "session",
     "adx_regime",
 )
-CANONICAL_ALERT_FIELDS_25 = CURRENT_ALERT_FIELDS_25  # compatibility for tests/importers
+CANONICAL_ALERT_FIELDS_25 = CURRENT_ALERT_FIELDS_25
 VALID_SUPABASE_STATUSES = {
-    "published",
-    "skipped_active_exists",
-    "skipped_non_green",
-    "failed_missing_service_key",
-    "failed_dedup_check",
-    "failed_publish",
+    "published", "skipped_active_exists", "skipped_non_green", "failed_missing_service_key",
+    "failed_dedup_check", "failed_publish",
 }
 
 
 def _split_scope(raw: str) -> tuple[str, ...]:
     if not raw:
         return ()
-    tokens = [item.strip().upper() for item in raw.replace(",", " ").split()]
-    return tuple(token for token in tokens if token)
+    return tuple(token for token in (item.strip().upper() for item in raw.replace(",", " ").split()) if token)
 
 
 def expected_scope() -> tuple[tuple[str, str], ...]:
     explicit = os.environ.get("BOTA_REQUIRED_DECISIONS", "").strip()
     if explicit:
-        entries: list[tuple[str, str]] = []
+        entries = []
         for token in _split_scope(explicit):
-            if ":" not in token:
-                continue
-            pair, _, timeframe = token.partition(":")
-            if pair and timeframe:
-                entries.append((pair, timeframe))
+            if ":" in token:
+                pair, _, timeframe = token.partition(":")
+                if pair and timeframe:
+                    entries.append((pair, timeframe))
         if entries:
             return tuple(entries)
-
     pairs = _split_scope(os.environ.get("PAIRS", ""))
     timeframes = _split_scope(os.environ.get("TIMEFRAMES", ""))
     if pairs and timeframes:
@@ -115,33 +102,24 @@ def _row_schema(values: list[str]) -> tuple[str, ...] | None:
 
 
 def parse_new_rows(path: Path, offset: int) -> list[dict[str, str]]:
-    """Parse appended rows by actual width and surface malformed evidence."""
     header = read_header(path)
     segment = read_new_bytes(path, offset)
     if not segment.strip():
         return []
-
-    rows: list[dict[str, str]] = []
+    rows = []
     known_headers = {tuple(LEGACY_ALERT_FIELDS_13), tuple(CURRENT_ALERT_FIELDS_25)}
     for values in csv.reader(io.StringIO(segment)):
-        if not values:
-            continue
-        if header and values == header:
-            continue
-        if tuple(values) in known_headers:
+        if not values or (header and values == header) or tuple(values) in known_headers:
             continue
         schema = _row_schema(values)
         if schema is None:
-            rows.append(
-                {
-                    "_malformed": "true",
-                    "_width": str(len(values)),
-                    "pair": values[1].upper() if len(values) > 1 else "",
-                    "tf": values[2].upper() if len(values) > 2 else "",
-                }
-            )
-            continue
-        rows.append(dict(zip(schema, values, strict=True)))
+            rows.append({
+                "_malformed": "true", "_width": str(len(values)),
+                "pair": values[1].upper() if len(values) > 1 else "",
+                "tf": values[2].upper() if len(values) > 2 else "",
+            })
+        else:
+            rows.append(dict(zip(schema, values, strict=True)))
     return rows
 
 
@@ -150,7 +128,6 @@ def truthy(value: Any) -> bool:
 
 
 def normalized_rejected(row: dict[str, str]) -> bool:
-    """Normalize legacy/new rejection keys; never turn explicit true into false."""
     if "filter_rejected" in row and str(row.get("filter_rejected", "")).strip() != "":
         return truthy(row.get("filter_rejected"))
     return truthy(row.get("rejected"))
@@ -161,11 +138,10 @@ def normalized_filter_reasons(row: dict[str, str]) -> str:
 
 
 def pair_lines(log_text: str, pair: str, timeframe: str) -> list[str]:
-    """Return the pair's contiguous cycle span, including unscoped send lines."""
     target = (pair, timeframe)
     scope = expected_scope()
-    current: tuple[str, str] | None = None
-    selected: list[str] = []
+    current = None
+    selected = []
     for line in log_text.splitlines():
         matched = [item for item in scope if f"{item[0]} {item[1]}" in line]
         if len(matched) == 1:
@@ -190,52 +166,36 @@ def trusted_server_epoch(cli_epoch: int, log_text: str) -> int:
 def log_outcome(lines: list[str]) -> tuple[str, str, str, str]:
     joined = "\n".join(lines)
     rules = (
-        (r"raw_cache missing/invalid", "raw_cache_invalid"),
-        (r"candle_stale", "candle_stale"),
-        (r"daily -3R circuit breaker active", "pause_guard"),
-        (r"\[NEWS_GATE ", "news_gate"),
-        (r"\[CALENDAR_BLOCK ", "calendar_gate"),
-        (r"parse_error", "parse_error"),
+        (r"raw_cache missing/invalid", "raw_cache_invalid"), (r"candle_stale", "candle_stale"),
+        (r"daily -3R circuit breaker active", "pause_guard"), (r"\[NEWS_GATE ", "news_gate"),
+        (r"\[CALENDAR_BLOCK ", "calendar_gate"), (r"parse_error", "parse_error"),
         (r"rejected_by_filter", "filter_rejected"),
         (r"gate: score_int=.*TELEGRAM_MIN_SCORE", "telegram_score_gate"),
-        (r"tier_skip", "telegram_tier_gate"),
-        (r"cooldown active", "telegram_cooldown"),
-        (r"already delivered", "delivery_dedup"),
-        (r"SENT: via", "telegram_sent"),
-        (r"send failed|FAILED:", "telegram_failed"),
-        (r"accepted score=", "accepted_no_delivery_evidence"),
+        (r"tier_skip", "telegram_tier_gate"), (r"cooldown active", "telegram_cooldown"),
+        (r"already delivered", "delivery_dedup"), (r"SENT: via", "telegram_sent"),
+        (r"send failed|FAILED:", "telegram_failed"), (r"accepted score=", "accepted_no_delivery_evidence"),
     )
     outcome = "no_terminal_outcome"
     for pattern, name in rules:
         if re.search(pattern, joined):
             outcome = name
             break
-
     telegram = "not_attempted"
     if "SENT: via" in joined:
         telegram = "sent"
     elif "send failed" in joined or "FAILED:" in joined:
         telegram = "failed"
-    elif outcome in {
-        "telegram_score_gate", "telegram_tier_gate", "telegram_cooldown", "delivery_dedup",
-    }:
+    elif outcome in {"telegram_score_gate", "telegram_tier_gate", "telegram_cooldown", "delivery_dedup"}:
         telegram = outcome
-
-    supabase = "not_attempted"
-    if "publish failed" in joined:
-        supabase = "failed"
-    elif "skip non-GREEN" in joined:
-        supabase = "skipped_non_green"
-
-    rejection = ""
+    supabase = "failed" if "publish failed" in joined else (
+        "skipped_non_green" if "skip non-GREEN" in joined else "not_attempted"
+    )
     match = re.findall(r"filters=([^\n]+)", joined)
-    if match:
-        rejection = match[-1][:1000]
+    rejection = match[-1][:1000] if match else ""
     return outcome, telegram, supabase, rejection
 
 
 def parse_supabase_results(path: Path | None) -> tuple[list[dict[str, str]], bool]:
-    """Read watcher-owned structured Supabase results; malformed evidence fails closed."""
     if path is None:
         return [], False
     try:
@@ -244,8 +204,7 @@ def parse_supabase_results(path: Path | None) -> tuple[list[dict[str, str]], boo
         return [], False
     except OSError:
         return [], True
-
-    results: list[dict[str, str]] = []
+    results = []
     malformed = False
     for line in text.splitlines():
         if not line.strip():
@@ -265,35 +224,23 @@ def parse_supabase_results(path: Path | None) -> tuple[list[dict[str, str]], boo
             malformed = True
             continue
         results.append({
-            "pair": pair,
-            "timeframe": timeframe,
+            "pair": pair, "timeframe": timeframe,
             "direction": str(value.get("direction") or "").upper(),
             "entry": str(value.get("entry") or ""),
-            "tier": str(value.get("tier") or "").upper(),
-            "status": status,
+            "tier": str(value.get("tier") or "").upper(), "status": status,
         })
     return results, malformed
 
 
-def supabase_for_decision(
-    results: list[dict[str, str]],
-    *,
-    pair: str,
-    timeframe: str,
-    row: dict[str, str] | None,
-) -> tuple[str | None, bool]:
-    """Return exact structured result and ambiguity flag for one decision."""
-    candidates = [
-        item for item in results
-        if item["pair"] == pair and item["timeframe"] == timeframe
-    ]
+def supabase_for_decision(results, *, pair: str, timeframe: str, row: dict[str, str] | None):
+    candidates = [item for item in results if item["pair"] == pair and item["timeframe"] == timeframe]
     if row:
         direction = str(row.get("direction") or "").upper()
         entry = str(row.get("entry") or "")
         if direction:
-            candidates = [item for item in candidates if not item["direction"] or item["direction"] == direction]
+            candidates = [i for i in candidates if not i["direction"] or i["direction"] == direction]
         if entry:
-            candidates = [item for item in candidates if not item["entry"] or item["entry"] == entry]
+            candidates = [i for i in candidates if not i["entry"] or i["entry"] == entry]
     if not candidates:
         return None, False
     if len(candidates) != 1:
@@ -305,62 +252,37 @@ def extract_stale_fields(lines: list[str]) -> tuple[str, int | None]:
     joined = "\n".join(lines)
     ts_match = re.findall(r"last=([^ ]+)", joined)
     age_match = re.findall(r"candle_stale age=(\d+)s", joined)
-    timestamp = ts_match[-1] if ts_match else ""
-    age = int(age_match[-1]) if age_match else None
-    return timestamp, age
+    return (ts_match[-1] if ts_match else "", int(age_match[-1]) if age_match else None)
 
 
-def ledger_decision(
-    *,
-    cycle_id: str,
-    server_epoch: int,
-    pair: str,
-    timeframe: str,
-    row: dict[str, str] | None,
-    lines: list[str],
-    structured_supabase: str | None = None,
-    supabase_ambiguous: bool = False,
-) -> dict[str, Any]:
+def ledger_decision(*, cycle_id, server_epoch, pair, timeframe, row, lines,
+                    structured_supabase=None, evidence_invalid=False):
     row = row or {}
     outcome, telegram, supabase, rejection = log_outcome(lines)
-    malformed = truthy(row.get("_malformed")) or supabase_ambiguous
+    malformed = truthy(row.get("_malformed")) or evidence_invalid
     persisted = bool(row) and not malformed
     rejected = normalized_rejected(row)
-
     if structured_supabase is not None:
-        if structured_supabase.startswith("failed_"):
-            supabase = "failed"
-        else:
-            supabase = structured_supabase
-
+        supabase = "failed" if structured_supabase.startswith("failed_") else structured_supabase
     if malformed:
         outcome = "parse_error"
         telegram = "not_attempted"
-        supabase = "not_attempted" if structured_supabase is None else supabase
+        if structured_supabase is None:
+            supabase = "not_attempted"
     elif persisted and rejected:
         outcome = "filter_rejected"
     elif persisted and outcome == "no_terminal_outcome":
         outcome = "decision_persisted_no_delivery_evidence"
     candle_timestamp, candle_age = extract_stale_fields(lines)
-
     command = [
-        sys.executable,
-        str(root_dir() / "tools" / "pipeline_ledger.py"),
-        "decision",
-        "--component", "watcher",
-        "--status", "failed" if malformed or outcome == "no_terminal_outcome" else "completed",
-        "--cycle-id", cycle_id,
-        "--pair", pair,
-        "--timeframe", timeframe,
-        "--outcome", outcome,
-        "--provider", row.get("provider", "unknown") or "unknown",
-        "--candle-timestamp", candle_timestamp,
+        sys.executable, str(root_dir() / "tools" / "pipeline_ledger.py"), "decision",
+        "--component", "watcher", "--status", "failed" if malformed or outcome == "no_terminal_outcome" else "completed",
+        "--cycle-id", cycle_id, "--pair", pair, "--timeframe", timeframe, "--outcome", outcome,
+        "--provider", row.get("provider", "unknown") or "unknown", "--candle-timestamp", candle_timestamp,
         "--filter-rejected", "true" if rejected else "false",
         "--rejection-gate", normalized_filter_reasons(row) or rejection,
         "--alerts-csv-persisted", "true" if persisted else "false",
-        "--telegram-result", telegram,
-        "--supabase-result", supabase,
-        "--server-epoch", str(server_epoch),
+        "--telegram-result", telegram, "--supabase-result", supabase, "--server-epoch", str(server_epoch),
     ]
     if candle_age is not None:
         command.extend(["--candle-age", str(candle_age)])
@@ -369,15 +291,9 @@ def ledger_decision(
         command.extend(["--score", score])
     result = subprocess.run(command, text=True, capture_output=True, check=False)
     return {
-        "pair": pair,
-        "timeframe": timeframe,
-        "outcome": outcome,
-        "persisted": persisted,
-        "telegram": telegram,
-        "supabase": supabase,
-        "server_epoch": server_epoch,
-        "ledger_rc": result.returncode,
-        "ledger_stderr": result.stderr.strip()[:500],
+        "pair": pair, "timeframe": timeframe, "outcome": outcome, "persisted": persisted,
+        "telegram": telegram, "supabase": supabase, "server_epoch": server_epoch,
+        "ledger_rc": result.returncode, "ledger_stderr": result.stderr.strip()[:500],
     }
 
 
@@ -398,64 +314,46 @@ def main() -> int:
     log_text = read_new_bytes(log_path, args.log_offset)
     supabase_results, supabase_malformed = parse_supabase_results(args.supabase_result_path)
     effective_epoch = trusted_server_epoch(args.server_epoch, log_text)
-    results: list[dict[str, Any]] = []
-    malformed = any(truthy(row.get("_malformed")) for row in rows) or supabase_malformed
+    csv_malformed = any(truthy(row.get("_malformed")) for row in rows)
 
+    prepared = []
+    supabase_ambiguous = False
     for pair, timeframe in expected_scope():
         matching = [
             row for row in rows
             if str(row.get("pair", "")).upper() == pair
             and str(row.get("tf", row.get("timeframe", ""))).upper() == timeframe
         ]
-        selected_row = {"_malformed": "true"} if malformed else (matching[-1] if matching else None)
-        supabase_status, supabase_ambiguous = supabase_for_decision(
-            supabase_results,
-            pair=pair,
-            timeframe=timeframe,
-            row=selected_row,
+        selected_row = matching[-1] if matching else None
+        status, ambiguous = supabase_for_decision(
+            supabase_results, pair=pair, timeframe=timeframe, row=selected_row
         )
-        results.append(
-            ledger_decision(
-                cycle_id=args.cycle_id,
-                server_epoch=effective_epoch,
-                pair=pair,
-                timeframe=timeframe,
-                row=selected_row,
-                lines=pair_lines(log_text, pair, timeframe),
-                structured_supabase=supabase_status,
-                supabase_ambiguous=supabase_ambiguous,
-            )
-        )
-        malformed = malformed or supabase_ambiguous
+        supabase_ambiguous = supabase_ambiguous or ambiguous
+        prepared.append((pair, timeframe, selected_row, status))
+
+    evidence_invalid = csv_malformed or supabase_malformed or supabase_ambiguous
+    results = []
+    for pair, timeframe, selected_row, supabase_status in prepared:
+        row = {"_malformed": "true"} if evidence_invalid else selected_row
+        results.append(ledger_decision(
+            cycle_id=args.cycle_id, server_epoch=effective_epoch, pair=pair, timeframe=timeframe,
+            row=row, lines=pair_lines(log_text, pair, timeframe),
+            structured_supabase=supabase_status, evidence_invalid=evidence_invalid,
+        ))
 
     healthy = (
-        not malformed
-        and all(
-            item["outcome"] != "no_terminal_outcome" and item["ledger_rc"] == 0
-            for item in results
-        )
+        not evidence_invalid
+        and all(item["outcome"] != "no_terminal_outcome" and item["ledger_rc"] == 0 for item in results)
     )
     status = "completed" if healthy else "failed"
-    subprocess.run(
-        [
-            sys.executable,
-            str(root / "tools" / "pipeline_ledger.py"),
-            "component",
-            "--component", "watcher",
-            "--status", status,
-            "--cycle-id", args.cycle_id,
-            "--details", json.dumps(results, separators=(",", ":")),
-            "--server-epoch", str(effective_epoch),
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
-    print(json.dumps(
-        {"healthy": healthy, "cycle_id": args.cycle_id, "server_epoch": effective_epoch, "results": results},
-        indent=2,
-        sort_keys=True,
-    ))
+    subprocess.run([
+        sys.executable, str(root / "tools" / "pipeline_ledger.py"), "component",
+        "--component", "watcher", "--status", status, "--cycle-id", args.cycle_id,
+        "--details", json.dumps(results, separators=(",", ":")), "--server-epoch", str(effective_epoch),
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    print(json.dumps({
+        "healthy": healthy, "cycle_id": args.cycle_id, "server_epoch": effective_epoch, "results": results,
+    }, indent=2, sort_keys=True))
     return 0 if healthy else 3
 
 
