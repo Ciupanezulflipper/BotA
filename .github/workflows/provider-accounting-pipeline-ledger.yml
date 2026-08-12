@@ -23,6 +23,7 @@ on:
       - "tests/test_watcher_cycle_observability.py"
       - "tests/test_supabase_cycle_evidence.py"
       - "tests/test_predeploy_crash_consistency.py"
+      - "tests/test_telegram_evidence_fail_closed.py"
       - ".github/workflows/provider-accounting-pipeline-ledger.yml"
   workflow_dispatch:
 
@@ -65,4 +66,5 @@ jobs:
             tests.test_provider_accounting_pipeline_ledger \
             tests.test_watcher_cycle_observability \
             tests.test_supabase_cycle_evidence \
-            tests.test_predeploy_crash_consistency
+            tests.test_predeploy_crash_consistency \
+            tests.test_telegram_evidence_fail_closed
