@@ -7,7 +7,8 @@ Contract:
 - Persist a durable intent before the Telegram request.
 - Persist authoritative Telegram confirmation (message_id/date) after ok=true.
 - If a previous attempt is left in intent/unknown_outcome, never blindly resend it.
-- Return 76 when a prior authoritative success is reconciled without a new send.
+- Reconcile BotA's existing delivery hash/cooldown immediately after confirmed delivery.
+- Emit one structured watcher-cycle delivery result when a bounded result path is supplied.
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ import io
 import json
 import os
 import re
+import stat
 import sys
 import tempfile
 import time
@@ -42,7 +44,12 @@ PAIR_RE = re.compile(r"\bBotA\s+([A-Z]{6})\s+([A-Z0-9]+)\s+(BUY|SELL)\b")
 SCORE_RE = re.compile(r"(?:Score:\s*|score=)([0-9]+(?:\.[0-9]+)?)", re.I)
 ENTRY_RE = re.compile(r"Entry:\s*([0-9]+(?:\.[0-9]+)?)", re.I)
 ALERTS_OFFSET_ENV = "BOTA_ALERTS_OFFSET"
+RESULT_LOG_ENV = "BOTA_TELEGRAM_RESULT_LOG"
+DELIVERY_STATE_DIR_ENV = "BOTA_DELIVERY_STATE_DIR"
+RESULT_LOG_PREFIX = "watcher_telegram."
+RESULT_LOG_SUFFIX = ".jsonl"
 RECONCILED_SENT_RC = 76
+UNKNOWN_OUTCOME_RC = 75
 
 
 def root_path() -> Path:
@@ -179,6 +186,11 @@ def delivery_key(identity: dict[str, str], chat_id: str) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def legacy_delivery_hash(identity: dict[str, str]) -> str:
+    raw = "|".join(identity[key] for key in ("pair","timeframe","direction","score","entry","sl","tp"))
+    return hashlib.md5(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
+
+
 def state_paths(key: str) -> tuple[Path, Path]:
     directory = root_path() / "state" / "telegram_delivery"
     directory.mkdir(parents=True, exist_ok=True)
@@ -221,6 +233,24 @@ def write_json_durable(path: Path, payload: dict[str, Any]) -> None:
             pass
 
 
+def write_text_durable(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+        fsync_directory(path.parent)
+    finally:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def read_state(path: Path) -> dict[str, Any] | None:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -229,6 +259,87 @@ def read_state(path: Path) -> dict[str, Any] | None:
     except (OSError, ValueError):
         return {"status": "unknown_outcome", "reason": "state_unreadable"}
     return value if isinstance(value, dict) else {"status": "unknown_outcome", "reason": "state_invalid"}
+
+
+def delivery_state_dir() -> Path:
+    expected = (root_path() / "logs" / "state").resolve()
+    raw = os.environ.get(DELIVERY_STATE_DIR_ENV, "").strip()
+    if not raw:
+        raise ValueError("delivery_state_dir_missing")
+    supplied = Path(raw).expanduser().resolve()
+    if supplied != expected:
+        raise ValueError("delivery_state_dir_mismatch")
+    supplied.mkdir(parents=True, exist_ok=True)
+    return supplied
+
+
+def mark_legacy_delivery(identity: dict[str, str], provenance: dict[str, Any]) -> bool:
+    """Update existing cooldown first and delivery hash last.
+
+    Hash-last ordering matters: if cooldown persistence fails, the absent hash
+    ensures the next cycle reaches this reconciler again rather than silently
+    skipping with an incomplete cooldown state.
+    """
+    try:
+        directory = delivery_state_dir()
+        boot_id = str(provenance.get("boot_id") or "unknown")
+        monotonic_seconds = int(provenance.get("monotonic_ns") or 0) // 1_000_000_000
+        if monotonic_seconds <= 0:
+            return False
+        cooldown = directory / f"last_sent_{identity['pair']}_{identity['timeframe']}.txt"
+        hash_path = directory / f"last_hash_{identity['pair']}_{identity['timeframe']}.txt"
+        write_text_durable(cooldown, f"{boot_id} {monotonic_seconds}\n")
+        write_text_durable(hash_path, legacy_delivery_hash(identity))
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def cycle_result_path() -> tuple[Path | None, bool]:
+    raw = os.environ.get(RESULT_LOG_ENV, "").strip()
+    if not raw:
+        return None, True
+    try:
+        path = Path(raw).expanduser().resolve(strict=True)
+        state_dir = (root_path() / "state").resolve(strict=True)
+        info = path.stat()
+    except OSError:
+        return None, False
+    valid = (
+        path.parent == state_dir
+        and path.name.startswith(RESULT_LOG_PREFIX)
+        and path.name.endswith(RESULT_LOG_SUFFIX)
+        and stat.S_ISREG(info.st_mode)
+        and info.st_uid == os.getuid()
+        and not (info.st_mode & 0o077)
+    )
+    return (path, True) if valid else (None, False)
+
+
+def emit_cycle_result(identity: dict[str, str], status: str, detail: dict[str, Any] | None = None) -> bool:
+    path, valid = cycle_result_path()
+    if not valid:
+        return False
+    if path is None:
+        return True
+    payload: dict[str, Any] = {
+        "schema_version": "1.0",
+        **identity,
+        "status": status,
+    }
+    if detail:
+        if isinstance(detail.get("message_id"), int):
+            payload["message_id"] = detail["message_id"]
+        if isinstance(detail.get("telegram_date"), int):
+            payload["telegram_date"] = detail["telegram_date"]
+    try:
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True, separators=(",",":")) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        return True
+    except OSError:
+        return False
 
 
 def telegram_credentials() -> tuple[str, str]:
@@ -296,15 +407,25 @@ def deliver(message: str) -> int:
         if prior:
             status = str(prior.get("status",""))
             if status == "sent":
+                provenance = runtime_provenance()
+                if not mark_legacy_delivery(identity, provenance):
+                    emit_cycle_result(identity, "sent_local_reconcile_failed", prior)
+                    print("[telegram_delivery] BLOCK sent_but_local_reconcile_failed", file=sys.stderr)
+                    return UNKNOWN_OUTCOME_RC
+                if not emit_cycle_result(identity, "reconciled_sent", prior):
+                    print("[telegram_delivery] BLOCK reconciled_result_not_persisted", file=sys.stderr)
+                    return UNKNOWN_OUTCOME_RC
                 print(f"[telegram_delivery] RECONCILED sent message_id={prior.get('message_id','')}", file=sys.stderr)
                 return RECONCILED_SENT_RC
             if status in {"intent","unknown_outcome"}:
                 prior["status"] = "unknown_outcome"
                 prior["reason"] = prior.get("reason") or "prior_attempt_unconfirmed"
                 write_json_durable(state_path, prior)
+                emit_cycle_result(identity, "unknown_outcome", prior)
                 print("[telegram_delivery] BLOCK unknown_outcome_no_blind_resend", file=sys.stderr)
-                return 75
+                return UNKNOWN_OUTCOME_RC
 
+        provenance = runtime_provenance()
         intent = {
             "schema_version": "1.0",
             "status": "intent",
@@ -312,7 +433,7 @@ def deliver(message: str) -> int:
             "chat_id": chat_id,
             "delivery_key": key,
             "pid": os.getpid(),
-            **runtime_provenance(),
+            **provenance,
         }
         write_json_durable(state_path, intent)
 
@@ -320,18 +441,27 @@ def deliver(message: str) -> int:
         if outcome == "sent":
             confirmed = {**intent, **detail, "status": "sent"}
             write_json_durable(state_path, confirmed)
+            if not mark_legacy_delivery(identity, provenance):
+                emit_cycle_result(identity, "sent_local_reconcile_failed", detail)
+                print("[telegram_delivery] BLOCK sent_but_local_reconcile_failed", file=sys.stderr)
+                return UNKNOWN_OUTCOME_RC
+            if not emit_cycle_result(identity, "sent", detail):
+                print("[telegram_delivery] BLOCK sent_result_not_persisted", file=sys.stderr)
+                return UNKNOWN_OUTCOME_RC
             print(f"[telegram_delivery] SENT message_id={confirmed['message_id']}", file=sys.stderr)
             return 0
         if outcome == "definite_failure":
             failed = {**intent, **detail, "status": "definite_failure"}
             write_json_durable(state_path, failed)
+            emit_cycle_result(identity, "definite_failure", detail)
             print("[telegram_delivery] FAILED definite_rejection", file=sys.stderr)
             return 1
 
         unknown = {**intent, **detail, "status": "unknown_outcome", "reason": "no_authoritative_response"}
         write_json_durable(state_path, unknown)
+        emit_cycle_result(identity, "unknown_outcome", detail)
         print("[telegram_delivery] UNKNOWN_OUTCOME no_blind_resend", file=sys.stderr)
-        return 75
+        return UNKNOWN_OUTCOME_RC
 
 
 def main() -> int:
