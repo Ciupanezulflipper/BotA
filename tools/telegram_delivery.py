@@ -7,6 +7,7 @@ Contract:
 - Persist a durable intent before the Telegram request.
 - Persist authoritative Telegram confirmation (message_id/date) after ok=true.
 - If a previous attempt is left in intent/unknown_outcome, never blindly resend it.
+- Return 76 when a prior authoritative success is reconciled without a new send.
 """
 from __future__ import annotations
 
@@ -41,6 +42,7 @@ PAIR_RE = re.compile(r"\bBotA\s+([A-Z]{6})\s+([A-Z0-9]+)\s+(BUY|SELL)\b")
 SCORE_RE = re.compile(r"(?:Score:\s*|score=)([0-9]+(?:\.[0-9]+)?)", re.I)
 ENTRY_RE = re.compile(r"Entry:\s*([0-9]+(?:\.[0-9]+)?)", re.I)
 ALERTS_OFFSET_ENV = "BOTA_ALERTS_OFFSET"
+RECONCILED_SENT_RC = 76
 
 
 def root_path() -> Path:
@@ -74,12 +76,12 @@ def row_dict(values: list[str]) -> dict[str, str] | None:
     return None
 
 
-def decision_matches(row: dict[str, str], identity: dict[str, str]) -> bool:
-    if str(row.get("pair","")).upper() != identity["pair"]:
+def decision_matches(row: dict[str, str], message_identity: dict[str, str]) -> bool:
+    if str(row.get("pair","")).upper() != message_identity["pair"]:
         return False
-    if str(row.get("tf", row.get("timeframe",""))).upper() != identity["timeframe"]:
+    if str(row.get("tf", row.get("timeframe",""))).upper() != message_identity["timeframe"]:
         return False
-    if str(row.get("direction","")).upper() != identity["direction"]:
+    if str(row.get("direction","")).upper() != message_identity["direction"]:
         return False
     rejected = row.get("filter_rejected")
     if rejected is None or str(rejected).strip() == "":
@@ -87,13 +89,13 @@ def decision_matches(row: dict[str, str], identity: dict[str, str]) -> bool:
     if truthy(rejected):
         return False
     try:
-        if abs(float(row.get("score","0")) - float(identity["score"])) > 0.011:
+        if abs(float(row.get("score","0")) - float(message_identity["score"])) > 0.011:
             return False
     except (TypeError, ValueError):
         return False
-    if identity["entry"]:
+    if message_identity["entry"]:
         try:
-            if abs(float(row.get("entry","0")) - float(identity["entry"])) > 0.000001:
+            if abs(float(row.get("entry","0")) - float(message_identity["entry"])) > 0.000001:
                 return False
         except (TypeError, ValueError):
             return False
@@ -136,31 +138,43 @@ def fsync_file_and_parent(path: Path) -> None:
     fsync_directory(path.parent)
 
 
-def prove_decision_persisted(identity: dict[str, str]) -> bool:
+def current_cycle_decision(message_identity: dict[str, str]) -> dict[str, str] | None:
     path = root_path() / "logs" / "alerts.csv"
     try:
         offset = cycle_alerts_offset()
         rows = read_cycle_rows(path, offset)
     except (OSError, ValueError):
-        return False
-    matched = False
+        return None
+    selected = None
     for values in reversed(rows):
         row = row_dict(values)
-        if row is not None and decision_matches(row, identity):
-            matched = True
+        if row is not None and decision_matches(row, message_identity):
+            selected = row
             break
-    if not matched:
-        return False
+    if selected is None:
+        return None
     try:
         fsync_file_and_parent(path)
     except OSError:
-        return False
-    return True
+        return None
+    return selected
+
+
+def canonical_identity(row: dict[str, str]) -> dict[str, str]:
+    return {
+        "pair": str(row.get("pair","")).upper(),
+        "timeframe": str(row.get("tf", row.get("timeframe",""))).upper(),
+        "direction": str(row.get("direction","")).upper(),
+        "score": str(row.get("score","")).strip(),
+        "entry": str(row.get("entry","")).strip(),
+        "sl": str(row.get("sl","")).strip(),
+        "tp": str(row.get("tp","")).strip(),
+    }
 
 
 def delivery_key(identity: dict[str, str], chat_id: str) -> str:
     canonical = "|".join(
-        [chat_id] + [identity[key] for key in ("pair","timeframe","direction","score","entry")]
+        [chat_id] + [identity[key] for key in ("pair","timeframe","direction","score","entry","sl","tp")]
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -262,15 +276,17 @@ def send_request(message: str) -> tuple[str, dict[str, Any]]:
 
 def deliver(message: str) -> int:
     try:
-        identity = parse_message(message)
+        message_identity = parse_message(message)
         _token, chat_id = telegram_credentials()
     except ValueError as exc:
         print(f"[telegram_delivery] BLOCK {exc}", file=sys.stderr)
         return 64
 
-    if not prove_decision_persisted(identity):
+    row = current_cycle_decision(message_identity)
+    if row is None:
         print("[telegram_delivery] BLOCK current_cycle_decision_not_durable", file=sys.stderr)
         return 65
+    identity = canonical_identity(row)
 
     key = delivery_key(identity, chat_id)
     state_path, lock_path = state_paths(key)
@@ -281,7 +297,7 @@ def deliver(message: str) -> int:
             status = str(prior.get("status",""))
             if status == "sent":
                 print(f"[telegram_delivery] RECONCILED sent message_id={prior.get('message_id','')}", file=sys.stderr)
-                return 0
+                return RECONCILED_SENT_RC
             if status in {"intent","unknown_outcome"}:
                 prior["status"] = "unknown_outcome"
                 prior["reason"] = prior.get("reason") or "prior_attempt_unconfirmed"
