@@ -14,8 +14,9 @@ ROOT="${BOTA_ROOT:-${HOME}/BotA}"
 TOOLS="${ROOT}/tools"
 LOGS="${ROOT}/logs"
 STATE="${ROOT}/state"
+DELIVERY_STATE="${ROOT}/logs/state"
 
-mkdir -p "${LOGS}" "${STATE}"
+mkdir -p "${LOGS}" "${STATE}" "${DELIVERY_STATE}"
 
 # The watcher selects tools/telegram_send.sh only when it is executable. GitHub
 # contents/API deployments may not preserve executable mode, so make that
@@ -42,10 +43,12 @@ alerts_offset="$(stat -c '%s' "${alerts}" 2>/dev/null || echo 0)"
 # Bind any external Telegram side effect to rows appended after this exact
 # cycle boundary. The sender fails closed if this offset is absent/invalid.
 export BOTA_ALERTS_OFFSET="${alerts_offset}"
+export BOTA_DELIVERY_STATE_DIR="${DELIVERY_STATE}"
 cycle_log="$(mktemp "${STATE}/watcher_cycle.XXXXXX.log")"
+telegram_result_log="$(mktemp "${STATE}/watcher_telegram.XXXXXX.jsonl")"
 supabase_result_log="$(mktemp "${STATE}/watcher_supabase.XXXXXX.jsonl")"
 delete_evidence_on_exit=0
-trap 'if (( delete_evidence_on_exit == 1 )); then rm -f "${cycle_log}" "${supabase_result_log}" 2>/dev/null || true; fi' EXIT
+trap 'if (( delete_evidence_on_exit == 1 )); then rm -f "${cycle_log}" "${telegram_result_log}" "${supabase_result_log}" 2>/dev/null || true; fi' EXIT
 
 server_epoch="${BOTA_SERVER_EPOCH:-0}"
 owns_cycle=0
@@ -59,6 +62,7 @@ if [[ -z "${cycle_id}" ]]; then
 fi
 
 export BOTA_CYCLE_ID="${cycle_id}"
+export BOTA_TELEGRAM_RESULT_LOG="${telegram_result_log}"
 export BOTA_SUPABASE_RESULT_LOG="${supabase_result_log}"
 
 if (( owns_cycle == 1 )); then
@@ -86,6 +90,7 @@ python3 "${TOOLS}/watcher_cycle_ledger.py" \
   --alerts-offset "${alerts_offset}" \
   --log-path "${cycle_log}" \
   --log-offset 0 \
+  --telegram-result-path "${telegram_result_log}" \
   --supabase-result-path "${supabase_result_log}" \
   --server-epoch "${BOTA_SERVER_EPOCH:-${server_epoch}}" \
   || reconcile_rc=$?
@@ -104,8 +109,8 @@ elif (( reconcile_rc != 0 )); then
 fi
 
 if (( final_rc != 0 )); then
-  printf '[WATCHER_EVIDENCE] retained cycle_log=%s supabase_log=%s\n' \
-    "${cycle_log}" "${supabase_result_log}" >&2
+  printf '[WATCHER_EVIDENCE] retained cycle_log=%s telegram_log=%s supabase_log=%s\n' \
+    "${cycle_log}" "${telegram_result_log}" "${supabase_result_log}" >&2
   if (( owns_cycle == 1 )); then
     python3 "${TOOLS}/pipeline_ledger.py" component \
       --component watcher --status failed --cycle-id "${cycle_id}" \
