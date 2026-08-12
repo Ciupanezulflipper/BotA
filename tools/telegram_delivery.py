@@ -20,6 +20,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -170,6 +171,23 @@ def state_paths(key: str) -> tuple[Path, Path]:
     return directory / f"{key}.json", directory / f"{key}.lock"
 
 
+def runtime_provenance() -> dict[str, Any]:
+    try:
+        boot_id = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="utf-8").strip()
+    except OSError:
+        boot_id = "unknown"
+    clock = getattr(time, "CLOCK_BOOTTIME", None)
+    monotonic_ns = time.clock_gettime_ns(clock) if clock is not None else time.monotonic_ns()
+    raw_epoch = os.environ.get("BOTA_SERVER_EPOCH", "").strip()
+    server_epoch = int(raw_epoch) if raw_epoch.isdigit() and int(raw_epoch) > 1_000_000_000 else 0
+    return {
+        "boot_id": boot_id,
+        "cycle_id": os.environ.get("BOTA_CYCLE_ID", ""),
+        "monotonic_ns": monotonic_ns,
+        "server_epoch": server_epoch,
+    }
+
+
 def write_json_durable(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
@@ -278,6 +296,7 @@ def deliver(message: str) -> int:
             "chat_id": chat_id,
             "delivery_key": key,
             "pid": os.getpid(),
+            **runtime_provenance(),
         }
         write_json_durable(state_path, intent)
 
