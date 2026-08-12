@@ -114,8 +114,17 @@ def runsv_candidates(
     ]
 
 
-def zombie_runsv_processes(table: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return defunct runsv processes even when /proc/<pid>/cmdline is empty."""
+def zombie_runsv_children(
+    table: dict[int, dict[str, Any]],
+    manager_pids: set[int],
+) -> list[dict[str, Any]]:
+    """Return defunct runsv children of the standard Termux runsvdir manager(s).
+
+    Zombie cmdlines are empty, so the exact service name cannot be recovered
+    reliably from /proc/<pid>/cmdline. Restricting by parent manager catches the
+    observed production defect without treating unrelated PID-1 runsv zombies as
+    BotA control-plane failures.
+    """
     return [
         {
             "pid": pid,
@@ -124,7 +133,9 @@ def zombie_runsv_processes(table: dict[int, dict[str, Any]]) -> list[dict[str, A
             "comm": row.get("comm"),
         }
         for pid, row in table.items()
-        if basename(row) == "runsv" and is_zombie(row)
+        if basename(row) == "runsv"
+        and is_zombie(row)
+        and int(row.get("ppid", 0)) in manager_pids
     ]
 
 
@@ -274,7 +285,7 @@ def snapshot() -> dict[str, Any]:
     orphaned = sum(row["owner"] == "pid1_orphan" for row in rows.values())
     running = sum(bool(row["service_running"]) for row in rows.values())
     duplicates = sum(int(row["runsv_count"] > 1) for row in rows.values())
-    zombies = zombie_runsv_processes(table)
+    zombies = zombie_runsv_children(table, set(managers))
     live_crond = crond_processes(table)
     crond_pidfile_pid, crond_pidfile_error = runtime_pidfile(
         prefix / "var" / "run" / "crond.pid"
