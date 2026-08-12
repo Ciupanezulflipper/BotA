@@ -25,6 +25,7 @@ def load_module(name: str, relative: str):
 telegram = load_module("telegram_delivery", "tools/telegram_delivery.py")
 persist = load_module("watcher_persistence_gate", "tools/watcher_persistence_gate.py")
 control = load_module("control_plane_status", "tools/control_plane_status.py")
+ledger = load_module("watcher_cycle_ledger_predeploy", "tools/watcher_cycle_ledger.py")
 
 
 def canonical_row(*, pair="GBPUSD", direction="BUY", score="84.90", entry="1.35379", rejected="false"):
@@ -36,12 +37,16 @@ def canonical_row(*, pair="GBPUSD", direction="BUY", score="84.90", entry="1.353
     ]
 
 
+def canonical_identity():
+    return telegram.canonical_identity(dict(zip(telegram.CURRENT_FIELDS, canonical_row(), strict=True)))
+
+
 class TelegramCrashConsistencyTests(unittest.TestCase):
     def setUp(self):
         td = tempfile.TemporaryDirectory()
         self.addCleanup(td.cleanup)
         self.root = Path(td.name)
-        (self.root / "logs").mkdir()
+        (self.root / "logs" / "state").mkdir(parents=True)
         (self.root / "state").mkdir()
         alerts = self.root / "logs" / "alerts.csv"
         with alerts.open("w", encoding="utf-8", newline="") as handle:
@@ -49,11 +54,16 @@ class TelegramCrashConsistencyTests(unittest.TestCase):
         self.offset = alerts.stat().st_size
         with alerts.open("a", encoding="utf-8", newline="") as handle:
             csv.writer(handle).writerow(canonical_row())
+        self.result_log = self.root / "state" / "watcher_telegram.test.jsonl"
+        self.result_log.touch(mode=0o600)
+        os.chmod(self.result_log, 0o600)
         self.env = {
             "BOTA_ROOT": str(self.root),
             "BOTA_ALERTS_OFFSET": str(self.offset),
             "BOTA_CYCLE_ID": "test-boot:123",
             "BOTA_SERVER_EPOCH": "1786555048",
+            "BOTA_TELEGRAM_RESULT_LOG": str(self.result_log),
+            "BOTA_DELIVERY_STATE_DIR": str(self.root / "logs" / "state"),
             "TELEGRAM_BOT_TOKEN": "test-token",
             "TELEGRAM_CHAT_ID": "123",
         }
@@ -63,6 +73,10 @@ class TelegramCrashConsistencyTests(unittest.TestCase):
             "💰 Entry: 1.35379\\n"
             "🛑 SL: 1.35222  🎯 TP: 1.35692"
         )
+
+    def reset_result_log(self):
+        self.result_log.write_text("", encoding="utf-8")
+        os.chmod(self.result_log, 0o600)
 
     def test_blocks_external_send_when_current_cycle_decision_not_persisted(self):
         alerts = self.root / "logs" / "alerts.csv"
@@ -93,7 +107,7 @@ class TelegramCrashConsistencyTests(unittest.TestCase):
         self.assertEqual(rc, 65)
         send.assert_not_called()
 
-    def test_success_persists_authoritative_message_id_and_runtime_provenance(self):
+    def test_success_persists_message_provenance_legacy_state_and_result(self):
         with mock.patch.object(
             telegram, "send_request", return_value=("sent", {"message_id": 7812, "telegram_date": 1786540291})
         ) as send:
@@ -112,36 +126,73 @@ class TelegramCrashConsistencyTests(unittest.TestCase):
         self.assertGreater(state["monotonic_ns"], 0)
         self.assertTrue(state["boot_id"])
 
-    def test_delivery_identity_is_scoped_to_chat(self):
-        identity = telegram.parse_message(self.message)
+        identity = canonical_identity()
+        hash_path = self.root / "logs" / "state" / "last_hash_GBPUSD_M15.txt"
+        cooldown_path = self.root / "logs" / "state" / "last_sent_GBPUSD_M15.txt"
+        self.assertEqual(hash_path.read_text(encoding="utf-8"), telegram.legacy_delivery_hash(identity))
+        self.assertTrue(cooldown_path.read_text(encoding="utf-8").strip())
+        results, malformed = ledger.parse_telegram_results(self.result_log)
+        self.assertFalse(malformed)
+        self.assertEqual(results[0]["status"], "sent")
+
+    def test_prior_sent_reconciles_without_network_resend(self):
+        with mock.patch.object(
+            telegram, "send_request", return_value=("sent", {"message_id": 7812, "telegram_date": 1786540291})
+        ):
+            with mock.patch.dict(os.environ, self.env, clear=False):
+                self.assertEqual(telegram.deliver(self.message), 0)
+        self.reset_result_log()
+        with mock.patch.object(telegram, "send_request") as second:
+            with mock.patch.dict(os.environ, self.env, clear=False):
+                rc = telegram.deliver(self.message)
+        self.assertEqual(rc, telegram.RECONCILED_SENT_RC)
+        second.assert_not_called()
+        results, malformed = ledger.parse_telegram_results(self.result_log)
+        self.assertFalse(malformed)
+        self.assertEqual(results[0]["status"], "reconciled_sent")
+        outcome, result = ledger.apply_structured_telegram("telegram_failed", "failed", "reconciled_sent")
+        self.assertEqual((outcome, result), ("telegram_sent", "sent"))
+
+    def test_delivery_identity_matches_full_trade_and_is_scoped_to_chat(self):
+        identity = canonical_identity()
+        self.assertEqual(identity["sl"], "1.35222")
+        self.assertEqual(identity["tp"], "1.35692")
         self.assertNotEqual(
             telegram.delivery_key(identity, "123"),
             telegram.delivery_key(identity, "456"),
         )
 
-    def test_unknown_outcome_never_blindly_resends(self):
+    def test_unknown_outcome_never_blindly_resends_and_is_unhealthy(self):
         with mock.patch.object(telegram, "send_request", return_value=("unknown_outcome", {})) as first:
             with mock.patch.dict(os.environ, self.env, clear=False):
                 rc1 = telegram.deliver(self.message)
-        self.assertEqual(rc1, 75)
+        self.assertEqual(rc1, telegram.UNKNOWN_OUTCOME_RC)
         first.assert_called_once()
+        results, malformed = ledger.parse_telegram_results(self.result_log)
+        self.assertFalse(malformed)
+        self.assertEqual(results[0]["status"], "unknown_outcome")
+        outcome, result = ledger.apply_structured_telegram("telegram_failed", "failed", "unknown_outcome")
+        self.assertEqual((outcome, result), ("telegram_unknown_outcome", "unknown_outcome"))
+        self.assertIn(outcome, ledger.UNHEALTHY_OUTCOMES)
 
+        self.reset_result_log()
         with mock.patch.object(telegram, "send_request") as second:
             with mock.patch.dict(os.environ, self.env, clear=False):
                 rc2 = telegram.deliver(self.message)
-        self.assertEqual(rc2, 75)
+        self.assertEqual(rc2, telegram.UNKNOWN_OUTCOME_RC)
         second.assert_not_called()
         state_file = next((self.root / "state" / "telegram_delivery").glob("*.json"))
         state = json.loads(state_file.read_text(encoding="utf-8"))
         self.assertEqual(state["status"], "unknown_outcome")
         self.assertEqual(state["cycle_id"], "test-boot:123")
 
-    def test_definite_rejection_is_retryable(self):
+    def test_definite_rejection_is_retryable_on_later_cycle(self):
         with mock.patch.object(
             telegram, "send_request", return_value=("definite_failure", {"http_status": 429})
         ):
             with mock.patch.dict(os.environ, self.env, clear=False):
                 self.assertEqual(telegram.deliver(self.message), 1)
+        self.reset_result_log()
         with mock.patch.object(
             telegram, "send_request", return_value=("sent", {"message_id": 99, "telegram_date": 1})
         ) as retry:
@@ -240,6 +291,8 @@ class WrapperHardeningTests(unittest.TestCase):
         self.assertIn("watcher_persistence_gate.py", text)
         self.assertIn("persistence_exit_code=", text)
         self.assertIn('export BOTA_ALERTS_OFFSET="${alerts_offset}"', text)
+        self.assertIn('export BOTA_TELEGRAM_RESULT_LOG="${telegram_result_log}"', text)
+        self.assertIn('export BOTA_DELIVERY_STATE_DIR="${DELIVERY_STATE}"', text)
         self.assertIn("delete_evidence_on_exit=0", text)
         self.assertIn("delete_evidence_on_exit=1", text)
         self.assertNotIn("assert ", text)
