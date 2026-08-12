@@ -84,9 +84,13 @@ class PublisherStatusTests(unittest.TestCase):
 
     def test_cycle_result_is_sanitized_jsonl(self):
         with tempfile.TemporaryDirectory() as td:
-            path = Path(td) / "cycle.jsonl"
+            root = Path(td)
+            state = root / "state"
+            state.mkdir()
+            path = state / "watcher_supabase.test.jsonl"
             path.touch(mode=0o600)
-            with mock.patch.dict(os.environ, {publisher.RESULT_LOG_ENV: str(path)}, clear=False):
+            env = {"BOTA_ROOT": str(root), publisher.RESULT_LOG_ENV: str(path)}
+            with mock.patch.dict(os.environ, env, clear=False):
                 self.assertTrue(publisher.emit_cycle_result(
                     pair="GBPUSD", direction="BUY", entry="1.35379", tf="M15",
                     tier="GREEN", status="published",
@@ -97,6 +101,20 @@ class PublisherStatusTests(unittest.TestCase):
             self.assertEqual(payload["status"], "published")
             self.assertNotIn("key", payload)
             self.assertNotIn("token", payload)
+
+    def test_arbitrary_result_path_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "state").mkdir()
+            outside = root / "not-owned-cycle.jsonl"
+            outside.touch(mode=0o600)
+            env = {"BOTA_ROOT": str(root), publisher.RESULT_LOG_ENV: str(outside)}
+            with mock.patch.dict(os.environ, env, clear=False):
+                self.assertFalse(publisher.emit_cycle_result(
+                    pair="GBPUSD", direction="BUY", entry="1.35379", tf="M15",
+                    tier="GREEN", status="published",
+                ))
+            self.assertEqual(outside.read_text(encoding="utf-8"), "")
 
     def test_boolean_publish_api_remains_compatible(self):
         with mock.patch.object(publisher, "publish_with_status", return_value=(True, "published")):
