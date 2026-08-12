@@ -3,6 +3,8 @@
 
 Uses only the Python standard library. Publication is serialized locally so the
 legacy watcher path and the independent ProfitLab worker cannot race each other.
+When ``BOTA_SUPABASE_RESULT_LOG`` is inherited from a watcher cycle, one
+structured result is appended for exact cycle reconciliation.
 """
 from __future__ import annotations
 
@@ -11,12 +13,16 @@ import fcntl
 import http.client
 import json
 import os
+import stat
 import sys
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
 SUPABASE_HOST = "ozgkeslgjqbqfewojnmr.supabase.co"
+RESULT_LOG_ENV = "BOTA_SUPABASE_RESULT_LOG"
+RESULT_LOG_PREFIX = "watcher_supabase."
+RESULT_LOG_SUFFIX = ".jsonl"
 
 
 def service_key() -> str:
@@ -52,43 +58,30 @@ def score_to_strength(score: int) -> int:
 
 
 def auth_headers(key: str) -> dict[str, str]:
-    return {
-        "apikey": key,
-        "Authorization": f"Bearer {key}",
-    }
+    return {"apikey": key, "Authorization": f"Bearer {key}"}
 
 
 def active_signal_exists(pair: str, key: str) -> bool | None:
     """Return active-state truth, or None if the dedup query failed."""
-    path = (
-        "/rest/v1/signals"
-        f"?status=eq.ACTIVE&pair=eq.{pair.upper()}&select=id"
-    )
+    path = "/rest/v1/signals" f"?status=eq.ACTIVE&pair=eq.{pair.upper()}&select=id"
     connection = http.client.HTTPSConnection(SUPABASE_HOST, timeout=10)
     try:
         connection.request("GET", path, headers=auth_headers(key))
         response = connection.getresponse()
         body = response.read()
         if not 200 <= response.status < 300:
-            print(
-                f"[supabase_publish] dedup HTTP {response.status}",
-                file=sys.stderr,
-            )
+            print(f"[supabase_publish] dedup HTTP {response.status}", file=sys.stderr)
             return None
         rows = json.loads(body.decode("utf-8"))
     except (OSError, ValueError, http.client.HTTPException) as exc:
-        print(
-            f"[supabase_publish] dedup check failed: {type(exc).__name__}",
-            file=sys.stderr,
-        )
+        print(f"[supabase_publish] dedup check failed: {type(exc).__name__}", file=sys.stderr)
         return None
     finally:
         connection.close()
 
     if rows:
         print(
-            f"[supabase_publish] SKIP {pair.upper()} — "
-            f"{len(rows)} ACTIVE signal(s) already open",
+            f"[supabase_publish] SKIP {pair.upper()} — {len(rows)} ACTIVE signal(s) already open",
             file=sys.stderr,
         )
         return True
@@ -109,42 +102,35 @@ def insert_signal(payload: dict[str, object], key: str) -> bool:
         body = response.read().decode("utf-8", "replace")
         if 200 <= response.status < 300:
             return True
-        print(
-            f"[supabase_publish] HTTP {response.status}: {body[:200]}",
-            file=sys.stderr,
-        )
+        print(f"[supabase_publish] HTTP {response.status}: {body[:200]}", file=sys.stderr)
         return False
     except (OSError, http.client.HTTPException) as exc:
-        print(
-            f"[supabase_publish] publish failed: {type(exc).__name__}",
-            file=sys.stderr,
-        )
+        print(f"[supabase_publish] publish failed: {type(exc).__name__}", file=sys.stderr)
         return False
     finally:
         connection.close()
 
 
-def publish(pair, direction, entry, sl, tp, score, tf, tier) -> bool:
+def publish_with_status(pair, direction, entry, sl, tp, score, tf, tier) -> tuple[bool, str]:
     tier = str(tier).upper()
     if tier != "GREEN":
         print(
-            f"[supabase_publish] SKIP non-GREEN tier={tier} — "
-            "only GREEN publishes ACTIVE signals",
+            f"[supabase_publish] SKIP non-GREEN tier={tier} — only GREEN publishes ACTIVE signals",
             file=sys.stderr,
         )
-        return True
+        return True, "skipped_non_green"
 
     key = service_key()
     if not key:
         print("[supabase_publish] SUPABASE_SERVICE_KEY not set", file=sys.stderr)
-        return False
+        return False, "failed_missing_service_key"
 
     with publication_lock():
         active = active_signal_exists(pair, key)
         if active is None:
-            return False
+            return False, "failed_dedup_check"
         if active:
-            return True
+            return True, "skipped_active_exists"
 
         payload = {
             "pair": pair.upper(),
@@ -159,13 +145,67 @@ def publish(pair, direction, entry, sl, tp, score, tf, tier) -> bool:
             "rationale": f"BotA score={score} tier={tier}",
         }
         if not insert_signal(payload, key):
-            return False
+            return False, "failed_publish"
 
-        print(
-            f"[supabase_publish] published {pair} {direction} entry={entry}",
-            file=sys.stderr,
-        )
+        print(f"[supabase_publish] published {pair} {direction} entry={entry}", file=sys.stderr)
+        return True, "published"
+
+
+def publish(pair, direction, entry, sl, tp, score, tf, tier) -> bool:
+    """Backward-compatible boolean publication API used by existing callers/tests."""
+    ok, _status = publish_with_status(pair, direction, entry, sl, tp, score, tf, tier)
+    return ok
+
+
+def cycle_result_path() -> tuple[Path | None, bool]:
+    """Return watcher-owned evidence path and validation status."""
+    raw_path = os.environ.get(RESULT_LOG_ENV, "").strip()
+    if not raw_path:
+        return None, True
+    try:
+        path = Path(raw_path).expanduser().resolve(strict=True)
+        state_dir = (root_path() / "state").resolve(strict=True)
+        info = path.stat()
+    except OSError as exc:
+        print(f"[supabase_publish] invalid cycle evidence path: {type(exc).__name__}", file=sys.stderr)
+        return None, False
+    valid = (
+        path.parent == state_dir
+        and path.name.startswith(RESULT_LOG_PREFIX)
+        and path.name.endswith(RESULT_LOG_SUFFIX)
+        and stat.S_ISREG(info.st_mode)
+        and info.st_uid == os.getuid()
+        and not (info.st_mode & 0o077)
+    )
+    if not valid:
+        print("[supabase_publish] invalid cycle evidence path ownership", file=sys.stderr)
+        return None, False
+    return path, True
+
+
+def emit_cycle_result(*, pair: str, direction: str, entry: str, tf: str, tier: str, status: str) -> bool:
+    """Append one sanitized result to the validated watcher-owned evidence file."""
+    path, path_valid = cycle_result_path()
+    if not path_valid:
+        return False
+    if path is None:
         return True
+    payload = {
+        "schema_version": "1.0",
+        "pair": pair.upper(),
+        "timeframe": tf.upper(),
+        "direction": direction.upper(),
+        "entry": str(entry),
+        "tier": tier.upper(),
+        "status": status,
+    }
+    try:
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
+        return True
+    except OSError as exc:
+        print(f"[supabase_publish] cycle evidence write failed: {type(exc).__name__}", file=sys.stderr)
+        return False
 
 
 def main() -> int:
@@ -179,17 +219,14 @@ def main() -> int:
     parser.add_argument("--tf", required=True)
     parser.add_argument("--tier", default="GREEN")
     args = parser.parse_args()
-    ok = publish(
-        args.pair,
-        args.direction,
-        args.entry,
-        args.sl,
-        args.tp,
-        args.score,
-        args.tf,
-        args.tier,
+    ok, status = publish_with_status(
+        args.pair, args.direction, args.entry, args.sl, args.tp, args.score, args.tf, args.tier
     )
-    return 0 if ok else 1
+    evidence_ok = emit_cycle_result(
+        pair=args.pair, direction=args.direction, entry=args.entry,
+        tf=args.tf, tier=args.tier, status=status,
+    )
+    return 0 if ok and evidence_ok else 1
 
 
 if __name__ == "__main__":
