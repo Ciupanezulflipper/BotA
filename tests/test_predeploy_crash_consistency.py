@@ -181,8 +181,9 @@ class TelegramCrashConsistencyTests(unittest.TestCase):
                 rc2 = telegram.deliver(self.message)
         self.assertEqual(rc2, telegram.UNKNOWN_OUTCOME_RC)
         second.assert_not_called()
-        state_file = next((self.root / "state" / "telegram_delivery").glob("*.json"))
-        state = json.loads(state_file.read_text(encoding="utf-8"))
+        state_files = list((self.root / "state" / "telegram_delivery").glob("*.json"))
+        self.assertEqual(len(state_files), 1)
+        state = json.loads(state_files[0].read_text(encoding="utf-8"))
         self.assertEqual(state["status"], "unknown_outcome")
         self.assertEqual(state["cycle_id"], "test-boot:123")
 
@@ -272,7 +273,7 @@ class ControlPlaneZombieTests(unittest.TestCase):
         }
         failures = control.topology_failures(
             1, len(control.SERVICES), len(control.SERVICES), 0, 0,
-            zombies, rows, [{"pid": 2, "ppid": 1, "argv": ["crond","-n","-s"]}], 2, None,
+            zombies, rows, [{"pid": 2, "ppid": 1, "argv": ["crond", "-n", "-s"]}], 2, None,
         )
         self.assertIn("zombie_runsv_count:1", failures)
 
