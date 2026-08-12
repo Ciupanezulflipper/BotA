@@ -21,11 +21,18 @@ mkdir -p "${LOGS}" "${STATE}"
 # contents/API deployments may not preserve executable mode, so make that
 # requirement explicit at the runtime boundary and fail closed if it cannot be
 # established. The sender itself remains version-controlled and testable.
-if [[ -f "${TOOLS}/telegram_send.sh" ]]; then
-  chmod 700 "${TOOLS}/telegram_send.sh"
+if [[ ! -f "${TOOLS}/telegram_send.sh" ]]; then
+  printf '[WATCHER_EVIDENCE] canonical telegram sender missing: %s\n' \
+    "${TOOLS}/telegram_send.sh" >&2
+  exit 66
+fi
+if ! chmod 700 "${TOOLS}/telegram_send.sh"; then
+  printf '[WATCHER_EVIDENCE] canonical telegram sender chmod failed: %s\n' \
+    "${TOOLS}/telegram_send.sh" >&2
+  exit 66
 fi
 if [[ ! -x "${TOOLS}/telegram_send.sh" ]]; then
-  printf '[WATCHER_EVIDENCE] canonical telegram sender unavailable or non-executable: %s\n' \
+  printf '[WATCHER_EVIDENCE] canonical telegram sender not executable after chmod: %s\n' \
     "${TOOLS}/telegram_send.sh" >&2
   exit 66
 fi
