@@ -17,8 +17,7 @@ mkdir -p "${LOGS}" "${STATE}"
 alerts="${LOGS}/alerts.csv"
 alerts_offset="$(stat -c '%s' "${alerts}" 2>/dev/null || echo 0)"
 cycle_log="$(mktemp "${STATE}/watcher_cycle.XXXXXX.log")"
-cleanup() { rm -f "${cycle_log}" 2>/dev/null || true; }
-trap cleanup EXIT
+trap 'rm -f "${cycle_log}" 2>/dev/null || true' EXIT
 
 server_epoch="${BOTA_SERVER_EPOCH:-0}"
 owns_cycle=0
