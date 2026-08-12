@@ -258,7 +258,7 @@ def topology_failures(
     failures.extend(reason for failed, reason in checks if failed)
     dead_wrappers = [
         name for name, row in rows.items()
-        if row.get("service_running") and not row.get("wrapper_alive")
+        if row.get("service_running") and row.get("wrapper_alive") is False
     ]
     if dead_wrappers:
         failures.append("wrapper_not_alive:" + ",".join(sorted(dead_wrappers)))
