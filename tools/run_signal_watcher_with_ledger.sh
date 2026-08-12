@@ -17,6 +17,19 @@ STATE="${ROOT}/state"
 
 mkdir -p "${LOGS}" "${STATE}"
 
+# The watcher selects tools/telegram_send.sh only when it is executable. GitHub
+# contents/API deployments may not preserve executable mode, so make that
+# requirement explicit at the runtime boundary and fail closed if it cannot be
+# established. The sender itself remains version-controlled and testable.
+if [[ -f "${TOOLS}/telegram_send.sh" ]]; then
+  chmod 700 "${TOOLS}/telegram_send.sh"
+fi
+if [[ ! -x "${TOOLS}/telegram_send.sh" ]]; then
+  printf '[WATCHER_EVIDENCE] canonical telegram sender unavailable or non-executable: %s\n' \
+    "${TOOLS}/telegram_send.sh" >&2
+  exit 66
+fi
+
 alerts="${LOGS}/alerts.csv"
 alerts_offset="$(stat -c '%s' "${alerts}" 2>/dev/null || echo 0)"
 cycle_log="$(mktemp "${STATE}/watcher_cycle.XXXXXX.log")"
