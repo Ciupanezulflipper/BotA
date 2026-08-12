@@ -20,29 +20,47 @@ SERVICES = (
 
 
 def process_table() -> dict[int, dict[str, Any]]:
-    """Return readable process parentage and argv from procfs."""
+    """Return readable process parentage, state, comm and argv from procfs."""
     table: dict[int, dict[str, Any]] = {}
     for entry in Path("/proc").iterdir():
         if not entry.name.isdigit():
             continue
         try:
             raw = (entry / "stat").read_text(errors="replace")
-            fields = raw[raw.rfind(")") + 2 :].split()
+            open_paren = raw.find("(")
+            close_paren = raw.rfind(")")
+            if open_paren < 0 or close_paren <= open_paren:
+                continue
+            comm = raw[open_paren + 1 : close_paren]
+            fields = raw[close_paren + 2 :].split()
+            state = fields[0]
+            ppid = int(fields[1])
             argv = [
                 item.decode(errors="replace")
                 for item in (entry / "cmdline").read_bytes().split(b"\0")
                 if item
             ]
-            table[int(entry.name)] = {"ppid": int(fields[1]), "argv": argv}
+            table[int(entry.name)] = {
+                "ppid": ppid,
+                "state": state,
+                "comm": comm,
+                "argv": argv,
+            }
         except (OSError, ValueError, IndexError):
             continue
     return table
 
 
 def basename(row: dict[str, Any]) -> str:
-    """Return process executable basename."""
+    """Return process executable basename, falling back to /proc stat comm."""
     argv = row.get("argv") or []
-    return Path(argv[0]).name if argv else ""
+    if argv:
+        return Path(argv[0]).name
+    return Path(str(row.get("comm") or "")).name
+
+
+def is_zombie(row: dict[str, Any] | None) -> bool:
+    return bool(row and row.get("state") == "Z")
 
 
 def service_status(
@@ -71,12 +89,13 @@ def standard_managers(
     table: dict[int, dict[str, Any]],
     service_root: Path,
 ) -> list[int]:
-    """Return runsvdir processes managing the standard Termux service root."""
+    """Return non-zombie runsvdir processes managing the Termux service root."""
     root_text = str(service_root)
     return [
         pid
         for pid, row in table.items()
         if basename(row) == "runsvdir"
+        and not is_zombie(row)
         and root_text in " ".join(row.get("argv", [])[1:])
     ]
 
@@ -85,12 +104,27 @@ def runsv_candidates(
     table: dict[int, dict[str, Any]],
     service: str,
 ) -> list[tuple[int, dict[str, Any]]]:
-    """Return exact runsv processes for one service name."""
+    """Return non-zombie exact runsv processes for one service name."""
     return [
         (pid, row)
         for pid, row in table.items()
         if basename(row) == "runsv"
+        and not is_zombie(row)
         and (row.get("argv") or [])[-1:] == [service]
+    ]
+
+
+def zombie_runsv_processes(table: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return defunct runsv processes even when /proc/<pid>/cmdline is empty."""
+    return [
+        {
+            "pid": pid,
+            "ppid": int(row.get("ppid", 0)),
+            "state": row.get("state"),
+            "comm": row.get("comm"),
+        }
+        for pid, row in table.items()
+        if basename(row) == "runsv" and is_zombie(row)
     ]
 
 
@@ -142,7 +176,8 @@ def inspect_service(
         service,
     )
     child_pid = wrapper_pid(service_root, service)
-    child_alive = bool(child_pid and Path(f"/proc/{child_pid}").is_dir())
+    child_row = table.get(child_pid) if child_pid else None
+    child_alive = bool(child_pid and child_row and not is_zombie(child_row))
     return {
         "runsv_count": len(candidates),
         "runsv_pid": runsv_pid,
@@ -152,11 +187,12 @@ def inspect_service(
         "sv_status": status_text,
         "wrapper_pid": child_pid,
         "wrapper_alive": child_alive,
+        "wrapper_state": child_row.get("state") if child_row else None,
     }
 
 
 def crond_processes(table: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return live foreground crond processes and parentage."""
+    """Return live non-zombie foreground crond processes and parentage."""
     return [
         {
             "pid": pid,
@@ -165,6 +201,7 @@ def crond_processes(table: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
         }
         for pid, row in table.items()
         if basename(row) == "crond"
+        and not is_zombie(row)
         and "-n" in (row.get("argv") or [])
         and "-s" in (row.get("argv") or [])
     ]
@@ -176,6 +213,7 @@ def topology_failures(
     running: int,
     orphaned: int,
     duplicates: int,
+    zombie_runsv: list[dict[str, Any]],
     rows: dict[str, Any],
     live_crond: list[dict[str, Any]],
     crond_pidfile_pid: int | None,
@@ -189,9 +227,16 @@ def topology_failures(
         (running != len(SERVICES), f"running:{running}/{len(SERVICES)}"),
         (orphaned != 0, f"orphaned:{orphaned}"),
         (duplicates != 0, f"duplicate_service_rows:{duplicates}"),
+        (len(zombie_runsv) != 0, f"zombie_runsv_count:{len(zombie_runsv)}"),
         (len(live_crond) != 1, f"live_crond_count:{len(live_crond)}"),
     )
     failures.extend(reason for failed, reason in checks if failed)
+    dead_wrappers = [
+        name for name, row in rows.items()
+        if row.get("service_running") and not row.get("wrapper_alive")
+    ]
+    if dead_wrappers:
+        failures.append("wrapper_not_alive:" + ",".join(sorted(dead_wrappers)))
     if crond_pidfile_error is not None:
         failures.append(f"crond_pidfile:{crond_pidfile_error}")
 
@@ -229,6 +274,7 @@ def snapshot() -> dict[str, Any]:
     orphaned = sum(row["owner"] == "pid1_orphan" for row in rows.values())
     running = sum(bool(row["service_running"]) for row in rows.values())
     duplicates = sum(int(row["runsv_count"] > 1) for row in rows.values())
+    zombies = zombie_runsv_processes(table)
     live_crond = crond_processes(table)
     crond_pidfile_pid, crond_pidfile_error = runtime_pidfile(
         prefix / "var" / "run" / "crond.pid"
@@ -239,13 +285,14 @@ def snapshot() -> dict[str, Any]:
         running,
         orphaned,
         duplicates,
+        zombies,
         rows,
         live_crond,
         crond_pidfile_pid,
         crond_pidfile_error,
     )
     return {
-        "schema_version": "1.2",
+        "schema_version": "1.3",
         "healthy": not failures,
         "manager_count": len(managers),
         "manager_pid": manager,
@@ -254,6 +301,7 @@ def snapshot() -> dict[str, Any]:
         "running": running,
         "orphaned": orphaned,
         "duplicate_service_rows": duplicates,
+        "zombie_runsv": zombies,
         "services": rows,
         "live_crond": live_crond,
         "crond_pidfile": {
