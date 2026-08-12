@@ -10,6 +10,7 @@ on:
       - "tools/control_plane_status.py"
       - "tools/watcher_cycle_ledger.py"
       - "tools/run_signal_watcher_with_ledger.sh"
+      - "tools/supabase_publish.py"
       - "tools/data_fetch_candles.sh"
       - "tools/indicators_updater.sh"
       - "tools/run_shadow_manager.sh"
@@ -17,6 +18,7 @@ on:
       - "tools/heartbeat.sh"
       - "tests/test_provider_accounting_pipeline_ledger.py"
       - "tests/test_watcher_cycle_observability.py"
+      - "tests/test_supabase_cycle_evidence.py"
       - ".github/workflows/provider-accounting-pipeline-ledger.yml"
   workflow_dispatch:
 
@@ -40,7 +42,8 @@ jobs:
             tools/pipeline_ledger.py \
             tools/pipeline_health.py \
             tools/control_plane_status.py \
-            tools/watcher_cycle_ledger.py
+            tools/watcher_cycle_ledger.py \
+            tools/supabase_publish.py
       - name: Check shell syntax
         run: |
           bash -n tools/data_fetch_candles.sh
@@ -53,4 +56,5 @@ jobs:
         run: |
           python -m unittest -v \
             tests.test_provider_accounting_pipeline_ledger \
-            tests.test_watcher_cycle_observability
+            tests.test_watcher_cycle_observability \
+            tests.test_supabase_cycle_evidence
