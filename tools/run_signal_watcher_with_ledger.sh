@@ -54,6 +54,9 @@ export BOTA_DELIVERY_STATE_DIR="${DELIVERY_STATE}"
 cycle_log="$(mktemp "${EVIDENCE_STATE}/watcher_cycle.XXXXXX.log")"
 telegram_result_log="$(mktemp "${EVIDENCE_STATE}/watcher_telegram.XXXXXX.jsonl")"
 supabase_result_log="$(mktemp "${EVIDENCE_STATE}/watcher_supabase.XXXXXX.jsonl")"
+# Explicitly model the success-only cleanup transition. There is intentionally
+# no EXIT trap: interruption/failure must leave bounded evidence on disk.
+delete_evidence_on_exit=0
 
 server_epoch="${BOTA_SERVER_EPOCH:-0}"
 owns_cycle=0
@@ -131,5 +134,8 @@ if (( final_rc != 0 )); then
   exit "${final_rc}"
 fi
 
-rm -f "${cycle_log}" "${telegram_result_log}" "${supabase_result_log}"
+delete_evidence_on_exit=1
+if (( delete_evidence_on_exit == 1 )); then
+  rm -f "${cycle_log}" "${telegram_result_log}" "${supabase_result_log}"
+fi
 exit 0
