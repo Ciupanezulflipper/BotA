@@ -7,8 +7,8 @@ Contract:
 - Persist a durable intent before the Telegram request.
 - Persist authoritative Telegram confirmation (message_id/date) after ok=true.
 - If a previous attempt is left in intent/unknown_outcome, never blindly resend it.
-- Reconcile BotA's existing delivery hash/cooldown immediately after confirmed delivery.
-- Emit one structured watcher-cycle delivery result when a bounded result path is supplied.
+- Reconcile BotA's existing cooldown and delivery hash after confirmed delivery.
+- Persist structured watcher-cycle evidence before committing the legacy delivery hash.
 """
 from __future__ import annotations
 
@@ -31,13 +31,13 @@ from pathlib import Path
 from typing import Any
 
 LEGACY_FIELDS = (
-    "timestamp","pair","tf","direction","score","confidence","entry","sl","tp",
-    "provider","rejected","filter_str","reasons",
+    "timestamp", "pair", "tf", "direction", "score", "confidence", "entry", "sl", "tp",
+    "provider", "rejected", "filter_str", "reasons",
 )
 CURRENT_FIELDS = (
-    "ts","pair","tf","direction","score","confidence","entry","sl","tp","provider",
-    "filter_rejected","filter_reasons","reasons","ema_comp","rsi_comp","macd_comp",
-    "adx_comp","adx_raw","rsi_raw","macd_hist_raw","macro6","h1_trend","tier","session",
+    "ts", "pair", "tf", "direction", "score", "confidence", "entry", "sl", "tp", "provider",
+    "filter_rejected", "filter_reasons", "reasons", "ema_comp", "rsi_comp", "macd_comp",
+    "adx_comp", "adx_raw", "rsi_raw", "macd_hist_raw", "macro6", "h1_trend", "tier", "session",
     "adx_regime",
 )
 PAIR_RE = re.compile(r"\bBotA\s+([A-Z]{6})\s+([A-Z0-9]+)\s+(BUY|SELL)\b")
@@ -57,7 +57,7 @@ def root_path() -> Path:
 
 
 def truthy(value: Any) -> bool:
-    return str(value or "").strip().lower() in {"1","true","yes","y","on"}
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def parse_message(message: str) -> dict[str, str]:
@@ -84,11 +84,11 @@ def row_dict(values: list[str]) -> dict[str, str] | None:
 
 
 def decision_matches(row: dict[str, str], message_identity: dict[str, str]) -> bool:
-    if str(row.get("pair","")).upper() != message_identity["pair"]:
+    if str(row.get("pair", "")).upper() != message_identity["pair"]:
         return False
-    if str(row.get("tf", row.get("timeframe",""))).upper() != message_identity["timeframe"]:
+    if str(row.get("tf", row.get("timeframe", ""))).upper() != message_identity["timeframe"]:
         return False
-    if str(row.get("direction","")).upper() != message_identity["direction"]:
+    if str(row.get("direction", "")).upper() != message_identity["direction"]:
         return False
     rejected = row.get("filter_rejected")
     if rejected is None or str(rejected).strip() == "":
@@ -96,13 +96,13 @@ def decision_matches(row: dict[str, str], message_identity: dict[str, str]) -> b
     if truthy(rejected):
         return False
     try:
-        if abs(float(row.get("score","0")) - float(message_identity["score"])) > 0.011:
+        if abs(float(row.get("score", "0")) - float(message_identity["score"])) > 0.011:
             return False
     except (TypeError, ValueError):
         return False
     if message_identity["entry"]:
         try:
-            if abs(float(row.get("entry","0")) - float(message_identity["entry"])) > 0.000001:
+            if abs(float(row.get("entry", "0")) - float(message_identity["entry"])) > 0.000001:
                 return False
         except (TypeError, ValueError):
             return False
@@ -169,25 +169,25 @@ def current_cycle_decision(message_identity: dict[str, str]) -> dict[str, str] |
 
 def canonical_identity(row: dict[str, str]) -> dict[str, str]:
     return {
-        "pair": str(row.get("pair","")).upper(),
-        "timeframe": str(row.get("tf", row.get("timeframe",""))).upper(),
-        "direction": str(row.get("direction","")).upper(),
-        "score": str(row.get("score","")).strip(),
-        "entry": str(row.get("entry","")).strip(),
-        "sl": str(row.get("sl","")).strip(),
-        "tp": str(row.get("tp","")).strip(),
+        "pair": str(row.get("pair", "")).upper(),
+        "timeframe": str(row.get("tf", row.get("timeframe", ""))).upper(),
+        "direction": str(row.get("direction", "")).upper(),
+        "score": str(row.get("score", "")).strip(),
+        "entry": str(row.get("entry", "")).strip(),
+        "sl": str(row.get("sl", "")).strip(),
+        "tp": str(row.get("tp", "")).strip(),
     }
 
 
 def delivery_key(identity: dict[str, str], chat_id: str) -> str:
     canonical = "|".join(
-        [chat_id] + [identity[key] for key in ("pair","timeframe","direction","score","entry","sl","tp")]
+        [chat_id] + [identity[key] for key in ("pair", "timeframe", "direction", "score", "entry", "sl", "tp")]
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def legacy_delivery_hash(identity: dict[str, str]) -> str:
-    raw = "|".join(identity[key] for key in ("pair","timeframe","direction","score","entry","sl","tp"))
+    raw = "|".join(identity[key] for key in ("pair", "timeframe", "direction", "score", "entry", "sl", "tp"))
     return hashlib.md5(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
@@ -220,7 +220,7 @@ def write_json_durable(path: Path, payload: dict[str, Any]) -> None:
     tmp = Path(tmp_name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, sort_keys=True, separators=(",",":"))
+            json.dump(payload, handle, sort_keys=True, separators=(",", ":"))
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
@@ -273,12 +273,11 @@ def delivery_state_dir() -> Path:
     return supplied
 
 
-def mark_legacy_delivery(identity: dict[str, str], provenance: dict[str, Any]) -> bool:
-    """Update existing cooldown first and delivery hash last.
+def prepare_legacy_cooldown(identity: dict[str, str], provenance: dict[str, Any]) -> bool:
+    """Persist cooldown state before structured cycle evidence.
 
-    Hash-last ordering matters: if cooldown persistence fails, the absent hash
-    ensures the next cycle reaches this reconciler again rather than silently
-    skipping with an incomplete cooldown state.
+    The delivery hash is intentionally not written here. It is the final legacy
+    commit marker and is written only after structured cycle evidence is durable.
     """
     try:
         directory = delivery_state_dir()
@@ -287,8 +286,17 @@ def mark_legacy_delivery(identity: dict[str, str], provenance: dict[str, Any]) -
         if monotonic_seconds <= 0:
             return False
         cooldown = directory / f"last_sent_{identity['pair']}_{identity['timeframe']}.txt"
-        hash_path = directory / f"last_hash_{identity['pair']}_{identity['timeframe']}.txt"
         write_text_durable(cooldown, f"{boot_id} {monotonic_seconds}\n")
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def commit_legacy_delivery_hash(identity: dict[str, str]) -> bool:
+    """Write the legacy delivery hash as the final local commit marker."""
+    try:
+        directory = delivery_state_dir()
+        hash_path = directory / f"last_hash_{identity['pair']}_{identity['timeframe']}.txt"
         write_text_durable(hash_path, legacy_delivery_hash(identity))
         return True
     except (OSError, ValueError, TypeError):
@@ -334,7 +342,7 @@ def emit_cycle_result(identity: dict[str, str], status: str, detail: dict[str, A
             payload["telegram_date"] = detail["telegram_date"]
     try:
         with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, sort_keys=True, separators=(",",":")) + "\n")
+            handle.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
             handle.flush()
             os.fsync(handle.fileno())
         return True
@@ -353,7 +361,7 @@ def telegram_credentials() -> tuple[str, str]:
 def send_request(message: str) -> tuple[str, dict[str, Any]]:
     token, chat_id = telegram_credentials()
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    data = urllib.parse.urlencode({"chat_id": chat_id, "text": message.replace("\\n","\n")}).encode("utf-8")
+    data = urllib.parse.urlencode({"chat_id": chat_id, "text": message.replace("\\n", "\n")}).encode("utf-8")
     request = urllib.request.Request(url, data=data, method="POST")
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
@@ -366,11 +374,11 @@ def send_request(message: str) -> tuple[str, dict[str, Any]]:
         if 400 <= int(exc.code) < 500:
             return "definite_failure", {"http_status": int(exc.code)}
         return "unknown_outcome", {"http_status": int(exc.code)}
-    except (urllib.error.URLError, TimeoutError, OSError):
+    except OSError:
         return "unknown_outcome", {}
     try:
         payload = json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError):
+    except ValueError:
         return "unknown_outcome", {}
     if not isinstance(payload, dict):
         return "unknown_outcome", {}
@@ -383,6 +391,23 @@ def send_request(message: str) -> tuple[str, dict[str, Any]]:
     if not isinstance(result, dict) or not isinstance(result.get("message_id"), int):
         return "unknown_outcome", {}
     return "sent", {"message_id": result["message_id"], "telegram_date": result.get("date")}
+
+
+def finalize_confirmed_delivery(
+    identity: dict[str, str],
+    provenance: dict[str, Any],
+    cycle_status: str,
+    detail: dict[str, Any],
+) -> bool:
+    """Persist cooldown, structured result, then legacy hash in that order."""
+    if not prepare_legacy_cooldown(identity, provenance):
+        emit_cycle_result(identity, "sent_local_reconcile_failed", detail)
+        return False
+    if not emit_cycle_result(identity, cycle_status, detail):
+        return False
+    if not commit_legacy_delivery_hash(identity):
+        return False
+    return True
 
 
 def deliver(message: str) -> int:
@@ -405,19 +430,15 @@ def deliver(message: str) -> int:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         prior = read_state(state_path)
         if prior:
-            status = str(prior.get("status",""))
+            status = str(prior.get("status", ""))
             if status == "sent":
                 provenance = runtime_provenance()
-                if not mark_legacy_delivery(identity, provenance):
-                    emit_cycle_result(identity, "sent_local_reconcile_failed", prior)
+                if not finalize_confirmed_delivery(identity, provenance, "reconciled_sent", prior):
                     print("[telegram_delivery] BLOCK sent_but_local_reconcile_failed", file=sys.stderr)
                     return UNKNOWN_OUTCOME_RC
-                if not emit_cycle_result(identity, "reconciled_sent", prior):
-                    print("[telegram_delivery] BLOCK reconciled_result_not_persisted", file=sys.stderr)
-                    return UNKNOWN_OUTCOME_RC
-                print(f"[telegram_delivery] RECONCILED sent message_id={prior.get('message_id','')}", file=sys.stderr)
+                print(f"[telegram_delivery] RECONCILED sent message_id={prior.get('message_id', '')}", file=sys.stderr)
                 return RECONCILED_SENT_RC
-            if status in {"intent","unknown_outcome"}:
+            if status in {"intent", "unknown_outcome"}:
                 prior["status"] = "unknown_outcome"
                 prior["reason"] = prior.get("reason") or "prior_attempt_unconfirmed"
                 write_json_durable(state_path, prior)
@@ -441,12 +462,8 @@ def deliver(message: str) -> int:
         if outcome == "sent":
             confirmed = {**intent, **detail, "status": "sent"}
             write_json_durable(state_path, confirmed)
-            if not mark_legacy_delivery(identity, provenance):
-                emit_cycle_result(identity, "sent_local_reconcile_failed", detail)
+            if not finalize_confirmed_delivery(identity, provenance, "sent", detail):
                 print("[telegram_delivery] BLOCK sent_but_local_reconcile_failed", file=sys.stderr)
-                return UNKNOWN_OUTCOME_RC
-            if not emit_cycle_result(identity, "sent", detail):
-                print("[telegram_delivery] BLOCK sent_result_not_persisted", file=sys.stderr)
                 return UNKNOWN_OUTCOME_RC
             print(f"[telegram_delivery] SENT message_id={confirmed['message_id']}", file=sys.stderr)
             return 0
