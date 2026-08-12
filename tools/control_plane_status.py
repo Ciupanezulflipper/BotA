@@ -224,20 +224,27 @@ def topology_failures(
     running: int,
     orphaned: int,
     duplicates: int,
-    rows: dict[str, Any],
-    live_crond: list[dict[str, Any]],
-    crond_pidfile_pid: int | None,
-    crond_pidfile_error: str | None,
-    *,
+    *evidence: Any,
     zombie_runsv: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     """Build compact acceptance failures from an inspected topology.
 
-    Keep the historical positional call contract intact. Zombie evidence is a
-    backward-compatible keyword-only extension so older callers/tests cannot
-    silently shift arguments when this health dimension is enabled.
+    Backward compatibility is deliberate:
+    - historical callers pass: rows, live_crond, pidfile_pid, pidfile_error
+    - the first zombie regression passed: zombies, rows, live_crond, pidfile_pid, pidfile_error
+    Production uses the historical shape plus keyword ``zombie_runsv=...``.
+    Any other positional shape fails explicitly instead of shifting silently.
     """
-    zombies = zombie_runsv or []
+    if len(evidence) == 4:
+        rows, live_crond, crond_pidfile_pid, crond_pidfile_error = evidence
+        zombies = zombie_runsv or []
+    elif len(evidence) == 5 and zombie_runsv is None:
+        zombies, rows, live_crond, crond_pidfile_pid, crond_pidfile_error = evidence
+    else:
+        raise TypeError("unexpected topology_failures evidence shape")
+    if not isinstance(rows, dict) or not isinstance(live_crond, list) or not isinstance(zombies, list):
+        raise TypeError("invalid topology_failures evidence types")
+
     failures: list[str] = []
     checks = (
         (manager_count != 1, f"manager_count:{manager_count}"),
