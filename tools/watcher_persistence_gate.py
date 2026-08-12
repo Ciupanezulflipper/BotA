@@ -3,8 +3,8 @@
 
 For each pair/timeframe that reached an evaluated accept/reject outcome in the
 current-cycle log, require a matching row appended to alerts.csv after the
-recorded byte offset. Pre-evaluation gates (stale/news/calendar/pause) do not
-require an alerts.csv decision row.
+recorded byte offset. When evaluated rows exist, fsync alerts.csv and its parent
+before the cycle may be considered healthy.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import argparse
 import csv
 import io
 import json
+import os
 import re
 from pathlib import Path
 
@@ -36,7 +37,10 @@ def read_segment(path: Path, offset: int) -> str:
         return ""
     with path.open("rb") as handle:
         handle.seek(offset)
-        return handle.read(1_048_576).decode("utf-8", "replace")
+        data = handle.read(1_048_577)
+    if len(data) > 1_048_576:
+        raise ValueError("alerts_cycle_segment_too_large")
+    return data.decode("utf-8", "replace")
 
 
 def parse_pairs(segment: str) -> tuple[set[tuple[str,str]], bool]:
@@ -65,6 +69,19 @@ def expected_evaluated(log_text: str) -> set[tuple[str,str]]:
     return {(m.group(1), m.group(2).upper()) for m in EVALUATED_RE.finditer(log_text)}
 
 
+def fsync_file_and_parent(path: Path) -> None:
+    file_fd = os.open(str(path), os.O_RDONLY)
+    try:
+        os.fsync(file_fd)
+    finally:
+        os.close(file_fd)
+    dir_fd = os.open(str(path.parent), os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--alerts-path", type=Path, required=True)
@@ -74,20 +91,28 @@ def main() -> int:
 
     try:
         log_text = args.log_path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        print(json.dumps({"healthy": False, "reason": "cycle_log_unreadable"}))
+        segment = read_segment(args.alerts_path, args.alerts_offset)
+    except (OSError, ValueError) as exc:
+        print(json.dumps({"healthy": False, "reason": type(exc).__name__}))
         return 3
 
     required = expected_evaluated(log_text)
-    persisted, malformed = parse_pairs(read_segment(args.alerts_path, args.alerts_offset))
+    persisted, malformed = parse_pairs(segment)
     missing = sorted(required - persisted)
-    healthy = not malformed and not missing
+    durable = True
+    if required and not malformed and not missing:
+        try:
+            fsync_file_and_parent(args.alerts_path)
+        except OSError:
+            durable = False
+    healthy = not malformed and not missing and durable
     print(json.dumps({
         "healthy": healthy,
         "required": sorted([f"{p}:{t}" for p,t in required]),
         "persisted": sorted([f"{p}:{t}" for p,t in persisted]),
         "missing": [f"{p}:{t}" for p,t in missing],
         "malformed": malformed,
+        "durable": durable,
     }, sort_keys=True))
     return 0 if healthy else 3
 
