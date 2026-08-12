@@ -13,10 +13,17 @@ set -euo pipefail
 ROOT="${BOTA_ROOT:-${HOME}/BotA}"
 TOOLS="${ROOT}/tools"
 LOGS="${ROOT}/logs"
-STATE="${ROOT}/state"
-DELIVERY_STATE="${ROOT}/logs/state"
+EVIDENCE_STATE="${ROOT}/state"
+WATCHER_STATE_RAW="${STATE:-}"
+if [[ -z "${WATCHER_STATE_RAW}" ]]; then
+  DELIVERY_STATE="${ROOT}/logs/state"
+elif [[ "${WATCHER_STATE_RAW}" == /* ]]; then
+  DELIVERY_STATE="${WATCHER_STATE_RAW}"
+else
+  DELIVERY_STATE="${ROOT}/${WATCHER_STATE_RAW}"
+fi
 
-mkdir -p "${LOGS}" "${STATE}" "${DELIVERY_STATE}"
+mkdir -p "${LOGS}" "${EVIDENCE_STATE}" "${DELIVERY_STATE}"
 
 # The watcher selects tools/telegram_send.sh only when it is executable. GitHub
 # contents/API deployments may not preserve executable mode, so make that
@@ -44,9 +51,9 @@ alerts_offset="$(stat -c '%s' "${alerts}" 2>/dev/null || echo 0)"
 # cycle boundary. The sender fails closed if this offset is absent/invalid.
 export BOTA_ALERTS_OFFSET="${alerts_offset}"
 export BOTA_DELIVERY_STATE_DIR="${DELIVERY_STATE}"
-cycle_log="$(mktemp "${STATE}/watcher_cycle.XXXXXX.log")"
-telegram_result_log="$(mktemp "${STATE}/watcher_telegram.XXXXXX.jsonl")"
-supabase_result_log="$(mktemp "${STATE}/watcher_supabase.XXXXXX.jsonl")"
+cycle_log="$(mktemp "${EVIDENCE_STATE}/watcher_cycle.XXXXXX.log")"
+telegram_result_log="$(mktemp "${EVIDENCE_STATE}/watcher_telegram.XXXXXX.jsonl")"
+supabase_result_log="$(mktemp "${EVIDENCE_STATE}/watcher_supabase.XXXXXX.jsonl")"
 delete_evidence_on_exit=0
 trap 'if (( delete_evidence_on_exit == 1 )); then rm -f "${cycle_log}" "${telegram_result_log}" "${supabase_result_log}" 2>/dev/null || true; fi' EXIT
 
