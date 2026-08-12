@@ -52,6 +52,8 @@ class TelegramCrashConsistencyTests(unittest.TestCase):
         self.env = {
             "BOTA_ROOT": str(self.root),
             "BOTA_ALERTS_OFFSET": str(self.offset),
+            "BOTA_CYCLE_ID": "test-boot:123",
+            "BOTA_SERVER_EPOCH": "1786555048",
             "TELEGRAM_BOT_TOKEN": "test-token",
             "TELEGRAM_CHAT_ID": "123",
         }
@@ -75,7 +77,6 @@ class TelegramCrashConsistencyTests(unittest.TestCase):
 
     def test_identical_historical_row_cannot_authorize_current_send(self):
         alerts = self.root / "logs" / "alerts.csv"
-        # Move the cycle boundary to EOF: the identical row now exists only before this cycle.
         env = {**self.env, "BOTA_ALERTS_OFFSET": str(alerts.stat().st_size)}
         with mock.patch.object(telegram, "send_request") as send:
             with mock.patch.dict(os.environ, env, clear=False):
@@ -92,7 +93,7 @@ class TelegramCrashConsistencyTests(unittest.TestCase):
         self.assertEqual(rc, 65)
         send.assert_not_called()
 
-    def test_success_persists_authoritative_message_id(self):
+    def test_success_persists_authoritative_message_id_and_runtime_provenance(self):
         with mock.patch.object(
             telegram, "send_request", return_value=("sent", {"message_id": 7812, "telegram_date": 1786540291})
         ) as send:
@@ -106,6 +107,10 @@ class TelegramCrashConsistencyTests(unittest.TestCase):
         self.assertEqual(state["status"], "sent")
         self.assertEqual(state["message_id"], 7812)
         self.assertEqual(state["chat_id"], "123")
+        self.assertEqual(state["cycle_id"], "test-boot:123")
+        self.assertEqual(state["server_epoch"], 1786555048)
+        self.assertGreater(state["monotonic_ns"], 0)
+        self.assertTrue(state["boot_id"])
 
     def test_delivery_identity_is_scoped_to_chat(self):
         identity = telegram.parse_message(self.message)
@@ -129,6 +134,7 @@ class TelegramCrashConsistencyTests(unittest.TestCase):
         state_file = next((self.root / "state" / "telegram_delivery").glob("*.json"))
         state = json.loads(state_file.read_text(encoding="utf-8"))
         self.assertEqual(state["status"], "unknown_outcome")
+        self.assertEqual(state["cycle_id"], "test-boot:123")
 
     def test_definite_rejection_is_retryable(self):
         with mock.patch.object(
@@ -199,7 +205,7 @@ class ControlPlaneZombieTests(unittest.TestCase):
         self.assertEqual(control.basename(row), "runsv")
         self.assertTrue(control.is_zombie(row))
 
-    def test_zombie_runsv_is_reported_and_fails_health(self):
+    def test_manager_child_zombie_runsv_is_reported_and_fails_health(self):
         table = {
             25219: {"argv": [], "comm": "runsv", "state": "Z", "ppid": 26950},
             26950: {
@@ -207,7 +213,7 @@ class ControlPlaneZombieTests(unittest.TestCase):
                 "comm": "runsvdir", "state": "S", "ppid": 1,
             },
         }
-        zombies = control.zombie_runsv_processes(table)
+        zombies = control.zombie_runsv_children(table, {26950})
         self.assertEqual([row["pid"] for row in zombies], [25219])
         rows = {
             name: {"service_running": True, "wrapper_alive": True, "runsv_pid": 1, "wrapper_pid": 2}
@@ -218,6 +224,14 @@ class ControlPlaneZombieTests(unittest.TestCase):
             zombies, rows, [{"pid": 2, "ppid": 1, "argv": ["crond","-n","-s"]}], 2, None,
         )
         self.assertIn("zombie_runsv_count:1", failures)
+
+    def test_unrelated_pid1_zombie_is_not_attributed_to_current_manager(self):
+        table = {
+            10: {"argv": [], "comm": "runsv", "state": "Z", "ppid": 1},
+            20: {"argv": [], "comm": "runsv", "state": "Z", "ppid": 26950},
+        }
+        zombies = control.zombie_runsv_children(table, {26950})
+        self.assertEqual([row["pid"] for row in zombies], [20])
 
 
 class WrapperHardeningTests(unittest.TestCase):
@@ -234,7 +248,7 @@ class WrapperHardeningTests(unittest.TestCase):
         watcher = (HERE / "tools" / "signal_watcher_pro.sh").read_text(encoding="utf-8")
         wrapper = (HERE / "tools" / "run_signal_watcher_with_ledger.sh").read_text(encoding="utf-8")
         self.assertIn('${TOOLS}/telegram_send.sh', watcher)
-        self.assertIn('chmod 700 "${TOOLS}/telegram_send.sh"', wrapper)
+        self.assertIn('if ! chmod 700 "${TOOLS}/telegram_send.sh"; then', wrapper)
         self.assertIn('[[ ! -x "${TOOLS}/telegram_send.sh" ]]', wrapper)
         self.assertTrue((HERE / "tools" / "telegram_send.sh").is_file())
         self.assertTrue((HERE / "tools" / "telegram_delivery.py").is_file())
