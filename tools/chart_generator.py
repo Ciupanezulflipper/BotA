@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Delivery-aware wrapper around the unchanged BotA chart renderer.
 
-A Telegram text delivery that was already authoritatively confirmed and merely
-reconciled in this cycle must not produce a second Telegram chart. All normal
-chart rendering is delegated byte-for-byte to ``chart_generator_core.py``.
+Canonical watcher production currently has durable Telegram text delivery but no
+crash-consistent photo-delivery transaction. Therefore canonical cycles do not
+create a chart PNG; this keeps the historical direct sendPhoto branch
+unreachable. Manual/non-canonical chart generation remains unchanged.
 """
 from __future__ import annotations
 
@@ -37,19 +38,20 @@ def reconciled_text_delivery() -> bool:
         path = Path(raw).expanduser().resolve(strict=True)
         state_dir = (ROOT / "state").resolve(strict=True)
         if path.parent != state_dir:
-            return False
+            raise ValueError("telegram_result_parent_invalid")
         if not path.name.startswith("watcher_telegram.") or not path.name.endswith(".jsonl"):
-            return False
+            raise ValueError("telegram_result_name_invalid")
         records = []
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
             value = json.loads(line)
-            if isinstance(value, dict):
-                records.append(value)
+            if not isinstance(value, dict):
+                raise ValueError("telegram_result_type_invalid")
+            records.append(value)
     except (OSError, ValueError) as exc:
         print(f"[chart] result-log validation failed: {type(exc).__name__}", file=sys.stderr)
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
     matches = [
         item for item in records
         if str(item.get("pair") or "").upper() == pair
@@ -59,8 +61,11 @@ def reconciled_text_delivery() -> bool:
 
 
 def main() -> None:
-    if reconciled_text_delivery():
-        print("[chart] SKIP reconciled prior Telegram text delivery", file=sys.stderr)
+    if os.environ.get("BOTA_CANONICAL_WATCHER_BOUNDARY", "").strip().lower() in {"1", "true", "yes", "on"}:
+        if reconciled_text_delivery():
+            print("[chart] SKIP reconciled prior Telegram text delivery", file=sys.stderr)
+        else:
+            print("[chart] SKIP untracked photo delivery on canonical boundary", file=sys.stderr)
         return
     runpy.run_path(str(CORE), run_name="__main__")
 
