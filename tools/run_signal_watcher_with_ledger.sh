@@ -104,6 +104,21 @@ if [[ -n "${persistence_output}" ]]; then
   printf '%s\n' "${persistence_output}" >>"${cycle_log}"
 fi
 
+# Independent strict contract in front of the legacy reconciler. This prevents
+# truncated/rotated evidence, duplicate current-cycle decisions, malformed
+# structured results, unhealthy Telegram outcomes, or missing/failed GREEN
+# Supabase evidence from ever being painted green by log inference.
+contract_rc=0
+python3 "${TOOLS}/watcher_cycle_contract.py" \
+  --cycle-id "${cycle_id}" \
+  --alerts-path "${alerts}" \
+  --alerts-offset "${alerts_offset}" \
+  --log-path "${cycle_log}" \
+  --log-offset 0 \
+  --telegram-result-path "${telegram_result_log}" \
+  --supabase-result-path "${supabase_result_log}" \
+  2>>"${cycle_log}" || contract_rc=$?
+
 reconcile_rc=0
 python3 "${TOOLS}/watcher_cycle_ledger.py" \
   --cycle-id "${cycle_id}" \
@@ -124,6 +139,8 @@ if (( watcher_rc != 0 )); then
   final_rc="${watcher_rc}"
 elif (( persistence_rc != 0 )); then
   final_rc="${persistence_rc}"
+elif (( contract_rc != 0 )); then
+  final_rc="${contract_rc}"
 elif (( reconcile_rc != 0 )); then
   final_rc="${reconcile_rc}"
 fi
@@ -134,7 +151,7 @@ if (( final_rc != 0 )); then
   if (( owns_cycle == 1 )); then
     python3 "${TOOLS}/pipeline_ledger.py" component \
       --component watcher --status failed --cycle-id "${cycle_id}" \
-      --details "watcher_exit_code=${watcher_rc};persistence_exit_code=${persistence_rc};reconcile_exit_code=${reconcile_rc}" \
+      --details "watcher_exit_code=${watcher_rc};persistence_exit_code=${persistence_rc};contract_exit_code=${contract_rc};reconcile_exit_code=${reconcile_rc}" \
       --server-epoch "${BOTA_SERVER_EPOCH:-${server_epoch}}" \
       >/dev/null 2>>"${LOGS}/error.log" || true
   fi
