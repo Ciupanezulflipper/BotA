@@ -8,7 +8,7 @@ TOOLS="${ROOT}/tools"
 CORE="${TOOLS}/signal_watcher_core.sh"
 SENDER="${TOOLS}/telegram_send.sh"
 
-if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+if [[ "${1:-}" = "--help" || "${1:-}" = "-h" ]]; then
   exec bash "${CORE}" "$@"
 fi
 
