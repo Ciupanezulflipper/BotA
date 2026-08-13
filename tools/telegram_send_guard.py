@@ -9,7 +9,7 @@ import os
 import sys
 from pathlib import Path
 
-from telegram_delivery import CURRENT_FIELDS, LEGACY_FIELDS, parse_message
+from telegram_delivery import decision_matches, parse_message, row_dict
 
 MAX_SEGMENT_BYTES = 262_144
 
@@ -37,30 +37,14 @@ def current_segment() -> str:
 
 def matching_rows(message: str) -> int:
     identity = parse_message(message)
-    if not identity:
-        raise ValueError("message_identity_unparseable")
     matches = 0
     for values in csv.reader(io.StringIO(current_segment())):
         if not values:
             continue
-        if len(values) == len(CURRENT_FIELDS):
-            row = dict(zip(CURRENT_FIELDS, values, strict=True))
-        elif len(values) == len(LEGACY_FIELDS):
-            row = dict(zip(LEGACY_FIELDS, values, strict=True))
-        else:
+        row = row_dict(values)
+        if row is None:
             raise ValueError("alerts_row_width_invalid")
-        rejected = str(row.get("filter_rejected", row.get("rejected", ""))).strip().lower()
-        if rejected in {"1", "true", "yes", "y", "on"}:
-            continue
-        if (
-            str(row.get("pair") or "").upper() == identity["pair"]
-            and str(row.get("tf") or "").upper() == identity["timeframe"]
-            and str(row.get("direction") or "").upper() == identity["direction"]
-            and str(row.get("score") or "") == identity["score"]
-            and str(row.get("entry") or "") == identity["entry"]
-            and str(row.get("sl") or "") == identity["sl"]
-            and str(row.get("tp") or "") == identity["tp"]
-        ):
+        if decision_matches(row, identity):
             matches += 1
     return matches
 
