@@ -11,6 +11,7 @@ Telegram controller for Bot-A
 
 import os, sys, time, json, signal, subprocess, traceback
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 import requests
 
@@ -86,7 +87,7 @@ def tg_get(method: str, params: dict) -> dict:
         log(f"tg_get error {method}: {e}")
         return {"ok": False, "error": str(e)}
 
-def send_text(text: str, parse_mode: str = None):
+def send_text(text: str, parse_mode: Optional[str] = None):
     data = {"chat_id": CHAT, "text": text}
     if parse_mode:
         data["parse_mode"] = parse_mode
