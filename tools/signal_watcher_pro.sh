@@ -6,6 +6,7 @@ set -euo pipefail
 ROOT="${BOTA_ROOT:-${HOME}/BotA}"
 TOOLS="${ROOT}/tools"
 CORE="${TOOLS}/signal_watcher_core.sh"
+SENDER="${TOOLS}/telegram_send.sh"
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   exec bash "${CORE}" "$@"
@@ -29,9 +30,24 @@ if [[ ! -f "${CORE}" ]]; then
   printf '[WATCHER_BOUNDARY] core_missing=%s -> fail_closed\n' "${CORE}" >&2
   exit 66
 fi
-if [[ ! -x "${TOOLS}/telegram_send.sh" ]]; then
+if [[ ! -f "${SENDER}" ]]; then
+  printf '[WATCHER_BOUNDARY] canonical_sender_missing=%s -> fail_closed\n' "${SENDER}" >&2
+  exit 66
+fi
+# GitHub's contents API does not preserve executable mode for newly created
+# files. Repair only this reviewed sender's owner-only execute metadata when
+# needed; never mutate its bytes. If permission repair fails, do not allow the
+# historical core to fall through to its inline urllib sender.
+if [[ ! -x "${SENDER}" ]]; then
+  if ! chmod 700 "${SENDER}"; then
+    printf '[WATCHER_BOUNDARY] canonical_sender_chmod_failed=%s -> fail_closed\n' \
+      "${SENDER}" >&2
+    exit 66
+  fi
+fi
+if [[ ! -x "${SENDER}" ]]; then
   printf '[WATCHER_BOUNDARY] canonical_sender_not_executable=%s -> fail_closed\n' \
-    "${TOOLS}/telegram_send.sh" >&2
+    "${SENDER}" >&2
   exit 66
 fi
 
