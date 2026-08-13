@@ -115,8 +115,11 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return out
 
 
-def validate_telegram(rows: dict[tuple[str, str], dict[str, str]], records: list[dict[str, Any]]) -> None:
+def validate_telegram(
+    rows: dict[tuple[str, str], dict[str, str]], records: list[dict[str, Any]]
+) -> set[tuple[str, str]]:
     seen: set[tuple[str, str]] = set()
+    sent: set[tuple[str, str]] = set()
     for record in records:
         pair = str(record.get("pair") or "").upper()
         tf = str(record.get("timeframe") or "").upper()
@@ -135,10 +138,16 @@ def validate_telegram(rows: dict[tuple[str, str], dict[str, str]], records: list
             raise ValueError("telegram_for_rejected_decision")
         if status in BAD_TELEGRAM:
             raise ValueError(f"telegram_delivery_unhealthy:{status}")
+        if status in {"sent", "reconciled_sent"}:
+            sent.add(identity)
+    return sent
 
 
 def validate_supabase(
-    rows: dict[tuple[str, str], dict[str, str]], records: list[dict[str, Any]], cycle_id: str
+    rows: dict[tuple[str, str], dict[str, str]],
+    records: list[dict[str, Any]],
+    cycle_id: str,
+    telegram_sent_scopes: set[tuple[str, str]],
 ) -> None:
     by_scope: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for record in records:
@@ -166,17 +175,14 @@ def validate_supabase(
                 raise ValueError("supabase_entry_mismatch")
             if str(record.get("status") or "") in BAD_SUPABASE:
                 raise ValueError(f"supabase_delivery_unhealthy:{record['status']}")
-        if row["rejected"] == "false" and row["tier"] == "GREEN" and service_key_present:
-            # GREEN publication follows successful Telegram delivery. If Telegram
-            # evidence says sent/reconciled and the publisher inherited this
-            # cycle, absence of its structured result is not authoritative.
-            telegram_sent = False
-            # Caller passes Telegram records separately; the scope-level sent
-            # check is represented through a private marker in main below.
-            if os.environ.get(f"_BOTA_TG_SENT_{scope[0]}_{scope[1]}") == "1":
-                telegram_sent = True
-            if telegram_sent and not records_for_scope:
-                raise ValueError("supabase_evidence_missing_after_telegram_send")
+        if (
+            row["rejected"] == "false"
+            and row["tier"] == "GREEN"
+            and service_key_present
+            and scope in telegram_sent_scopes
+            and not records_for_scope
+        ):
+            raise ValueError("supabase_evidence_missing_after_telegram_send")
 
 
 def main() -> int:
@@ -191,21 +197,15 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        # The log segment must also remain exact/bounded; the older ledger may
-        # display a tail for diagnostics, but a truncated/rotated current cycle
-        # cannot be authoritative.
+        # The log segment must remain exact/bounded. The older ledger may show a
+        # tail for diagnostics, but truncated/rotated evidence cannot authorize a
+        # healthy current cycle.
         bounded_segment(args.log_path, args.log_offset)
         rows = parse_rows(args.alerts_path, args.alerts_offset)
         telegram = read_jsonl(args.telegram_result_path)
         supabase = read_jsonl(args.supabase_result_path)
-        validate_telegram(rows, telegram)
-        sent_scopes = {
-            (str(r.get("pair") or "").upper(), str(r.get("timeframe") or "").upper())
-            for r in telegram if str(r.get("status") or "") in {"sent", "reconciled_sent"}
-        }
-        for pair, tf in sent_scopes:
-            os.environ[f"_BOTA_TG_SENT_{pair}_{tf}"] = "1"
-        validate_supabase(rows, supabase, args.cycle_id)
+        sent_scopes = validate_telegram(rows, telegram)
+        validate_supabase(rows, supabase, args.cycle_id, sent_scopes)
     except (OSError, ValueError) as exc:
         print(f"[WATCHER_CONTRACT] FAIL {exc}", file=sys.stderr)
         return 4
