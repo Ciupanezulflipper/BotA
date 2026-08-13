@@ -1,7 +1,9 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Canonical BotA watcher Telegram sender.
 # - Prove exactly one matching current-cycle decision before network access.
-# - Delegate all crash-consistent delivery semantics to telegram_delivery.py.
+# - Delegate Telegram network/state semantics through telegram_delivery_boundary.py.
+# - Defer legacy cooldown/hash commit until the outer GREEN transaction proves
+#   Supabase success.
 # - rc=76 means an earlier authoritative send was reconciled; it is success for
 #   the legacy caller, while chart_generator.py suppresses the duplicate chart.
 set -euo pipefail
@@ -12,7 +14,7 @@ if [[ $# -lt 1 ]]; then
 fi
 python3 "${SCRIPT_DIR}/telegram_send_guard.py" --message "$*"
 rc=0
-python3 "${SCRIPT_DIR}/telegram_delivery.py" --message "$*" || rc=$?
+python3 "${SCRIPT_DIR}/telegram_delivery_boundary.py" --message "$*" || rc=$?
 if [[ "${rc}" -eq 76 ]]; then
   printf '%s\n' "[telegram_send] reconciled prior authoritative send" >&2
   exit 0
