@@ -5,7 +5,7 @@
 # that exact cycle identity. When called standalone, it creates its own cycle
 # identity and retains the legacy component-start/failure bookkeeping.
 #
-# Failed/interrupted cycles retain their bounded evidence files in state/ for
+# Failed/interrupted cycles retain bounded evidence files in state/ for
 # post-crash forensics. Successful cycles remove them explicitly at the end.
 
 set -euo pipefail
@@ -49,6 +49,20 @@ if [[ ! -f "${TOOLS}/telegram_send.sh" ]]; then
   printf '[WATCHER_EVIDENCE] canonical telegram sender missing: %s\n' \
     "${TOOLS}/telegram_send.sh" >&2
   exit 66
+fi
+
+# Failed/interrupted cycles intentionally retain their exact evidence, but that
+# retention must be bounded. Prune only BotA-owned old regular files after a
+# grace window; if a hard cap still cannot be restored, fail before creating a
+# new cycle or crossing any external-resource boundary.
+if ! python3 "${TOOLS}/watcher_evidence_retention.py" \
+  --state-dir "${EVIDENCE_STATE}" \
+  --keep-per-kind 200 \
+  --hard-cap-per-kind 400 \
+  --grace-seconds 21600 \
+  2>>"${LOGS}/error.log"; then
+  printf '[WATCHER_EVIDENCE] retention_gate_failed -> fail_closed\n' >&2
+  exit 67
 fi
 
 alerts="${LOGS}/alerts.csv"
