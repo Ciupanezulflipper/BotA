@@ -62,10 +62,19 @@ def bounded_segment(path: Path, offset: int) -> bytes:
 
 
 def parse_rows(alerts: Path, offset: int) -> dict[tuple[str, str], dict[str, str]]:
-    raw = bounded_segment(alerts, offset).decode("utf-8", "replace")
+    try:
+        raw = bounded_segment(alerts, offset).decode("utf-8", "strict")
+    except UnicodeDecodeError as exc:
+        raise ValueError("alerts_utf8_invalid") from exc
     grouped: dict[tuple[str, str], list[dict[str, str]]] = {}
     for values in csv.reader(io.StringIO(raw)):
         if not values:
+            continue
+        # A first-run cycle may create alerts.csv after the offset was captured.
+        # Skip only the literal known header row; never infer headers loosely.
+        if len(values) == CURRENT_WIDTH and values[0].strip().lower() == "ts" and values[1].strip().lower() == "pair" and values[2].strip().lower() == "tf":
+            continue
+        if len(values) == LEGACY_WIDTH and values[0].strip().lower() == "timestamp" and values[1].strip().lower() == "pair" and values[2].strip().lower() == "tf":
             continue
         if len(values) not in {LEGACY_WIDTH, CURRENT_WIDTH}:
             raise ValueError("alerts_row_width_invalid")
@@ -98,7 +107,10 @@ def parse_rows(alerts: Path, offset: int) -> dict[tuple[str, str], dict[str, str
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     try:
-        text = path.read_text(encoding="utf-8")
+        raw = bounded_segment(path, 0)
+        text = raw.decode("utf-8", "strict")
+    except UnicodeDecodeError as exc:
+        raise ValueError("structured_evidence_utf8_invalid") from exc
     except OSError as exc:
         raise ValueError("structured_evidence_missing") from exc
     out = []
@@ -154,15 +166,17 @@ def validate_supabase(
         pair = str(record.get("pair") or "").upper()
         tf = str(record.get("timeframe") or "").upper()
         status = str(record.get("status") or "")
+        identity = (pair, tf)
         if str(record.get("cycle_id") or "") != cycle_id:
             raise ValueError("supabase_cycle_id_mismatch")
         if not pair or not tf or not str(record.get("direction") or "") or not str(record.get("entry") or ""):
             raise ValueError("supabase_identity_missing")
+        if identity not in rows:
+            raise ValueError("supabase_scope_unexpected")
         if status not in VALID_SUPABASE:
             raise ValueError("supabase_status_invalid")
-        by_scope.setdefault((pair, tf), []).append(record)
+        by_scope.setdefault(identity, []).append(record)
 
-    service_key_present = bool(os.environ.get("SUPABASE_SERVICE_KEY", "").strip())
     for scope, row in rows.items():
         records_for_scope = by_scope.get(scope, [])
         if len(records_for_scope) > 1:
@@ -173,12 +187,18 @@ def validate_supabase(
                 raise ValueError("supabase_direction_mismatch")
             if str(record.get("entry") or "") != row["entry"]:
                 raise ValueError("supabase_entry_mismatch")
-            if str(record.get("status") or "") in BAD_SUPABASE:
-                raise ValueError(f"supabase_delivery_unhealthy:{record['status']}")
+            if str(record.get("tier") or "").upper() != row["tier"]:
+                raise ValueError("supabase_tier_mismatch")
+            status = str(record.get("status") or "")
+            if status in BAD_SUPABASE:
+                raise ValueError(f"supabase_delivery_unhealthy:{status}")
+            if row["tier"] == "GREEN" and status not in {"published", "skipped_active_exists"}:
+                raise ValueError("supabase_green_status_invalid")
+            if row["tier"] != "GREEN":
+                raise ValueError("supabase_record_for_non_green")
         if (
             row["rejected"] == "false"
             and row["tier"] == "GREEN"
-            and service_key_present
             and scope in telegram_sent_scopes
             and not records_for_scope
         ):
