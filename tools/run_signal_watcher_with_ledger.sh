@@ -11,38 +11,61 @@
 set -euo pipefail
 
 ROOT="${BOTA_ROOT:-${HOME}/BotA}"
+DEPLOY_MARKER="${ROOT}/state/runtime_deploy_in_progress.json"
+# Generation barrier must precede every filesystem/runtime/network side effect.
+# -e is false for a dangling symlink, so -L is required as well. Never follow
+# or read the marker: its mere presence means the runtime generation is
+# ambiguous and trading work must fail closed until deployment/rollback clears it.
+if [[ -e "${DEPLOY_MARKER}" || -L "${DEPLOY_MARKER}" ]]; then
+  printf '[WATCHER_EVIDENCE] deployment_generation_barrier_active marker=%s\n' \
+    "${DEPLOY_MARKER}" >&2
+  exit 78
+fi
+
 TOOLS="${ROOT}/tools"
 LOGS="${ROOT}/logs"
 EVIDENCE_STATE="${ROOT}/state"
-WATCHER_STATE_RAW="${STATE:-}"
-if [[ -z "${WATCHER_STATE_RAW}" ]]; then
-  DELIVERY_STATE="${ROOT}/logs/state"
-elif [[ "${WATCHER_STATE_RAW}" = /* ]]; then
+WATCHER_STATE_RAW="${BOTA_WATCHER_STATE:-logs/state}"
+if [[ "${WATCHER_STATE_RAW}" = /* ]]; then
   DELIVERY_STATE="${WATCHER_STATE_RAW}"
 else
   DELIVERY_STATE="${ROOT}/${WATCHER_STATE_RAW}"
 fi
+# One explicit watcher-state contract. Do not inherit an ambient generic STATE
+# value from cron/runit/interactive shells. The signal watcher receives this
+# exact path too, so its legacy cooldown/hash files and the canonical sender
+# always operate on the same state directory.
+export BOTA_WATCHER_STATE="${DELIVERY_STATE}"
+export STATE="${DELIVERY_STATE}"
 
 mkdir -p "${LOGS}" "${EVIDENCE_STATE}" "${DELIVERY_STATE}"
 
-# The watcher selects tools/telegram_send.sh only when it is executable. GitHub
-# contents/API deployments may not preserve executable mode, so make that
-# requirement explicit at the runtime boundary and fail closed if it cannot be
-# established. The sender itself remains version-controlled and testable.
+# telegram_send.sh is the only authorized watcher Telegram transport. Runtime
+# code must not mutate deployment-tree permissions on every cycle; deployment
+# is responsible for installing this file executable. Missing/non-executable is
+# therefore a clear fail-closed configuration error.
 if [[ ! -f "${TOOLS}/telegram_send.sh" ]]; then
   printf '[WATCHER_EVIDENCE] canonical telegram sender missing: %s\n' \
     "${TOOLS}/telegram_send.sh" >&2
   exit 66
 fi
-if ! chmod 700 "${TOOLS}/telegram_send.sh"; then
-  printf '[WATCHER_EVIDENCE] canonical telegram sender chmod failed: %s\n' \
+if [[ ! -x "${TOOLS}/telegram_send.sh" ]]; then
+  printf '[WATCHER_EVIDENCE] canonical telegram sender not executable: %s\n' \
     "${TOOLS}/telegram_send.sh" >&2
   exit 66
 fi
-if [[ ! -x "${TOOLS}/telegram_send.sh" ]]; then
-  printf '[WATCHER_EVIDENCE] canonical telegram sender not executable after chmod: %s\n' \
-    "${TOOLS}/telegram_send.sh" >&2
-  exit 66
+
+# Bound retained crash evidence on the phone. Cleanup is prefix-scoped, refuses
+# symlinks/non-regular entries, and keeps the newest sets. Failure is observable
+# but does not authorize deleting anything outside the exact state directory.
+if [[ -f "${TOOLS}/watcher_evidence_retention.py" ]]; then
+  if ! python3 "${TOOLS}/watcher_evidence_retention.py" \
+      --state-dir "${EVIDENCE_STATE}" --keep-per-prefix 96 \
+      2>>"${LOGS}/error.log"; then
+    printf '[WATCHER_EVIDENCE] retention_cleanup_failed state=%s\n' \
+      "${EVIDENCE_STATE}" >&2
+    exit 67
+  fi
 fi
 
 alerts="${LOGS}/alerts.csv"
@@ -54,9 +77,6 @@ export BOTA_DELIVERY_STATE_DIR="${DELIVERY_STATE}"
 cycle_log="$(mktemp "${EVIDENCE_STATE}/watcher_cycle.XXXXXX.log")"
 telegram_result_log="$(mktemp "${EVIDENCE_STATE}/watcher_telegram.XXXXXX.jsonl")"
 supabase_result_log="$(mktemp "${EVIDENCE_STATE}/watcher_supabase.XXXXXX.jsonl")"
-# Explicitly model the success-only cleanup transition. There is intentionally
-# no EXIT trap: interruption/failure must leave bounded evidence on disk.
-delete_evidence_on_exit=0
 
 server_epoch="${BOTA_SERVER_EPOCH:-0}"
 owns_cycle=0
@@ -134,8 +154,6 @@ if (( final_rc != 0 )); then
   exit "${final_rc}"
 fi
 
-delete_evidence_on_exit=1
-if (( delete_evidence_on_exit == 1 )); then
-  rm -f "${cycle_log}" "${telegram_result_log}" "${supabase_result_log}"
-fi
+# Success-only cleanup. Interrupted/failed cycles deliberately retain evidence.
+rm -f "${cycle_log}" "${telegram_result_log}" "${supabase_result_log}"
 exit 0
