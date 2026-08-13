@@ -178,7 +178,7 @@ def bot_cache_dir() -> str:
 
 
 def _cache_key(url: str) -> str:
-    return hashlib.sha1(url.encode("utf-8")).hexdigest()
+    return hashlib.sha1(url.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def _cache_paths(url: str) -> Tuple[str, str]:

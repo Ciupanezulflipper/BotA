@@ -17,7 +17,7 @@ def send(msg):
 def main():
   now = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
   if ACC.exists():
-    d = eval(ACC.read_text())
+    d = json.loads(ACC.read_text())
   else:
     d = dict(analyzed=0,wins=0,winrate=0.0,horizon_min=240,take_pips=15)
   msg = []

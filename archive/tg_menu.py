@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # tools/tg_menu.py  — PTB 13.x polling menu for Bot A
-import os, time, datetime as dt, traceback
+import functools, os, subprocess, sys, time, datetime as dt, traceback
 from telegram import Update, BotCommand
 from telegram.ext import Updater, CommandHandler, CallbackContext
 
@@ -21,8 +21,11 @@ CHAT_ID = (os.getenv("TELEGRAM_CHAT_ID") or os.getenv("CHAT_ID") or "").strip()
 if not TOKEN:
     raise SystemExit("tg_menu.py: TELEGRAM_BOT_TOKEN (or alias) is missing.")
 if not CHAT_ID:
-    # Not fatal: we can still reply to whoever sends commands
-    CHAT_ID = None
+    raise SystemExit("tg_menu.py: TELEGRAM_CHAT_ID (or alias) is missing; refusing to serve any chat.")
+
+BOT_A = os.path.expanduser("~/bot-a")
+AUTO_H1_LOG = os.path.join(BOT_A, "logs", "auto_h1.log")
+DAILY_SUMMARY = os.path.join(BOT_A, "tools", "daily_summary.py")
 
 START_TS = time.time()
 LOGF = os.path.expanduser("~/bot-a/logs/tg_menu.log")
@@ -32,10 +35,33 @@ def log(msg: str):
     with open(LOGF, "a") as f:
         f.write(f"[{dt.datetime.utcnow():%Y-%m-%d %H:%M:%S}Z] {msg}\n")
 
+def authorized(handler):
+    """Only the configured chat may drive the bot."""
+    @functools.wraps(handler)
+    def wrapper(update: Update, ctx: CallbackContext):
+        chat = update.effective_chat
+        if chat is None or str(chat.id) != CHAT_ID:
+            log(f"denied command from chat_id={getattr(chat, 'id', None)}")
+            return
+        return handler(update, ctx)
+    return wrapper
+
+def run(argv, env=None, tail=3500):
+    """Run argv without a shell and return trailing output."""
+    proc = subprocess.run(argv, shell=False, check=False, env=env,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          timeout=180)
+    return proc.stdout.decode("utf-8", "ignore").strip()[-tail:]
+
+def bot_a_env():
+    return dict(os.environ, PYTHONPATH=BOT_A)
+
 # ---- command handlers ----
+@authorized
 def cmd_start(update: Update, ctx: CallbackContext):
     update.message.reply_text("✅ Bot A menu online.\nCommands: /status /uptime /run_eurusd /digest /help")
 
+@authorized
 def cmd_help(update: Update, ctx: CallbackContext):
     update.message.reply_text(
         "Commands:\n"
@@ -45,36 +71,40 @@ def cmd_help(update: Update, ctx: CallbackContext):
         "/digest – send today’s daily summary now\n"
     )
 
+@authorized
 def cmd_uptime(update: Update, ctx: CallbackContext):
     secs = int(time.time() - START_TS)
     h, r = divmod(secs, 3600); m, s = divmod(r, 60)
     update.message.reply_text(f"⏱ Uptime: {h}h {m}m {s}s")
 
+@authorized
 def cmd_status(update: Update, ctx: CallbackContext):
-    path = os.path.expanduser("~/bot-a/logs/auto_h1.log")
     try:
-        out = os.popen(f"tail -n 30 {path}").read().strip()
+        with open(AUTO_H1_LOG) as f:
+            out = "".join(f.readlines()[-30:]).strip()
         if not out:
             raise RuntimeError("empty")
         update.message.reply_text(f"📄 Last entries:\n{out[-3500:]}")
     except Exception as e:
         update.message.reply_text(f"⚠️ Cannot read log: {e}")
 
+@authorized
 def cmd_run_now(update: Update, ctx: CallbackContext):
     # Immediate, side-effect-free run (dry run)
-    cmd = 'PYTHONPATH="$HOME/bot-a" python3 -m tools.runner_confluence --pair EURUSD --tf H1 --bars 200 --dry-run'
     try:
-        out = os.popen(cmd).read().strip()
+        out = run([sys.executable, "-m", "tools.runner_confluence",
+                   "--pair", "EURUSD", "--tf", "H1", "--bars", "200", "--dry-run"],
+                  env=bot_a_env())
         if not out:
             raise RuntimeError("no output")
         update.message.reply_text(out[-3500:])
     except Exception as e:
         update.message.reply_text(f"⚠️ run_eurusd failed: {e}")
 
+@authorized
 def cmd_digest(update: Update, ctx: CallbackContext):
-    cmd = 'PYTHONPATH="$HOME/bot-a" python3 "$HOME/bot-a/tools/daily_summary.py"'
     try:
-        out = os.popen(cmd).read().strip()
+        out = run([sys.executable, DAILY_SUMMARY], env=bot_a_env())
         update.message.reply_text(out or "Digest invoked.")
     except Exception as e:
         update.message.reply_text(f"⚠️ digest failed: {e}")
