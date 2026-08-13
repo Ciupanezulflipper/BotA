@@ -13,6 +13,7 @@ import datetime as dt
 import json
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any, Callable
 
@@ -51,9 +52,12 @@ def parse_candle_time(value: str) -> dt.datetime:
 
 
 def get_json(url: str, timeout: int = DEFAULT_TIMEOUT_SEC) -> tuple[Any, str]:
-    """GET one JSON document, returning ``(payload, error)`` without raising."""
+    """GET one JSON document over HTTPS, returning ``(payload, error)`` without raising."""
+    parsed = urllib.parse.urlparse(url)
+    if not url.startswith("https://") or not parsed.netloc:
+        return None, f"unsupported url scheme/netloc: {url!r}"
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310
+        with urllib.request.urlopen(url, timeout=timeout) as response:  # nosec B310
             raw = response.read().decode("utf-8", "ignore")
         return json.loads(raw), ""
     except urllib.error.HTTPError as exc:
