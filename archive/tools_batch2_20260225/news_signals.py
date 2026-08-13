@@ -129,7 +129,7 @@ def map_bias_to_trade(symbol: str, bias: str, why: str):
 
 def row_fingerprint(r: dict) -> str:
     base = f"{r.get('time_utc','')}|{r.get('symbol','')}|{r.get('bias','')}|{r.get('why','')}"
-    return hashlib.sha1(base.encode("utf-8")).hexdigest()[:12]
+    return hashlib.sha1(base.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
 
 def main():
     ap = argparse.ArgumentParser()

@@ -32,8 +32,8 @@ So today:
 That error happens when something does:
 - `source .env.botA`  OR  `. .env.botA`
 
-But `.env.botA` contains values like:
-`MT5_PASSWORD=fdlp(at0vM`
+But `.env.botA` contains values with shell metacharacters, e.g.:
+`MT5_PASSWORD=<redacted-value-containing-parentheses>`
 Parentheses break bash parsing when you source the file unquoted.
 
 So the root cause is simple:
