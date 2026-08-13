@@ -55,19 +55,6 @@ if [[ ! -x "${TOOLS}/telegram_send.sh" ]]; then
   exit 66
 fi
 
-# Bound retained crash evidence on the phone. Cleanup is prefix-scoped, refuses
-# symlinks/non-regular entries, and keeps the newest sets. Failure is observable
-# but does not authorize deleting anything outside the exact state directory.
-if [[ -f "${TOOLS}/watcher_evidence_retention.py" ]]; then
-  if ! python3 "${TOOLS}/watcher_evidence_retention.py" \
-      --state-dir "${EVIDENCE_STATE}" --keep-per-prefix 96 \
-      2>>"${LOGS}/error.log"; then
-    printf '[WATCHER_EVIDENCE] retention_cleanup_failed state=%s\n' \
-      "${EVIDENCE_STATE}" >&2
-    exit 67
-  fi
-fi
-
 alerts="${LOGS}/alerts.csv"
 alerts_offset="$(stat -c '%s' "${alerts}" 2>/dev/null || echo 0)"
 # Bind any external Telegram side effect to rows appended after this exact
