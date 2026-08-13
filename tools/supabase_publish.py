@@ -217,11 +217,12 @@ def emit_cycle_result(*, pair: str, direction: str, entry: str, tf: str, tier: s
     }
     try:
         data = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
-        total = len(data)
-        offset = 0
-        while offset < total:
-            written = os.write(fd, data[offset:])
-            offset += written
+        view = memoryview(data)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0:
+                raise OSError("short_write")
+            view = view[written:]
         os.fsync(fd)
         return True
     except OSError as exc:
