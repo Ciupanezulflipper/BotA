@@ -9,9 +9,9 @@ on:
       - "tools/pipeline_health.py"
       - "tools/control_plane_status.py"
       - "tools/watcher_cycle_ledger.py"
+      - "tools/watcher_cycle_contract.py"
       - "tools/watcher_persistence_gate.py"
       - "tools/run_signal_watcher_with_ledger.sh"
-      - "tools/watcher_evidence_retention.py"
       - "tools/telegram_delivery.py"
       - "tools/telegram_send.sh"
       - "tools/supabase_publish.py"
@@ -46,12 +46,10 @@ jobs:
             tools/pipeline_health.py \
             tools/control_plane_status.py \
             tools/watcher_cycle_ledger.py \
+            tools/watcher_cycle_contract.py \
             tools/watcher_persistence_gate.py \
             tools/telegram_delivery.py \
             tools/supabase_publish.py
-          if [ -f tools/watcher_evidence_retention.py ]; then
-            python -m py_compile tools/watcher_evidence_retention.py
-          fi
       - name: Check shell syntax
         run: |
           bash -n tools/data_fetch_candles.sh
@@ -71,4 +69,5 @@ jobs:
             tests.test_predeploy_crash_consistency \
             tests.test_telegram_evidence_fail_closed \
             tests.test_telegram_commit_ordering \
-            tests.test_runtime_deployment_barrier
+            tests.test_runtime_deployment_barrier \
+            tests.test_watcher_cycle_contract
