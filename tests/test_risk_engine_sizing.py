@@ -110,7 +110,7 @@ class AtrTests(unittest.TestCase):
 
     def test_older_candles_outside_the_window_are_ignored(self):
         rows = ohlc(30)
-        rows[0]["high"] = 99.0
+        rows[1]["high"] = 99.0
         self.assertAlmostEqual(
             risk_engine.atr(rows, period=14), risk_engine.atr(ohlc(30), period=14)
         )

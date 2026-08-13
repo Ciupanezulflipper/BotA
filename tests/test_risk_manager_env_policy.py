@@ -43,14 +43,30 @@ class EnvIntTests(unittest.TestCase):
             self.assertEqual(risk_manager._env_int("N", 7), 7)
 
 
+class FrozenDatetime(datetime.datetime):
+    """``datetime`` subclass whose ``now()`` is pinned to a fixed UTC instant."""
+
+    FIXED = datetime.datetime(2026, 3, 1, 23, 30, tzinfo=datetime.timezone.utc)
+
+    @classmethod
+    def now(cls, tz=None):
+        return cls.FIXED.astimezone(tz) if tz else cls.FIXED.replace(tzinfo=None)
+
+
 class UtcTodayTests(unittest.TestCase):
     def test_returns_utc_iso_date(self):
-        stamp = risk_manager.utc_today_str()
-        self.assertRegex(stamp, r"^\d{4}-\d{2}-\d{2}$")
-        self.assertEqual(
-            stamp,
-            datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"),
-        )
+        with patch.object(risk_manager.datetime, "datetime", FrozenDatetime):
+            self.assertEqual(risk_manager.utc_today_str(), "2026-03-01")
+
+    def test_uses_utc_rather_than_local_time(self):
+        ahead_of_utc = datetime.timezone(datetime.timedelta(hours=2))
+        with patch.object(risk_manager.datetime, "datetime", FrozenDatetime), patch.dict(
+            risk_manager.os.environ, {"TZ": "Europe/Bucharest"}
+        ):
+            self.assertNotEqual(
+                FrozenDatetime.FIXED.astimezone(ahead_of_utc).strftime("%Y-%m-%d"),
+                risk_manager.utc_today_str(),
+            )
 
 
 class PolicyAccessorTests(unittest.TestCase):

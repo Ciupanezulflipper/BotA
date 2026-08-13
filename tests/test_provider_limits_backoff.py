@@ -12,7 +12,7 @@ from unittest.mock import patch
 from tools import provider_limits
 
 
-class ProviderLimitsTestCase(unittest.TestCase):
+class ProviderLimitsFixture:
     """Redirect the registry to a temporary file and freeze time."""
 
     NOW = 1_700_000_000.0
@@ -34,12 +34,12 @@ class ProviderLimitsTestCase(unittest.TestCase):
         self.db.write_text(json.dumps(payload))
 
 
-class LoadTests(ProviderLimitsTestCase):
+class LoadTests(ProviderLimitsFixture, unittest.TestCase):
     def test_missing_file_returns_defaults_copy(self):
         loaded = provider_limits._load()
         self.assertEqual(loaded, provider_limits.DEFAULTS)
-        loaded["yahoo"] = {"last": 1.0, "cooldown": 1.0}
-        self.assertNotEqual(provider_limits.DEFAULTS["yahoo"], loaded["yahoo"])
+        loaded["yahoo"]["cooldown"] = 1.0
+        self.assertEqual(provider_limits.DEFAULTS["yahoo"]["cooldown"], 90.0)
 
     def test_corrupt_file_falls_back_to_defaults(self):
         self.db.write_text("{not json")
@@ -52,7 +52,7 @@ class LoadTests(ProviderLimitsTestCase):
         )
 
 
-class SaveTests(ProviderLimitsTestCase):
+class SaveTests(ProviderLimitsFixture, unittest.TestCase):
     def test_save_writes_json_and_removes_temp_file(self):
         provider_limits._save({"finnhub": {"last": 1.0, "cooldown": 2.0}})
         self.assertEqual(
@@ -61,7 +61,7 @@ class SaveTests(ProviderLimitsTestCase):
         self.assertFalse(self.db.with_suffix(".tmp").exists())
 
 
-class ReadyTests(ProviderLimitsTestCase):
+class ReadyTests(ProviderLimitsFixture, unittest.TestCase):
     def test_never_used_provider_is_ready(self):
         self.assertTrue(provider_limits.ready("yahoo"))
 
@@ -85,7 +85,7 @@ class ReadyTests(ProviderLimitsTestCase):
         self.assertTrue(provider_limits.ready("brand-new"))
 
 
-class StampTests(ProviderLimitsTestCase):
+class StampTests(ProviderLimitsFixture, unittest.TestCase):
     def test_stamp_records_now_and_blocks_immediate_reuse(self):
         provider_limits.stamp("yahoo")
         stored = json.loads(self.db.read_text())
@@ -106,7 +106,9 @@ class StampTests(ProviderLimitsTestCase):
 
     def test_stamp_does_not_mutate_module_defaults(self):
         provider_limits.stamp("yahoo", cooldown=5.0)
-        self.assertEqual(provider_limits.DEFAULTS["yahoo"], {"last": 0.0, "cooldown": 90.0})
+        self.assertEqual(
+            provider_limits.DEFAULTS["yahoo"], {"last": 0.0, "cooldown": 90.0}
+        )
 
         self.db.unlink()
         provider_limits.stamp("yahoo")

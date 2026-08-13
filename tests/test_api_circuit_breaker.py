@@ -13,27 +13,40 @@ from unittest.mock import patch
 from tools import api_circuit_breaker
 
 
-class CircuitBreakerTestCase(unittest.TestCase):
-    """Each test gets an isolated state file instead of the real home path."""
+FIXED_NOW = datetime(2026, 8, 13, 12, 0, 0)
+
+
+class FrozenDatetime(datetime):
+    """``datetime`` subclass whose ``now()`` is pinned to ``FIXED_NOW``."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return FIXED_NOW
+
+
+class CircuitBreakerFixture:
+    """Isolated state file and frozen clock instead of the real home path."""
+
+    today = str(FIXED_NOW.date())
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.state_file = Path(self._tmp.name) / "logs" / ".api_state.json"
-        patcher = patch.object(api_circuit_breaker, "STATE_FILE", self.state_file)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        for attribute, value in (
+            ("STATE_FILE", self.state_file),
+            ("datetime", FrozenDatetime),
+        ):
+            patcher = patch.object(api_circuit_breaker, attribute, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def write_state(self, state: dict) -> None:
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
         self.state_file.write_text(json.dumps(state))
 
-    @property
-    def today(self) -> str:
-        return str(datetime.now().date())
 
-
-class LoadStateTests(CircuitBreakerTestCase):
+class LoadStateTests(CircuitBreakerFixture, unittest.TestCase):
     def test_missing_file_yields_empty_today_state(self):
         state = api_circuit_breaker.load_state()
         self.assertEqual(state, {"date": self.today, "calls": {}})
@@ -47,14 +60,14 @@ class LoadStateTests(CircuitBreakerTestCase):
         )
 
     def test_stale_day_state_is_reset(self):
-        yesterday = str(datetime.now().date() - timedelta(days=1))
+        yesterday = str(FIXED_NOW.date() - timedelta(days=1))
         self.write_state({"date": yesterday, "calls": {"twelvedata": 700}})
         self.assertEqual(
             api_circuit_breaker.load_state(), {"date": self.today, "calls": {}}
         )
 
 
-class SaveStateTests(CircuitBreakerTestCase):
+class SaveStateTests(CircuitBreakerFixture, unittest.TestCase):
     def test_creates_parent_directory_and_round_trips(self):
         state = {"date": self.today, "calls": {"finnhub": 2}}
         api_circuit_breaker.save_state(state)
@@ -62,7 +75,7 @@ class SaveStateTests(CircuitBreakerTestCase):
         self.assertEqual(json.loads(self.state_file.read_text()), state)
 
 
-class RecordCallTests(CircuitBreakerTestCase):
+class RecordCallTests(CircuitBreakerFixture, unittest.TestCase):
     def test_first_call_starts_at_one_and_persists(self):
         self.assertEqual(api_circuit_breaker.record_call("twelvedata"), 1)
         self.assertEqual(
@@ -88,12 +101,12 @@ class RecordCallTests(CircuitBreakerTestCase):
         )
 
     def test_stale_day_counter_restarts(self):
-        yesterday = str(datetime.now().date() - timedelta(days=1))
+        yesterday = str(FIXED_NOW.date() - timedelta(days=1))
         self.write_state({"date": yesterday, "calls": {"twelvedata": 500}})
         self.assertEqual(api_circuit_breaker.record_call("twelvedata"), 1)
 
 
-class CheckQuotaTests(CircuitBreakerTestCase):
+class CheckQuotaTests(CircuitBreakerFixture, unittest.TestCase):
     def test_unused_provider_reports_full_quota(self):
         report = api_circuit_breaker.check_quota("alphavantage")
         self.assertEqual(report["calls_today"], 0)
@@ -128,7 +141,7 @@ class CheckQuotaTests(CircuitBreakerTestCase):
         self.assertFalse(report["ok"])
 
 
-class GetStatusTests(CircuitBreakerTestCase):
+class GetStatusTests(CircuitBreakerFixture, unittest.TestCase):
     def test_covers_every_known_provider(self):
         status = api_circuit_breaker.get_status()
         self.assertEqual(
@@ -140,11 +153,12 @@ class GetStatusTests(CircuitBreakerTestCase):
 
     def test_recorded_calls_are_visible(self):
         self.write_state({"date": self.today, "calls": {"twelvedata": 400}})
-        row = next(
+        rows = [
             r for r in api_circuit_breaker.get_status() if r["provider"] == "twelvedata"
-        )
-        self.assertEqual(row["calls"], 400)
-        self.assertEqual(row["percent"], 50.0)
+        ]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["calls"], 400)
+        self.assertEqual(rows[0]["percent"], 50.0)
 
 
 if __name__ == "__main__":

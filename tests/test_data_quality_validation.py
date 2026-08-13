@@ -8,7 +8,9 @@ from unittest.mock import patch
 
 try:
     import pandas as pd
-except Exception:  # pragma: no cover - pandas is optional in some runtimes
+except ModuleNotFoundError as exc:  # pragma: no cover - pandas is optional locally
+    if exc.name != "pandas":
+        raise
     pd = None
 
 if pd is not None:
