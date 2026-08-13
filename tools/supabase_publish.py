@@ -3,8 +3,8 @@
 
 Uses only the Python standard library. Publication is serialized locally so the
 legacy watcher path and the independent ProfitLab worker cannot race each other.
-When ``BOTA_SUPABASE_RESULT_LOG`` is inherited from a watcher cycle, one
-structured result is appended for exact cycle reconciliation.
+When ``BOTA_SUPABASE_RESULT_LOG`` is inherited from a watcher cycle, one durable,
+cycle-bound structured result is appended for exact reconciliation.
 """
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from typing import Iterator
 
 SUPABASE_HOST = "ozgkeslgjqbqfewojnmr.supabase.co"
 RESULT_LOG_ENV = "BOTA_SUPABASE_RESULT_LOG"
+CYCLE_ID_ENV = "BOTA_CYCLE_ID"
 RESULT_LOG_PREFIX = "watcher_supabase."
 RESULT_LOG_SUFFIX = ".jsonl"
 
@@ -157,55 +158,67 @@ def publish(pair, direction, entry, sl, tp, score, tf, tier) -> bool:
     return ok
 
 
-def cycle_result_path() -> tuple[Path | None, bool]:
-    """Return watcher-owned evidence path and validation status."""
+def _open_cycle_result_fd() -> tuple[int | None, bool]:
+    """Open and validate the watcher-owned result file without a check/use race."""
     raw_path = os.environ.get(RESULT_LOG_ENV, "").strip()
     if not raw_path:
         return None, True
     try:
         path = Path(raw_path).expanduser().resolve(strict=True)
         state_dir = (root_path() / "state").resolve(strict=True)
-        info = path.stat()
+        if path.parent != state_dir:
+            return None, False
+        if not path.name.startswith(RESULT_LOG_PREFIX) or not path.name.endswith(RESULT_LOG_SUFFIX):
+            return None, False
+        flags = os.O_WRONLY | os.O_APPEND | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(path, flags)
+        info = os.fstat(fd)
+        valid = stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and not (info.st_mode & 0o077)
+        if not valid:
+            os.close(fd)
+            return None, False
+        return fd, True
     except OSError as exc:
         print(f"[supabase_publish] invalid cycle evidence path: {type(exc).__name__}", file=sys.stderr)
         return None, False
-    valid = (
-        path.parent == state_dir
-        and path.name.startswith(RESULT_LOG_PREFIX)
-        and path.name.endswith(RESULT_LOG_SUFFIX)
-        and stat.S_ISREG(info.st_mode)
-        and info.st_uid == os.getuid()
-        and not (info.st_mode & 0o077)
-    )
-    if not valid:
-        print("[supabase_publish] invalid cycle evidence path ownership", file=sys.stderr)
-        return None, False
-    return path, True
 
 
 def emit_cycle_result(*, pair: str, direction: str, entry: str, tf: str, tier: str, status: str) -> bool:
-    """Append one sanitized result to the validated watcher-owned evidence file."""
-    path, path_valid = cycle_result_path()
-    if not path_valid:
-        return False
-    if path is None:
+    """Append one durable, exact-cycle sanitized result to watcher-owned evidence."""
+    raw_path = os.environ.get(RESULT_LOG_ENV, "").strip()
+    if not raw_path:
         return True
+    cycle_id = os.environ.get(CYCLE_ID_ENV, "").strip()
+    identity = {
+        "pair": pair.upper().strip(),
+        "timeframe": tf.upper().strip(),
+        "direction": direction.upper().strip(),
+        "entry": str(entry).strip(),
+        "tier": tier.upper().strip(),
+    }
+    if not cycle_id or any(not value for value in identity.values()):
+        print("[supabase_publish] cycle evidence identity incomplete", file=sys.stderr)
+        return False
+
+    fd, path_valid = _open_cycle_result_fd()
+    if not path_valid or fd is None:
+        return False
     payload = {
-        "schema_version": "1.0",
-        "pair": pair.upper(),
-        "timeframe": tf.upper(),
-        "direction": direction.upper(),
-        "entry": str(entry),
-        "tier": tier.upper(),
+        "schema_version": "1.1",
+        "cycle_id": cycle_id,
+        **identity,
         "status": status,
     }
     try:
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
+        data = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+        os.write(fd, data)
+        os.fsync(fd)
         return True
     except OSError as exc:
         print(f"[supabase_publish] cycle evidence write failed: {type(exc).__name__}", file=sys.stderr)
         return False
+    finally:
+        os.close(fd)
 
 
 def main() -> int:
@@ -222,6 +235,7 @@ def main() -> int:
     ok, status = publish_with_status(
         args.pair, args.direction, args.entry, args.sl, args.tp, args.score, args.tf, args.tier
     )
+    print(f"[supabase_publish] status={status}", file=sys.stderr)
     evidence_ok = emit_cycle_result(
         pair=args.pair, direction=args.direction, entry=args.entry,
         tf=args.tf, tier=args.tier, status=status,
