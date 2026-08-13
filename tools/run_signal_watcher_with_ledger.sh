@@ -44,6 +44,8 @@ mkdir -p "${LOGS}" "${EVIDENCE_STATE}" "${DELIVERY_STATE}"
 # code must not mutate deployment-tree permissions on every cycle; deployment
 # is responsible for installing this file executable. Missing/non-executable is
 # therefore a clear fail-closed configuration error.
+# Historical implementation removed during 2026-08-13 hardening:
+# if ! chmod 700 "${TOOLS}/telegram_send.sh"; then
 if [[ ! -f "${TOOLS}/telegram_send.sh" ]]; then
   printf '[WATCHER_EVIDENCE] canonical telegram sender missing: %s\n' \
     "${TOOLS}/telegram_send.sh" >&2
@@ -64,6 +66,9 @@ export BOTA_DELIVERY_STATE_DIR="${DELIVERY_STATE}"
 cycle_log="$(mktemp "${EVIDENCE_STATE}/watcher_cycle.XXXXXX.log")"
 telegram_result_log="$(mktemp "${EVIDENCE_STATE}/watcher_telegram.XXXXXX.jsonl")"
 supabase_result_log="$(mktemp "${EVIDENCE_STATE}/watcher_supabase.XXXXXX.jsonl")"
+# Explicit success-cleanup state. Failed/interrupted runs leave this at 0 and
+# preserve evidence; only the fully successful path below sets it to 1.
+delete_evidence_on_exit=0
 
 server_epoch="${BOTA_SERVER_EPOCH:-0}"
 owns_cycle=0
@@ -159,5 +164,8 @@ if (( final_rc != 0 )); then
 fi
 
 # Success-only cleanup. Interrupted/failed cycles deliberately retain evidence.
-rm -f "${cycle_log}" "${telegram_result_log}" "${supabase_result_log}"
+delete_evidence_on_exit=1
+if (( delete_evidence_on_exit == 1 )); then
+  rm -f "${cycle_log}" "${telegram_result_log}" "${supabase_result_log}"
+fi
 exit 0
