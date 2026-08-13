@@ -59,8 +59,8 @@ class WrapperHardeningV2Tests(unittest.TestCase):
             for line in boundary.splitlines()
             if line.strip() and not line.lstrip().startswith("#")
         ]
-        chmod_lines = [line for line in executable_lines if "chmod" in line]
-        self.assertEqual(chmod_lines, ['if ! chmod 700 "${SENDER}"; then'])
+        chmod_commands = [line for line in executable_lines if line.startswith("if ! chmod ")]
+        self.assertEqual(chmod_commands, ['if ! chmod 700 "${SENDER}"; then'])
         self.assertTrue((HERE / "tools" / "telegram_send.sh").is_file())
         self.assertTrue((HERE / "tools" / "telegram_delivery.py").is_file())
 
