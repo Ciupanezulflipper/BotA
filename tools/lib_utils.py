@@ -6,8 +6,12 @@ No external deps, home-directory only, safe file locking, and all helpers
 expected by runner/digest/outbox scripts.
 """
 
-import os, io, json, time, hashlib, contextlib, datetime as dt
+import os, io, json, sys, time, hashlib, contextlib, datetime as dt
 from typing import Any, Iterable, Optional
+
+
+def _warn(msg: str) -> None:
+    print(f"[lib_utils] {msg}", file=sys.stderr)
 
 # ========= Paths (Termux-safe) =========
 BASE_DIR = os.path.expanduser("~/bot-a")
@@ -33,7 +37,8 @@ def _choose_tmp_dir() -> str:
                 f.write("ok")
             os.remove(test)
             return c
-        except Exception:
+        except OSError as e:
+            _warn(f"tmp dir {c} not usable: {e}")
             continue
     # last resort: inside BASE_DIR
     fback = os.path.join(BASE_DIR, "tmp")
@@ -50,15 +55,22 @@ def ensure_dir(path: str, exist_ok: bool = True) -> None:
 for _d in (BASE_DIR, DATA_DIR, LOGS_DIR, TMP_DIR):
     try:
         ensure_dir(_d, exist_ok=True)
-    except Exception:
-        pass
+    except OSError as e:
+        _warn(f"cannot create required directory {_d}: {e}")
 
 def secure_files(paths: Iterable[str], mode: int = 0o600) -> None:
+    """Tighten permissions on the given paths.
+
+    A failure here can leave credentials world-readable, so it is reported
+    instead of being discarded.
+    """
     for p in paths:
         try:
             os.chmod(p, mode)
-        except Exception:
-            pass
+        except FileNotFoundError:
+            continue
+        except OSError as e:
+            _warn(f"cannot chmod {p} to {oct(mode)}: {e}")
 
 def lock_path(name: str) -> str:
     """Return absolute lockfile path inside TMP_DIR."""
@@ -110,12 +122,18 @@ def hours_to_next_fx_open(now: Optional[dt.datetime] = None) -> float:
 
 # ========= JSON helpers =========
 def read_json(path: str, default: Any = None) -> Any:
+    """Read JSON, falling back to ``default``.
+
+    A missing file is a normal cold-start condition and stays quiet; an
+    unreadable or corrupt file is a real fault and is reported.
+    """
     try:
         with io.open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
         return default
-    except Exception:
+    except (OSError, ValueError) as e:
+        _warn(f"unusable JSON at {path}, using default: {type(e).__name__}: {e}")
         return default
 
 def write_json(path: str, obj: Any) -> None:
@@ -143,8 +161,8 @@ def rotate_csv_daily(csv_path: str, current_date: dt.date) -> None:
         dst = f"{base}.{file_date.isoformat()}{ext}"
         try:
             os.replace(csv_path, dst)
-        except Exception:
-            pass
+        except OSError as e:
+            _warn(f"daily rotation of {csv_path} failed: {e}")
 
 def digest_checksum(payload: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:10]
@@ -182,8 +200,8 @@ def file_lock(name_or_path: str, timeout_sec: float = 1.0):
         try:
             if fd is not None: os.close(fd)
             if os.path.exists(lf): os.unlink(lf)
-        except Exception:
-            pass
+        except OSError as e:
+            _warn(f"lock release failed for {lf}: {e}")
 
 @contextlib.contextmanager
 def single_instance(instance_name: str = "runner"):
@@ -209,18 +227,20 @@ def alert(msg: str, level: str = "INFO") -> None:
     line = f"[{level}] {utcstr()} {msg}\n"
     try:
         append_text(_log_path("alerts.log"), line)
+    except OSError as e:
+        _warn(f"cannot append alert to alerts.log: {e}")
     finally:
-        try:
-            print(line, end="")
-        except Exception:
-            pass
+        print(line, end="")
 
 # ========= Convenience =========
 def read_text(path: str, default: str = "") -> str:
     try:
         with io.open(path, "r", encoding="utf-8") as f:
             return f.read()
-    except Exception:
+    except FileNotFoundError:
+        return default
+    except (OSError, UnicodeDecodeError) as e:
+        _warn(f"unreadable text file {path}, using default: {type(e).__name__}: {e}")
         return default
 
 def write_text(path: str, content: str) -> None:

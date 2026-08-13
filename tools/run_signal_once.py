@@ -52,7 +52,8 @@ def _utcnow() -> datetime:
 def _age_minutes(dt: datetime) -> float:
     try:
         return max(0.0, (_utcnow() - dt).total_seconds() / 60.0)
-    except Exception:
+    except (AttributeError, TypeError, ValueError) as e:
+        print(f"[warn] Unusable timestamp {dt!r}, reporting max age: {e}", file=sys.stderr)
         return 999.9
 
 
@@ -87,7 +88,8 @@ def _pip_multiplier(pair: str) -> float:
     """
     try:
         _, quote = _pair_to_fx_parts(pair)
-    except Exception:
+    except (AttributeError, ValueError) as e:
+        print(f"[warn] Unparseable pair {pair!r}, assuming 4-digit pips: {e}", file=sys.stderr)
         return 10000.0
 
     if quote == "JPY":
@@ -118,8 +120,13 @@ def _guard(provider: str, cost: int = 1) -> bool:
             return True
         if r.returncode == 97:
             return False
+        print(
+            f"[warn] quota_guard denied {provider} (rc={r.returncode}): "
+            f"{(r.stderr or '').strip()[:300]}",
+            file=sys.stderr,
+        )
         return False
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         print(f"[warn] quota_guard failed for {provider}: {e}", file=sys.stderr)
         return False
 
@@ -243,8 +250,8 @@ def fetch_alpha_vantage(pair: str):
 
     try:
         tkey = sorted(series.keys())[-1]
-    except Exception:
-        raise RuntimeError("AlphaVantage time series sorting failed")
+    except TypeError as e:
+        raise RuntimeError("AlphaVantage time series sorting failed") from e
 
     point = series.get(tkey) or {}
     if "4. close" not in point:
@@ -303,8 +310,12 @@ def _load_prev_price(csv_path: str, pair: str, max_age_hours: float = 24.0):
 
         return last_price, last_ts
 
-    except Exception as e:
-        print(f"[warn] Failed to read previous price from {csv_path}: {e}", file=sys.stderr)
+    except (OSError, UnicodeError, ValueError) as e:
+        print(
+            f"[warn] Failed to read previous price from {csv_path}: "
+            f"{type(e).__name__}: {e}",
+            file=sys.stderr,
+        )
         return None, None
 
 
@@ -337,8 +348,12 @@ def _compute_signal(pair: str, price: float, prev_price: float, prev_ts: datetim
             minutes_since = (_utcnow() - prev_ts).total_seconds() / 60.0
             if minutes_since < min_minutes:
                 return "WAIT", 0, False
-        except Exception:
-            pass
+        except (AttributeError, TypeError, ValueError) as e:
+            print(
+                f"[warn] Cooldown not enforced for {pair}, "
+                f"unusable previous timestamp {prev_ts!r}: {e}",
+                file=sys.stderr,
+            )
 
     try:
         pip_mult = _pip_multiplier(pair)
@@ -384,8 +399,12 @@ def _compute_signal(pair: str, price: float, prev_price: float, prev_ts: datetim
 
         return decision, score, weak
 
-    except Exception as e:
-        print(f"[warn] Failed to compute signal for {pair}: {e}", file=sys.stderr)
+    except (ArithmeticError, TypeError, ValueError) as e:
+        print(
+            f"[warn] Failed to compute signal for {pair}, forcing WAIT: "
+            f"{type(e).__name__}: {e}",
+            file=sys.stderr,
+        )
         return "WAIT", 0, False
 
 
@@ -399,15 +418,19 @@ def _append_history(
     provider: str,
     age_min: float,
     price: float,
-):
+) -> bool:
     """
-    Append one line to signal_history.csv
+    Append one line to signal_history.csv.
+
+    Returns False when the history could not be written: the next tick then
+    has no previous price, so cooldown and spike detection are degraded.
     """
     log_dir = os.path.dirname(csv_path)
     try:
         os.makedirs(log_dir, exist_ok=True)
-    except Exception as e:
+    except OSError as e:
         print(f"[warn] Failed to create log dir {log_dir}: {e}", file=sys.stderr)
+        return False
 
     ts = _utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
     line = (
@@ -422,8 +445,10 @@ def _append_history(
                 header = "timestamp,pair,decision,score,weak,provider,age_min,price,dry_run\n"
                 f.write(header)
             f.write(line)
-    except Exception as e:
+    except (OSError, UnicodeError) as e:
         print(f"[warn] Logging to {csv_path} failed: {e}", file=sys.stderr)
+        return False
+    return True
 
 
 # --- Telegram alert function (HTML standardized) ---
@@ -504,8 +529,8 @@ def _send_telegram_alert(pair: str, decision: str, score: int, weak: bool,
             print(f"[warn] Telegram send failed (rc={result.returncode}): {err_snip}", file=sys.stderr)
     except subprocess.TimeoutExpired:
         print("[warn] Telegram send timeout", file=sys.stderr)
-    except Exception as e:
-        print(f"[warn] Telegram error: {e}", file=sys.stderr)
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"[warn] Telegram error: {type(e).__name__}: {e}", file=sys.stderr)
 
 
 # --- Self-test mode (env-agnostic) ---
@@ -592,14 +617,17 @@ def main():
         try:
             got = fn(pair)
             break
-        except Exception as e:
-            errs.append(f"{prov}: {e}")
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
+            errs.append(f"{prov}: {type(e).__name__}: {e}")
 
     if not got:
         print(f"[run] {pair} TF15 decision=WAIT score=0 weak=false provider=? age=999.9 price=?")
-        if errs:
-            print("[warn] providers failed: " + "; ".join(errs), file=sys.stderr)
-        sys.exit(0)
+        print(
+            "[error] no provider returned a price for "
+            f"{pair}: {'; '.join(errs) if errs else 'no providers configured'}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     provider, price, dt = got
     age = _age_minutes(dt)
@@ -630,7 +658,7 @@ def main():
         _send_telegram_alert(pair, decision, score, weak, price, provider, age, pips_moved)
 
     # 6) Append to CSV history
-    _append_history(
+    history_written = _append_history(
         csv_path=csv_path,
         pair=pair,
         decision=decision,
@@ -646,7 +674,7 @@ def main():
         f"[run] {pair} TF15 decision={decision} score={score} "
         f"weak={str(weak).lower()} provider={provider} age={age:.1f} price={price:.5f}"
     )
-    sys.exit(0)
+    sys.exit(0 if history_written else 1)
 
 
 if __name__ == "__main__":

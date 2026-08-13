@@ -16,26 +16,29 @@ def _parse_ts(s: str) -> Optional[datetime]:
         s = str(s).strip().replace("Z", "+00:00")
         dt = datetime.fromisoformat(s)
         return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-    except Exception:
+    except (TypeError, ValueError):
         return None
 
 def _sf(v, d=0.0) -> float:
     try:
         f = float(v)
         return d if f != f else f  # nan check
-    except Exception:
+    except (TypeError, ValueError):
         return d
 
 def fetch_future_bars(pair: str, tf: str, after_time: datetime, bars: int) -> Optional[List[Dict]]:
     try:
         from BotA.tools.providers import get_ohlc
-    except ImportError:
+    except ImportError as e:
+        print(f"[auditor] providers unavailable, cannot audit {pair} {tf}: {e}", file=sys.stderr)
         return None
     try:
         rows, source = get_ohlc(pair, tf, bars * 4)
-    except Exception:
+    except (RuntimeError, OSError, ValueError) as e:
+        print(f"[auditor] bar fetch failed for {pair} {tf}: {type(e).__name__}: {e}", file=sys.stderr)
         return None
     if not rows:
+        print(f"[auditor] no bars returned for {pair} {tf}", file=sys.stderr)
         return None
 
     result = []
@@ -110,7 +113,9 @@ def simulate_trade(action, entry, sl, tp1, tp2, tp3,
 
 def _mins(a, b) -> int:
     try: return int((a - b).total_seconds() / 60)
-    except: return 0
+    except (AttributeError, TypeError, ValueError) as e:
+        print(f"[auditor] duration undetermined for {a!r} - {b!r}: {e}", file=sys.stderr)
+        return 0
 
 def _result(outcome, hit, R, t, px, mins) -> Dict:
     return {"outcome": outcome, "hit_level": hit, "R_multiple": float(R),
@@ -152,7 +157,10 @@ def main():
             tp1   = float(row["tp1"])
             tp2   = float(row["tp2"])
             tp3   = float(row["tp3"])
-        except Exception: continue
+        except (KeyError, TypeError, ValueError) as e:
+            print(f"[auditor] skipping row with unusable levels "
+                  f"(pair={pair} tf={tf}): {type(e).__name__}: {e}", file=sys.stderr)
+            continue
 
         bars = fetch_future_bars(pair, tf, row["_ts"], args.horizon)
         res  = simulate_trade(action, entry, sl, tp1, tp2, tp3,

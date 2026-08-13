@@ -27,8 +27,12 @@ def recalc_row(r):
             r["tp1"]      = f"{e - TP1_MULT*atr/10000:.5f}"
             r["tp2"]      = f"{e - TP2_MULT*atr/10000:.5f}"
             r["tp3"]      = f"{e - (TP2_MULT*TP3_FACTOR)*atr/10000:.5f}"
-    except:
-        pass
+    except (KeyError, TypeError, ValueError) as exc:
+        print(
+            f"[recalc] row left unchanged (ts={r.get('timestamp')!r} pair={r.get('pair')!r}): "
+            f"{type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
     return r
 
 df = pd.read_csv(IN)

@@ -3,7 +3,7 @@ Robust multi-provider OHLC fetcher with retry + cache + SSL toggle.
 """
 
 from __future__ import annotations
-import os, json, time, requests, argparse
+import os, json, sys, time, requests, argparse
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime, timezone
@@ -49,6 +49,10 @@ TF_TO_TD = {
 
 # --------------------------- helpers ---------------------------
 
+def _warn(msg: str) -> None:
+    print(f"[providers] {msg}", file=sys.stderr)
+
+
 def _bool_env(name: str, default: bool = True) -> bool:
     return os.getenv(name, "true" if default else "false").lower() in (
         "1",
@@ -77,14 +81,18 @@ def _cache_load(pair: str, tf: str) -> Optional[Tuple[List[Dict], str]]:
         return None
     try:
         obj = json.loads(p.read_text())
-        if time.time() - obj.get("cached_at", 0) > CACHE_TTL_SEC:
-            return None
-        rows = obj.get("rows") or []
-        src = obj.get("source", "unknown")
-        if rows:
-            return rows, f"cache:{src}"
-    except:
+    except (OSError, ValueError) as e:
+        _warn(f"cache unreadable for {pair} {tf}, refetching: {e}")
         return None
+    if not isinstance(obj, dict):
+        _warn(f"cache malformed for {pair} {tf}, refetching")
+        return None
+    if time.time() - obj.get("cached_at", 0) > CACHE_TTL_SEC:
+        return None
+    rows = obj.get("rows") or []
+    src = obj.get("source", "unknown")
+    if rows:
+        return rows, f"cache:{src}"
     return None
 
 
@@ -93,8 +101,8 @@ def _cache_save(pair: str, tf: str, rows: List[Dict], src: str) -> None:
         _cache_path(pair, tf).write_text(
             json.dumps({"cached_at": time.time(), "rows": rows, "source": src})
         )
-    except:
-        pass
+    except (OSError, TypeError, ValueError) as e:
+        _warn(f"cache write failed for {pair} {tf}: {e}")
 
 
 def _iso_ts(ts):
@@ -126,6 +134,7 @@ def _fetch_yahoo(pair, tf, bars, verify):
         "1d": "max",
     }.get(interval, "60d")
     last = "yahoo unknown"
+    last_exc: Optional[BaseException] = None
     for att in range(YAHOO_RETRIES):
         base = YAHOO_ENDPOINTS[att % 2]
         url = f"{base}/v8/finance/chart/{sym}"
@@ -166,9 +175,11 @@ def _fetch_yahoo(pair, tf, bars, verify):
             if len(rows) < bars * 0.5:
                 raise RuntimeError("Yahoo: insufficient bars")
             return rows[-bars:]
-        except Exception as e:
-            last = str(e)
-    raise RuntimeError(last)
+        except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError, IndexError) as e:
+            last = f"{type(e).__name__}: {e}"
+            last_exc = e
+            _warn(f"yahoo attempt {att + 1}/{YAHOO_RETRIES} failed for {pair} {tf}: {last}")
+    raise RuntimeError(last) from last_exc
 
 
 def _fetch_av(pair, tf, bars, verify):
@@ -251,7 +262,8 @@ def get_ohlc(pair: str, tf: str, bars: int = 200) -> Tuple[List[Dict], str]:
     cached = _cache_load(pair, tf)
     if cached:
         return cached
-    last_error = None
+    last_error: Optional[BaseException] = None
+    failures: List[str] = []
     for src in order:
         try:
             if src == "yahoo":
@@ -261,12 +273,18 @@ def get_ohlc(pair: str, tf: str, bars: int = 200) -> Tuple[List[Dict], str]:
             elif src == "twelvedata":
                 rows = _fetch_td(pair, tf, bars, verify)
             else:
+                failures.append(f"{src}: unknown provider")
+                _warn(f"unknown provider in PROVIDER_ORDER: {src}")
                 continue
             _cache_save(pair, tf, rows, src)
             return rows, src
-        except Exception as e:
+        except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError, IndexError) as e:
             last_error = e
-    raise RuntimeError(f"All providers failed: {last_error}")
+            failures.append(f"{src}: {type(e).__name__}: {e}")
+            _warn(f"provider {src} failed for {pair} {tf}: {type(e).__name__}: {e}")
+    raise RuntimeError(
+        f"All providers failed for {pair} {tf}: " + "; ".join(failures)
+    ) from last_error
 
 # --------------------------- CLI ---------------------------
 

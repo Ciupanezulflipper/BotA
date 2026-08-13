@@ -26,22 +26,41 @@ def get_chat():
     return _env("TELEGRAM_CHAT_ID")
 
 def send_telegram(msg: str) -> bool:
-    import urllib.request, urllib.parse
+    import urllib.error, urllib.parse, urllib.request
     token = get_token(); chat = get_chat()
     if not token or not chat:
-        print("[sltp] TELEGRAM not configured"); return False
+        print("[sltp] TELEGRAM not configured", file=sys.stderr); return False
     url  = f"https://api.telegram.org/bot{token}/sendMessage"
     data = urllib.parse.urlencode({"chat_id": chat, "text": msg, "parse_mode": "HTML"}).encode()
     try:
         with urllib.request.urlopen(url, data=data, timeout=15) as r:
             return json.load(r).get("ok", False)
-    except Exception as e:
-        print(f"[sltp] Telegram error: {e}"); return False
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        print(f"[sltp] Telegram error: {type(e).__name__}: {e}", file=sys.stderr); return False
 
 def load_state() -> dict:
+    """Load the dedupe state.
+
+    A missing file is normal on first run. A corrupt file is reported loudly
+    because starting from an empty state can re-alert already reported hits.
+    """
+    empty = {"hit": {}, "daily_summary_sent": ""}
     try:
-        with open(STATE_FILE) as f: return json.load(f)
-    except Exception: return {"hit": {}, "daily_summary_sent": ""}
+        with open(STATE_FILE) as f: state = json.load(f)
+    except FileNotFoundError:
+        return empty
+    except (OSError, ValueError) as e:
+        print(
+            f"[sltp] state unusable at {STATE_FILE}, duplicate alerts possible: {type(e).__name__}: {e}",
+            file=sys.stderr,
+        )
+        return empty
+    if not isinstance(state, dict):
+        print(f"[sltp] state malformed at {STATE_FILE}, duplicate alerts possible", file=sys.stderr)
+        return empty
+    state.setdefault("hit", {})
+    state.setdefault("daily_summary_sent", "")
+    return state
 
 def save_state(state: dict):
     LOGS.mkdir(parents=True, exist_ok=True)
@@ -56,14 +75,17 @@ def get_current_price(pair: str, tf: str = "M15") -> float:
         with open(path) as f: raw = json.load(f)
         rows = raw.get("rows", [])
         if rows: return float(rows[-1].get("close", 0))
-    except Exception: pass
+    except (OSError, ValueError, TypeError, AttributeError) as e:
+        print(f"[sltp] price cache unusable at {path}: {type(e).__name__}: {e}", file=sys.stderr)
     return 0.0
 
 def get_cache_age_secs(pair: str, tf: str = "M15") -> int:
     path = CACHE / f"{pair}_{tf}.json"
     if not path.exists(): return 9999
     try: return int(time.time() - path.stat().st_mtime)
-    except: return 9999
+    except OSError as e:
+        print(f"[sltp] cannot stat {path}, treating cache as stale: {e}", file=sys.stderr)
+        return 9999
 
 def load_sent_signals() -> list:
     if not ALERTS_CSV.exists(): return []
@@ -82,7 +104,9 @@ def load_sent_signals() -> list:
                     sl    = float(row.get("sl", 0) or 0)
                     tp    = float(row.get("tp", 0) or 0)
                     score = float(row.get("score", 0) or 0)
-                except: continue
+                except (TypeError, ValueError) as e:
+                    print(f"[sltp] skipping row with unparseable levels: {e}", file=sys.stderr)
+                    continue
                 if not entry or not sl or not tp: continue
                 results.append({
                     "timestamp": row.get("timestamp", ""),
@@ -94,8 +118,8 @@ def load_sent_signals() -> list:
                     "sl":        sl,
                     "tp":        tp,
                 })
-    except Exception as e:
-        print(f"[sltp] CSV read error: {e}")
+    except (OSError, csv.Error, UnicodeError) as e:
+        print(f"[sltp] CSV read error on {ALERTS_CSV}: {type(e).__name__}: {e}", file=sys.stderr)
     return results
 
 def check_hit(direction, current, entry, sl, tp) -> str:
@@ -116,12 +140,14 @@ def pips(a: float, b: float, pair: str) -> float:
 def sig_key(sig: dict) -> str:
     return f"{sig['timestamp']}|{sig['pair']}|{sig['direction']}"
 
-def run_monitor():
+def run_monitor() -> int:
+    """Alert on resolved signals. Returns the number of failed deliveries."""
     state   = load_state()
     signals = load_sent_signals()
     now_utc = datetime.now(timezone.utc)
     cutoff  = now_utc - timedelta(hours=24)
     alerts_sent = 0
+    send_failures = 0
 
     for sig in signals:
         key = sig_key(sig)
@@ -131,7 +157,9 @@ def run_monitor():
             ts_str = sig["timestamp"].replace("Z", "+00:00")
             ts = datetime.fromisoformat(ts_str)
             if ts.tzinfo is None: ts = ts.replace(tzinfo=timezone.utc)
-        except: continue
+        except (AttributeError, TypeError, ValueError) as e:
+            print(f"[sltp] skipping signal with bad timestamp {sig.get('timestamp')!r}: {e}", file=sys.stderr)
+            continue
 
         if ts < cutoff: continue
 
@@ -176,23 +204,31 @@ def run_monitor():
             save_state(state)
             alerts_sent += 1
             print(f"[sltp] ALERT: {pair} {direction} {hit} @ {current:.5f}")
+        else:
+            send_failures += 1
+            print(f"[sltp] delivery failed, will retry: {pair} {direction} {hit}", file=sys.stderr)
 
-    print(f"[sltp] Done. {len(signals)} signals checked, {alerts_sent} alerts sent.")
+    print(f"[sltp] Done. {len(signals)} signals checked, {alerts_sent} alerts sent, "
+          f"{send_failures} deliveries failed.")
+    return send_failures
 
-def run_daily_summary():
+def run_daily_summary() -> int:
+    """Send the daily summary. Returns the number of failed deliveries."""
     state = load_state()
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if state.get("daily_summary_sent") == today:
-        print("[sltp] Summary already sent."); return
+        print("[sltp] Summary already sent."); return 0
 
     hits = state.get("hit", {})
     today_hits = {k: v for k, v in hits.items()
                   if v.get("reported_at", "")[:10] == today}
 
     if not today_hits:
-        send_telegram(f"📊 <b>BotA Daily SL/TP Summary — {today}</b>\nNo signals resolved today.")
+        if not send_telegram(f"📊 <b>BotA Daily SL/TP Summary — {today}</b>\nNo signals resolved today."):
+            print("[sltp] empty summary not delivered, not marking as sent", file=sys.stderr)
+            return 1
         state["daily_summary_sent"] = today
-        save_state(state); return
+        save_state(state); return 0
 
     wins   = [v for v in today_hits.values() if v.get("hit") == "TP"]
     losses = [v for v in today_hits.values() if v.get("hit") == "SL"]
@@ -216,15 +252,18 @@ def run_daily_summary():
         e = "✅" if hit == "TP" else "❌"
         msg += f"{e} {pair} {direction} → {hit} {r} ({pips_val:+.1f} pips)\n"
 
-    send_telegram(msg)
+    if not send_telegram(msg):
+        print("[sltp] summary not delivered, not marking as sent", file=sys.stderr)
+        return 1
     state["daily_summary_sent"] = today
     save_state(state)
     print(f"[sltp] Summary sent: {len(wins)}W/{len(losses)}L")
+    return 0
 
 if __name__ == "__main__":
     env_path = ROOT / ".env.runtime"
     if env_path.exists():
-        with open(env_path) as f:
+        with open(env_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line.startswith("export "): line = line[7:]
@@ -232,7 +271,5 @@ if __name__ == "__main__":
                     k, v = line.split("=", 1)
                     os.environ.setdefault(k.strip(), v.strip().strip('"'))
 
-    if "--summary" in sys.argv:
-        run_daily_summary()
-    else:
-        run_monitor()
+    failures = run_daily_summary() if "--summary" in sys.argv else run_monitor()
+    sys.exit(1 if failures else 0)
