@@ -40,14 +40,27 @@ class WrapperHardeningV2Tests(unittest.TestCase):
         self.assertLess(barrier, watcher)
         self.assertIn('[[ -e "${DEPLOY_MARKER}" || -L "${DEPLOY_MARKER}" ]]', text)
 
-    def test_runtime_requires_but_does_not_chmod_canonical_sender(self):
-        wrapper = (HERE / "tools" / "run_signal_watcher_with_ledger.sh").read_text(encoding="utf-8")
-        self.assertIn('[[ ! -x "${TOOLS}/telegram_send.sh" ]]', wrapper)
+    def test_canonical_boundary_repairs_only_sender_mode_and_fails_closed(self):
+        outer = (HERE / "tools" / "run_signal_watcher_with_ledger.sh").read_text(encoding="utf-8")
+        boundary = (HERE / "tools" / "signal_watcher_pro.sh").read_text(encoding="utf-8")
+
+        # The outer runner checks identity/presence but does not reject the
+        # GitHub contents API's default 100644 mode before the canonical boundary.
+        self.assertIn('[[ ! -f "${TOOLS}/telegram_send.sh" ]]', outer)
+        self.assertNotIn('[[ ! -x "${TOOLS}/telegram_send.sh" ]]', outer)
+
+        # Only the canonical sender gets conditional owner-only mode repair.
+        self.assertIn('if [[ ! -x "${SENDER}" ]]; then', boundary)
+        self.assertIn('chmod 700 "${SENDER}"', boundary)
+        self.assertIn('canonical_sender_chmod_failed=', boundary)
+        self.assertIn('canonical_sender_not_executable=', boundary)
         executable_lines = [
-            line.strip() for line in wrapper.splitlines()
+            line.strip()
+            for line in boundary.splitlines()
             if line.strip() and not line.lstrip().startswith("#")
         ]
-        self.assertFalse(any("chmod" in line and "telegram_send.sh" in line for line in executable_lines))
+        chmod_lines = [line for line in executable_lines if "chmod" in line]
+        self.assertEqual(chmod_lines, ['if ! chmod 700 "${SENDER}"; then'])
         self.assertTrue((HERE / "tools" / "telegram_send.sh").is_file())
         self.assertTrue((HERE / "tools" / "telegram_delivery.py").is_file())
 
