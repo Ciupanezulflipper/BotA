@@ -113,16 +113,22 @@ fi
 # truncated/rotated evidence, duplicate current-cycle decisions, malformed
 # structured results, unhealthy Telegram outcomes, or missing/failed GREEN
 # Supabase evidence from ever being painted green by log inference.
+# Capture diagnostics separately so the contract never reads and writes the
+# same evidence file concurrently.
 contract_rc=0
-python3 "${TOOLS}/watcher_cycle_contract.py" \
-  --cycle-id "${cycle_id}" \
-  --alerts-path "${alerts}" \
-  --alerts-offset "${alerts_offset}" \
-  --log-path "${cycle_log}" \
-  --log-offset 0 \
-  --telegram-result-path "${telegram_result_log}" \
-  --supabase-result-path "${supabase_result_log}" \
-  2>>"${cycle_log}" || contract_rc=$?
+contract_output="$({
+  python3 "${TOOLS}/watcher_cycle_contract.py" \
+    --cycle-id "${cycle_id}" \
+    --alerts-path "${alerts}" \
+    --alerts-offset "${alerts_offset}" \
+    --log-path "${cycle_log}" \
+    --log-offset 0 \
+    --telegram-result-path "${telegram_result_log}" \
+    --supabase-result-path "${supabase_result_log}"
+} 2>&1)" || contract_rc=$?
+if [[ -n "${contract_output}" ]]; then
+  printf '%s\n' "${contract_output}" >>"${cycle_log}"
+fi
 
 reconcile_rc=0
 python3 "${TOOLS}/watcher_cycle_ledger.py" \
