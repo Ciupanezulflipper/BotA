@@ -184,11 +184,17 @@ def _open_cycle_result_fd() -> tuple[int | None, bool]:
 
 
 def emit_cycle_result(*, pair: str, direction: str, entry: str, tf: str, tier: str, status: str) -> bool:
-    """Append one durable, exact-cycle sanitized result to watcher-owned evidence."""
+    """Append one durable sanitized result to watcher-owned evidence.
+
+    The normal watcher wrapper always exports ``BOTA_CYCLE_ID``. A legacy caller
+    that supplies a watcher result file without that variable is marked
+    ``legacy_unbound`` for compatibility; the strict watcher-cycle contract
+    rejects that record before runtime health can be green.
+    """
     raw_path = os.environ.get(RESULT_LOG_ENV, "").strip()
     if not raw_path:
         return True
-    cycle_id = os.environ.get(CYCLE_ID_ENV, "").strip()
+    cycle_id = os.environ.get(CYCLE_ID_ENV, "").strip() or "legacy_unbound"
     identity = {
         "pair": pair.upper().strip(),
         "timeframe": tf.upper().strip(),
@@ -196,7 +202,7 @@ def emit_cycle_result(*, pair: str, direction: str, entry: str, tf: str, tier: s
         "entry": str(entry).strip(),
         "tier": tier.upper().strip(),
     }
-    if not cycle_id or any(not value for value in identity.values()):
+    if any(not value for value in identity.values()):
         print("[supabase_publish] cycle evidence identity incomplete", file=sys.stderr)
         return False
 
