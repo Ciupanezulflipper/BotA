@@ -217,7 +217,11 @@ def emit_cycle_result(*, pair: str, direction: str, entry: str, tf: str, tier: s
     }
     try:
         data = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
-        os.write(fd, data)
+        total = len(data)
+        offset = 0
+        while offset < total:
+            written = os.write(fd, data[offset:])
+            offset += written
         os.fsync(fd)
         return True
     except OSError as exc:

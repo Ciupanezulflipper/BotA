@@ -32,7 +32,10 @@ def current_segment() -> str:
         raise ValueError("alerts_segment_too_large")
     with alerts.open("rb") as handle:
         handle.seek(offset)
-        return handle.read(length).decode("utf-8", "replace")
+        try:
+            return handle.read(length).decode("utf-8", "strict")
+        except UnicodeDecodeError as exc:
+            raise ValueError("alerts_utf8_decode_error") from exc
 
 
 def matching_rows(message: str) -> int:

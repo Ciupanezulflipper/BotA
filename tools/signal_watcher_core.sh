@@ -311,12 +311,14 @@ signal_delivery_hash() {
   local pair="$1" tf="$2" direction="$3" score="$4" entry="$5" sl="$6" tp="$7"
   local hash_input="${pair}|${tf}|${direction}|${score}|${entry}|${sl}|${tp}"
 
-  printf '%s' "${hash_input}" |
-    md5sum 2>/dev/null |
-    cut -d' ' -f1 ||
-    printf '%s' "${hash_input}" |
-      cksum |
-      cut -d' ' -f1
+  local hash_result
+  hash_result="$(printf '%s' "${hash_input}" | md5sum 2>/dev/null | cut -d' ' -f1)" || hash_result=""
+  if [[ -n "${hash_result}" ]]; then
+    printf '%s' "${hash_result}"
+  else
+    hash_result="$(printf '%s' "${hash_input}" | cksum | cut -d' ' -f1)" || hash_result=""
+    printf '%s' "${hash_result}"
+  fi
 }
 
 # Returns 0 if not previously delivered, 1 if duplicate.
@@ -1007,22 +1009,29 @@ except Exception:
         log "CHART" "${pair_o} ${tf_o} chart generation failed"
       fi
     fi
-    # Cooldown and delivery hash are meaningful only after a real successful send.
+    # Cooldown is meaningful only after a real successful send.
     if ! is_true "${DRY_RUN_MODE:-false}" && ! is_false "${TELEGRAM_ENABLED:-1}"; then
       telegram_cooldown_mark "${pair_o}" "${tf_o}"
-      signal_delivery_mark "${pair_o}" "${tf_o}" "${direction}" "${score}" "${entry}" "${sl}" "${tp}"
-    # Publish to ProfitLab dashboard — GREEN tier only.
+    fi
+    # Publish to ProfitLab dashboard — GREEN tier only, before delivery dedup mark.
+    local supabase_ok="true"
     if [[ "${tier}" = "GREEN" ]]; then
       if [[ -f "${TOOLS}/supabase_publish.py" ]] && [[ -n "${SUPABASE_SERVICE_KEY:-}" ]]; then
-        python3 "${TOOLS}/supabase_publish.py" \
+        if ! python3 "${TOOLS}/supabase_publish.py" \
           --pair "${pair_o}" --direction "${direction}" \
           --entry "${entry}" --sl "${sl}" --tp "${tp}" \
           --score "${score_int}" --tf "${tf_o}" --tier "${tier}" \
-          2>>"${ERRLOG}" || log "SUPABASE" "publish failed for ${pair_o} ${tf_o}"
+          2>>"${ERRLOG}"; then
+          log "SUPABASE" "publish failed for ${pair_o} ${tf_o}"
+          supabase_ok="false"
+        fi
       fi
     else
       log "SUPABASE" "skip non-GREEN tier=${tier} for ${pair_o} ${tf_o}"
     fi
+    # Mark delivery only after both Telegram and Supabase complete successfully.
+    if [[ "${supabase_ok}" == "true" ]]; then
+      signal_delivery_mark "${pair_o}" "${tf_o}" "${direction}" "${score}" "${entry}" "${sl}" "${tp}"
     fi
   else
     log "TELEGRAM" "send failed, cooldown NOT set for ${pair_o} ${tf_o} (will retry next cycle)"
@@ -1056,7 +1065,7 @@ scan_once() {
   else
     log "CLOCK" "server_clock_unavailable -> SKIP_SCAN fail_closed"
     export BOTA_SERVER_EPOCH="0"
-    return 0
+    return 1
   fi
   for tf in ${TIMEFRAMES}; do
     for pair in ${PAIRS}; do

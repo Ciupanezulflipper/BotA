@@ -47,8 +47,9 @@ def reconciled_text_delivery() -> bool:
             value = json.loads(line)
             if isinstance(value, dict):
                 records.append(value)
-    except (OSError, ValueError):
-        return False
+    except (OSError, ValueError) as exc:
+        print(f"[chart] result-log validation failed: {type(exc).__name__}", file=sys.stderr)
+        raise SystemExit(1)
     matches = [
         item for item in records
         if str(item.get("pair") or "").upper() == pair
