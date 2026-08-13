@@ -18,7 +18,14 @@ Output:
 from __future__ import annotations
 import os, sys, csv, json, pathlib, argparse, statistics
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from typing import Optional
+
+if __package__:
+    from tools import bota_common as common
+else:  # direct execution or file-based module loading
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools import bota_common as common
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 ALERTS_CSV  = ROOT / "logs" / "alerts.csv"
@@ -47,11 +54,7 @@ LEDGER_HEADER = [
     "max_favorable",
 ]
 
-def pip_size(pair: str) -> float:
-    pair = pair.upper()
-    if "JPY" in pair:
-        return 0.01
-    return 0.0001
+pip_size = common.fx_pip_size
 
 def pips(price_diff: float, pair: str) -> float:
     return round(price_diff / pip_size(pair), 1)

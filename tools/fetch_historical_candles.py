@@ -26,6 +26,12 @@ from pathlib import Path
 from typing import Callable, Iterable, Mapping
 from urllib.parse import urlencode, urlsplit
 
+if __package__:
+    from tools import bota_common as common
+else:  # direct execution or file-based module loading
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools import bota_common as common
+
 ALLOWED_PAIRS = {"EURUSD", "GBPUSD"}
 TF_TO_GRANULARITY = {"M15": "M15", "H1": "H1", "H4": "H4", "D1": "D"}
 TF_SECONDS = {"M15": 15 * 60, "H1": 60 * 60, "H4": 4 * 60 * 60, "D1": 24 * 60 * 60}
@@ -63,27 +69,9 @@ Transport = Callable[[str, str, str, float], HttpResponse]
 SleepFn = Callable[[float], None]
 
 
-def utc_now() -> datetime:
-    """Return current UTC time."""
-    return datetime.now(timezone.utc)
-
-
-def iso_z(value: datetime) -> str:
-    """Render an aware datetime in UTC Z form."""
-    if value.tzinfo is None:
-        raise ValueError("timestamp must be timezone-aware")
-    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def parse_utc(value: str) -> datetime:
-    """Parse an ISO-8601 UTC/offset timestamp into UTC."""
-    text = str(value).strip()
-    if not text:
-        raise ValueError("timestamp is empty")
-    parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        raise ValueError("timestamp must include timezone")
-    return parsed.astimezone(timezone.utc)
+utc_now = common.utc_now
+iso_z = common.iso_z
+parse_utc = common.parse_utc
 
 
 def normalize_pair(value: str) -> str:

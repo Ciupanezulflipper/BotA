@@ -4,16 +4,19 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import math
 import re
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+if __package__:
+    from tools import bota_common as common
+else:  # direct execution or file-based module loading
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools import bota_common as common
 
 POLICY_FIELDS = {
     "A": "policy_a_current",
@@ -31,49 +34,8 @@ class Candidate:
     time_delta_minutes: float
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        while block := handle.read(1024 * 1024):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-def _parse_utc(value: str) -> datetime:
-    text = value.strip()
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    parsed = datetime.fromisoformat(text)
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
-
-
-def _pip_size(pair: str) -> float:
-    return 0.01 if "JPY" in pair.upper() else 0.0001
-
-
-def _finite_number(value: Any, field: str) -> float:
-    number = float(value)
-    if not math.isfinite(number):
-        raise ValueError(f"non-finite {field}")
-    return number
-
-
 def _load_events(path: Path) -> list[dict[str, Any]]:
-    events: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for line_number, raw in enumerate(handle, start=1):
-            text = raw.strip()
-            if not text:
-                continue
-            value = json.loads(text)
-            if not isinstance(value, dict):
-                raise ValueError(f"event line {line_number} is not an object")
-            events.append(value)
-    if not events:
-        raise ValueError("replay event ledger is empty")
-    return events
+    return common.read_jsonl_objects(path, label="replay event ledger")
 
 
 def _load_outcomes(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -121,17 +83,17 @@ def _candidate(
         return None
 
     pair = str(outcome["pair"])
-    published_entry = _finite_number(outcome.get("entry_price"), "entry_price")
-    replay_entry = _finite_number(event.get("entry"), "replay entry")
+    published_entry = common.finite(outcome.get("entry_price"), "entry_price")
+    replay_entry = common.finite(event.get("entry"), "replay entry")
     if published_entry <= 0 or replay_entry <= 0:
         return None
 
-    entry_diff_pips = abs(replay_entry - published_entry) / _pip_size(pair)
+    entry_diff_pips = abs(replay_entry - published_entry) / common.pip_size(pair)
     if entry_diff_pips > max_entry_pips:
         return None
 
-    published_time = _parse_utc(str(outcome.get("created_at", "")))
-    decision_time = _parse_utc(str(event.get("decision_time", "")))
+    published_time = common.parse_utc_assume_utc(str(outcome.get("created_at", "")))
+    decision_time = common.parse_utc_assume_utc(str(event.get("decision_time", "")))
     time_delta_minutes = abs((published_time - decision_time).total_seconds()) / 60.0
     if time_delta_minutes > max_time_minutes:
         return None
@@ -222,7 +184,7 @@ def _resolve_unique_matches(
 
 def _outcome_class(row: dict[str, Any]) -> str:
     status = str(row.get("status", "")).upper()
-    pips = _finite_number(row.get("result_pips", 0.0), "result_pips")
+    pips = common.finite(row.get("result_pips", 0.0), "result_pips")
     if status == "CANCELLED":
         return "cancelled"
     if pips > 0:
@@ -238,7 +200,7 @@ def _policy_stats(
     selected = [row for row in matched_rows if bool(row["event"].get(policy_field))]
     classes = Counter(_outcome_class(row["outcome"]) for row in selected)
     total_pips = sum(
-        _finite_number(row["outcome"].get("result_pips", 0.0), "result_pips")
+        common.finite(row["outcome"].get("result_pips", 0.0), "result_pips")
         for row in selected
     )
     resolved = classes["win"] + classes["loss"] + classes["breakeven"]
@@ -259,7 +221,7 @@ def _matched_row(
     outcome: dict[str, Any], event: dict[str, Any], candidate: Candidate
 ) -> dict[str, Any]:
     live_score = _live_score(outcome)
-    replay_score = _finite_number(event.get("score", 0.0), "replay score")
+    replay_score = common.finite(event.get("score", 0.0), "replay score")
     return {
         "outcome": outcome,
         "event": event,
@@ -410,7 +372,7 @@ def _comparison_result(
             "events_sha256": events_sha256,
             "expected_events_sha256": expected_events_sha256,
             "outcomes_path": str(outcomes_path),
-            "outcomes_sha256": _sha256(outcomes_path),
+            "outcomes_sha256": common.sha256_file(outcomes_path),
             "outcome_source": snapshot.get("source"),
             "outcome_project_ref": snapshot.get("project_ref"),
             "outcome_query_window": snapshot.get("query_window"),
@@ -442,7 +404,7 @@ def compare(
     if max_time_minutes <= 0 or max_entry_pips <= 0:
         raise ValueError("matching tolerances must be positive")
 
-    events_sha256 = _sha256(events_path)
+    events_sha256 = common.sha256_file(events_path)
     normalized_expected = _validate_expected_sha256(
         expected_events_sha256,
         events_sha256,

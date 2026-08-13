@@ -3,14 +3,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
+import sys
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+if __package__:
+    from tools import bota_common as common
+else:  # direct execution or file-based module loading
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools import bota_common as common
 
 ROOT = Path.home() / "BotA"
 LOG_DIR = ROOT / "logs"
@@ -25,18 +31,10 @@ SPREAD_PIPS_DEFAULT = float(os.environ.get("SIM_SPREAD_PIPS_DEFAULT", "1.0"))
 MIN_TP_PIPS = float(os.environ.get("SIM_MIN_TP_PIPS", "1.5"))
 
 
-def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def parse_iso8601(ts: str) -> Optional[datetime]:
-    try:
-        dt = datetime.fromisoformat(ts)
-    except Exception:
-        return None
-    if dt.tzinfo is None:
-        return None
-    return dt.astimezone(timezone.utc)
+now_utc = common.utc_now
+parse_iso8601 = common.parse_utc_or_none
+pip_size = common.pip_size
+safe_float = common.safe_float
 
 
 def floor_to_m15(dt: datetime) -> datetime:
@@ -47,17 +45,6 @@ def floor_to_m15(dt: datetime) -> datetime:
 
 def next_m15_candle_start(dt: datetime) -> datetime:
     return floor_to_m15(dt) + timedelta(minutes=15)
-
-
-def pip_size(pair: str) -> float:
-    p = pair.upper().strip()
-    if p.endswith("JPY"):
-        return 0.01
-    if p in ("XAUUSD", "XAU/USD"):
-        return 0.1
-    if p in ("XAGUSD", "XAG/USD"):
-        return 0.01
-    return 0.0001
 
 
 def pips(diff: float, pair: str) -> float:
@@ -85,16 +72,6 @@ class Candle:
     time: datetime
     high: float
     low: float
-
-
-def safe_float(v: Any, default: float = 0.0) -> float:
-    try:
-        f = float(v)
-        if math.isnan(f) or math.isinf(f):
-            return default
-        return f
-    except Exception:
-        return default
 
 
 def load_jsonl(path: Path) -> List[Dict[str, Any]]:

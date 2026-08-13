@@ -28,7 +28,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import math
 import os
 import sys
 import email.utils
@@ -37,6 +36,12 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+if __package__:
+    from tools import bota_common as common
+else:  # direct execution or file-based module loading
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools import bota_common as common
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -103,14 +108,7 @@ def server_device_now_utc() -> Tuple[Optional[datetime], str]:
     return values[len(values) // 2], f"server_clock_ok:count={len(values)} spread={spread:.0f}s"
 
 
-def safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        f = float(str(value).strip())
-        if math.isnan(f) or math.isinf(f):
-            return default
-        return f
-    except Exception:
-        return default
+safe_float = common.safe_float
 
 
 def parse_bool_rejected(value: Any) -> bool:
@@ -150,15 +148,7 @@ def next_m15_after(dt: datetime) -> datetime:
     return floor_to_m15(dt) + timedelta(minutes=15)
 
 
-def pip_size(pair: str) -> float:
-    p = pair.upper().strip()
-    if p.endswith("JPY"):
-        return 0.01
-    if p in {"XAUUSD", "XAU/USD"}:
-        return 0.1
-    if p in {"XAGUSD", "XAG/USD"}:
-        return 0.01
-    return 0.0001
+pip_size = common.pip_size
 
 
 def pair_to_instrument(pair: str) -> str:
