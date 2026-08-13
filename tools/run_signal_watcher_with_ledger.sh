@@ -40,19 +40,13 @@ export STATE="${DELIVERY_STATE}"
 
 mkdir -p "${LOGS}" "${EVIDENCE_STATE}" "${DELIVERY_STATE}"
 
-# telegram_send.sh is the only authorized watcher Telegram transport. Runtime
-# code must not mutate deployment-tree permissions on every cycle; deployment
-# is responsible for installing this file executable. Missing/non-executable is
-# therefore a clear fail-closed configuration error.
-# Historical implementation removed during 2026-08-13 hardening:
-# if ! chmod 700 "${TOOLS}/telegram_send.sh"; then
+# telegram_send.sh is the only authorized watcher Telegram transport. Presence
+# is required here; the canonical boundary owns the conditional owner-only
+# executable-mode repair and fails closed if that cannot be established. This
+# ordering prevents a fresh GitHub checkout's 100644 mode from bypassing the
+# canonical sender or producing a false pre-boundary failure.
 if [[ ! -f "${TOOLS}/telegram_send.sh" ]]; then
   printf '[WATCHER_EVIDENCE] canonical telegram sender missing: %s\n' \
-    "${TOOLS}/telegram_send.sh" >&2
-  exit 66
-fi
-if [[ ! -x "${TOOLS}/telegram_send.sh" ]]; then
-  printf '[WATCHER_EVIDENCE] canonical telegram sender not executable: %s\n' \
     "${TOOLS}/telegram_send.sh" >&2
   exit 66
 fi
