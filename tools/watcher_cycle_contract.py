@@ -11,6 +11,7 @@ import csv
 import io
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,10 @@ VALID_SUPABASE = {
 }
 BAD_TELEGRAM = {"definite_failure", "unknown_outcome", "sent_local_reconcile_failed"}
 BAD_SUPABASE = {"failed_missing_service_key", "failed_dedup_check", "failed_publish"}
+SKIP_LINE_RE = re.compile(
+    r"^\[(STALE|PAUSE|NEWS_GATE|CALENDAR_BLOCK) [^\]]+\] "
+    r"([A-Z]{6}) ([A-Z0-9]+) (.*)$"
+)
 
 
 def expected_scope() -> tuple[tuple[str, str], ...]:
@@ -61,7 +66,34 @@ def bounded_segment(path: Path, offset: int) -> bytes:
         return handle.read(length)
 
 
-def parse_rows(alerts: Path, offset: int) -> dict[tuple[str, str], dict[str, str]]:
+def terminal_skip_scopes(log_text: str) -> set[tuple[str, str]]:
+    """Return only scopes with an explicit known terminal skip in this cycle log."""
+    expected = set(expected_scope())
+    skipped: set[tuple[str, str]] = set()
+    for line in log_text.splitlines():
+        match = SKIP_LINE_RE.match(line.strip())
+        if match is None:
+            continue
+        tag, pair, tf, detail = match.groups()
+        scope = (pair, tf.upper())
+        if scope not in expected:
+            raise ValueError("terminal_skip_scope_unexpected")
+        legitimate = (
+            (tag == "STALE" and detail.endswith("-> SKIP"))
+            or (tag == "PAUSE" and detail == "skipped — daily -3R circuit breaker active")
+            or (tag == "NEWS_GATE" and detail.startswith("blocked — "))
+            or (tag == "CALENDAR_BLOCK" and detail == "blocked by news event")
+        )
+        if legitimate:
+            skipped.add(scope)
+    return skipped
+
+
+def parse_rows(
+    alerts: Path,
+    offset: int,
+    allowed_missing: set[tuple[str, str]] | None = None,
+) -> dict[tuple[str, str], dict[str, str]]:
     try:
         raw = bounded_segment(alerts, offset).decode("utf-8", "strict")
     except UnicodeDecodeError as exc:
@@ -96,9 +128,12 @@ def parse_rows(alerts: Path, offset: int) -> dict[tuple[str, str], dict[str, str
         }
         grouped.setdefault((pair, tf), []).append(row)
 
+    allowed = allowed_missing or set()
     out: dict[tuple[str, str], dict[str, str]] = {}
     for scope in expected_scope():
         matches = grouped.get(scope, [])
+        if len(matches) == 0 and scope in allowed:
+            continue
         if len(matches) != 1:
             raise ValueError(f"decision_count_invalid:{scope[0]}:{scope[1]}:{len(matches)}")
         out[scope] = matches[0]
@@ -217,11 +252,15 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        # The log segment must remain exact/bounded. The older ledger may show a
-        # tail for diagnostics, but truncated/rotated evidence cannot authorize a
-        # healthy current cycle.
-        bounded_segment(args.log_path, args.log_offset)
-        rows = parse_rows(args.alerts_path, args.alerts_offset)
+        # This is the exact current-cycle log. Missing decision rows are permitted
+        # only when this same log contains a recognized scope-specific terminal
+        # skip emitted by the watcher before decision persistence.
+        try:
+            log_text = bounded_segment(args.log_path, args.log_offset).decode("utf-8", "strict")
+        except UnicodeDecodeError as exc:
+            raise ValueError("cycle_log_utf8_invalid") from exc
+        skipped = terminal_skip_scopes(log_text)
+        rows = parse_rows(args.alerts_path, args.alerts_offset, skipped)
         telegram = read_jsonl(args.telegram_result_path)
         supabase = read_jsonl(args.supabase_result_path)
         sent_scopes = validate_telegram(rows, telegram)
