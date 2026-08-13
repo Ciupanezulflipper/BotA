@@ -79,6 +79,49 @@ class WatcherCycleContractTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "decision_count_invalid:EURUSD:M15:2"):
                     contract.parse_rows(alerts, offset)
 
+    def test_exact_terminal_skip_allows_one_missing_scope(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, alerts, offset, log, _tg, _sb = self.make_cycle(
+                td, [row("GBPUSD"), row("USDJPY")]
+            )
+            log.write_text(
+                "[STALE 2026-08-13T12:00:00+0000] EURUSD M15 candle_stale age=9999s max=2700s last=x src=oanda -> SKIP\n",
+                encoding="utf-8",
+            )
+            with self.base_env(root):
+                skipped = contract.terminal_skip_scopes(log.read_text(encoding="utf-8"))
+                parsed = contract.parse_rows(alerts, offset, skipped)
+            self.assertNotIn(("EURUSD", "M15"), parsed)
+            self.assertIn(("GBPUSD", "M15"), parsed)
+            self.assertIn(("USDJPY", "M15"), parsed)
+
+    def test_unknown_missing_scope_stays_fail_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, alerts, offset, log, _tg, _sb = self.make_cycle(
+                td, [row("GBPUSD"), row("USDJPY")]
+            )
+            log.write_text(
+                "[DEBUG 2026-08-13T12:00:00+0000] EURUSD M15 parse_error(tsv_empty)\n",
+                encoding="utf-8",
+            )
+            with self.base_env(root):
+                skipped = contract.terminal_skip_scopes(log.read_text(encoding="utf-8"))
+                with self.assertRaisesRegex(ValueError, "decision_count_invalid:EURUSD:M15:0"):
+                    contract.parse_rows(alerts, offset, skipped)
+
+    def test_terminal_skip_for_unexpected_scope_fails(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, _alerts, _offset, log, _tg, _sb = self.make_cycle(
+                td, [row("EURUSD"), row("GBPUSD"), row("USDJPY")]
+            )
+            log.write_text(
+                "[PAUSE 2026-08-13T12:00:00+0000] AUDUSD M15 skipped — daily -3R circuit breaker active\n",
+                encoding="utf-8",
+            )
+            with self.base_env(root):
+                with self.assertRaisesRegex(ValueError, "terminal_skip_scope_unexpected"):
+                    contract.terminal_skip_scopes(log.read_text(encoding="utf-8"))
+
     def test_telegram_definite_failure_is_unhealthy(self):
         with tempfile.TemporaryDirectory() as td:
             root, alerts, offset, _log, tg, _sb = self.make_cycle(
@@ -145,6 +188,30 @@ class WatcherCycleContractTests(unittest.TestCase):
                 parsed = contract.parse_rows(alerts, offset)
                 with self.assertRaisesRegex(ValueError, "supabase_cycle_id_mismatch"):
                     contract.validate_supabase(parsed, contract.read_jsonl(sb), "cycle-1", set())
+
+    def test_supabase_unexpected_scope_fails(self):
+        rows = {("EURUSD", "M15"): {
+            "pair": "EURUSD", "timeframe": "M15", "direction": "BUY", "score": "84.90",
+            "entry": "1.35379", "sl": "1.35222", "tp": "1.35692", "rejected": "false", "tier": "GREEN",
+        }}
+        record = {
+            "cycle_id": "cycle-1", "pair": "GBPUSD", "timeframe": "M15",
+            "direction": "BUY", "entry": "1.20000", "tier": "GREEN", "status": "published",
+        }
+        with self.assertRaisesRegex(ValueError, "supabase_scope_unexpected"):
+            contract.validate_supabase(rows, [record], "cycle-1", set())
+
+    def test_green_cannot_use_skipped_non_green_status(self):
+        rows = {("EURUSD", "M15"): {
+            "pair": "EURUSD", "timeframe": "M15", "direction": "BUY", "score": "84.90",
+            "entry": "1.35379", "sl": "1.35222", "tp": "1.35692", "rejected": "false", "tier": "GREEN",
+        }}
+        record = {
+            "cycle_id": "cycle-1", "pair": "EURUSD", "timeframe": "M15",
+            "direction": "BUY", "entry": "1.35379", "tier": "GREEN", "status": "skipped_non_green",
+        }
+        with self.assertRaisesRegex(ValueError, "supabase_green_status_invalid"):
+            contract.validate_supabase(rows, [record], "cycle-1", {("EURUSD", "M15")})
 
     def test_oversized_segment_fails_closed(self):
         with tempfile.TemporaryDirectory() as td:
