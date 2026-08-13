@@ -299,11 +299,14 @@ class WrapperHardeningTests(unittest.TestCase):
         self.assertNotIn("assert ", text)
 
     def test_watcher_boundary_requires_canonical_sender(self):
-        watcher = (HERE / "tools" / "signal_watcher_pro.sh").read_text(encoding="utf-8")
-        wrapper = (HERE / "tools" / "run_signal_watcher_with_ledger.sh").read_text(encoding="utf-8")
-        self.assertIn('${TOOLS}/telegram_send.sh', watcher)
-        self.assertIn('if ! chmod 700 "${TOOLS}/telegram_send.sh"; then', wrapper)
-        self.assertIn('[[ ! -x "${TOOLS}/telegram_send.sh" ]]', wrapper)
+        boundary = (HERE / "tools" / "signal_watcher_pro.sh").read_text(encoding="utf-8")
+        outer = (HERE / "tools" / "run_signal_watcher_with_ledger.sh").read_text(encoding="utf-8")
+        self.assertIn('[[ ! -f "${TOOLS}/telegram_send.sh" ]]', outer)
+        self.assertIn('SENDER="${TOOLS}/telegram_send.sh"', boundary)
+        self.assertIn('if [[ ! -x "${SENDER}" ]]; then', boundary)
+        self.assertIn('if ! chmod 700 "${SENDER}"; then', boundary)
+        self.assertIn('canonical_sender_chmod_failed=', boundary)
+        self.assertIn('canonical_sender_not_executable=', boundary)
         self.assertTrue((HERE / "tools" / "telegram_send.sh").is_file())
         self.assertTrue((HERE / "tools" / "telegram_delivery.py").is_file())
 
