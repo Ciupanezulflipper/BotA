@@ -67,6 +67,7 @@ jobs:
             tests.test_watcher_cycle_observability \
             tests.test_supabase_cycle_evidence \
             tests.test_predeploy_crash_consistency \
+            tests.test_predeploy_crash_consistency_v2 \
             tests.test_telegram_evidence_fail_closed \
             tests.test_telegram_commit_ordering \
             tests.test_runtime_deployment_barrier \
