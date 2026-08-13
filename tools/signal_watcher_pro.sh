@@ -1,12 +1,13 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Canonical watcher boundary. The historical watcher implementation is preserved
-# byte-for-byte in signal_watcher_core.sh; this wrapper only enforces the
-# crash-consistent cycle context required by the delivery/evidence layer.
+# in signal_watcher_core.sh; this wrapper enforces the crash-consistent
+# cycle/delivery context required by the evidence layer.
 set -euo pipefail
 ROOT="${BOTA_ROOT:-${HOME}/BotA}"
 TOOLS="${ROOT}/tools"
 CORE="${TOOLS}/signal_watcher_core.sh"
 SENDER="${TOOLS}/telegram_send.sh"
+RECOVERY="${TOOLS}/watcher_pending_delivery_recovery.py"
 
 if [[ "${1:-}" = "--help" || "${1:-}" = "-h" ]]; then
   exec bash "${CORE}" "$@"
@@ -34,6 +35,21 @@ if [[ ! -f "${SENDER}" ]]; then
   printf '[WATCHER_BOUNDARY] canonical_sender_missing=%s -> fail_closed\n' "${SENDER}" >&2
   exit 66
 fi
+if [[ ! -f "${RECOVERY}" ]]; then
+  printf '[WATCHER_BOUNDARY] pending_recovery_missing=%s -> fail_closed\n' "${RECOVERY}" >&2
+  exit 66
+fi
+
+# The legacy core uses STATE for cooldown/hash files while the canonical sender
+# uses BOTA_DELIVERY_STATE_DIR. They must be one namespace or dedup/cooldown can
+# diverge and suppress retries incorrectly.
+if [[ -n "${STATE:-}" && "${STATE}" != "${BOTA_DELIVERY_STATE_DIR}" ]]; then
+  printf '[WATCHER_BOUNDARY] state_dir_mismatch state=%s delivery=%s -> fail_closed\n' \
+    "${STATE}" "${BOTA_DELIVERY_STATE_DIR}" >&2
+  exit 64
+fi
+export STATE="${BOTA_DELIVERY_STATE_DIR}"
+
 # GitHub's contents API does not preserve executable mode for newly created
 # files. Repair only this reviewed sender's owner-only execute metadata when
 # needed; never mutate its bytes. If permission repair fails, do not allow the
@@ -49,6 +65,15 @@ if [[ ! -x "${SENDER}" ]]; then
   printf '[WATCHER_BOUNDARY] canonical_sender_not_executable=%s -> fail_closed\n' \
     "${SENDER}" >&2
   exit 66
+fi
+
+# A confirmed Telegram send whose legacy hash is not yet committed represents
+# an incomplete Telegram->Supabase transaction. Clear only its stale cooldown so
+# the next cycle reaches the canonical sender, reconciles without resending the
+# text, retries Supabase, and commits cooldown/hash only after success.
+if ! python3 "${RECOVERY}"; then
+  printf '[WATCHER_BOUNDARY] pending_delivery_recovery_failed -> fail_closed\n' >&2
+  exit 68
 fi
 
 # The legacy watcher labels every nonzero sender result as a "network failure",
