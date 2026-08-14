@@ -25,7 +25,9 @@ def grab(pat, default=None, cast=float):
     m = re.search(pat, text, re.I)
     if not m: return default
     try: return cast(m.group(1))
-    except: return default
+    except (TypeError, ValueError) as e:
+        print(f"[tp_sl_policy] uncastable match {m.group(1)!r} for {pat!r}: {e}", file=sys.stderr)
+        return default
 
 entry = grab(r"\bEntry:\s*([0-9]+\.[0-9]+)")
 sl0   = grab(r"\bSL:\s*([0-9]+\.[0-9]+)")

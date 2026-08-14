@@ -53,7 +53,9 @@ def load_ohlc(pair: str, tf: str) -> dict:
                     s = str(t).replace("Z", "+00:00")
                     dt = datetime.fromisoformat(s)
                     if dt.tzinfo is None: dt = dt.replace(tzinfo=timezone.utc)
-            except: continue
+            except (ValueError, OSError, OverflowError) as e:
+                print(f"[chart] skipping bar with bad time {t!r}: {e}", file=sys.stderr)
+                continue
             times.append(dt)
             opens.append(sf(r.get("open")))
             highs.append(sf(r.get("high")))
@@ -65,7 +67,9 @@ def load_ohlc(pair: str, tf: str) -> dict:
         quotes = result.get("indicators", {}).get("quote", [{}])[0]
         for i, t in enumerate(ts_list):
             try: dt = datetime.fromtimestamp(t, tz=timezone.utc)
-            except: continue
+            except (ValueError, OSError, OverflowError, TypeError) as e:
+                print(f"[chart] skipping bar with bad timestamp {t!r}: {e}", file=sys.stderr)
+                continue
             times.append(dt)
             opens.append(sf(quotes.get("open", [0])[i]))
             highs.append(sf(quotes.get("high", [0])[i]))
@@ -80,7 +84,9 @@ def load_indicators(pair: str, tf: str) -> dict:
     if not path.exists(): return {}
     try:
         with open(path) as f: return json.load(f)
-    except: return {}
+    except (OSError, ValueError) as e:
+        print(f"[chart] indicators unusable at {path}: {e}", file=sys.stderr)
+        return {}
 
 
 def ema(values: list, period: int) -> list:
@@ -240,7 +246,9 @@ def main():
         try:
             ohlc = load_ohlc(pair, "M15")
             entry = sf(ohlc["close"][-1]) if ohlc["close"] else 1.0850
-        except: entry = 1.0850
+        except (OSError, ValueError, KeyError, IndexError, TypeError) as e:
+            print(f"[chart] sanity OHLC load failed for {pair}, using placeholder entry: {e}", file=sys.stderr)
+            entry = 1.0850
         sl, tp = entry*0.999, entry*1.002
         out = str(CHARTS / f"sanity_{pair}.png")
         make_chart(out, pair, "M15", "BUY", entry, sl, tp, 70.0, 70.0)

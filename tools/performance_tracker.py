@@ -6,6 +6,7 @@ Tracks wins, losses, profit/loss, and generates statistics
 
 import json
 import os
+import sys
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
@@ -31,7 +32,11 @@ class PerformanceTracker:
         if PERF_FILE.exists():
             try:
                 return json.loads(PERF_FILE.read_text())
-            except:
+            except (OSError, ValueError) as e:
+                print(
+                    f"[performance] {PERF_FILE} unusable, starting from empty history: {e}",
+                    file=sys.stderr,
+                )
                 return self._init_data()
         return self._init_data()
     

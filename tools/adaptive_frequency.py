@@ -159,7 +159,8 @@ def load_frequency_state():
                 return strategy
         
         return TF_STRATEGY["low"]
-    except:
+    except (OSError, ValueError) as e:
+        print(f"[adaptive] frequency state unusable at {STATE_FILE}, defaulting to low: {e}", file=sys.stderr)
         return TF_STRATEGY["low"]
 
 

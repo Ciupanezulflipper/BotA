@@ -19,13 +19,15 @@ NAME_MAP = {
 def _env_int(k: str, d: int) -> int:
     try:
         return int(os.getenv(k, d))
-    except Exception:
+    except (TypeError, ValueError) as e:
+        print(f"[signal_engine] {k} unusable, using {d}: {e}", file=sys.stderr)
         return d
 
 def _env_float(k: str, d: float) -> float:
     try:
         return float(os.getenv(k, d))
-    except Exception:
+    except (TypeError, ValueError) as e:
+        print(f"[signal_engine] {k} unusable, using {d}: {e}", file=sys.stderr)
         return d
 
 def _env_bool(k: str, d: bool = False) -> bool:
@@ -39,7 +41,8 @@ def _load_provider(name: str):
 def _clamp_age_minutes(v) -> float:
     try:
         a = float(v)
-    except Exception:
+    except (TypeError, ValueError) as e:
+        print(f"[signal_engine] unusable data age {v!r}, treating as stale: {e}", file=sys.stderr)
         a = 1e9
     if a < 0:
         a = 0.0
@@ -66,13 +69,13 @@ def pick_provider(symbol: str, tf: str, limit: int, providers: List[str], min_ba
     for pname in providers:
         try:
             mod = _load_provider(pname)
-        except Exception as e:
+        except ImportError as e:
             failures.append(f"{pname}: import fail {e}")
             continue
         try:
             res = mod.fetch(symbol, tf, limit)
-        except Exception as e:
-            failures.append(f"{pname}: exception {e}")
+        except (AttributeError, OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
+            failures.append(f"{pname}: {type(e).__name__}: {e}")
             continue
         if not isinstance(res, dict):
             failures.append(f"{pname}: bad type {type(res)}")
@@ -108,7 +111,8 @@ def compute_signal(candles: List[dict]) -> Dict[str, Any]:
             continue
         try:
             closes.append(float(close))
-        except Exception:
+        except (TypeError, ValueError) as e:
+            print(f"[signal_engine] skipping candle with bad close {close!r}: {e}", file=sys.stderr)
             continue
 
     # Guarantee schema: always include "price"
@@ -176,18 +180,21 @@ def main():
     pick, err = pick_provider(args.symbol, args.tf, args.limit, providers, min_bars, max_age)
     if not pick:
         print(json.dumps({"ok": False, "error": f"no provider usable: {err}"}))
-        sys.exit(0)
+        sys.exit(1)
 
     candles = pick.get("candles") or []
     if not isinstance(candles, list) or not candles:
         print(json.dumps({"ok": False, "error": "no candle data received"}))
-        sys.exit(0)
+        sys.exit(1)
 
     try:
         sig = compute_signal(candles)
-    except Exception as e:
-        print(json.dumps({"ok": False, "error": f"signal computation failed: {e}"}))
-        sys.exit(0)
+    except (ArithmeticError, IndexError, KeyError, TypeError, ValueError) as e:
+        print(json.dumps({
+            "ok": False,
+            "error": f"signal computation failed: {type(e).__name__}: {e}",
+        }))
+        sys.exit(1)
 
     decision = sig.get("decision", "WAIT")
     score = int(sig.get("score", 0) or 0)

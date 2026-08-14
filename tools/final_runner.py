@@ -29,26 +29,33 @@ import pandas as pd
 # -------------------- Providers --------------------
 try:
     from BotA.tools.providers import get_ohlc
-except Exception as e:
-    print(f"ERROR: Cannot import BotA.tools.providers.get_ohlc -> {e}")
+except ImportError as e:
+    print(f"ERROR: Cannot import BotA.tools.providers.get_ohlc -> {e}", file=sys.stderr)
     sys.exit(1)
 
 # -------------------- Telegram fallbacks --------------------
 def _dummy_send(msg: str) -> bool:
-    print("WARNING: Telegram module not available, message not sent.")
+    print("WARNING: Telegram module not available, message not sent.", file=sys.stderr)
     return False
 
-send_telegram_message = _dummy_send
+TELEGRAM_IMPORT_FAILURES: List[str] = []
+
 try:
-    from BotA.tools.telegramalert import send_telegram_message as send_telegram_message  # type: ignore
-except Exception:
+    from BotA.tools.telegramalert import send_telegram_message  # type: ignore
+except ImportError as e:
+    TELEGRAM_IMPORT_FAILURES.append(f"BotA.tools.telegramalert: {e}")
     try:
-        from BotA.tools.telegramsender import send_telegram_message as send_telegram_message  # type: ignore
-    except Exception:
+        from BotA.tools.telegramsender import send_telegram_message  # type: ignore
+    except ImportError as e:
+        TELEGRAM_IMPORT_FAILURES.append(f"BotA.tools.telegramsender: {e}")
         try:
-            from BotA.tools.telegram_smoke import send_telegram_message as send_telegram_message  # type: ignore
-        except Exception:
-            pass  # keep dummy
+            from BotA.tools.telegram_smoke import send_telegram_message  # type: ignore
+        except ImportError as e:
+            TELEGRAM_IMPORT_FAILURES.append(f"BotA.tools.telegram_smoke: {e}")
+            send_telegram_message = _dummy_send
+
+for _failure in TELEGRAM_IMPORT_FAILURES if send_telegram_message is _dummy_send else ():
+    print(f"WARNING: Telegram sender unavailable -> {_failure}", file=sys.stderr)
 
 
 # ============================================================================
@@ -122,6 +129,12 @@ def _ensure_numeric(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
     return df
 
 def fetch_and_compute(symbol: str, tf: str, min_bars: int = 30) -> Dict[str, Any]:
+    """Fetch bars and compute indicators.
+
+    Data/provider faults are reported as an ``error`` entry (callers treat a
+    timeframe as unusable) and are also written to stderr so a failing
+    timeframe is never invisible in cron/service logs.
+    """
     try:
         rows, source = get_ohlc(symbol, tf, bars=200)
         if not rows or len(rows) < min_bars:
@@ -161,8 +174,10 @@ def fetch_and_compute(symbol: str, tf: str, min_bars: int = 30) -> Dict[str, Any
             "error": None
         }
         return out
-    except Exception as e:
-        return {"error": str(e)}
+    except (RuntimeError, OSError, ValueError, KeyError, TypeError, IndexError) as e:
+        detail = f"{type(e).__name__}: {e}"
+        print(f"[final_runner] {symbol} {tf} unusable -> {detail}", file=sys.stderr)
+        return {"error": detail}
 
 def compute_vote(d: Dict[str, Any]) -> int:
     if d.get("error"):
@@ -231,12 +246,17 @@ def check_news_window(news_file: str, window_minutes: int) -> bool:
                     continue
                 try:
                     ts = datetime.fromisoformat(s.replace("Z", "+00:00"))
-                except Exception:
+                except ValueError:
+                    print(
+                        f"[final_runner] skipping unparseable news timestamp {s!r} in {news_file}",
+                        file=sys.stderr,
+                    )
                     continue
                 delta_min = abs((ts - now).total_seconds()) / 60.0
                 if delta_min <= float(window_minutes):
                     return True
-    except Exception:
+    except OSError as e:
+        print(f"[final_runner] news file {news_file} unreadable: {e}", file=sys.stderr)
         return False
     return False
 
