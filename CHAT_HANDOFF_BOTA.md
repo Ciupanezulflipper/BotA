@@ -1,91 +1,29 @@
 # BotA Chat Handoff
 
-Last updated: **2026-08-09 UTC**
+Last updated: **2026-08-13**
 
 Read this first in any new AI session before proposing BotA changes.
 
 ## Current grounded answer
 
 ```text
-CHECKPOINT_BASE_MAIN=810441fd772e1330db7de670c3eae95606981742
-PHONE_RUNTIME_SOURCE_BASELINE=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
-PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
-PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
-PHONE_WORKTREE_DIRTY=YES
-
-PACKAGE_1_CLOCK_SESSION=PASS
-PACKAGE_2_CONTROL_PLANE_RECOVERY=PASS
-PACKAGE_2_FINALIZER_DEPLOY=PASS
-PR87_PR88_PHONE_DEPLOY=PASS
-RUNTIME_DEPENDENCY_CONTRACT=PASS
-CURRENT_CONTROL_PLANE=HEALTHY
-CURRENT_REQUIRED_SERVICES_OWNED=7/7
-CURRENT_REQUIRED_SERVICES_RUNNING=7/7
-CURRENT_ORPHANED_RUNSV=0
-CURRENT_DUPLICATE_SERVICE_ROWS=0
-WATCHDOG_SINGLETON=PASS
-BOOT_PERSISTENCE=PASS
-PROFITLAB_PRESERVED=PASS
-NATURAL_SHADOW_CYCLE=PASS
-PRE_MARKET_PRODUCTION_INTEGRITY=PASS
-PR89_WATCHDOG_GUARDIAN=BLOCKED_REVIEW_AND_CI
-OPEN_MARKET_THREE_PAIR_PROOF=PENDING
-MONDAY_READY=NO
+PRE_AUDIT_RUNTIME_CODE_MAIN=3e69920582d3d310be751e7b451f1afb67e1e5bb
+POST_PLACEHOLDER_REVERT_MAIN=3cf3dd1470e4dff7ec4e4d4d7b32f8eb57e9c022
+CONTENT_DIFF_3e699205_TO_3cf3dd14=ZERO_FILES
+PR108_HEAD=bf30cfcba7af7d22a963d799809b8c7b1f47809d
+PR108_STATE=OPEN
+PR108_DRAFT=YES
+PR108_CI_GREEN=NO
+PR108_REVIEWED=NO
+PR108_DEPLOYABLE=NO
+PR102_DO_NOT_DEPLOY=YES
+CURRENT_VALID_PR108_PHONE_PACKAGE=NO
+PHONE_ACTION=NO
 ```
 
-The phone checkout HEAD is not production identity. Runtime acceptance is based on immutable reviewed source blobs, deployed file parity, runtime state, and bounded postconditions.
+The two commits after `3e699205...` are a documentation placeholder create+revert pair. Direct compare reports zero changed files. They do not represent runtime or strategy drift.
 
-## Latest verified phone evidence
-
-The PR #87 / #88 deployment and subsequent natural runtime proof passed:
-
-```text
-requests==2.34.2
-DEPENDENCY_CONTRACT=PASS
-PIP_BASELINE_REGRESSION=NO
-CONTROL_PLANE=7_OF_7_HEALTHY
-WATCHDOG_SINGLETON=PASS
-PROFITLAB_PRESERVED=PASS
-SERVICE_RESTARTED=NO
-SHADOW_MANUALLY_EXECUTED=NO
-STRATEGY_CHANGED=NO
-```
-
-A later natural runit-owned shadow cycle completed successfully:
-
-```text
-SHADOW_STATUS=completed
-SHADOW_DETAILS=exit_code=0
-LATEST_SHADOW_HEARTBEAT=OK | 0 active signals
-LATEST_SHADOW_DONE_LOG=Shadow Manager done | 0 active signals
-NATURAL_SHADOW_ACCEPTANCE=PASS
-```
-
-The corrected pre-market integrity gate then passed all nine checks with zero failures:
-
-```text
-CHECK_CONTROL_PLANE=PASS
-CHECK_WATCHDOG_OWNERSHIP=PASS
-CHECK_BOOT_PERSISTENCE=PASS
-CHECK_CRON_OWNERSHIP=PASS
-CHECK_RUNTIME_PARITY=PASS
-CHECK_PRODUCTION_CONFIG=PASS
-CHECK_PROFITLAB=PASS
-CHECK_PROGRESS=PASS
-CHECK_TRUSTED_CLOCK=PASS
-FAILURE_COUNT=0
-PRE_MARKET_INTEGRITY_ACCEPTANCE=PASS
-```
-
-Therefore:
-
-```text
-INFRASTRUCTURE_AND_CLOSED_MARKET_READINESS=PASS
-```
-
-Do **not** translate that into `MONDAY_READY=YES` yet.
-
-## Current production scope
+## Stable production scope
 
 ```text
 PAIRS=EURUSD GBPUSD USDJPY
@@ -93,77 +31,83 @@ TIMEFRAMES=M15
 POLICY_B_ENABLED=1
 POLICY_B_SCORE_MIN=70
 POLICY_B_ADX_MAX=30
-NEWS_ON=0
 TELEGRAM_ENABLED=1
 DRY_RUN_MODE=0
 ```
 
-Do not lower thresholds or change signal eligibility to manufacture activity.
+Do not lower thresholds, expand scope, force signal count, or manufacture Telegram activity to satisfy readiness checks.
 
-## Current blocker — PR #89
+## Historical phone evidence
 
-PR #89 `fix: persist native watchdog with fail-closed cron guardian` is still open. Current head at this checkpoint:
+Previously proven phone state included one native manager, 7/7 owned and running required services, zero orphaned `runsv`, zero duplicate service rows, watchdog singleton, boot persistence, cron ownership, trusted-clock PASS, natural shadow-cycle PASS, and corrected pre-market integrity PASS.
+
+Those are retained historical facts. The 2026-08-13 audit was repository-only and did not reverify current phone topology.
+
+## Current blocker — PR #108 corrective closure
+
+PR #89 is merged and is not the current blocker.
+
+PR #108 is explicitly draft/not deployable. At exact head `bf30cfcba7af7d22a963d799809b8c7b1f47809d` the audit proved:
 
 ```text
-PR89_HEAD=4f73a999634bc83c52defb0d31bfb72291ac83b9
-PR89_MERGEABLE=true
-GITHUB_ACTIONS_SECURITY_SCAN=PASS
-GITHUB_ACTIONS_NATIVE_WATCHDOG_GUARDIAN=PASS
 DEEPSOURCE_PYTHON=FAIL
-UNRESOLVED_REVIEW_THREADS=10
-DISTINCT_REMEDIATION_ITEMS=9
+DEEPSOURCE_SHELL=FAIL
+SONARCLOUD_QUALITY_GATE=FAIL
+SONARCLOUD_SECURITY_RATING_NEW_CODE=D
+CODERABBIT_CURRENT_HEAD_CONTENT_REVIEW=NOT_COMPLETED_DRAFT
 ```
 
-Two unresolved threads report the same unused-variable cleanup; there are therefore 10 open threads but 9 distinct fixes.
+Additional proven findings:
 
-The unresolved findings are concentrated in the five PR files:
+- Security Scan can be false-green because ShellCheck and Bandit use `|| true`.
+- Gitleaks still globally allowlists sensitive path classes including `.env*`, `config/tele.env`, backups, `_snapshots/`, and `archive/`.
+- Historical credential rotation/revocation is unproven.
+- `tools/provider_limits.py` still has shallow-copy nested-default aliasing on the cold-start path.
+- `tests.test_runtime_deployment_barrier` is explicitly executed by PR #108 provider/pipeline CI.
+- PR #102 is superseded for the current corrective runtime and must not be deployed.
 
-- `.github/workflows/native-watchdog-guardian.yml`
-- `tools/native_watchdog_guard.py`
-- `tools/native_watchdog_cron_config.py`
-- `tests/test_native_watchdog_guard.py`
-- `tests/test_native_watchdog_cron_config.py`
+Detailed evidence: `audits/READ_ONLY_ADVERSARIAL_AUDIT_2026-08-13.md`.
 
-Required fixes:
-
-1. active advisory `FLOCK` ownership rather than open-descriptor inference;
-2. shell-safe quoted cron paths plus CR/LF rejection;
-3. controlled guardian failure even if event logging itself fails;
-4. AST-based no-termination validator with negative fixtures;
-5. full rendered-crontab validation with exactly one managed active `--ensure` line;
-6. finite timeout validation (`NaN` / infinities rejected);
-7. `persist-credentials: false` on checkout;
-8. unused-variable cleanup;
-9. staticmethod cleanup in cron tests.
-
-No phone deployment of PR #89 is allowed until exact-head review/static/CI gates pass.
-
-## Remaining Monday gates
+## Readiness ladder
 
 ```text
-PR89_REVIEW_CLEAN=PENDING
-PR89_EXACT_HEAD_STATIC_AND_CI=PASS_REQUIRED
-PR89_MERGE=PENDING
-GUARDIAN_PHONE_DEPLOY=PENDING
-GUARDIAN_WATCHDOG_ONLY_FAULT_INJECTION=PENDING
-OPEN_MARKET_EURUSD_M15=PENDING
-OPEN_MARKET_GBPUSD_M15=PENDING
-OPEN_MARKET_USDJPY_M15=PENDING
-MONDAY_READY=NO
+CODE_COMPLETE=NO
+CI_GREEN=NO
+REVIEWED=NO
+DEPLOYABLE=NO
+DEPLOYED=NO_FOR_PR108
+RUNTIME_VERIFIED=NO_FOR_PR108
+LIVE_SIGNAL_PATH_VERIFIED=NO_FOR_PR108
+EVIDENCE_CAPTURE_VERIFIED_IN_PRODUCTION=NO_FOR_PR108
 ```
 
-Three legitimate current-cycle rejects are acceptable for the market-open proof. A Telegram signal is not required.
+## Required next package
+
+Repository-only PR #108 corrective closure:
+
+1. make intended security gates blocking and truthful;
+2. remove inappropriate Gitleaks sensitive-path blind spots;
+3. resolve SonarCloud Security Rating D and quality-gate failure;
+4. resolve DeepSource Python/Shell failures;
+5. integrate only narrow independently validated fixes from PRs #104-#106;
+6. keep PR #107 broad refactor outside the reliability freeze;
+7. resolve current evidence/delivery/review findings;
+8. independently prove no strategy/config drift;
+9. obtain an actual current-head review after the PR is reviewable;
+10. rerun exact-head required gates and require PASS.
+
+Only after final merge may a new rollback-capable Android deployment package be built from the final corrective runtime SHA.
 
 ## Canonical current sources
 
 1. `CONTINUITY_CURRENT.md`
 2. `AI_START_HERE.md`
-3. `audits/PRE_MARKET_READINESS_CHECKPOINT_2026-08-09.md`
+3. `audits/READ_ONLY_ADVERSARIAL_AUDIT_2026-08-13.md`
 4. GitHub issue #9
-5. this file
-
-`ERRORS.md`, `RESOLVED.md`, and older dated audits preserve historical failure and repair context; current gate truth must follow the sources above when historical wording differs.
+5. PR #108 exact-head CI/review state
+6. verified phone evidence when making current runtime claims
+7. this file
 
 ## Exactly one next action
 
-Fix every still-valid unresolved PR #89 review finding on branch `fix/watchdog-persistence-guardian-20260809`, run focused validation, and stop for human confirmation before commit/push. Do not mutate the phone/runtime while fixing the GitHub PR.
+Close the PR #108 repository gate. Do not mutate the phone/runtime while that gate is open.
