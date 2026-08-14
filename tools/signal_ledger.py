@@ -226,7 +226,7 @@ def generate_report(ledger_path: pathlib.Path) -> str:
         if rr_wins:
             lines += [f"  Avg R:R on winners: {statistics.mean(rr_wins):.2f}"]
     lines += ["", "── PER PAIR ───────────────────────────────────────────────"]
-    for pair in sorted(set(r["pair"] for r in rows)):
+    for pair in sorted({r["pair"] for r in rows}):
         pair_closed = [r for r in closed if r["pair"] == pair]
         pair_wins   = [r for r in pair_closed if r["outcome"] == "WIN"]
         wr = len(pair_wins) / len(pair_closed) * 100 if pair_closed else 0
