@@ -4,7 +4,7 @@ The outer tools/watcher_gated_cycle.sh already consults the market gate,
 which in turn probes multiple HTTPS Date headers to derive a trusted server
 epoch. That epoch is exported to child processes via BOTA_SERVER_EPOCH.
 
-Previously tools/signal_watcher_pro.sh::scan_once unconditionally re-probed
+Previously the production watcher core's scan_once unconditionally re-probed
 the server clock, turning a successful gate into a fail-closed skip whenever
 the second probe was rate-limited, network-flapped, or DNS-throttled. These
 tests pin the new contract:
@@ -15,7 +15,7 @@ tests pin the new contract:
     fails closed (BOTA_SERVER_EPOCH="0" and no pair processing).
 
 The behavior tests drive scan_once by extracting the function body from
-signal_watcher_pro.sh and stub out compute_server_clock_epoch /
+signal_watcher_core.sh and stub out compute_server_clock_epoch /
 process_pair_tf so we can observe how the trusted epoch was resolved without
 doing any live network work or side-effects.
 """
@@ -29,7 +29,7 @@ import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPT = REPO / "tools" / "signal_watcher_pro.sh"
+SCRIPT = REPO / "tools" / "signal_watcher_core.sh"
 
 
 HARNESS_TEMPLATE = r"""
