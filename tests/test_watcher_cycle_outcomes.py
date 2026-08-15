@@ -386,7 +386,23 @@ class DecisionBeforeDedupInvariantTests(unittest.TestCase):
     """
 
     def test_signal_watcher_persists_decision_before_dedup_check(self) -> None:
-        source = (TOOLS / "signal_watcher_pro.sh").read_text(encoding="utf-8")
+        boundary = (TOOLS / "signal_watcher_pro.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            'CORE="${TOOLS}/signal_watcher_core.sh"',
+            boundary,
+            "signal_watcher_pro.sh must select the reviewed watcher core",
+        )
+        self.assertIn(
+            'exec bash "${CORE}" "$@"',
+            boundary,
+            "signal_watcher_pro.sh must delegate execution to its core",
+        )
+
+        source = (TOOLS / "signal_watcher_core.sh").read_text(
+            encoding="utf-8"
+        )
         # Locate the alerts.csv append and the dedup gate.
         append_marker = "append_alert_csv"
         dedup_markers = (
@@ -398,7 +414,7 @@ class DecisionBeforeDedupInvariantTests(unittest.TestCase):
         self.assertIn(
             append_marker,
             source,
-            "signal_watcher_pro.sh must call append_alert_csv to persist decisions",
+            "signal_watcher_core.sh must call append_alert_csv to persist decisions",
         )
         dedup_index = -1
         for marker in dedup_markers:
@@ -408,7 +424,7 @@ class DecisionBeforeDedupInvariantTests(unittest.TestCase):
         self.assertGreater(
             dedup_index,
             -1,
-            "signal_watcher_pro.sh must contain a Telegram delivery dedup gate",
+            "signal_watcher_core.sh must contain a Telegram delivery dedup gate",
         )
         # The last occurrence of append_alert_csv must appear before the
         # dedup marker; otherwise a decision could be dedup-suppressed

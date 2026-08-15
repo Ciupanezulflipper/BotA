@@ -31,6 +31,27 @@ REPO = Path(__file__).resolve().parents[1]
 TOOLS = REPO / "tools"
 
 
+def install_runner_gate_fixtures(root: Path) -> None:
+    """Install successful dependencies outside these outer-cycle contracts."""
+    tools = root / "tools"
+    for name in (
+        "watcher_evidence_retention.py",
+        "watcher_persistence_gate.py",
+        "watcher_cycle_contract.py",
+    ):
+        (tools / name).write_text(
+            "raise SystemExit(0)\n",
+            encoding="utf-8",
+        )
+
+    sender = tools / "telegram_send.sh"
+    sender.write_text(
+        "#!/data/data/com.termux/files/usr/bin/bash\nexit 0\n",
+        encoding="utf-8",
+    )
+    sender.chmod(0o755)
+
+
 class WatcherCycleProcessBoundaryTests(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -51,6 +72,8 @@ class WatcherCycleProcessBoundaryTests(unittest.TestCase):
                 TOOLS / name,
                 self.root / "tools" / name,
             )
+
+        install_runner_gate_fixtures(self.root)
 
         signal_watcher = self.root / "tools" / "signal_watcher_pro.sh"
 
@@ -87,6 +110,18 @@ class WatcherCycleProcessBoundaryTests(unittest.TestCase):
                 )
                 parser.add_argument(
                     "--log-offset",
+                    required=True,
+                )
+                parser.add_argument(
+                    "--log-path",
+                    required=True,
+                )
+                parser.add_argument(
+                    "--telegram-result-path",
+                    required=True,
+                )
+                parser.add_argument(
+                    "--supabase-result-path",
                     required=True,
                 )
                 parser.add_argument(
@@ -352,6 +387,8 @@ class WatcherCycleInnerFailureDominatesTests(unittest.TestCase):
                 self.root / "tools" / name,
             )
 
+        install_runner_gate_fixtures(self.root)
+
     def tearDown(self) -> None:
         self.tmp.cleanup()
         super().tearDown()
@@ -379,12 +416,12 @@ class WatcherCycleInnerFailureDominatesTests(unittest.TestCase):
 
                 if [[ ! -s "${{alerts}}" ]]; then
                   printf '%s\\n' \\
-                    'ts,pair,tf,score,filter_rejected,filter_reasons,provider' \\
+                    'timestamp,pair,tf,direction,score,confidence,entry,sl,tp,provider,rejected,filter_str,reasons' \\
                     >"${{alerts}}"
                 fi
 
                 for pair in EURUSD GBPUSD USDJPY; do
-                  printf 'now,%s,M15,55,true,adx_regime_block,oanda\\n' \\
+                  printf 'now,%s,M15,HOLD,55,40,0,0,0,oanda,true,adx_regime_block,test_fixture\\n' \\
                     "${{pair}}" \\
                     >>"${{alerts}}"
 
@@ -421,12 +458,12 @@ class WatcherCycleInnerFailureDominatesTests(unittest.TestCase):
 
                 if [[ ! -s "${alerts}" ]]; then
                   printf '%s\\n' \\
-                    'ts,pair,tf,score,filter_rejected,filter_reasons,provider' \\
+                    'timestamp,pair,tf,direction,score,confidence,entry,sl,tp,provider,rejected,filter_str,reasons' \\
                     >"${alerts}"
                 fi
 
                 for pair in EURUSD GBPUSD USDJPY; do
-                  printf 'now,%s,M15,55,true,adx_regime_block,oanda\\n' \\
+                  printf 'now,%s,M15,HOLD,55,40,0,0,0,oanda,true,adx_regime_block,test_fixture\\n' \\
                     "${pair}" \\
                     >>"${alerts}"
 
