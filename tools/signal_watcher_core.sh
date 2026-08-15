@@ -799,7 +799,7 @@ format_telegram_signal_message() {
   local tier="$1" emoji="$2" pair="$3" tf="$4" direction="$5"
   local score="$6" confidence="$7" entry="$8" sl="$9" tp="${10}"
 
-  if [[ "${tier}" == "GREEN" ]]; then
+  if [[ "${tier}" = "GREEN" ]]; then
     printf '%s BotA %s %s %s\n━━━━━━━━━━━━━━\n📊 Score: %s | Confidence: %s\n💰 Entry: %s\n🛑 SL: %s\n🎯 TP: %s' \
       "${emoji}" "${pair}" "${tf}" "${direction}" \
       "${score}" "${confidence}" "${entry}" "${sl}" "${tp}"
