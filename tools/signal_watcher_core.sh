@@ -795,6 +795,21 @@ except Exception as e:
   fi
 }
 
+format_telegram_signal_message() {
+  local tier="$1" emoji="$2" pair="$3" tf="$4" direction="$5"
+  local score="$6" confidence="$7" entry="$8" sl="$9" tp="${10}"
+
+  if [[ "${tier}" = "GREEN" ]]; then
+    printf '%s BotA %s %s %s\n━━━━━━━━━━━━━━\n📊 Score: %s | Confidence: %s\n💰 Entry: %s\n🛑 SL: %s\n🎯 TP: %s' \
+      "${emoji}" "${pair}" "${tf}" "${direction}" \
+      "${score}" "${confidence}" "${entry}" "${sl}" "${tp}"
+  else
+    printf '%s BotA %s %s %s\n━━━━━━━━━━━━━━\n📊 Score: %s | Confidence: %s\n👀 Watchlist — confirmation pending' \
+      "${emoji}" "${pair}" "${tf}" "${direction}" \
+      "${score}" "${confidence}"
+  fi
+}
+
 process_pair_tf() {
   local pair="$1"
   local tf="$2"
@@ -979,11 +994,9 @@ except Exception:
   fi
 
   local msg
-  if [[ "${tier}" = "GREEN" ]]; then
-    msg="${emoji} BotA ${pair_o} ${tf_o} ${direction}\n📊 Score: ${score} | ${filter_str}\n💰 Entry: ${entry}\n🛑 SL: ${sl}  🎯 TP: ${tp}"
-  else
-    msg="${emoji} BotA ${pair_o} ${tf_o} ${direction} | score=${score} conf=${conf} | ${filter_str}"
-  fi
+  msg="$(format_telegram_signal_message \
+    "${tier}" "${emoji}" "${pair_o}" "${tf_o}" "${direction}" \
+    "${score}" "${conf}" "${entry}" "${sl}" "${tp}")"
 
   if send_telegram_message "${msg}"; then
     # Send chart PNG for GREEN signals only
