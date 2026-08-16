@@ -5,44 +5,64 @@
 # that exact cycle identity. When called standalone, it creates its own cycle
 # identity and retains the legacy component-start/failure bookkeeping.
 #
-# Failed/interrupted cycles retain their bounded evidence files in state/ for
+# Failed/interrupted cycles retain bounded evidence files in state/ for
 # post-crash forensics. Successful cycles remove them explicitly at the end.
 
 set -euo pipefail
 
 ROOT="${BOTA_ROOT:-${HOME}/BotA}"
+DEPLOY_MARKER="${ROOT}/state/runtime_deploy_in_progress.json"
+# Generation barrier must precede every filesystem/runtime/network side effect.
+# -e is false for a dangling symlink, so -L is required as well. Never follow
+# or read the marker: its mere presence means the runtime generation is
+# ambiguous and trading work must fail closed until deployment/rollback clears it.
+if [[ -e "${DEPLOY_MARKER}" || -L "${DEPLOY_MARKER}" ]]; then
+  printf '[WATCHER_EVIDENCE] deployment_generation_barrier_active marker=%s\n' \
+    "${DEPLOY_MARKER}" >&2
+  exit 78
+fi
+
 TOOLS="${ROOT}/tools"
 LOGS="${ROOT}/logs"
 EVIDENCE_STATE="${ROOT}/state"
-WATCHER_STATE_RAW="${STATE:-}"
-if [[ -z "${WATCHER_STATE_RAW}" ]]; then
-  DELIVERY_STATE="${ROOT}/logs/state"
-elif [[ "${WATCHER_STATE_RAW}" = /* ]]; then
+WATCHER_STATE_RAW="${BOTA_WATCHER_STATE:-logs/state}"
+if [[ "${WATCHER_STATE_RAW}" = /* ]]; then
   DELIVERY_STATE="${WATCHER_STATE_RAW}"
 else
   DELIVERY_STATE="${ROOT}/${WATCHER_STATE_RAW}"
 fi
+# One explicit watcher-state contract. Do not inherit an ambient generic STATE
+# value from cron/runit/interactive shells. The signal watcher receives this
+# exact path too, so its legacy cooldown/hash files and the canonical sender
+# always operate on the same state directory.
+export BOTA_WATCHER_STATE="${DELIVERY_STATE}"
+export STATE="${DELIVERY_STATE}"
 
 mkdir -p "${LOGS}" "${EVIDENCE_STATE}" "${DELIVERY_STATE}"
 
-# The watcher selects tools/telegram_send.sh only when it is executable. GitHub
-# contents/API deployments may not preserve executable mode, so make that
-# requirement explicit at the runtime boundary and fail closed if it cannot be
-# established. The sender itself remains version-controlled and testable.
+# telegram_send.sh is the only authorized watcher Telegram transport. Presence
+# is required here; the canonical boundary owns the conditional owner-only
+# executable-mode repair and fails closed if that cannot be established. This
+# ordering prevents a fresh GitHub checkout's 100644 mode from bypassing the
+# canonical sender or producing a false pre-boundary failure.
 if [[ ! -f "${TOOLS}/telegram_send.sh" ]]; then
   printf '[WATCHER_EVIDENCE] canonical telegram sender missing: %s\n' \
     "${TOOLS}/telegram_send.sh" >&2
   exit 66
 fi
-if ! chmod 700 "${TOOLS}/telegram_send.sh"; then
-  printf '[WATCHER_EVIDENCE] canonical telegram sender chmod failed: %s\n' \
-    "${TOOLS}/telegram_send.sh" >&2
-  exit 66
-fi
-if [[ ! -x "${TOOLS}/telegram_send.sh" ]]; then
-  printf '[WATCHER_EVIDENCE] canonical telegram sender not executable after chmod: %s\n' \
-    "${TOOLS}/telegram_send.sh" >&2
-  exit 66
+
+# Failed/interrupted cycles intentionally retain their exact evidence, but that
+# retention must be bounded. Prune only BotA-owned old regular files after a
+# grace window; if a hard cap still cannot be restored, fail before creating a
+# new cycle or crossing any external-resource boundary.
+if ! python3 "${TOOLS}/watcher_evidence_retention.py" \
+  --state-dir "${EVIDENCE_STATE}" \
+  --keep-per-kind 200 \
+  --hard-cap-per-kind 400 \
+  --grace-seconds 21600 \
+  2>>"${LOGS}/error.log"; then
+  printf '[WATCHER_EVIDENCE] retention_gate_failed -> fail_closed\n' >&2
+  exit 67
 fi
 
 alerts="${LOGS}/alerts.csv"
@@ -54,8 +74,8 @@ export BOTA_DELIVERY_STATE_DIR="${DELIVERY_STATE}"
 cycle_log="$(mktemp "${EVIDENCE_STATE}/watcher_cycle.XXXXXX.log")"
 telegram_result_log="$(mktemp "${EVIDENCE_STATE}/watcher_telegram.XXXXXX.jsonl")"
 supabase_result_log="$(mktemp "${EVIDENCE_STATE}/watcher_supabase.XXXXXX.jsonl")"
-# Explicitly model the success-only cleanup transition. There is intentionally
-# no EXIT trap: interruption/failure must leave bounded evidence on disk.
+# Explicit success-cleanup state. Failed/interrupted runs leave this at 0 and
+# preserve evidence; only the fully successful path below sets it to 1.
 delete_evidence_on_exit=0
 
 server_epoch="${BOTA_SERVER_EPOCH:-0}"
@@ -97,6 +117,27 @@ if [[ -n "${persistence_output}" ]]; then
   printf '%s\n' "${persistence_output}" >>"${cycle_log}"
 fi
 
+# Independent strict contract in front of the legacy reconciler. This prevents
+# truncated/rotated evidence, duplicate current-cycle decisions, malformed
+# structured results, unhealthy Telegram outcomes, or missing/failed GREEN
+# Supabase evidence from ever being painted green by log inference.
+# Capture diagnostics separately so the contract never reads and writes the
+# same evidence file concurrently.
+contract_rc=0
+contract_output="$({
+  python3 "${TOOLS}/watcher_cycle_contract.py" \
+    --cycle-id "${cycle_id}" \
+    --alerts-path "${alerts}" \
+    --alerts-offset "${alerts_offset}" \
+    --log-path "${cycle_log}" \
+    --log-offset 0 \
+    --telegram-result-path "${telegram_result_log}" \
+    --supabase-result-path "${supabase_result_log}"
+} 2>&1)" || contract_rc=$?
+if [[ -n "${contract_output}" ]]; then
+  printf '%s\n' "${contract_output}" >>"${cycle_log}"
+fi
+
 reconcile_rc=0
 python3 "${TOOLS}/watcher_cycle_ledger.py" \
   --cycle-id "${cycle_id}" \
@@ -117,6 +158,8 @@ if (( watcher_rc != 0 )); then
   final_rc="${watcher_rc}"
 elif (( persistence_rc != 0 )); then
   final_rc="${persistence_rc}"
+elif (( contract_rc != 0 )); then
+  final_rc="${contract_rc}"
 elif (( reconcile_rc != 0 )); then
   final_rc="${reconcile_rc}"
 fi
@@ -127,13 +170,14 @@ if (( final_rc != 0 )); then
   if (( owns_cycle == 1 )); then
     python3 "${TOOLS}/pipeline_ledger.py" component \
       --component watcher --status failed --cycle-id "${cycle_id}" \
-      --details "watcher_exit_code=${watcher_rc};persistence_exit_code=${persistence_rc};reconcile_exit_code=${reconcile_rc}" \
+      --details "watcher_exit_code=${watcher_rc};persistence_exit_code=${persistence_rc};contract_exit_code=${contract_rc};reconcile_exit_code=${reconcile_rc}" \
       --server-epoch "${BOTA_SERVER_EPOCH:-${server_epoch}}" \
       >/dev/null 2>>"${LOGS}/error.log" || true
   fi
   exit "${final_rc}"
 fi
 
+# Success-only cleanup. Interrupted/failed cycles deliberately retain evidence.
 delete_evidence_on_exit=1
 if (( delete_evidence_on_exit == 1 )); then
   rm -f "${cycle_log}" "${telegram_result_log}" "${supabase_result_log}"
