@@ -357,14 +357,22 @@ signal_delivery_is_new() {
 # Update the delivery hash only after a successful real Telegram send.
 signal_delivery_mark() {
   local pair="$1" tf="$2" direction="$3" score="$4" entry="$5" sl="$6" tp="$7"
-  local sig_hash hash_file
+  local sig_hash hash_file temp_file
 
   sig_hash="$(
     signal_delivery_hash       "${pair}" "${tf}" "${direction}" "${score}"       "${entry}" "${sl}" "${tp}"
   )" || return 1
 
   hash_file="${STATE}/last_hash_${pair}_${tf}.txt"
-  printf '%s' "${sig_hash}" > "${hash_file}" 2>/dev/null
+  temp_file="$(mktemp "${hash_file}.tmp.XXXXXX" 2>/dev/null)" || return 1
+  if ! printf '%s' "${sig_hash}" > "${temp_file}" 2>/dev/null; then
+    rm -f -- "${temp_file}"
+    return 1
+  fi
+  if ! mv -- "${temp_file}" "${hash_file}" 2>/dev/null; then
+    rm -f -- "${temp_file}"
+    return 1
+  fi
 }
 
 complete_delivery_transaction() {

@@ -94,6 +94,76 @@ class WatcherHashFallbackTests(unittest.TestCase):
         self.assertEqual(completed.stdout, "")
 
 
+class WatcherAtomicDeliveryMarkTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.state = self.root / "state"
+        self.bin_dir = self.root / "bin"
+        self.state.mkdir()
+        self.bin_dir.mkdir()
+        self.hash_file = self.state / "last_hash_EURUSD_M15.txt"
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def install_command(self, name: str, body: str) -> None:
+        command = self.bin_dir / name
+        command.write_text(f"#!/bin/bash\n{body}\n", encoding="utf-8")
+        command.chmod(0o755)
+
+    def run_mark(self) -> subprocess.CompletedProcess[str]:
+        script = core_functions("signal_delivery_hash", "complete_delivery_transaction") + "\n" + (
+            "signal_delivery_mark EURUSD M15 BUY 84.90 1.35379 1.35222 1.35692\n"
+        )
+        env = os.environ.copy()
+        env["STATE"] = str(self.state)
+        env["PATH"] = f"{self.bin_dir}:{env['PATH']}"
+        return subprocess.run(
+            ["/bin/bash", "-c", script], env=env, capture_output=True, text=True, check=False
+        )
+
+    def temporary_files(self) -> list[Path]:
+        return list(self.state.glob("last_hash_EURUSD_M15.txt.tmp.*"))
+
+    def test_successful_mark_writes_complete_expected_hash(self) -> None:
+        completed = self.run_mark()
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(self.hash_file.read_text(encoding="utf-8"), legacy_hash(IDENTITY))
+
+    def test_write_failure_preserves_committed_hash_and_returns_nonzero(self) -> None:
+        self.hash_file.write_text("previous-valid-hash", encoding="utf-8")
+        self.install_command(
+            "mktemp",
+            'temp="$(/usr/bin/mktemp "$1")" || exit 1\nchmod 400 "${temp}"\nprintf \'%s\\n\' "${temp}"',
+        )
+
+        completed = self.run_mark()
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertEqual(self.hash_file.read_text(encoding="utf-8"), "previous-valid-hash")
+        self.assertEqual(self.temporary_files(), [])
+
+    def test_rename_failure_preserves_committed_hash_and_returns_nonzero(self) -> None:
+        self.hash_file.write_text("previous-valid-hash", encoding="utf-8")
+        self.install_command("mv", "exit 1")
+
+        completed = self.run_mark()
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertEqual(self.hash_file.read_text(encoding="utf-8"), "previous-valid-hash")
+        self.assertEqual(self.temporary_files(), [])
+
+    def test_successful_replacement_leaves_no_temporary_residue(self) -> None:
+        self.hash_file.write_text("previous-valid-hash", encoding="utf-8")
+
+        completed = self.run_mark()
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(self.hash_file.read_text(encoding="utf-8"), legacy_hash(IDENTITY))
+        self.assertEqual(self.temporary_files(), [])
+
+
 class GreenDeliveryPrerequisiteTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
