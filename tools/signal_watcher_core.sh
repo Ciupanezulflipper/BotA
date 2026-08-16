@@ -311,14 +311,24 @@ signal_delivery_hash() {
   local pair="$1" tf="$2" direction="$3" score="$4" entry="$5" sl="$6" tp="$7"
   local hash_input="${pair}|${tf}|${direction}|${score}|${entry}|${sl}|${tp}"
 
-  local hash_result
-  hash_result="$(printf '%s' "${hash_input}" | md5sum 2>/dev/null | cut -d' ' -f1)" || hash_result=""
-  if [[ -n "${hash_result}" ]]; then
-    printf '%s' "${hash_result}"
-  else
-    hash_result="$(printf '%s' "${hash_input}" | cksum | cut -d' ' -f1)" || hash_result=""
-    printf '%s' "${hash_result}"
+  local hash_result=""
+  if command -v md5sum >/dev/null 2>&1; then
+    hash_result="$(printf '%s' "${hash_input}" | md5sum 2>/dev/null)" || hash_result=""
+    hash_result="${hash_result%% *}"
+    if [[ "${hash_result}" =~ ^[0-9a-f]{32}$ ]]; then
+      printf '%s' "${hash_result}"
+      return 0
+    fi
   fi
+
+  hash_result="$(printf '%s' "${hash_input}" | python3 -c '
+import hashlib, sys
+print(hashlib.md5(sys.stdin.buffer.read(), usedforsecurity=False).hexdigest())
+' 2>/dev/null)" || hash_result=""
+  if [[ ! "${hash_result}" =~ ^[0-9a-f]{32}$ ]]; then
+    return 1
+  fi
+  printf '%s' "${hash_result}"
 }
 
 # Returns 0 if not previously delivered, 1 if duplicate.
@@ -329,7 +339,7 @@ signal_delivery_is_new() {
 
   sig_hash="$(
     signal_delivery_hash       "${pair}" "${tf}" "${direction}" "${score}"       "${entry}" "${sl}" "${tp}"
-  )"
+  )" || return 2
 
   hash_file="${STATE}/last_hash_${pair}_${tf}.txt"
 
@@ -351,10 +361,37 @@ signal_delivery_mark() {
 
   sig_hash="$(
     signal_delivery_hash       "${pair}" "${tf}" "${direction}" "${score}"       "${entry}" "${sl}" "${tp}"
-  )"
+  )" || return 1
 
   hash_file="${STATE}/last_hash_${pair}_${tf}.txt"
-  printf '%s' "${sig_hash}" > "${hash_file}" 2>/dev/null || true
+  printf '%s' "${sig_hash}" > "${hash_file}" 2>/dev/null
+}
+
+complete_delivery_transaction() {
+  local tier="$1" pair="$2" tf="$3" direction="$4" score="$5" score_int="$6"
+  local entry="$7" sl="$8" tp="$9"
+
+  if [[ "${tier}" = "GREEN" ]]; then
+    if [[ ! -f "${TOOLS}/supabase_publish.py" ]]; then
+      log "SUPABASE" "publisher missing for ${pair} ${tf} -> fail_closed"
+      return 1
+    fi
+    if ! python3 "${TOOLS}/supabase_publish.py" \
+      --pair "${pair}" --direction "${direction}" \
+      --entry "${entry}" --sl "${sl}" --tp "${tp}" \
+      --score "${score_int}" --tf "${tf}" --tier "${tier}" \
+      2>>"${ERRLOG}"; then
+      log "SUPABASE" "publish failed for ${pair} ${tf}"
+      return 1
+    fi
+  else
+    log "SUPABASE" "skip non-GREEN tier=${tier} for ${pair} ${tf}"
+  fi
+
+  if ! signal_delivery_mark "${pair}" "${tf}" "${direction}" "${score}" "${entry}" "${sl}" "${tp}"; then
+    log "DEDUP" "delivery hash commit failed for ${pair} ${tf} -> fail_closed"
+    return 1
+  fi
 }
 
 raw_cache_path() {
@@ -988,9 +1025,14 @@ except Exception:
 
   # Delivery dedup is evaluated only after all decision and Telegram gates.
   # It is read-only here; the hash is marked only after a successful real send.
-  if ! signal_delivery_is_new "${pair_o}" "${tf_o}" "${direction}" "${score}" "${entry}" "${sl}" "${tp}"; then
+  local delivery_new_rc=0
+  signal_delivery_is_new "${pair_o}" "${tf_o}" "${direction}" "${score}" "${entry}" "${sl}" "${tp}" || delivery_new_rc=$?
+  if (( delivery_new_rc == 1 )); then
     log "DEDUP" "${pair_o} ${tf_o} already delivered -> skip Telegram/Supabase"
     return 0
+  elif (( delivery_new_rc != 0 )); then
+    log "DEDUP" "${pair_o} ${tf_o} delivery hash unavailable -> fail_closed"
+    return 1
   fi
 
   local msg
@@ -1026,25 +1068,11 @@ except Exception:
     if ! is_true "${DRY_RUN_MODE:-false}" && ! is_false "${TELEGRAM_ENABLED:-1}"; then
       telegram_cooldown_mark "${pair_o}" "${tf_o}"
     fi
-    # Publish to ProfitLab dashboard — GREEN tier only, before delivery dedup mark.
-    local supabase_ok="true"
-    if [[ "${tier}" = "GREEN" ]]; then
-      if [[ -f "${TOOLS}/supabase_publish.py" ]] && [[ -n "${SUPABASE_SERVICE_KEY:-}" ]]; then
-        if ! python3 "${TOOLS}/supabase_publish.py" \
-          --pair "${pair_o}" --direction "${direction}" \
-          --entry "${entry}" --sl "${sl}" --tp "${tp}" \
-          --score "${score_int}" --tf "${tf_o}" --tier "${tier}" \
-          2>>"${ERRLOG}"; then
-          log "SUPABASE" "publish failed for ${pair_o} ${tf_o}"
-          supabase_ok="false"
-        fi
-      fi
-    else
-      log "SUPABASE" "skip non-GREEN tier=${tier} for ${pair_o} ${tf_o}"
-    fi
-    # Mark delivery only after both Telegram and Supabase complete successfully.
-    if [[ "${supabase_ok}" == "true" ]]; then
-      signal_delivery_mark "${pair_o}" "${tf_o}" "${direction}" "${score}" "${entry}" "${sl}" "${tp}"
+    # Commit only after the complete Telegram->Supabase transaction succeeds.
+    if ! complete_delivery_transaction \
+      "${tier}" "${pair_o}" "${tf_o}" "${direction}" "${score}" "${score_int}" \
+      "${entry}" "${sl}" "${tp}"; then
+      return 1
     fi
   else
     log "TELEGRAM" "send failed, cooldown NOT set for ${pair_o} ${tf_o} (will retry next cycle)"

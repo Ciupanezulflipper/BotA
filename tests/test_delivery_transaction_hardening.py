@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import subprocess
+import shutil
 import sys
 import tempfile
 import unittest
@@ -45,6 +46,123 @@ IDENTITY = {
 def legacy_hash(identity: dict[str, str]) -> str:
     raw = "|".join(identity[k] for k in ("pair", "timeframe", "direction", "score", "entry", "sl", "tp"))
     return hashlib.md5(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
+
+
+def core_functions(start: str, end: str) -> str:
+    source = (TOOLS / "signal_watcher_core.sh").read_text(encoding="utf-8")
+    return source[source.index(f"{start}() {{"):source.index(f"{end}() {{")]
+
+
+class WatcherHashFallbackTests(unittest.TestCase):
+    def run_hash(self, *, md5sum_body: str | None, python_body: str | None = None) -> subprocess.CompletedProcess[str]:
+        with tempfile.TemporaryDirectory() as td:
+            bin_dir = Path(td)
+            if md5sum_body is not None:
+                md5sum = bin_dir / "md5sum"
+                md5sum.write_text(f"#!/bin/sh\n{md5sum_body}\n", encoding="utf-8")
+                md5sum.chmod(0o755)
+            python3 = bin_dir / "python3"
+            if python_body is None:
+                python3.symlink_to(sys.executable)
+            else:
+                python3.write_text(f"#!/bin/sh\n{python_body}\n", encoding="utf-8")
+                python3.chmod(0o755)
+            script = core_functions("signal_delivery_hash", "raw_cache_path") + "\n" + (
+                'signal_delivery_hash EURUSD M15 BUY 84.90 1.35379 1.35222 1.35692\n'
+            )
+            env = os.environ.copy()
+            env["PATH"] = str(bin_dir)
+            return subprocess.run(
+                ["/bin/bash", "-c", script], env=env, capture_output=True, text=True, check=False
+            )
+
+    def test_python_fallback_matches_recovery_md5_when_md5sum_unavailable(self) -> None:
+        completed = self.run_hash(md5sum_body=None)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, legacy_hash(IDENTITY))
+        self.assertRegex(completed.stdout, r"^[0-9a-f]{32}$")
+        self.assertEqual(completed.stdout, completed.stdout.lower())
+
+    def test_python_fallback_is_used_when_md5sum_fails(self) -> None:
+        completed = self.run_hash(md5sum_body="exit 1")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, legacy_hash(IDENTITY))
+
+    def test_hash_generation_failure_fails_closed(self) -> None:
+        completed = self.run_hash(md5sum_body="exit 1", python_body="exit 1")
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "")
+
+
+class GreenDeliveryPrerequisiteTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.tools = self.root / "tools"
+        self.state = self.root / "state"
+        self.tools.mkdir()
+        self.state.mkdir()
+        self.result_log = self.state / "watcher_supabase.test.jsonl"
+        self.result_log.touch(mode=0o600)
+        self.marker = self.root / "delivery-marked"
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def run_transaction(
+        self, *, install_publisher: bool, key: str = "", publisher_source: str | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        publisher = self.tools / "supabase_publish.py"
+        if publisher_source is not None:
+            publisher.write_text(publisher_source, encoding="utf-8")
+        elif install_publisher:
+            shutil.copy2(TOOLS / "supabase_publish.py", publisher)
+        elif publisher.exists():
+            publisher.unlink()
+        script = core_functions("complete_delivery_transaction", "raw_cache_path") + "\n" + (
+            'log() { printf "%s\\n" "$*" >&2; }\n'
+            'signal_delivery_mark() { : > "${MARKER}"; }\n'
+            'complete_delivery_transaction GREEN EURUSD M15 BUY 84.90 84 1.35379 1.35222 1.35692\n'
+        )
+        env = os.environ.copy()
+        env.update({
+            "TOOLS": str(self.tools), "ERRLOG": str(self.root / "error.log"),
+            "MARKER": str(self.marker), "BOTA_ROOT": str(self.root),
+            "BOTA_CYCLE_ID": "cycle-1", "BOTA_SUPABASE_RESULT_LOG": str(self.result_log),
+            "SUPABASE_SERVICE_KEY": key,
+        })
+        return subprocess.run(
+            ["bash", "-c", script], env=env, capture_output=True, text=True, check=False
+        )
+
+    def test_missing_service_key_fails_without_committing_delivery(self) -> None:
+        completed = self.run_transaction(install_publisher=True)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertFalse(self.marker.exists())
+        evidence = json.loads(self.result_log.read_text(encoding="utf-8"))
+        self.assertEqual(evidence["status"], "failed_missing_service_key")
+        self.assertEqual(evidence["cycle_id"], "cycle-1")
+
+    def test_missing_publisher_fails_without_committing_delivery(self) -> None:
+        completed = self.run_transaction(install_publisher=False, key="configured")
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertFalse(self.marker.exists())
+        self.assertIn("publisher missing", completed.stderr)
+        self.assertEqual(self.result_log.read_text(encoding="utf-8"), "")
+
+        retry = self.run_transaction(
+            install_publisher=True, key="configured", publisher_source="raise SystemExit(0)\n"
+        )
+        self.assertEqual(retry.returncode, 0, retry.stderr)
+        self.assertTrue(self.marker.exists())
+
+    def test_publisher_failure_fails_without_committing_delivery(self) -> None:
+        completed = self.run_transaction(
+            install_publisher=True, key="configured", publisher_source="raise SystemExit(1)\n"
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertFalse(self.marker.exists())
+        self.assertIn("publish failed", completed.stderr)
 
 
 class PendingDeliveryRecoveryTests(unittest.TestCase):
