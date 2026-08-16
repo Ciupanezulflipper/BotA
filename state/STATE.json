@@ -1,154 +1,146 @@
 {
   "_meta": {
-    "schema_version": "2.1",
+    "schema_version": "2.2",
     "project": "BotA",
     "repository": "Ciupanezulflipper/BotA",
     "record_type": "repository_handoff_snapshot_not_live_runtime_state",
-    "recorded_date_utc": "2026-08-09",
-    "authoritative_detail": "audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md"
+    "recorded_date": "2026-08-13",
+    "authoritative_detail": "audits/READ_ONLY_ADVERSARIAL_AUDIT_2026-08-13.md"
   },
-  "readiness": {
-    "code_ready": true,
-    "merged_to_main": true,
-    "deployed_to_phone": true,
-    "runtime_parity_verified": true,
-    "package_1_clock_session": "PASS",
-    "package_2_live_control_plane_repair": "PASS",
-    "package_2_persistent_hardening": "PENDING",
-    "pre_market_production_integrity": "PENDING",
-    "open_market_three_pair_live_proof": false,
-    "monday_ready": false,
-    "classification": "PACKAGE1_PASS_PACKAGE2_HARDENING_PENDING"
-  },
-  "release": {
-    "deployed_github_sha": "8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0",
-    "phone_local_branch": "deploy/repaired-core-20260802T215531Z",
-    "phone_local_head": "4339543551aae2e2bcbf727aefe96e3eb103b665",
-    "phone_worktree_is_deployment_identity": false,
-    "active_wrapper_path": "/data/data/com.termux/files/home/.config/bota-sv/bota-watcher/run",
-    "active_wrapper_blob": "25b240dc6913bf9cde82ab79a62ea6cddd73bc8e",
-    "active_wrapper_mode": "755",
-    "package_1_backup_path": "/data/data/com.termux/files/home/BotA-backups/clock-pkg1-20260809T022316Z"
+  "repository": {
+    "pre_audit_runtime_code_main": "3e69920582d3d310be751e7b451f1afb67e1e5bb",
+    "post_placeholder_revert_main": "3cf3dd1470e4dff7ec4e4d4d7b32f8eb57e9c022",
+    "compare_files_changed": 0,
+    "runtime_or_strategy_content_drift_from_pre_audit_main": false,
+    "documentation_placeholder_incident": "create_then_revert_on_protected_main"
   },
   "production_scope": {
-    "pairs": ["EURUSD", "GBPUSD", "USDJPY"],
-    "timeframes": ["M15"],
+    "pairs": [
+      "EURUSD",
+      "GBPUSD",
+      "USDJPY"
+    ],
+    "timeframes": [
+      "M15"
+    ],
     "policy_b_enabled": true,
     "policy_b_score_min": 70,
     "policy_b_adx_max": 30,
-    "news_on": false,
     "telegram_enabled": true,
     "dry_run_mode": false,
-    "package_1_changed_strategy_thresholds": false
+    "strategy_threshold_changes_authorized": false
   },
-  "package_1_clock_session": {
-    "pr": 84,
-    "deployed_release": "8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0",
-    "runtime_files": [
-      "tools/calendar_guard.py",
-      "tools/market_open.sh",
-      "tools/news_filter_real.py",
-      "tools/scoring_engine.sh",
-      "tools/trusted_time.py"
-    ],
-    "trusted_epoch_reused_per_cycle": true,
-    "session_score_uses_android_wall_clock": false,
-    "calendar_uses_trusted_epoch": true,
-    "news_calendar_date_uses_trusted_epoch_when_active": true,
-    "calendar_before_after_sign_bug_fixed": true,
-    "clock_boottime_for_elapsed_health_preserved": true,
-    "randomized_fault_cases": 2000,
-    "live_proof": {
-      "cycle_id": "b32a66a6-1a91-4b61-b759-c32851cbae6b:144452448476926",
-      "status": "skipped_market_closed",
-      "terminal_outcome": "MARKET_CLOSED",
-      "market_reason": "MARKET_CLOSED_SUNDAY",
-      "time_source": "server_epoch",
-      "server_epoch": 1786245830,
-      "timestamp_utc": "2026-08-09T03:23:50+00:00"
-    }
-  },
-  "control_plane": {
+  "historical_phone_proof": {
+    "classification": "historical_verified_evidence_not_current_phone_state",
+    "package_1_clock_session": "PASS",
+    "package_2_control_plane_recovery": "PASS",
+    "package_2_finalizer_deploy": "PASS",
+    "pr87_pr88_phone_deploy": "PASS",
+    "runtime_dependency_contract": "PASS",
+    "natural_shadow_cycle": "PASS",
+    "pre_market_production_integrity": "PASS",
     "manager_count": 1,
-    "manager_pid_at_latest_proof": 4398,
-    "required_services": 7,
-    "owned_services": 7,
-    "running_services": 7,
+    "required_services_owned": "7/7",
+    "required_services_running": "7/7",
     "orphaned_runsv": 0,
     "duplicate_service_rows": 0,
-    "live_crond_count": 1,
-    "active_watcher_cron_count": 0,
-    "active_profitlab_cron_count": 1,
-    "services": [
-      "bota-updater",
-      "bota-watcher",
-      "bota-closer",
-      "bota-shadow",
-      "bota-heartbeat",
-      "bota-supervisor",
-      "crond"
-    ]
+    "watchdog_singleton": "PASS",
+    "boot_persistence": "PASS",
+    "cron_ownership": "PASS",
+    "trusted_clock": "PASS",
+    "current_phone_state_reverified_on_2026_08_13": false
   },
-  "package_2_findings": {
-    "stale_live_singleton_child": {
-      "service": "crond",
-      "stale_pid": 4107,
-      "stale_ppid": 1,
-      "current_runsv_pid": 24583,
-      "failure": "stale live crond held crond.pid while current manager-owned runsv retried a replacement",
-      "repair": "identity-check stale daemon, quiesce failed restart loop, terminate stale daemon, let current runsv start one replacement",
-      "replacement_pid": 17994,
-      "replacement_parent_runsv": 24583,
-      "live_repair_status": "PASS"
+  "current_corrective_pr": {
+    "number": 108,
+    "head": "bf30cfcba7af7d22a963d799809b8c7b1f47809d",
+    "state": "OPEN",
+    "draft": true,
+    "code_complete": false,
+    "ci_green": false,
+    "reviewed": false,
+    "deployable": false,
+    "deployed": false,
+    "runtime_verified": false,
+    "live_signal_path_verified": false,
+    "evidence_capture_verified_in_production": false,
+    "phone_action": false
+  },
+  "exact_head_gates": {
+    "deepsource_python": "FAIL",
+    "deepsource_shell": "FAIL",
+    "sonarcloud_quality_gate": "FAIL",
+    "sonarcloud_security_rating_new_code": "D",
+    "coderabbit_current_head_content_review": "NOT_COMPLETED_DRAFT"
+  },
+  "proven_open_findings": {
+    "security_workflow_false_green": {
+      "status": "OPEN",
+      "evidence": [
+        "ShellCheck command uses || true",
+        "Bandit command uses || true"
+      ]
     },
-    "pid1_orphaned_supervisors": {
-      "observed_running": 7,
-      "observed_owned_before_reconciliation": 1,
-      "observed_orphaned": 6,
-      "final_owned": 7,
-      "final_orphaned": 0,
-      "live_repair_status": "PASS"
+    "gitleaks_sensitive_path_blind_spot": {
+      "status": "OPEN",
+      "allowlisted_path_classes": [
+        ".env",
+        ".env.*",
+        ".env.runtime",
+        ".env.profitlab",
+        ".env.botA*",
+        "config/tele.env",
+        "config.backup-*",
+        "_snapshots/",
+        "archive/"
+      ],
+      "historical_credentials_rotated_or_revoked": "UNPROVEN"
     },
-    "persistent_watchdog": {
-      "source_parity_with_github": true,
-      "one_shot_healthy_topology_run": "PASS",
-      "boot_launcher_guard_state": "DISABLED",
-      "persistent_recovery_proven": false,
-      "stale_live_singleton_recovery_automated": false,
-      "status": "PENDING"
+    "provider_limits_shallow_copy_aliasing": {
+      "status": "OPEN",
+      "current_behavior": "DEFAULTS.copy() plus nested mutation can alias module defaults",
+      "candidate_source": "PR #104 narrow fix only"
     }
   },
-  "profitlab": {
-    "cursor_offset": 897734,
-    "alerts_csv_size": 897734,
-    "pending_bytes": 0,
-    "bootstrap_required": false,
-    "bootstrap_forbidden_on_current_state": true
+  "proven_positive_controls": {
+    "generation_barrier_test_executed_by_required_ci": true,
+    "test": "tests.test_runtime_deployment_barrier"
   },
-  "residual_observations": [
-    "Android wall clock remains an operational warning, but Package #1 removed it from the audited market/session/calendar paths.",
-    "Wall-clock cron scheduling risk remains separate from strategy/event-time correctness.",
-    "Compact pipeline state may retain a legacy top-level schema label while newer events use schema 1.1.",
-    "Fresh updater/shadow/data evidence is still required for the genuine open-market proof."
-  ],
-  "package_2_required_tests": [
-    "manager loss",
-    "PID-1 orphaned runsv handoff",
-    "down-service recovery",
-    "dead stale pidfile",
-    "live stale singleton child/resource owner",
-    "duplicate supervisor",
-    "multiple manager attempt",
-    "watchdog duplicate attempt",
-    "release/blob/config drift",
-    "missing or stale updater/shadow/data readiness"
-  ],
+  "deployment": {
+    "pr102_state": "OPEN_DRAFT",
+    "pr102_current_authority": "SUPERSEDED_FOR_PR108_CORRECTIVE_PATH",
+    "pr102_do_not_deploy": true,
+    "valid_pr108_phone_package_exists": false,
+    "new_transactional_package_required_after_final_corrective_merge": true
+  },
+  "resolved_corrections": {
+    "pr89_current_blocker": false,
+    "pr89_merged": true,
+    "stale_handoff_pr89_classification_corrected": true,
+    "documentation_placeholder_reverted": true,
+    "placeholder_revert_compare_files_changed": 0
+  },
   "freeze": {
+    "mutate_phone": false,
+    "deploy_pr102": false,
+    "deploy_pr108": false,
     "bootstrap_profitlab": false,
     "lower_thresholds_to_force_signals": false,
     "force_telegram_test_signal": false,
-    "declare_package_2_complete_from_manual_repair": false,
-    "declare_monday_ready_from_closed_market_proof": false
+    "merge_pr104_wholesale": false,
+    "merge_pr107_broad_refactor_into_reliability_freeze": false,
+    "declare_ready_from_repository_only": false
   },
-  "next_action": "Complete Package #2 Pre-Market Production Integrity in reviewed code/tests: persistent single-instance watchdog/boot recovery, explicit stale-live-singleton-child reconciliation, orphan handoff, duplicate detection, immutable release/config/data-path readiness, and isolated fault injection. Only then mutate the phone. After Package #2 passes, require one natural MARKET_OPEN cycle proving EURUSD:M15, GBPUSD:M15, and USDJPY:M15 in the same current cycle with fresh updater/shadow/data evidence, trusted time, unique ownership, and one authoritative terminal watcher outcome."
+  "required_next_repository_gate": [
+    "make intended security gates truthful and blocking",
+    "remove inappropriate Gitleaks sensitive-path blind spots",
+    "resolve SonarCloud Security Rating D and quality-gate failure",
+    "resolve DeepSource Python and Shell failures",
+    "integrate only narrow independently validated fixes from PRs #104-#106",
+    "keep PR #107 broad utility refactor outside the reliability freeze unless a proven defect requires a minimal extraction",
+    "resolve current evidence, delivery, analyzer, and review findings",
+    "independently prove STRATEGY_CONFIG_DRIFT=NONE",
+    "obtain actual current-head review",
+    "rerun exact-head required gates and require PASS"
+  ],
+  "next_action": "Complete PR #108 repository-only corrective closure. Do not mutate Android/Termux. After the final corrective runtime commit is merged and reviewed, build a new rollback-capable transactional phone deployment package pinned to that final merge SHA."
 }

@@ -1,133 +1,149 @@
 # BotA AI Start Here
 
-Last updated: **2026-08-09 UTC**
+Last updated: **2026-08-13**
 
 Read this before proposing BotA commands, code, service, strategy, Telegram, provider, Supabase, replay, deployment, or Android/Termux changes.
 
-## Current authoritative truth
+## Evidence hierarchy
+
+1. current BotA GitHub repository state;
+2. current PR/CI/review state;
+3. verified phone/runtime evidence when runtime claims are required;
+4. dated audits and continuity files for navigation/history only.
+
+Never let a dated handoff silently override newer live GitHub or phone evidence.
+
+## Current repository truth
 
 ```text
-CHECKPOINT_BASE_MAIN=163eae4ee7a0d651ed0ad3516dba7eaef4c09cbe
-PHONE_RUNTIME_SOURCE_BASELINE=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
-PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
-PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
-PHONE_WORKTREE_DIRTY=YES
+PRE_AUDIT_RUNTIME_CODE_MAIN=3e69920582d3d310be751e7b451f1afb67e1e5bb
+POST_PLACEHOLDER_REVERT_MAIN=3cf3dd1470e4dff7ec4e4d4d7b32f8eb57e9c022
+CONTENT_DIFF_3e699205_TO_3cf3dd14=ZERO_FILES
+PR108_HEAD=bf30cfcba7af7d22a963d799809b8c7b1f47809d
+PR108_STATE=OPEN
+PR108_DRAFT=YES
+PR108_DEPLOYABLE=NO
+PHONE_ACTION=NO
+```
 
+The two commits after `3e699205...` are a documentation placeholder create+revert pair. Protected `main` rejected a force reset; direct compare proves zero changed files between `3e699205...` and `3cf3dd14...`.
+
+## Stable production scope
+
+```text
 PAIRS=EURUSD GBPUSD USDJPY
 TIMEFRAMES=M15
-TELEGRAM_ENABLED=1
-DRY_RUN_MODE=0
-
-PACKAGE_1_CLOCK_SESSION=PASS
-PACKAGE_2_CONTROL_PLANE_RECOVERY=PASS
-PACKAGE_2_FINALIZER_DEPLOY=PASS
-PR87_PR88_PHONE_DEPLOY=PASS
-REQUESTS_RUNTIME_DEPENDENCY=PASS_2.34.2
-NATURAL_SHADOW_CYCLE=PASS
-PRE_MARKET_PRODUCTION_INTEGRITY=PASS
-PRE_MARKET_FAILURE_COUNT=0
-
-CURRENT_MANAGER_COUNT=1
-CURRENT_REQUIRED_SERVICES_OWNED=7/7
-CURRENT_REQUIRED_SERVICES_RUNNING=7/7
-CURRENT_ORPHANED_RUNSV=0
-CURRENT_DUPLICATE_SERVICE_ROWS=0
-WATCHDOG_SINGLETON=PASS
-WATCHDOG_LOCK_SINGLETON=PASS
-BOOT_PERSISTENCE=PASS
-CRON_OWNERSHIP=PASS
-RUNTIME_PARITY=PASS
-PRODUCTION_CONFIG=PASS
-PROFITLAB=PASS
-TRUSTED_CLOCK=PASS
-
-PR89_GUARDIAN=NOT_DEPLOYABLE_YET
-OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
-MONDAY_READY=NO
-```
-
-`CHECKPOINT_BASE_MAIN` is the GitHub main commit used as the documentation base. The documentation merge containing this file advances `main`; GitHub issue #9 carries the live current-main SHA. The reviewed phone runtime source baseline remains `5cbfbf11...`.
-
-## What has been proven on the phone
-
-The control plane recovered from the observed orphan-supervisor failure class and currently satisfies the production ownership contract: one native manager, seven manager-owned required supervisors, seven running services, zero orphans, and zero duplicate service rows.
-
-The native watchdog finalizer passed and left one watchdog process holding the watchdog lock. The managed Termux:Boot watchdog block is installed.
-
-PR #87 and PR #88 production fixes were deployed from exact runtime source commit `5cbfbf11fd98d9a40b1d5ea28995f584ec9da080`. `requests==2.34.2` is installed and importable under Python 3.14.6. The installation did not change any previously installed Python distribution and did not worsen the pre-existing Termux `pip check` baseline.
-
-A subsequent **natural** runit shadow cycle completed with `exit_code=0`, wrote an `OK` heartbeat, and logged `Shadow Manager done | 0 active signals`. It was not manually executed and no service was restarted for that proof.
-
-The corrected pre-market integrity gate then returned all nine checks PASS with zero failure reasons:
-
-```text
-control_plane=PASS
-watchdog_ownership=PASS
-boot_persistence=PASS
-cron_ownership=PASS
-runtime_parity=PASS
-production_config=PASS
-profitlab=PASS
-progress=PASS
-trusted_clock=PASS
-```
-
-## Current strategy/runtime freeze
-
-```text
 POLICY_B_ENABLED=1
 POLICY_B_SCORE_MIN=70
 POLICY_B_ADX_MAX=30
-NEWS_ON=0
+TELEGRAM_ENABLED=1
+DRY_RUN_MODE=0
 DO_NOT_LOWER_THRESHOLDS=YES
 DO_NOT_FORCE_SIGNAL_COUNT=YES
-DO_NOT_FORCE_TELEGRAM_TEST_SIGNAL=YES
-DO_NOT_BOOTSTRAP_PROFITLAB=YES
 ```
 
-No readiness fix may manufacture signals by changing strategy thresholds, pair/timeframe scope, Telegram eligibility, or ProfitLab semantics.
+No reliability/readiness fix may manufacture activity by weakening strategy gates.
 
-## Current blocker: PR #89
+## Historical phone baseline that was previously proven
 
-PR #89 (`fix/watchdog-persistence-guardian-20260809`) is the only infrastructure blocker before the open-market proof. Do **not** deploy it in its current state.
-
-Current head:
+The last recorded closed-market production evidence proved:
 
 ```text
-4f73a999634bc83c52defb0d31bfb72291ac83b9
+SINGLE_NATIVE_MANAGER=PASS
+REQUIRED_SERVICES_OWNED=7/7
+REQUIRED_SERVICES_RUNNING=7/7
+ORPHANED_RUNSV=0
+DUPLICATE_SERVICE_ROWS=0
+WATCHDOG_SINGLETON=PASS
+BOOT_PERSISTENCE=PASS
+CRON_OWNERSHIP=PASS
+TRUSTED_CLOCK=PASS
+PRE_MARKET_INTEGRITY=PASS
 ```
 
-Current review/CI state includes `DeepSource: Python = failure` and unresolved still-valid findings. Required fixes include:
+These are historical verified phone facts, not a claim about the phone's current state on 2026-08-13. Reverify the phone before making a current runtime-health claim.
 
-- use active advisory `FLOCK` ownership rather than open-descriptor ownership;
-- safely quote all rendered cron paths and reject CR/LF injection;
-- keep controlled `WATCHDOG_GUARD=FAIL` / RC 4 behavior even if event logging fails;
-- replace incomplete grep termination checks with AST-based validation and negative fixtures;
-- validate the complete rendered cron and exactly one active `--ensure` guardian line;
-- reject NaN/infinite timeout values;
-- resolve remaining lint/test-quality findings.
+## Current blocker: PR #108 corrective closure
 
-PR #89 must be review-clean and exact-head CI-clean before phone deployment or watchdog fault injection.
+PR #89 is merged and is no longer the current blocker.
+
+PR #108 (`fix: reconcile Devin findings and enforce predeploy runtime evidence contracts`) is the active corrective integration package. It is intentionally draft and explicitly not deployable.
+
+Current readiness ladder:
+
+```text
+CODE_COMPLETE=NO
+CI_GREEN=NO
+REVIEWED=NO
+DEPLOYABLE=NO
+DEPLOYED=NO_FOR_PR108
+RUNTIME_VERIFIED=NO_FOR_PR108
+LIVE_SIGNAL_PATH_VERIFIED=NO_FOR_PR108
+EVIDENCE_CAPTURE_VERIFIED_IN_PRODUCTION=NO_FOR_PR108
+```
+
+## Proven blockers from the 2026-08-13 adversarial audit
+
+1. PR #108 exact-head CI is not green: DeepSource Python FAIL, DeepSource Shell FAIL, SonarCloud quality gate FAIL, Security Rating on New Code D.
+2. CodeRabbit has not completed a current-head content review because PR #108 is draft.
+3. `.github/workflows/security.yml` allows ShellCheck and Bandit commands to succeed despite findings via `|| true`; therefore a green Security Scan does not prove those tools clean.
+4. `.gitleaks.toml` still globally allowlists sensitive path classes including `.env*`, `config/tele.env`, backup directories, `_snapshots/`, and `archive/`; therefore green Gitleaks does not prove those classes secret-free.
+5. `tools/provider_limits.py` still contains a shallow-copy aliasing defect (`DEFAULTS.copy()` plus nested mutation) on the cold-start path.
+6. PR #102 is superseded for the current corrective path and must not be deployed.
+7. The generation-barrier regression is now explicitly invoked by the PR #108 provider/pipeline CI workflow; this is a proven positive control.
+
+Canonical audit: `audits/READ_ONLY_ADVERSARIAL_AUDIT_2026-08-13.md`.
+
+## Security truth
+
+Do not claim historical credentials are valid, invalid, rotated, or revoked without independent evidence.
+
+Current status:
+
+```text
+HISTORICAL_CREDENTIAL_ROTATION=UNPROVEN
+GITLEAKS_SENSITIVE_PATH_BLIND_SPOT=OPEN
+SECURITY_WORKFLOW_FALSE_GREEN_CLASS=OPEN
+SONARCLOUD_SECURITY_GATE=FAIL
+```
+
+## Deployment truth
+
+PR #102 is open/draft but pinned to the older PR #101/#103 generation. PR #108 requires a new transactional deployment package only after the final corrective runtime commit is merged and reviewed.
+
+```text
+PR102_DO_NOT_DEPLOY=YES
+CURRENT_VALID_PR108_PHONE_PACKAGE=NO
+PHONE_ACTION=NO
+```
 
 ## Mandatory operating model
 
 ```text
-GitHub connector / GitHub PR -> code, review, CI, commits, documentation
-Phone / Termux              -> runtime-only evidence and approved deployment
+GitHub PR -> code/review/CI/documentation
+Phone      -> runtime evidence + explicitly approved deployment only
 ```
 
-Never equate code-ready, merged, deployed, runtime-verified, pre-market-ready, and Monday-ready.
+Track separately:
 
-Never push directly to `main`. Work on the existing PR branch, run tests, inspect review threads, commit intentionally, push the PR branch, then re-check exact-head CI/review.
+```text
+code-ready -> reviewed -> merged -> deployable -> deployed -> runtime-verified -> live-path-verified
+```
+
+Never collapse those stages into one "ready" claim.
 
 ## Read first
 
-1. `CONTINUITY_CURRENT.md` — current operational status and next action.
-2. `audits/PRE_MARKET_READINESS_CHECKPOINT_2026-08-09.md` — latest phone proof and remaining blocker.
-3. GitHub issue #9 — authoritative readiness tracker and live current-main SHA.
-4. PR #89 — guardian implementation and unresolved review findings.
-5. `ERRORS.md` and `audits/ERROR_LOG.md` — historical failure/prevention record.
+1. `CONTINUITY_CURRENT.md`
+2. `audits/READ_ONLY_ADVERSARIAL_AUDIT_2026-08-13.md`
+3. GitHub issue #9
+4. PR #108 and its exact-head checks/review threads
+5. `ERRORS.md`
+6. `RESOLVED.md`
+7. verified phone/runtime evidence when current production state is required
 
 ## Exactly one next engineering action
 
-Fix PR #89 on its existing branch, without touching production strategy or the phone runtime. Require exact-head CI/static/review PASS before any deployment instruction is generated.
+Close the PR #108 repository-only corrective package: make security gates truthful/blocking, remove Gitleaks sensitive-path blind spots, resolve Sonar/DeepSource/review findings, integrate only independently validated narrow fixes from PRs #104-#106, keep PR #107 broad refactor outside the reliability freeze, prove no strategy/config drift, and obtain exact-head CI plus real current-head review PASS.
+
+Do **not** mutate the Android/Termux runtime until that repository gate is complete and a new reviewed rollback-capable deployment package is built from the final merged corrective runtime commit.

@@ -169,7 +169,7 @@ Verified phone acceptance:
 
 ```text
 PACKAGE_2_FINALIZER_DEPLOY=PASS
-CURRENT_CONTROL_PLANE=HEALTHY
+CURRENT_CONTROL_PLANE=HEALTHY_AT_PROOF_TIME
 CURRENT_REQUIRED_SERVICES_OWNED=7/7
 CURRENT_REQUIRED_SERVICES_RUNNING=7/7
 CURRENT_ORPHANED_RUNSV=0
@@ -185,35 +185,60 @@ NATURAL_SHADOW_CYCLE=PASS
 PRE_MARKET_PRODUCTION_INTEGRITY=PASS
 ```
 
-Natural shadow proof:
-
-```text
-SHADOW_STATUS=completed
-SHADOW_DETAILS=exit_code=0
-SHADOW_HEARTBEAT=OK | 0 active signals
-SHADOW_LOG=Shadow Manager done | 0 active signals
-```
-
-Corrected pre-market integrity proof:
-
-```text
-CHECK_CONTROL_PLANE=PASS
-CHECK_WATCHDOG_OWNERSHIP=PASS
-CHECK_BOOT_PERSISTENCE=PASS
-CHECK_CRON_OWNERSHIP=PASS
-CHECK_RUNTIME_PARITY=PASS
-CHECK_PRODUCTION_CONFIG=PASS
-CHECK_PROFITLAB=PASS
-CHECK_PROGRESS=PASS
-CHECK_TRUSTED_CLOCK=PASS
-FAILURE_COUNT=0
-PRE_MARKET_INTEGRITY_ACCEPTANCE=PASS
-```
-
-No service restart, manual shadow execution, strategy change, or ProfitLab cursor mutation was required by the PR #87/#88 dependency deployment.
+These are historical phone proofs from 2026-08-09. They are not a substitute for rechecking current phone state when current runtime truth is required.
 
 Canonical proof: `audits/PRE_MARKET_READINESS_CHECKPOINT_2026-08-09.md`.
 
-### Still not resolved by this entry
+---
 
-PR #89 is a separate watchdog-liveness follow-up. It must pass review/static gates and then phone guardian/fault-injection acceptance. Genuine open-market same-cycle proof for EURUSD:M15, GBPUSD:M15, and USDJPY:M15 is also still pending. Therefore `MONDAY_READY=NO`.
+## 2026-08-09 — PR #89 watchdog persistence guardian
+
+- Status: **RESOLVED AT REPOSITORY LEVEL / MERGED**
+- PR: #89
+- Merge commit: `741a2756675a789dc23ab7d6df3b2675bc474fd6`
+- Correction recorded 2026-08-13: older continuity files still described PR #89 as open/current blocker after it had merged.
+- Current implication: PR #89 is **not** the active blocker.
+
+Any statement that PR #89 is currently open or the current readiness blocker is stale.
+
+---
+
+## 2026-08-13 — Documentation placeholder create/revert incident
+
+- Status: **RESOLVED / NO CONTENT DRIFT**
+- During audit recording, an audit placeholder was accidentally created on protected `main` before the intended docs branch existed.
+- The placeholder was immediately deleted.
+- GitHub rejected force-reset of protected `main`, leaving a create+revert pair in history.
+- Direct compare:
+
+```text
+BASE=3e69920582d3d310be751e7b451f1afb67e1e5bb
+HEAD=3cf3dd1470e4dff7ec4e4d4d7b32f8eb57e9c022
+FILES_CHANGED=0
+```
+
+- Runtime/strategy content drift: **NONE**.
+- Prevention rule added to `ERRORS.md`: create/verify the target branch before any content write; never rely on default-branch fallback.
+
+---
+
+## Still not resolved after the 2026-08-13 audit
+
+The following are explicitly **not** resolved and must not be listed as PASS:
+
+```text
+PR108_EXACT_HEAD_CI=FAIL
+PR108_CURRENT_HEAD_REVIEW=NOT_COMPLETE
+SONARCLOUD_SECURITY_RATING_NEW_CODE=D
+SECURITY_WORKFLOW_FALSE_GREEN_CLASS=OPEN
+GITLEAKS_SENSITIVE_PATH_BLIND_SPOT=OPEN
+PROVIDER_LIMITS_SHALLOW_COPY_ALIASING=OPEN
+HISTORICAL_CREDENTIAL_ROTATION_STATUS=UNPROVEN
+CURRENT_VALID_PR108_PHONE_PACKAGE=NO
+PR102_DO_NOT_DEPLOY=YES
+PR108_DEPLOYED=NO
+PR108_RUNTIME_VERIFIED=NO
+PR108_LIVE_THREE_PAIR_PATH_VERIFIED=NO
+```
+
+Canonical current audit: `audits/READ_ONLY_ADVERSARIAL_AUDIT_2026-08-13.md`.

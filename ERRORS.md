@@ -1,6 +1,6 @@
 # BotA Errors and Silent-Failure Register
 
-Last updated: **2026-08-09 UTC**
+Last updated: **2026-08-13**
 
 Purpose: preserve verified failure classes, current open risks, fixed solutions, and prevention rules without letting old snapshots masquerade as current production truth.
 
@@ -9,35 +9,28 @@ Canonical current sources:
 - `CONTINUITY_CURRENT.md`
 - `AI_START_HERE.md`
 - `CHAT_HANDOFF_BOTA.md`
-- `audits/PRE_MARKET_READINESS_CHECKPOINT_2026-08-09.md`
-- `audits/ERROR_LOG.md`
+- `audits/READ_ONLY_ADVERSARIAL_AUDIT_2026-08-13.md`
 - GitHub issue #9
+- PR #108 exact-head CI/review state
+- verified phone/runtime evidence when current production claims are required
 
 ## Current verdict
 
 ```text
-PHONE_RUNTIME_SOURCE_BASELINE=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
-PACKAGE_1_CLOCK_SESSION=PASS
-PACKAGE_2_CONTROL_PLANE_RECOVERY=PASS
-PACKAGE_2_FINALIZER_DEPLOY=PASS
-PR87_PR88_PHONE_DEPLOY=PASS
-RUNTIME_DEPENDENCY_CONTRACT=PASS
-CURRENT_CONTROL_PLANE=HEALTHY
-CURRENT_OWNED_SERVICES=7/7
-CURRENT_RUNNING_SERVICES=7/7
-CURRENT_ORPHANED_RUNSV=0
-CURRENT_DUPLICATE_SERVICE_ROWS=0
-WATCHDOG_SINGLETON=PASS
-BOOT_PERSISTENCE=PASS
-PROFITLAB_CURSOR=PRESERVED
-NATURAL_SHADOW_CYCLE=PASS
-PRE_MARKET_PRODUCTION_INTEGRITY=PASS
-PR89_WATCHDOG_GUARDIAN=BLOCKED_REVIEW_AND_CI
-OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
-MONDAY_READY=NO
+PRE_AUDIT_RUNTIME_CODE_MAIN=3e69920582d3d310be751e7b451f1afb67e1e5bb
+POST_PLACEHOLDER_REVERT_MAIN=3cf3dd1470e4dff7ec4e4d4d7b32f8eb57e9c022
+CONTENT_DIFF_3e699205_TO_3cf3dd14=ZERO_FILES
+PR108_HEAD=bf30cfcba7af7d22a963d799809b8c7b1f47809d
+PR108_STATE=OPEN_DRAFT
+PR108_CI_GREEN=NO
+PR108_REVIEWED=NO
+PR108_DEPLOYABLE=NO
+PR102_DO_NOT_DEPLOY=YES
+CURRENT_VALID_PR108_PHONE_PACKAGE=NO
+PHONE_ACTION=NO
 ```
 
-Package #1 and Package #2 closed-market infrastructure are deployed and proven. The active blocker is the separate PR #89 watchdog-liveness guardian plus the later genuine market-open three-pair proof.
+PR #89 is merged and no longer the current blocker. The active blocker is PR #108 corrective closure. Historical phone PASS evidence remains valid as historical evidence only; current phone health was not reverified by the 2026-08-13 repository audit.
 
 ## E001 — Scope branching / mixed phases
 
@@ -47,15 +40,15 @@ Package #1 and Package #2 closed-market infrastructure are deployed and proven. 
 
 ## E002 — Repository state mistaken for deployed runtime
 
-**Failure:** GitHub `main` or phone checkout HEAD treated as proof of the live release.
+**Failure:** GitHub `main`, a merged PR, or phone checkout HEAD treated as proof of the live release.
 
-**Prevention:** immutable approved SHA + deployed blob/mode parity + active-wrapper parity + runtime config + live evidence.
+**Prevention:** track `code-ready -> reviewed -> merged -> deployable -> deployed -> runtime-verified -> live-path-verified` separately.
 
 ## E003 — Duplicate execution ownership
 
 **Failure:** cron, runit, boot launchers, wrappers, or multiple supervisors can own the same job.
 
-**Current watcher rule:** runit-only; direct watcher cron count `0`.
+**Historical watcher rule:** runit-only; direct watcher cron count `0`.
 
 **Prevention:** prove one owner at the current gate, not only historically.
 
@@ -63,224 +56,216 @@ Package #1 and Package #2 closed-market infrastructure are deployed and proven. 
 
 **Failure:** `runsv` supervisors can survive manager loss and become PID-1 orphans while services continue running.
 
-**Observed during Package #2:** live services remained while manager ownership was split or absent.
+**Historical verified recovery:** one manager, `owned=7/7`, `running=7/7`, `orphaned=0`, duplicates `0`.
 
-**Final verified state:**
-
-```text
-manager_count=1
-owned=7/7
-running=7/7
-orphaned=0
-duplicate_service_rows=0
-```
-
-**Status:** core recovery/finalizer path deployed and pre-market gate PASS. Independent watchdog-liveness after unexpected watchdog death is tracked separately in PR #89.
+**Prevention:** service liveness is insufficient without supervisor lineage/ownership.
 
 ## E005 — Device wall-clock leakage into trading semantics
 
-**Failure:** Android wall clock was about one hour behind trusted server UTC and nested strategy/event paths still used local wall time.
+**Failure:** Android wall clock differed from trusted server time while nested strategy/event paths used local wall time.
 
-**Package #1 fixes:** scorer session component, nested market-gate reuse, economic-calendar timing, and active Finnhub calendar-date selection now derive from trusted epoch. CLOCK_BOOTTIME/monotonic remains for elapsed-time health/cooldown.
-
-**Live proof:** Package #1 terminal event persisted `time_source=server_epoch`.
-
-**Residual risk:** wall-clock cron scheduling remains a separate operational/device concern.
+**Resolved historical package:** scorer/session/calendar/news event-time semantics were bound to inherited trusted epoch; monotonic/BOOTTIME remained elapsed-time domain.
 
 ## E006 — Partial pair observability
 
 **Failure:** health can falsely pass while USDJPY disappears.
 
-**Current fix:** three-pair EURUSD/GBPUSD/USDJPY M15 observability contract.
-
-**Remaining proof:** genuine open-market same-cycle decisions for all three pairs.
+**Prevention:** require current-cycle EURUSD/GBPUSD/USDJPY M15 observability together.
 
 ## E007 — Pre-journal dedup / lost decision evidence
 
-**Failure:** delivery/dedup previously interfered with complete decision journaling.
+**Failure:** delivery/dedup interfered with complete decision journaling.
 
-**Prevention:** persist decisions independently from delivery/dedup state; Telegram delivery is not evaluation proof.
+**Prevention:** journal evaluation independently from delivery/dedup state.
 
 ## E008 — Inner watcher failure hidden by semantic aggregation
 
-**Failure:** existing/partial semantic evidence can look healthy while current inner execution failed.
+**Failure:** partial semantic evidence can look healthy while current inner execution failed.
 
-**Fix:** nonzero inner execution dominates semantic aggregation and surfaces an operational terminal failure.
+**Prevention:** nonzero execution failure dominates semantic aggregation.
 
 ## E009 — Watcher cycle without terminal outcome
 
-**Failure:** process/heartbeat liveness while a watcher cycle disappears without a terminal record.
+**Failure:** liveness without an authoritative terminal event.
 
-**Fix:** gated cycle + coherent cycle ID + append-only ledger + authoritative terminal outcome.
+**Prevention:** coherent cycle ID + append-only evidence + one authoritative terminal outcome.
 
 ## E010 — Moving GitHub release target during deployment
 
-**Failure:** deploy against branch state while `main` moves.
+**Failure:** deployment uses branch state while `main` moves.
 
-**Containment:** release-pin mismatch caused safe pre-mutation abort.
-
-**Prevention:** immutable commit pin plus final remote-pin check immediately before mutation.
+**Prevention:** immutable commit/object pin plus final remote-pin check immediately before mutation.
 
 ## E011 — Non-executable runit wrapper
 
-**Failure:** correct contents stored with Git mode `100644` made watcher activation fail.
+**Failure:** correct content with wrong executable mode blocked activation.
 
-**Fix:** PR #81 changed `ops/runit/bota-watcher.run` to `100755`; deployment rollback preserved prior runtime until corrected.
+**Prevention:** deployment parity includes bytes and mode.
 
 ## E012 — Wrong service-root assumption
 
-**Failure:** tooling assumed every service lived under `${HOME}/.config/bota-sv`.
+**Failure:** tooling assumed the wrong Termux service root.
 
-**Fix:** canonical service tree is `$PREFIX/var/service`; resolve the watcher wrapper physical path separately.
+**Prevention:** resolve canonical service tree and wrapper physical path explicitly.
 
 ## E013 — Deployment manifest drift
 
-**Failure:** generated deployment instructions can omit audited files or include unrelated files.
+**Failure:** generated deployment package omits audited files or includes unrelated files.
 
-**Prevention:** exact parity-audited manifest, expected file count, immutable source verification, explicit phone config changes only.
+**Prevention:** exact manifest, immutable source verification, expected file count, explicit config changes only.
 
 ## E014 — ProfitLab cursor replay risk
 
-**Failure:** bootstrap/reset could replay historical alert rows.
+**Failure:** bootstrap/reset can replay historical alert rows.
 
-**Current state:** preserved through PR #87/#88 deployment and pre-market gate.
-
-**Prevention:** preserve cursor; do not run `--bootstrap` on current production.
+**Prevention:** preserve cursor; do not bootstrap current production without explicit separate approval.
 
 ## E015 — Persisted compact-state schema label lag
 
-**Observation:** compact state may retain an older top-level schema label while current events use schema 1.1.
+**Observation:** compact state may retain older schema labels while newer events use a newer event schema.
 
 **Classification:** bookkeeping debt unless behavior is affected.
 
 ## E016 — Stale event mistaken for current failure
 
-**Observation:** an older shadow failure can remain in compact state after deployment.
+**Failure:** old failures in compact state can be read as current.
 
-**Prevention:** compare timestamp/cycle against deployment and require fresh updater/shadow evidence. A natural post-deploy shadow cycle now passes; the same principle remains required for the market-open gate.
+**Prevention:** compare timestamps/cycle IDs against deployment and require fresh evidence.
 
 ## E017 — Stale overlapping PRs
 
-**Failure:** old-base PRs can look actionable after architecture moves.
+**Failure:** old-base PRs can look actionable after architecture/runtime changes.
 
-**Containment:** PR #77 closed unmerged; stale draft PR #7 must not be merged wholesale.
+**Current containment:** stale PR #7 must not be merged wholesale; PR #102 is now also superseded for the PR #108 corrective path.
 
 ## E018 — Calendar before/after exclusion-window sign inversion
 
-**Failure:** `minutes_away = event - now` was paired with reversed before/after comparisons, so configured asymmetric windows were applied in the wrong direction.
+**Failure:** signed event distance was paired with reversed asymmetric window comparisons.
 
-**Package #1 fix:** positive `minutes_away` is treated as before-event; negative as after-event. Boundary tests cover HIGH and MEDIUM windows on both sides.
+**Resolved historical package:** positive distance = before event; negative distance = after event, with boundary tests.
 
 ## E019 — Nested components established inconsistent cycle time
 
-**Failure:** outer gate could use trusted server time while nested scorer/gates independently re-probed or read another clock.
+**Failure:** outer gate and nested components could establish different `now` values.
 
-**Package #1 fix:** inherited `BOTA_SERVER_EPOCH` is reused through the audited strategy/event-time path.
+**Resolved historical package:** inherited `BOTA_SERVER_EPOCH` reused through audited strategy/event-time path.
 
 ## E020 — Stale live singleton daemon blocked manager-owned service
 
-**Failure:** current runit reported `crond` down while an old live PID-1-owned `crond` still executed jobs and held `/var/run/crond.pid`.
+**Failure:** old PID-1-owned `crond` held the pidfile while current manager-owned runsv retried replacements.
 
-**Live repair:** identity-check stale daemon -> quiesce failed restart loop -> terminate only stale daemon -> manager-owned runsv starts replacement -> verify one stable live `crond`.
-
-**Status:** resolved in live incident and incorporated into reviewed Package #2 hardening; current pre-market cron ownership PASS.
+**Historical repair:** identity-check stale daemon, quiesce failed loop, terminate only corroborated stale daemon, verify manager-owned replacement.
 
 ## E021 — Health gate checked service liveness without owner lineage
 
-**Failure:** seven services could all report `run` while supervisors were PID-1 orphans.
+**Failure:** `running=7/7` could coexist with PID-1 orphan supervisors.
 
-**Fix:** production health now requires manager count, supervisor lineage, duplicate count, service liveness, and singleton child ownership where applicable.
-
-**Current proof:** `owned=7/7`, `running=7/7`, `orphaned=0`, duplicates `0`.
+**Prevention:** require manager count, supervisor lineage, duplicate count, service liveness, and singleton-child ownership.
 
 ## E022 — Watchdog source existed while persistent startup was unproven
 
-**Historical failure:** watchdog source files matched GitHub, but persistent startup had not yet been finalized/proven.
+**Failure:** source parity was mistaken for persistent recovery proof.
 
-**Resolution:** Package #2 finalizer and managed Termux:Boot watchdog block are deployed; one watchdog process holds the watchdog lock; `CHECK_BOOT_PERSISTENCE=PASS` and `CHECK_WATCHDOG_OWNERSHIP=PASS` in the corrected pre-market gate.
+**Historical resolution:** managed boot persistence and watchdog singleton were later proven.
 
-**Status:** RESOLVED for boot persistence.
+## E023 — Watchdog-liveness guardian was once the current blocker
 
-## E023 — Independent watchdog-liveness guardian still review-blocked
+**Historical state:** PR #89 previously blocked readiness.
 
-**Failure class being addressed:** the watchdog can disappear after boot while `crond` survives. A one-shot boot launcher alone does not guarantee watchdog liveness for the rest of the boot.
+**Current correction:** PR #89 was merged on 2026-08-09. Any handoff still calling PR #89 the current blocker is stale.
 
-**PR #89 design:** a narrow once-per-minute cron guardian may invoke only the already-reviewed watchdog launcher when the watchdog is exactly absent and lock ownership is unambiguous. It must never signal services or reconcile topology itself.
+**Current blocker:** PR #108 corrective integration closure.
 
-**Current PR #89 state:**
+## E024 — False-green security workflow
+
+**Failure:** a workflow labeled Security Scan can be green even while scanners found issues because commands intentionally swallow nonzero exit status.
+
+**Proven 2026-08-13:**
+
+- ShellCheck command uses `|| true`.
+- Bandit command uses `|| true`.
+
+**Impact:** `Security Scan=PASS` does not prove ShellCheck/Bandit clean.
+
+**Prevention:** if a scanner is claimed as a gate, its unacceptable findings must propagate nonzero status to the workflow. Advisory scans must be explicitly labeled advisory and must not be used as readiness evidence.
+
+**Status:** OPEN / PR #108 blocker.
+
+## E025 — Gitleaks sensitive-path blind spot
+
+**Failure:** Gitleaks can report clean while the configuration globally excludes the exact path classes most likely to contain credentials.
+
+**Proven 2026-08-13:** current `.gitleaks.toml` globally allowlists `.env*`, `config/tele.env`, `config.backup-*`, `_snapshots/`, and `archive/` classes.
+
+**Impact:** green Gitleaks is insufficient proof for those excluded classes.
+
+**Credential caution:** the audit does not prove whether historical credentials are currently valid or already rotated/revoked.
+
+**Prevention:** narrow allowlists to explicit samples/placeholders/tests; scan current sensitive working-tree classes with a blocking configuration; treat history remediation/rotation as separate evidence.
+
+**Status:** OPEN / PR #108 blocker.
+
+## E026 — Provider-limit nested-default aliasing
+
+**Failure:** `DEFAULTS.copy()` is shallow. On cold start, `stamp()` can obtain a nested dictionary aliased to the module-level `DEFAULTS` object and mutate default cooldown state process-wide.
+
+**Proven 2026-08-13:** defect exists on current runtime-code baseline.
+
+**Candidate narrow fix:** deep-copy defaults and copy selected provider entry before mutation; add regression proving module defaults remain unchanged.
+
+**Scope rule:** use the focused defect fix only; do not merge PR #104 wholesale.
+
+**Status:** OPEN / PR #108 corrective scope.
+
+## E027 — Deployment package superseded by newer corrective runtime
+
+**Failure:** a reviewed/open deployment package can outlive the runtime generation it was designed to deploy and appear actionable.
+
+**Proven 2026-08-13:** PR #102 is open/draft and pinned to the older PR #101/#103 generation, while PR #108 explicitly requires a new deployment package after final corrective merge.
+
+**Prevention:** deployment authority is SHA/generation-specific and expires when the target runtime changes materially.
 
 ```text
-HEAD=4f73a999634bc83c52defb0d31bfb72291ac83b9
-STATE=OPEN
-MERGEABLE=true
-GITHUB_ACTIONS_SECURITY_SCAN=PASS
-GITHUB_ACTIONS_NATIVE_WATCHDOG_GUARDIAN=PASS
-DEEPSOURCE_PYTHON=FAIL
-UNRESOLVED_REVIEW_THREADS=10
-DISTINCT_REMEDIATION_ITEMS=9
+PR102_DO_NOT_DEPLOY=YES
+CURRENT_VALID_PR108_PHONE_PACKAGE=NO
 ```
 
-Two unresolved threads report the same unused-variable cleanup; the current connector view therefore contains 10 open threads representing 9 distinct fixes.
+**Status:** OPEN operational guard; no phone action.
 
-Still-valid review requirements:
+## E028 — Documentation write accidentally targeted protected main
 
-1. active advisory `FLOCK` ownership, not open-descriptor inference;
-2. shell-safe path quoting and CR/LF rejection in rendered cron;
-3. controlled status/RC when event logging itself fails;
-4. AST-based no-termination validation plus negative fixtures;
-5. complete rendered-crontab validation and exactly one active managed `--ensure` guardian line;
-6. reject non-finite timeout values;
-7. disable checkout credential persistence;
-8. unused-value cleanup;
-9. staticmethod cleanup in tests.
+**Failure:** during 2026-08-13 audit recording, a placeholder audit file was mistakenly created on protected `main` before the intended docs branch existed.
 
-**Prevention:** do not deploy PR #89 until exact-head review/static/CI gates pass and phone fault injection proves watchdog-only termination is repaired by exactly one guardian-driven watchdog recreation.
+**Containment:** placeholder was immediately deleted. Protected branch refused force reset, so the create+revert pair remains in history.
 
-## Package #1 fixed-solution summary
+**Verification:** direct compare from pre-write `3e699205...` to post-revert `3cf3dd14...` reports zero changed files.
 
-```text
-TRUSTED_TIME_HELPER=DEPLOYED
-MARKET_GATE_TRUSTED_EPOCH=DEPLOYED
-SESSION_SCORE_TRUSTED_EPOCH=DEPLOYED
-CALENDAR_WINDOW_FIX=DEPLOYED
-NEWS_DATE_TRUSTED_EPOCH=DEPLOYED
-RUNTIME_PARITY=PASS
-LIVE_PROOF=PASS
-THRESHOLDS_CHANGED=NO
-PAIR_SCOPE_CHANGED=NO
-```
+**Impact:** no runtime/strategy content drift; Git history contains two documentation-only commits.
 
-## Package #2 fixed-solution summary
+**Prevention:** create/verify target branch before any content write; reject writes when branch is missing rather than falling back to default branch.
 
-```text
-CONTROL_PLANE_RECOVERY=PASS
-FINALIZER_DEPLOY=PASS
-BOOT_PERSISTENCE=PASS
-WATCHDOG_SINGLETON=PASS
-PR87_PR88_PHONE_DEPLOY=PASS
-RUNTIME_DEPENDENCY_CONTRACT=PASS
-NATURAL_SHADOW_CYCLE=PASS
-PRE_MARKET_PRODUCTION_INTEGRITY=PASS
-PROFITLAB_PRESERVED=PASS
-STRATEGY_CHANGED=NO
-```
-
-## Historical strategy-quality evidence remains separate
-
-The June-July replay/outcome evidence remains preserved. Current readiness is an operational proof problem; missing runtime evidence must never be “fixed” by lowering thresholds.
+**Status:** RESOLVED / recorded for recurrence prevention.
 
 ## Current open risks
 
 ```text
-PR89_WATCHDOG_LIVENESS_GUARDIAN=BLOCKED_REVIEW_AND_CI
-ANDROID_WALL_CLOCK_CRON_SCHEDULING=OPEN_WARN
-OPEN_MARKET_THREE_PAIR_PROOF=PENDING
+PR108_EXACT_HEAD_CI=FAIL
+PR108_REVIEW_COMPLETE=NO
+SONARCLOUD_SECURITY_RATING_NEW_CODE=D
+SECURITY_WORKFLOW_FALSE_GREEN_CLASS=OPEN
+GITLEAKS_SENSITIVE_PATH_BLIND_SPOT=OPEN
+PROVIDER_LIMITS_ALIASING=OPEN
+HISTORICAL_CREDENTIAL_ROTATION_STATUS=UNPROVEN
+PR102_SUPERSEDED_DO_NOT_DEPLOY=YES
+CURRENT_VALID_PR108_PHONE_PACKAGE=NO
+CURRENT_PHONE_HEALTH=NOT_REVERIFIED_BY_2026_08_13_AUDIT
+OPEN_MARKET_THREE_PAIR_PROOF_FOR_FINAL_CORRECTIVE_RUNTIME=PENDING
 SIGNAL_CLOSER_LIFECYCLE=SEPARATE_WORK
-H1_ADX_OVERRIDE_CONTRACT=SEPARATE_APPROVAL
-COMPACT_STATE_SCHEMA_NORMALIZATION=DEFERRED
 MONDAY_READY=NO
 ```
 
 ## Exactly one next engineering action
 
-Fix every still-valid unresolved PR #89 review finding on `fix/watchdog-persistence-guardian-20260809`, run focused validation, and stop for human confirmation before commit/push. Do not mutate the phone while fixing the GitHub PR.
+Close PR #108 in the repository only: make security gates truthful, remove Gitleaks blind spots, resolve Sonar/DeepSource/current review findings, integrate only narrow validated fixes from PRs #104-#106, keep PR #107 out of the reliability freeze, prove no strategy/config drift, and obtain exact-head CI plus actual current-head review PASS.
+
+Do not mutate the phone until a new reviewed rollback-capable deployment package is built from the final merged corrective runtime commit.
