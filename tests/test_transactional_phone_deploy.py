@@ -12,6 +12,7 @@ EXECUTOR = str(Path(__file__).resolve().parents[1] / "ops/transactional_phone_de
 CHANGED = "tools/chart_generator.py"
 ADDED = "tools/chart_generator_core.py"
 SECRET = "123456:OBVIOUS_FAKE_TEST_TOKEN_DO_NOT_USE"
+SUPABASE_SECRET = "obvious-fake-supabase-service-key-do-not-use"
 
 
 def make_runtime(tmp_path: Path) -> tuple[Path, dict[str, str]]:
@@ -22,7 +23,8 @@ def make_runtime(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     subprocess.run(["git", "checkout", "--detach", RELEASE], cwd=root, check=True,
                    capture_output=True, text=True)
     (root / ".env.runtime").write_text(
-        f"TELEGRAM_BOT_TOKEN={SECRET}\nTELEGRAM_CHAT_ID=999000\n", encoding="utf-8"
+        f"TELEGRAM_BOT_TOKEN={SECRET}\nTELEGRAM_CHAT_ID=999000\n"
+        f"SUPABASE_SERVICE_KEY={SUPABASE_SECRET}\n", encoding="utf-8"
     )
     state = tmp_path / "service.state"
     state.write_text("run\n", encoding="ascii")
@@ -32,6 +34,10 @@ def make_runtime(tmp_path: Path) -> tuple[Path, dict[str, str]]:
         "#!/bin/sh\n"
         "action=$1\n"
         "printf '%s\\n' \"$action\" >> \"$FAKE_SV_LOG\"\n"
+        "if [ \"${FAKE_SV_HANG_ACTION:-}\" = \"$action\" ] && [ ! -e \"${FAKE_SV_HANG_MARKER:-}\" ]; then\n"
+        "  : > \"$FAKE_SV_HANG_MARKER\"\n"
+        "  sleep 30\n"
+        "fi\n"
         "[ \"${FAKE_SV_FAIL_ACTION:-}\" = \"$action\" ] && exit 91\n"
         "case $action in\n"
         " status) [ \"$(cat \"$FAKE_SV_STATE\")\" = run ] && { echo 'run: bota-watcher'; exit 0; }; echo 'down: bota-watcher'; exit 1;;\n"
@@ -50,7 +56,8 @@ def make_runtime(tmp_path: Path) -> tuple[Path, dict[str, str]]:
 
 def invoke(root: Path, env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["python3", EXECUTOR, *args], cwd=root, env=env, text=True, capture_output=True, check=False
+        ["python3", EXECUTOR, *args], cwd=root, env=env, text=True, capture_output=True, check=False,
+        timeout=15
     )
 
 
@@ -171,11 +178,82 @@ class TransactionalPhoneDeployTests(unittest.TestCase):
     root, env = self.root, self.env
     journal = root / "state/transactional_phone_deploy/active.json"
     journal.parent.mkdir(parents=True)
-    journal.write_text(json.dumps({"phase": "files_installed", "audit": str(root / "audits/old")}), encoding="utf-8")
+    journal.write_text(json.dumps({"schema": 1, "phase": "files_installed", "source": RELEASE,
+                                   "audit": str(root / "audits/old")}), encoding="utf-8")
     result = apply(root, env)
     assert result.returncode != 0
     assert "INCOMPLETE_JOURNAL_DETECTED" in result.stdout
     assert_no_deployment_audit(root)
+
+
+  def test_complete_journal_is_reconciled_without_rollback(self):
+    root, env = self.root, self.env
+    first = apply(root, env)
+    assert first.returncode == 0, first.stdout + first.stderr
+    audit = next(line.split("=", 1)[1] for line in first.stdout.splitlines()
+                 if line.startswith("AUDIT_DIRECTORY="))
+    journal = root / "state/transactional_phone_deploy/active.json"
+    journal.write_text(json.dumps({"schema": 1, "phase": "complete", "source": RELEASE,
+                                   "audit": audit}), encoding="utf-8")
+    Path(env["FAKE_SV_LOG"]).write_text("", encoding="ascii")
+    result = apply(root, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not journal.exists()
+    assert "ROLLBACK=" not in result.stdout
+    actions = Path(env["FAKE_SV_LOG"]).read_text().splitlines()
+    assert "down" not in actions
+    assert "up" not in actions
+
+
+  def test_backup_failure_is_audited_before_transaction_becomes_authoritative(self):
+    root, env = self.root, self.env
+    old = b"previous chart before failed backup\n"
+    (root / CHANGED).write_bytes(old)
+    env["BOTA_TEST_FAIL_BACKUP_AT"] = "0"
+    result = apply(root, env)
+    assert result.returncode != 0
+    assert "INJECTED_BACKUP_FAILURE" in result.stdout
+    assert "ROLLBACK=" not in result.stdout
+    assert (root / CHANGED).read_bytes() == old
+    assert Path(env["FAKE_SV_STATE"]).read_text().strip() == "run"
+    actions = Path(env["FAKE_SV_LOG"]).read_text().splitlines()
+    assert "down" not in actions
+    assert "up" not in actions
+    audit = next((root / "audits").glob("transactional_phone_deploy_*"))
+    assert not (audit / "deployment.json").exists()
+    evidence = json.loads((audit / "backup_failure.json").read_text(encoding="utf-8"))
+    assert evidence["status"] == "backup_failed"
+    assert not (root / "state/transactional_phone_deploy/active.json").exists()
+
+
+  def test_missing_supabase_service_key_fails_before_mutation_without_leaking_secrets(self):
+    root, env = self.root, self.env
+    config = root / ".env.runtime"
+    config.write_text(f"TELEGRAM_BOT_TOKEN={SECRET}\nTELEGRAM_CHAT_ID=999000\n", encoding="utf-8")
+    before = (root / CHANGED).read_bytes()
+    result = apply(root, env)
+    assert result.returncode != 0
+    assert "REQUIRED_CREDENTIALS_MISSING" in result.stdout
+    assert (root / CHANGED).read_bytes() == before
+    assert not Path(env["FAKE_SV_LOG"]).exists()
+    assert_no_deployment_audit(root)
+    assert SECRET not in result.stdout + result.stderr
+
+
+  def test_service_command_timeout_rolls_back_and_restores_service(self):
+    root, env = self.root, self.env
+    old = b"previous chart before service timeout\n"
+    (root / CHANGED).write_bytes(old)
+    env["BOTA_TEST_COMMAND_TIMEOUT_SECONDS"] = "0.2"
+    env["FAKE_SV_HANG_ACTION"] = "up"
+    env["FAKE_SV_HANG_MARKER"] = str(Path(self.temporary.name) / "hung-once")
+    result = apply(root, env)
+    assert result.returncode != 0
+    assert "COMMAND_TIMEOUT:fake-sv" in result.stdout
+    assert "ROLLBACK=PASS" in result.stdout
+    assert (root / CHANGED).read_bytes() == old
+    assert Path(env["FAKE_SV_STATE"]).read_text().strip() == "run"
+    assert_no_temps(root)
 
 
   def test_already_deployed_is_idempotent_and_does_not_restart(self):
@@ -222,6 +300,8 @@ class TransactionalPhoneDeployTests(unittest.TestCase):
     result = apply(root, env)
     assert result.returncode == 0
     assert SECRET not in result.stdout + result.stderr
+    assert SUPABASE_SECRET not in result.stdout + result.stderr
     for path in (root / "audits").rglob("*"):
         if path.is_file():
             assert SECRET.encode() not in path.read_bytes()
+            assert SUPABASE_SECRET.encode() not in path.read_bytes()

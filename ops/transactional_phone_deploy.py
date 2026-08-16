@@ -38,6 +38,8 @@ EXECUTABLE = {
     "tools/signal_watcher_pro.sh",
     "tools/telegram_send.sh",
 }
+COMMAND_TIMEOUT_SECONDS = 30.0
+SERVICE_TIMEOUT_SECONDS = 15.0
 
 
 class Abort(RuntimeError):
@@ -48,10 +50,18 @@ def emit(message: str) -> None:
     print(message, flush=True)
 
 
-def run(argv: list[str], cwd: Path, *, check: bool = True, capture: bool = True) -> subprocess.CompletedProcess[str]:
+def run(argv: list[str], cwd: Path, *, check: bool = True, capture: bool = True,
+        timeout: float = COMMAND_TIMEOUT_SECONDS) -> subprocess.CompletedProcess[str]:
     # argv is always a list, shell=False is retained, and production executable
     # names are fixed by this module rather than accepted from CLI input.
-    result = subprocess.run(argv, cwd=cwd, text=True, capture_output=capture, check=False)  # NOSONAR
+    if os.environ.get("BOTA_ALLOW_NON_TERMUX") == "1":
+        timeout = float(os.environ.get("BOTA_TEST_COMMAND_TIMEOUT_SECONDS", timeout))
+    try:
+        result = subprocess.run(argv, cwd=cwd, text=True, capture_output=capture, check=False,
+                                timeout=timeout)  # NOSONAR
+    except subprocess.TimeoutExpired as exc:
+        identity = Path(argv[0]).name
+        raise Abort(f"COMMAND_TIMEOUT:{identity}") from exc
     if check and result.returncode:
         raise Abort(f"COMMAND_FAILED:{argv[0]}:rc={result.returncode}")
     return result
@@ -99,7 +109,7 @@ def atomic_copy(source: Path, target: Path, mode: int, label: str) -> None:
 
 def service(root: Path, action: str, *, check: bool = True) -> subprocess.CompletedProcess[str]:
     command = os.environ.get("BOTA_SV_COMMAND", "sv") if os.environ.get("BOTA_ALLOW_NON_TERMUX") == "1" else "sv"
-    return run([command, action, SERVICE], root, check=check)
+    return run([command, action, SERVICE], root, check=check, timeout=SERVICE_TIMEOUT_SECONDS)
 
 
 def service_running(root: Path) -> bool:
@@ -159,7 +169,7 @@ def required_configuration(root: Path) -> None:  # NOSONAR - explicit secret-saf
                 if value.strip().strip("'\""):
                     names.add(key.strip())
     token = bool({"TELEGRAM_BOT_TOKEN", "TELEGRAM_TOKEN"} & names)
-    if not token or "TELEGRAM_CHAT_ID" not in names:
+    if not token or "TELEGRAM_CHAT_ID" not in names or "SUPABASE_SERVICE_KEY" not in names:
         raise Abort("REQUIRED_CREDENTIALS_MISSING")
 
 
@@ -169,13 +179,30 @@ def ensure_no_incomplete(root: Path) -> None:
         return
     try:
         data = json.loads(active.read_text(encoding="utf-8"))
+        if data.get("schema") != 1:
+            raise ValueError("journal schema")
         phase = data["phase"]
+        source = data["source"]
         audit = Path(data["audit"]).resolve()
     except Exception as exc:
         raise Abort("INCOMPLETE_JOURNAL_AMBIGUOUS") from exc
     allowed = (root / "audits").resolve()
     if allowed not in audit.parents:
         raise Abort("INCOMPLETE_JOURNAL_AMBIGUOUS")
+    if phase == "complete":
+        if source != RELEASE or not audit.is_dir():
+            raise Abort("INCOMPLETE_JOURNAL_AMBIGUOUS")
+        for record_name in (DEPLOYMENT_METADATA, "provenance.json"):
+            record = audit / record_name
+            if record.is_file():
+                try:
+                    record_data = json.loads(record.read_text(encoding="utf-8"))
+                except Exception as exc:
+                    raise Abort("INCOMPLETE_JOURNAL_AMBIGUOUS") from exc
+                if record_data.get("source") != RELEASE:
+                    raise Abort("INCOMPLETE_JOURNAL_AMBIGUOUS")
+        active.unlink()
+        return
     if phase == "rollback_complete":
         raise Abort("COMPLETED_ROLLBACK_JOURNAL_REQUIRES_REVIEW")
     raise Abort(f"INCOMPLETE_JOURNAL_DETECTED:{phase}:MANUAL_ROLLBACK_REQUIRED")
@@ -305,8 +332,11 @@ def stage_files(root: Path, source: str, objects: dict[str, tuple[str, str]], st
 
 
 def back_up_files(root: Path, backup: Path, files: list[dict[str, object]]) -> None:
-    for item in files:
+    for index, item in enumerate(files):
         if item["existed"]:
+            if (os.environ.get("BOTA_ALLOW_NON_TERMUX") == "1"
+                    and os.environ.get("BOTA_TEST_FAIL_BACKUP_AT") == str(index)):
+                raise Abort("INJECTED_BACKUP_FAILURE")
             item_path = str(item["path"])
             destination = backup / item_path
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -390,10 +420,16 @@ def deploy(root: Path, source: str) -> int:
         metadata = {"schema": 1, "source": source, "service": SERVICE,
                     "service_was_running": service_was_running, "files": files,
                     "mutable_sentinels": mutable_sentinels(root)}
-        atomic_json(audit / DEPLOYMENT_METADATA, metadata)
         (audit / "source_commit.txt").write_text(source + "\n", encoding="ascii")
         (audit / "runtime_manifest.txt").write_text("\n".join(MANIFEST) + "\n", encoding="utf-8")
-        back_up_files(root, backup, files)
+        try:
+            back_up_files(root, backup, files)
+        except Exception as exc:
+            atomic_json(audit / "backup_failure.json",
+                        {"schema": 1, "source": source, "status": "backup_failed",
+                         "error_type": type(exc).__name__})
+            raise
+        atomic_json(audit / DEPLOYMENT_METADATA, metadata)
         atomic_json(active, {"schema": 1, "phase": "backups_complete", "source": source, "audit": str(audit)})
         if finish_if_current(root, active, audit, stage, source, service_was_running, changed):
             return 0
