@@ -1,34 +1,33 @@
 {
   "_meta": {
-    "schema_version": "2.1",
+    "schema_version": "3.0",
     "project": "BotA",
     "repository": "Ciupanezulflipper/BotA",
     "record_type": "repository_handoff_snapshot_not_live_runtime_state",
-    "recorded_date_utc": "2026-08-09",
-    "authoritative_detail": "audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md"
+    "recorded_date_utc": "2026-08-10",
+    "authoritative_detail": "audits/REPLACEMENT_RUNTIME_SIX_MODEL_ARCHITECTURE_AUDIT_2026-08-10.md"
   },
-  "readiness": {
-    "code_ready": true,
-    "merged_to_main": true,
-    "deployed_to_phone": true,
-    "runtime_parity_verified": true,
-    "package_1_clock_session": "PASS",
-    "package_2_live_control_plane_repair": "PASS",
-    "package_2_persistent_hardening": "PENDING",
-    "pre_market_production_integrity": "PENDING",
-    "open_market_three_pair_live_proof": false,
-    "monday_ready": false,
-    "classification": "PACKAGE1_PASS_PACKAGE2_HARDENING_PENDING"
+  "architecture": {
+    "status": "GO_BUILD",
+    "selected_option": "OPTION_A_CONSTRAINED",
+    "persistent_process_count": 2,
+    "resurrection_authority": "minimal_owner_restarter",
+    "orchestrator": "lightweight_python_orchestrator",
+    "trading_engine_integration": "EXEC_EXISTING_MODULES_AS_BOUNDED_SUBPROCESSES",
+    "runit_target": "REMOVE_COMPLETELY_AT_CUTOVER",
+    "runsvdir_target": "REMOVE_COMPLETELY_AT_CUTOVER",
+    "bota_cron_restart_authority": "REMOVE_COMPLETELY",
+    "profile_d_production_launch": "FORBIDDEN",
+    "bare_crond_fallback": "REMOVE",
+    "legacy_runsvdir_death_signal_gate": "USEFUL_BUT_NOT_REQUIRED"
   },
-  "release": {
-    "deployed_github_sha": "8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0",
-    "phone_local_branch": "deploy/repaired-core-20260802T215531Z",
-    "phone_local_head": "4339543551aae2e2bcbf727aefe96e3eb103b665",
-    "phone_worktree_is_deployment_identity": false,
-    "active_wrapper_path": "/data/data/com.termux/files/home/.config/bota-sv/bota-watcher/run",
-    "active_wrapper_blob": "25b240dc6913bf9cde82ab79a62ea6cddd73bc8e",
-    "active_wrapper_mode": "755",
-    "package_1_backup_path": "/data/data/com.termux/files/home/BotA-backups/clock-pkg1-20260809T022316Z"
+  "current_phase": {
+    "production_cutover_started": false,
+    "legacy_phone_runtime_may_still_be_running": true,
+    "next_package": "R1_OWNER_RESTARTER_CONTRACT",
+    "next_package_uses_dummy_runtime_only": true,
+    "production_runtime_mutation_allowed_in_r1": false,
+    "strategy_change_allowed": false
   },
   "production_scope": {
     "pairs": ["EURUSD", "GBPUSD", "USDJPY"],
@@ -38,117 +37,140 @@
     "policy_b_adx_max": 30,
     "news_on": false,
     "telegram_enabled": true,
-    "dry_run_mode": false,
-    "package_1_changed_strategy_thresholds": false
+    "dry_run_mode": false
   },
-  "package_1_clock_session": {
-    "pr": 84,
-    "deployed_release": "8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0",
-    "runtime_files": [
-      "tools/calendar_guard.py",
-      "tools/market_open.sh",
-      "tools/news_filter_real.py",
+  "trading_engine": {
+    "signal_generation_proven": true,
+    "telegram_delivery_proven": true,
+    "market_scanning_proven": true,
+    "strategy_rewrite_required": false,
+    "behavior_frozen_during_runtime_migration": true,
+    "major_entrypoints": [
+      "tools/data_fetch_candles.sh",
+      "tools/indicators_updater.sh",
+      "tools/build_indicators.py",
       "tools/scoring_engine.sh",
-      "tools/trusted_time.py"
-    ],
-    "trusted_epoch_reused_per_cycle": true,
-    "session_score_uses_android_wall_clock": false,
-    "calendar_uses_trusted_epoch": true,
-    "news_calendar_date_uses_trusted_epoch_when_active": true,
-    "calendar_before_after_sign_bug_fixed": true,
-    "clock_boottime_for_elapsed_health_preserved": true,
-    "randomized_fault_cases": 2000,
-    "live_proof": {
-      "cycle_id": "b32a66a6-1a91-4b61-b759-c32851cbae6b:144452448476926",
-      "status": "skipped_market_closed",
-      "terminal_outcome": "MARKET_CLOSED",
-      "market_reason": "MARKET_CLOSED_SUNDAY",
-      "time_source": "server_epoch",
-      "server_epoch": 1786245830,
-      "timestamp_utc": "2026-08-09T03:23:50+00:00"
-    }
-  },
-  "control_plane": {
-    "manager_count": 1,
-    "manager_pid_at_latest_proof": 4398,
-    "required_services": 7,
-    "owned_services": 7,
-    "running_services": 7,
-    "orphaned_runsv": 0,
-    "duplicate_service_rows": 0,
-    "live_crond_count": 1,
-    "active_watcher_cron_count": 0,
-    "active_profitlab_cron_count": 1,
-    "services": [
-      "bota-updater",
-      "bota-watcher",
-      "bota-closer",
-      "bota-shadow",
-      "bota-heartbeat",
-      "bota-supervisor",
-      "crond"
+      "tools/quality_filter.py",
+      "tools/m15_h1_fusion.sh",
+      "tools/production_signal_policy.py",
+      "tools/signal_watcher_pro.sh",
+      "tools/watcher_gated_cycle.sh",
+      "tools/run_signal_watcher_with_ledger.sh",
+      "tools/pipeline_ledger.py",
+      "tools/watcher_cycle_ledger.py",
+      "tools/signal_closer.py",
+      "tools/run_signal_closer_live.sh",
+      "tools/be_shadow_manager.py",
+      "tools/run_shadow_manager.sh",
+      "tools/send_tg.sh"
     ]
   },
-  "package_2_findings": {
-    "stale_live_singleton_child": {
-      "service": "crond",
-      "stale_pid": 4107,
-      "stale_ppid": 1,
-      "current_runsv_pid": 24583,
-      "failure": "stale live crond held crond.pid while current manager-owned runsv retried a replacement",
-      "repair": "identity-check stale daemon, quiesce failed restart loop, terminate stale daemon, let current runsv start one replacement",
-      "replacement_pid": 17994,
-      "replacement_parent_runsv": 24583,
-      "live_repair_status": "PASS"
-    },
-    "pid1_orphaned_supervisors": {
-      "observed_running": 7,
-      "observed_owned_before_reconciliation": 1,
-      "observed_orphaned": 6,
-      "final_owned": 7,
-      "final_orphaned": 0,
-      "live_repair_status": "PASS"
-    },
-    "persistent_watchdog": {
-      "source_parity_with_github": true,
-      "one_shot_healthy_topology_run": "PASS",
-      "boot_launcher_guard_state": "DISABLED",
-      "persistent_recovery_proven": false,
-      "stale_live_singleton_recovery_automated": false,
-      "status": "PENDING"
-    }
+  "useful_progress_contract": {
+    "pid_exists_is_health": false,
+    "required_fields": [
+      "runtime_instance_id",
+      "runtime_start_utc",
+      "heartbeat_write_utc",
+      "last_market_data_success_utc",
+      "last_indicator_update_utc",
+      "last_watcher_cycle_complete_utc",
+      "last_signal_decision_utc",
+      "last_closer_cycle_complete_utc",
+      "last_shadow_cycle_complete_utc",
+      "last_clock_validation_utc",
+      "last_external_delivery_attempt_utc",
+      "clock_trust_state",
+      "market_session_state",
+      "last_cycle_error_class"
+    ],
+    "living_zombie_action": "FORCED_PROCESS_EXIT_AND_EXTERNAL_RESTART"
   },
-  "profitlab": {
-    "cursor_offset": 897734,
-    "alerts_csv_size": 897734,
-    "pending_bytes": 0,
-    "bootstrap_required": false,
-    "bootstrap_forbidden_on_current_state": true
+  "crash_consistency": {
+    "pattern": [
+      "persist_unique_intent",
+      "perform_external_side_effect",
+      "persist_confirmed_terminal_state"
+    ],
+    "unknown_outcome_requires_reconciliation": true,
+    "blind_replay_forbidden": true,
+    "must_persist": [
+      "signal_outbox_intent",
+      "telegram_send_state",
+      "dedupe_state",
+      "open_signal_lifecycle",
+      "closer_state",
+      "shadow_state_when_required_for_outcome_integrity",
+      "last_cycle_progress_timestamps"
+    ],
+    "rebuildable": [
+      "market_data_cache",
+      "indicator_cache"
+    ]
   },
-  "residual_observations": [
-    "Android wall clock remains an operational warning, but Package #1 removed it from the audited market/session/calendar paths.",
-    "Wall-clock cron scheduling risk remains separate from strategy/event-time correctness.",
-    "Compact pipeline state may retain a legacy top-level schema label while newer events use schema 1.1.",
-    "Fresh updater/shadow/data evidence is still required for the genuine open-market proof."
+  "android_suspend_contract": {
+    "missed_cycles_expected": true,
+    "replay_missed_scans": false,
+    "revalidate_trusted_clock_after_gap": true,
+    "refresh_market_data_after_gap": true,
+    "reject_stale_or_incomplete_candles": true,
+    "resume_from_fresh_decision_boundary_only": true
+  },
+  "acceptance": {
+    "static_unit": "REQUIRED",
+    "engine_parity": "REQUIRED",
+    "fault_injection": "REQUIRED",
+    "restart_single_instance": "REQUIRED",
+    "duplicate_prevention": "REQUIRED",
+    "crash_consistency": "REQUIRED",
+    "android_unattended": "REQUIRED",
+    "shadow_live": "REQUIRED",
+    "minimum_shadow_days": 7,
+    "preferred_shadow_days": "10-14"
+  },
+  "strategy_proof": {
+    "separate_from_runtime_proof": true,
+    "win_rate_target_percent": 60,
+    "positive_expectancy_required": true,
+    "initial_minimum_closed_signals": 100,
+    "preferred_closed_signals": 200,
+    "metrics": [
+      "win_rate",
+      "expectancy",
+      "average_win",
+      "average_loss",
+      "R_multiple_or_payoff_ratio",
+      "profit_factor",
+      "maximum_drawdown",
+      "unresolved_outcomes",
+      "duplicate_or_excluded_signal_counts",
+      "sample_selection_rules"
+    ]
+  },
+  "cloud": {
+    "cloud_now": false,
+    "cloud_after_strategy_proof": true,
+    "android_failure_escape_hatch": "If the simplified two-process runtime repeatedly fails required unattended/shadow acceptance, Linux/VPS migration becomes necessary as a proof host before final strategy statistics are complete."
+  },
+  "repository": {
+    "architecture_branch": "docs/final-runtime-architecture-20260810",
+    "architecture_pr": 96,
+    "canonical_audit": "audits/REPLACEMENT_RUNTIME_SIX_MODEL_ARCHITECTURE_AUDIT_2026-08-10.md",
+    "preserved_phone_only_svdir_branch": "preserve/svdir-launcher-20260810",
+    "preserved_phone_only_svdir_commit": "99d297bffe5f3f4ffe40275279ebf281e24615cb"
+  },
+  "r1_acceptance": [
+    "exactly_one_owner",
+    "at_most_one_runtime",
+    "normal_exit_restart",
+    "SIGTERM_restart",
+    "SIGKILL_restart",
+    "duplicate_owner_rejected",
+    "duplicate_runtime_rejected",
+    "PID_alive_but_stale_progress_detected",
+    "corrupt_or_missing_heartbeat_handled",
+    "rapid_crash_loop_bounded_and_observable",
+    "production_runtime_unchanged",
+    "strategy_unchanged"
   ],
-  "package_2_required_tests": [
-    "manager loss",
-    "PID-1 orphaned runsv handoff",
-    "down-service recovery",
-    "dead stale pidfile",
-    "live stale singleton child/resource owner",
-    "duplicate supervisor",
-    "multiple manager attempt",
-    "watchdog duplicate attempt",
-    "release/blob/config drift",
-    "missing or stale updater/shadow/data readiness"
-  ],
-  "freeze": {
-    "bootstrap_profitlab": false,
-    "lower_thresholds_to_force_signals": false,
-    "force_telegram_test_signal": false,
-    "declare_package_2_complete_from_manual_repair": false,
-    "declare_monday_ready_from_closed_market_proof": false
-  },
-  "next_action": "Complete Package #2 Pre-Market Production Integrity in reviewed code/tests: persistent single-instance watchdog/boot recovery, explicit stale-live-singleton-child reconciliation, orphan handoff, duplicate detection, immutable release/config/data-path readiness, and isolated fault injection. Only then mutate the phone. After Package #2 passes, require one natural MARKET_OPEN cycle proving EURUSD:M15, GBPUSD:M15, and USDJPY:M15 in the same current cycle with fresh updater/shadow/data evidence, trusted time, unique ownership, and one authoritative terminal watcher outcome."
+  "next_action": "Build and test Package R1, the minimal owner/restarter contract, against a dummy runtime only. Do not integrate trading logic or mutate the production phone/runtime until R1 passes."
 }

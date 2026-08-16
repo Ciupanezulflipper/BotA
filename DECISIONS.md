@@ -1,18 +1,64 @@
 # BotA Decisions Register
 
-Last updated: **2026-08-09 UTC**
+Last updated: **2026-08-10 UTC**
 
 This file records active decisions. Older decisions remain in Git history and dated audits. Explicit supersession here controls current work.
 
 ## Active locked decisions
 
+### 2026-08-10 — Replacement runtime architecture after six-model audit
+
+- Status: **LOCKED — GO_BUILD**
+- Canonical audit: `audits/REPLACEMENT_RUNTIME_SIX_MODEL_ARCHITECTURE_AUDIT_2026-08-10.md`.
+- Preserve the trading engine and strategy behavior. Replace the Android/Termux orchestration layer.
+- Selected architecture: constrained **Option A**.
+
+```text
+PERSISTENT_PROCESS_COUNT=2
+PROCESS_1=MINIMAL_OWNER_RESTARTER
+PROCESS_2=LIGHTWEIGHT_PYTHON_ORCHESTRATOR
+TRADING_ENGINE_INTEGRATION=EXEC_EXISTING_MODULES_AS_BOUNDED_SUBPROCESSES
+ONE_RESURRECTION_AUTHORITY=OWNER_RESTARTER
+RUNIT_TARGET=REMOVE_COMPLETELY_AT_CUTOVER
+RUNSVDIR_TARGET=REMOVE_COMPLETELY_AT_CUTOVER
+BOT_A_CRON_RESTART_AUTHORITY=REMOVE_COMPLETELY
+PROFILE_D_PRODUCTION_LAUNCH=FORBIDDEN
+BARE_CROND_FALLBACK=REMOVE
+STRATEGY_CHANGE=NO
+```
+
+- PID existence is not health. The replacement must persist useful-work progress including market data, indicator update, watcher completion, signal decision, closer completion, shadow completion, trusted-clock validation, and external delivery attempt timestamps.
+- A live PID with objectively stale required work is a **living zombie** and must result in forced runtime exit followed by restart by the single external owner.
+- Every network call and engine subprocess must have bounded deadlines. Infinite retry/blocking paths are forbidden.
+- Externally visible side effects require durable intent-before-action semantics and restart reconciliation; blind replay after an unknown outcome is forbidden.
+- Android suspend/Doze gaps must not cause replay of stale scans. Revalidate trusted time and candle freshness before resuming.
+- Existing trading-engine entrypoints remain behavior-frozen during migration; do not import/refactor them into a new monolithic strategy runtime as part of this package.
+- Legacy `runsvdir` death-signal capture is **USEFUL_BUT_NOT_REQUIRED**. It must not restart the historical repair cycle or block replacement development.
+- Minimum shadow-live gate: **7 consecutive days**, preferred **10–14 days**, plus parity, fault injection, restart, crash-consistency, and Android unattended tests.
+- Cloud remains deferred during proof collection:
+
+```text
+CLOUD_NOW=NO
+CLOUD_AFTER_STRATEGY_PROOF=YES
+```
+
+- Strategy proof and runtime proof are separate. Target >=60% closed-signal win rate must also include positive expectancy and a meaningful clean sample; initial evidence requires at least 100 closed signals, with 200+ preferred for stronger conclusions.
+- Exactly one next engineering package: **R1 owner/restarter contract**, tested with a dummy runtime only. No production cutover, strategy change, runit removal, cron removal, or phone startup mutation occurs in R1.
+
+### 2026-08-10 — Previous runit Package #2 path is superseded as target architecture
+
+- Status: **SUPERSEDED FOR FUTURE ARCHITECTURE WORK**
+- Prior 2026-08-09 decisions requiring persistent runit/watchdog hardening remain historical evidence of the incident and may still describe the currently deployed legacy phone runtime.
+- They no longer define the target architecture or next engineering objective.
+- Do not continue PR #89/watchdog-guardian work merely to preserve runit unless new evidence proves the replacement architecture cannot meet its acceptance contract.
+- Until cutover, the existing phone runtime must not be destructively altered outside an explicit migration/deployment gate.
+
 ### 2026-08-09 — Deployed production release after Package #1
 
-- Status: **LOCKED**
-- Current deployed runtime release: `8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0`.
-- Package #1 (`Clock & Session Time`) is **PASS**: merged, hash-pinned, deployed, byte-parity verified, and live-proven.
-- Package #2 (`Pre-Market Production Integrity`) is **PENDING** despite successful live control-plane repairs.
-- `MONDAY_READY=NO` until Package #2 passes and a genuine open-market three-pair cycle passes.
+- Status: **HISTORICAL / LEGACY-RUNTIME CONTEXT**
+- Current deployed runtime release at that checkpoint: `8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0`.
+- Package #1 (`Clock & Session Time`) was **PASS**: merged, hash-pinned, deployed, byte-parity verified, and live-proven.
+- Package #2 (`Pre-Market Production Integrity`) was pending despite successful live control-plane repairs.
 - Canonical dated proof: `audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md`.
 
 ### 2026-08-09 — One trusted strategy/event instant per watcher cycle
@@ -33,38 +79,17 @@ This file records active decisions. Older decisions remain in Git history and da
 
 ### 2026-08-09 — Service liveness and service ownership are separate health dimensions
 
-- Status: **LOCKED**
-- `sv status=run`, a live wrapper PID, or continuing cron jobs are not sufficient proof of a healthy control plane.
-- Every readiness/control-plane check must separately establish:
-
-```text
-one native runsvdir manager
-one runsv supervisor per required service
-all seven required supervisors owned by that manager
-all seven services running
-zero PID-1 orphan supervisors
-zero duplicate service rows
-singleton child/resource owner correct where applicable
-```
-
-- The Package #2 incident proved this distinction: cron jobs were executing while the current manager-owned `runsv crond` could not own the live daemon.
+- Status: **HISTORICAL INCIDENT RULE**
+- `sv status=run`, a live wrapper PID, or continuing cron jobs are not sufficient proof of a healthy legacy runit control plane.
+- Historical readiness/control-plane checks separately established one manager, seven owned supervisors, seven running services, zero PID-1 orphan supervisors, and zero duplicate service rows.
+- This distinction remains useful forensic evidence, but the replacement runtime uses useful-work progress rather than runit ownership topology as its primary health contract.
 
 ### 2026-08-09 — Stale live singleton child is not the same as stale dead pidfile
 
-- Status: **LOCKED**
-- A pidfile/resource lock must not be deleted merely because the current supervisor cannot start its service.
+- Status: **LOCKED FORENSIC RULE**
+- A pidfile/resource lock must not be deleted merely because a supervisor cannot start its service.
 - Before terminating or removing anything, prove whether the recorded owner PID is alive, its command identity, and its parent/ownership lineage.
-- Exact incident: stale live `crond` PID 4107, PPID 1, held `crond.pid` while current manager-owned `runsv crond` PID 24583 retried replacements.
-- The accepted live repair was: quiesce current restart loop -> verify stale daemon identity -> terminate stale daemon -> let current `runsv` start one replacement -> verify replacement parentage/stability.
-- Package #2 must automate this class safely rather than rely on manual operator repair.
-
-### 2026-08-09 — Persistent watchdog remains a Package #2 gate
-
-- Status: **LOCKED**
-- The watchdog source matching GitHub and a one-shot RC 0 are not equivalent to persistent recovery.
-- Current phone boot launcher explicitly has `RUNSVDIR_GUARD_START=DISABLED`.
-- Package #2 must prove a single-instance persistent watchdog after Termux service-manager startup without creating a second manager/supervisor generation.
-- It must recover or safely classify manager loss, orphaned `runsv`, down services, duplicate supervisors, stale dead pidfiles, and live stale singleton-child/resource-owner conditions.
+- Exact historical incident: stale live `crond` PID 4107, PPID 1, held `crond.pid` while current manager-owned `runsv crond` retried replacements.
 
 ### 2026-08-09 — Current production scope
 
@@ -81,25 +106,13 @@ TELEGRAM_ENABLED=1
 DRY_RUN_MODE=0
 ```
 
-- The old EURUSD/GBPUSD-only scope is superseded.
 - Do not add/remove pairs or loosen thresholds as an operational recovery mechanism.
 
 ### 2026-08-09 — Signal frequency is not a readiness criterion
 
 - Status: **LOCKED**
 - Do not lower score, ADX, H1/H4/D1, Telegram, cooldown, or eligibility thresholds to manufacture signals.
-- Three legitimate rejected/HOLD decisions can satisfy the final open-market execution-path proof.
-- A Telegram signal is not required.
 - Operational failure must not be reclassified as strategy rejection.
-
-### 2026-08-09 — Exactly one watcher owner
-
-- Status: **LOCKED**
-- Production watcher ownership is runit-only.
-- Active direct watcher cron count must remain zero.
-- Active physical wrapper:
-  `/data/data/com.termux/files/home/.config/bota-sv/bota-watcher/run`.
-- Every readiness check must prove current unique ownership.
 
 ### 2026-08-09 — Deployment identity is not phone Git HEAD
 
@@ -124,13 +137,12 @@ DEPLOYMENT_READY
 DEPLOYED_TO_PHONE
 RUNTIME_PARITY_VERIFIED
 LIVE_PIPELINE_VERIFIED
-PRE_MARKET_PRODUCTION_INTEGRITY
-OPEN_MARKET_THREE_PAIR_PROOF
-MONDAY_READY
+SHADOW_ACCEPTANCE
+CUTOVER_READY
+STRATEGY_EVIDENCE_READY
 ```
 
 - Passing an earlier gate does not imply later gates.
-- Package #2 live repair does not imply Package #2 persistent hardening is complete.
 
 ### 2026-08-09 — Every watcher cycle needs one authoritative terminal outcome
 
@@ -138,15 +150,6 @@ MONDAY_READY
 - Every scheduled watcher cycle must end in an observable terminal outcome.
 - One cycle ID remains coherent across gate -> watcher -> reconciler -> ledger.
 - Terminal-ledger persistence failure is operational failure.
-
-Latest Package #1 live proof:
-
-```text
-cycle_id=b32a66a6-1a91-4b61-b759-c32851cbae6b:144452448476926
-terminal_outcome=MARKET_CLOSED
-market_reason=MARKET_CLOSED_SUNDAY
-time_source=server_epoch
-```
 
 ### 2026-08-09 — ProfitLab state is independent and preserved
 
@@ -161,58 +164,16 @@ pending_bytes=0
 - Do not run `profitlab_delivery.py --bootstrap` on current production.
 - Do not replay historical alerts during routine deployments/recovery.
 
-### 2026-08-09 — Package #2 acceptance contract
-
-- Status: **LOCKED**
-- Before persistent phone changes, Package #2 must have isolated fault tests for at least:
-
-```text
-manager loss
-PID-1 orphaned runsv handoff
-single service down
-dead stale pidfile
-live stale singleton child/resource owner
-duplicate supervisor
-multiple manager attempt
-watchdog duplicate attempt
-release/blob/config drift
-missing/stale updater or shadow/data readiness
-```
-
-- The production implementation must preserve one native manager and one owner per required service.
-- Strategy behavior is out of scope.
-
-### 2026-08-09 — Final open-market readiness gate
-
-- Status: **LOCKED**
-- After Package #2 passes, the first genuine `MARKET_OPEN` cycle must show:
-
-```text
-EURUSD:M15 current decision present
-GBPUSD:M15 current decision present
-USDJPY:M15 current decision present
-same current cycle identity proven
-fresh updater/data evidence
-fresh shadow evidence
-one authoritative terminal watcher outcome
-trusted server time
-no active direct watcher cron
-no second watcher owner
-7/7 correctly owned and running
-```
-
-- Three legitimate rejects are acceptable.
-- Delivery evidence is checked only if a signal genuinely qualifies.
-
 ## Separate behavior-changing work
 
-Do not mix these into Package #2:
+Do not mix these into the replacement-runtime migration:
 
-1. **Signal-closer lifecycle** — draft PR #7 is stale; do not merge wholesale.
+1. **Signal-closer lifecycle** — separate behavior review.
 2. **H1/ADX override contract** — separate strategy behavior review.
 3. **Legacy/redundant provider refresh cleanup** — separate behavior/performance change.
-4. **Compact state-schema normalization** — deferred bookkeeping unless it becomes operationally material.
-5. **Android system-clock correction** — separate operational/device task; trusted server epoch remains trading truth.
+4. **Compact state-schema normalization** — deferred bookkeeping unless operationally material.
+5. **Android system-clock correction** — separate device task; trusted server epoch remains trading truth.
+6. **Threshold/pair/timeframe optimization** — forbidden during runtime migration.
 
 ## Repository workflow decision
 
