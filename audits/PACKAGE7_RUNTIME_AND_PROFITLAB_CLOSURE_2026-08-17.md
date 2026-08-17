@@ -43,14 +43,6 @@ Before Package 7, weekend evidence repeatedly showed manager loss followed by mi
 After Package 7 deployment, production naturally lost the previous manager. The new watchdog recorded the exact intended recovery sequence:
 
 ```text
-EVENT=orphan_tree_drained_before_native
-manager=26290
-drained=[30851,308?]
-```
-
-Authoritative full event from the phone:
-
-```text
 EVENT=orphan_tree_drained_before_native manager=26290 drained=[30851, 30942, 31191, 31243, 31325, 31489, 31638] error=None
 EVENT=topology_healthy manager=26290 drained=None error=None
 ```
