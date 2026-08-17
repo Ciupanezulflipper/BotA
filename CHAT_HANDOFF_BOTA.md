@@ -7,92 +7,23 @@ Read this first in any new AI session before proposing BotA changes.
 ## Current grounded answer
 
 ```text
-GITHUB_MAIN_AT_PACKAGE6=028db6ee5a993869bf33a534c4339475981d9357
+GITHUB_MAIN_AT_DOC_REFRESH=b0f30df9aeade1711b7e2c45045b2bc95c9954b4
+PACKAGE7_RELEASE=48db934e44ffebd0e0a419c9ca57554ecf7f372e
 PR108=MERGED
-PR108_RUNTIME_RELEASE=f36836315526fd2be826e8abff1c333004b64b0c
 PR113=MERGED
+PR115=MERGED
 PACKAGE6_PHONE_DEPLOYMENT=PASS
-PACKAGE6_RUNTIME_FILES_VERIFIED=12
-PACKAGE6_POSTDEPLOY_ACCEPTANCE=BLOCKED
-LATEST_CONTROL_PLANE=7/7_RUNNING_7/7_OWNED_WITH_1_ZOMBIE_RUNSV
-WEEKEND_CONTROL_PLANE_STABILITY=FAIL
-PROFITLAB_PENDING_BYTES_AT_FIRST_POSTDEPLOY_GATE=271063
+PACKAGE7_REAL_MANAGER_LOSS_RECOVERY=PASS
+CURRENT_CONTROL_PLANE=HEALTHY
+PROFITLAB_RECONCILED=YES
+CLOSED_MARKET_PREMARKET_INTEGRITY=PASS
 OPEN_MARKET_THREE_PAIR_PROOF=PENDING
 PRODUCTION_READY=NO
 ```
 
-## User scope and release objective
+## Scope
 
-Do not expand BotA work into unrelated audits, tools, repos, or strategy changes. The objective is a clean, reliable production signal bot using the existing EURUSD/GBPUSD/USDJPY M15 strategy and modern Telegram signal presentation.
-
-Do not waste phone/laptop sessions by repeatedly rediscovering already-proven facts. Use the accumulated evidence and close one actual release blocker at a time.
-
-## Package 6 phone deployment
-
-The reviewed transactional deployer from PR #113 successfully installed the 12-file PR #108 runtime payload pinned to:
-
-```text
-f36836315526fd2be826e8abff1c333004b64b0c
-```
-
-Deployment audit:
-
-```text
-/data/data/com.termux/files/home/BotA/audits/transactional_phone_deploy_20260816T201256Z_31681
-```
-
-The first attempt safely aborted because the deployer did not find `SUPABASE_SERVICE_KEY` in `.env` / `.env.runtime`. The key already existed in local untracked `config/strategy.env`, was identified as a new Supabase secret key, and returned HTTP 200 with both the current publisher headers and `apikey` only. No secret value was printed or committed. The local ignored `.env.runtime` alias is mode `0600`.
-
-## Post-deploy findings
-
-The first production-integrity check found two stale control-plane files and a ProfitLab backlog. The two runtime files were repaired to exact release bytes/modes:
-
-```text
-start_native_service_daemon_watchdog.sh
-  blob=c383857b7323e1511d71e351a3becd54ca42d682
-  mode=755
-control_plane_status.py
-  blob=45e7aa5d5b88668720d48efc009cb376c0109783
-  mode=755
-CONTROL_PLANE_PARITY_REPAIR=PASS
-```
-
-The latest control-plane snapshot then showed:
-
-```text
-MANAGER_COUNT=1
-OWNED=7/7
-RUNNING=7/7
-ORPHANED=0
-DUPLICATES=0
-LIVE_CROND_COUNT=1
-FAILURE=zombie_runsv_count:1
-```
-
-## Critical correction from weekend telemetry
-
-The operator reported **89 BotA Telegram messages during the weekend**. These were not Monday-market notifications and were not one duplicated unchanged failure.
-
-The stream shows repeated real control-plane degradation and recovery from 2026-08-14 through 2026-08-17 UTC, including:
-
-```text
-manager_count:0
-owned:0/7 .. 6/7
-orphaned:1 .. 7
-running:6/7
-live_crond_count:0
-crond_pidfile:missing
-crond_not_owned_by_current_runsv
-crond_parent_not_current_runsv
-zombie_runsv_count:1 -> 2 -> 3
-shadow DEADMAN=118m,218m,245m,197m,151m
-```
-
-The correct diagnosis is **recurring runtime/control-plane flapping**. Repeated RECOVERY messages prove self-recovery occurs, but they do not prove stability because the same failure families return.
-
-Do not treat the 89-message problem as a notification-dedup bug only. Alert coalescing is desirable later, but it must not conceal real instability.
-
-## Current production scope
+Do not expand BotA work into unrelated audits, tools, repos, or strategy changes. The production scope remains EURUSD/GBPUSD/USDJPY M15 with the existing thresholds and modern text-only Telegram trade presentation.
 
 ```text
 PAIRS=EURUSD GBPUSD USDJPY
@@ -105,25 +36,92 @@ TELEGRAM_ENABLED=1
 DRY_RUN_MODE=0
 ```
 
-No threshold lowering, forced signals, or fake Telegram trade is authorized.
+No threshold lowering, forced signals, fake Telegram trades, or chart reintroduction is authorized.
 
-## Current release blockers
+## Package 7 result
 
-1. recurring native-manager / runsv / crond ownership instability, including zombie accumulation;
-2. ProfitLab pending region (`271063` bytes at first post-deploy gate) must be reconciled without bootstrap/reset;
-3. natural market-open same-cycle EURUSD/GBPUSD/USDJPY M15 acceptance remains pending.
+Production watchdog blob:
 
-Telegram operator-alert presentation should be cleaned only after the health state is trustworthy enough not to hide distinct incidents.
+`7dd58b7ea0be3663d380de0a7961eeec482f1c14`
 
-## Canonical current sources
+Real production manager-loss recovery occurred after deployment:
 
-1. `CONTINUITY_CURRENT.md`
-2. `AI_START_HERE.md`
-3. `audits/PACKAGE6_PHONE_DEPLOY_AND_WEEKEND_RUNTIME_FINDINGS_2026-08-17.md`
-4. GitHub issue #9
-5. `ERRORS.md`
-6. this file
+```text
+EVENT=orphan_tree_drained_before_native
+new_manager=26290
+drained=[30851,30942,31191,31243,31325,31489,31638]
+EVENT=topology_healthy manager=26290
+```
+
+Latest direct control plane:
+
+```text
+CONTROL_PLANE_HEALTHY=TRUE
+MANAGER_PID=26290
+OWNED=7/7
+RUNNING=7/7
+ORPHANED=0
+DUPLICATES=0
+ZOMBIES=0
+WATCHDOG_SINGLETON=YES
+```
+
+Two transient zombie `runsv` rows disappeared without another restart. The Termux service root is shared by BotA plus `sshd` and `ssh-agent`, and the zombie cmdlines were empty, so those rows could not be attributed to a BotA service. Do not reopen runit surgery unless new real ownership/orphan/crond flapping appears.
+
+## ProfitLab result
+
+The 372609-byte stale region was classified before mutation: 1450 rows, 5 eligible historical GREEN rows, 0 malformed, 0 partial. Reconciliation advanced only the exact verified region and published no stale trade.
+
+```text
+OLD_CURSOR=930393
+NEW_CURSOR=1303002
+STALE_PUBLICATIONS_SENT=0
+PENDING_BYTES=0
+CURSOR_CAUGHT_UP=TRUE
+KEY_AVAILABLE_TO_CRON_ENV=YES
+PROFITLAB_DELIVERY=NO_NEW_ROWS x4
+PROFITLAB_RECONCILED=YES
+```
+
+No `--bootstrap` or reset-to-end shortcut was used.
+
+## Closed-market final gate
+
+```text
+PRE_MARKET_HEALTHY=TRUE
+PRE_MARKET_RC=0
+CONTROL_PLANE=TRUE
+WATCHDOG_OWNERSHIP=TRUE
+BOOT_PERSISTENCE=TRUE
+CRON_OWNERSHIP=TRUE
+RUNTIME_PARITY=TRUE
+PRODUCTION_CONFIG=TRUE
+PROFITLAB=TRUE
+MARKET_GATE=TRUE
+PROGRESS=TRUE
+TRUSTED_CLOCK=TRUE
+MARKET_STATUS=Closed
+PROFITLAB_PENDING_BYTES=0
+FAILURE_COUNT=0
+```
+
+Phone audit:
+
+`/data/data/com.termux/files/home/BotA/audits/pre_market_integrity_20260817T203832Z.json`
+
+## GitHub identity note
+
+Current `main` is four no-op commits ahead of Package 7 due to two accidental empty placeholder create/delete pairs. GitHub compare shows zero changed files between `48db934e...` and `b0f30df...`. Do not force-rewrite `main` without explicit operator authorization.
+
+## Remaining blockers
+
+1. natural open-market same-cycle EURUSD:M15 / GBPUSD:M15 / USDJPY:M15 acceptance;
+2. verify `INTERNAL_ERROR:MARKET_OPEN` and missing current M15 decisions do not recur on the stable runtime;
+3. if a genuine GREEN/YELLOW occurs, verify modern Telegram delivery plus normal ProfitLab handling;
+4. confirm operational Telegram incident lifecycle is concise enough without hiding distinct failures.
+
+A genuine HOLD/reject is a valid acceptance outcome. Do not manufacture a trade.
 
 ## Exactly one next action
 
-Close the recurring control-plane stability defect from the existing weekend evidence. Do not start another broad audit or another unrelated package before that blocker is causally narrowed and fixed.
+Wait for the next configured market-open window and collect the natural three-pair M15 acceptance. No more phone mutation is justified tonight by current evidence.
