@@ -40,10 +40,9 @@ class Package7ManagerLossTests(unittest.TestCase):
     def immediate(predicate, _timeout):
         return predicate()
 
-    def test_full_orphan_tree_is_drained_before_native_manager_start(self) -> None:
-        state = {"table": orphan_table()}
+    def reconcile_simulated(self, initial_table):
+        state = {"table": dict(initial_table)}
         events: list[tuple[str, str]] = []
-        expected_old = list(range(201, 208))
 
         def table_fn():
             return state["table"]
@@ -60,41 +59,47 @@ class Package7ManagerLossTests(unittest.TestCase):
                 state["table"].pop(old_pid)
             return subprocess.CompletedProcess([], 0, "", "")
 
-        with tempfile.TemporaryDirectory() as temp:
-            pidfile = Path(temp) / "service-daemon.pid"
-            crond_pidfile = Path(temp) / "crond.pid"
-            crond_pidfile.write_text(f"{CROND_PID}\n")
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        pidfile = Path(temp.name) / "service-daemon.pid"
+        crond_pidfile = Path(temp.name) / "crond.pid"
+        crond_pidfile.write_text(f"{CROND_PID}\n")
 
-            def command_fn(argv, _timeout):
-                events.append(("START", "manager"))
-                self.assertFalse(
-                    any(
-                        watchdog.runsv_rows(state["table"], service)
-                        for service in watchdog.SERVICES
-                    )
+        def command_fn(argv, _timeout):
+            events.append(("START", "manager"))
+            self.assertFalse(
+                any(
+                    watchdog.runsv_rows(state["table"], service)
+                    for service in watchdog.SERVICES
                 )
-                state["table"] = healthy_table()
-                pidfile.write_text("100\n")
-                crond_pidfile.write_text(f"{CROND_PID}\n")
-                return subprocess.CompletedProcess(argv, 0, "", "")
-
-            result = watchdog.reconcile_once(
-                ROOT,
-                DAEMON,
-                pidfile,
-                SV,
-                1,
-                2,
-                table_fn=table_fn,
-                command_fn=command_fn,
-                run_sv_fn=sv_fn,
-                service_running_fn=lambda *_args: True,
-                wait_fn=self.immediate,
-                crond_pidfile=crond_pidfile,
-                child_pid_fn=lambda _root, service: (
-                    CROND_PID if service == "crond" else None
-                ),
             )
+            state["table"] = healthy_table()
+            pidfile.write_text("100\n")
+            crond_pidfile.write_text(f"{CROND_PID}\n")
+            return subprocess.CompletedProcess(argv, 0, "", "")
+
+        result = watchdog.reconcile_once(
+            ROOT,
+            DAEMON,
+            pidfile,
+            SV,
+            1,
+            2,
+            table_fn=table_fn,
+            command_fn=command_fn,
+            run_sv_fn=sv_fn,
+            service_running_fn=lambda *_args: True,
+            wait_fn=self.immediate,
+            crond_pidfile=crond_pidfile,
+            child_pid_fn=lambda _root, service: (
+                CROND_PID if service == "crond" else None
+            ),
+        )
+        return result, events
+
+    def test_full_orphan_tree_is_drained_before_native_manager_start(self) -> None:
+        result, events = self.reconcile_simulated(orphan_table())
+        expected_old = list(range(201, 208))
 
         self.assertEqual(result["drained_orphan_pids"], expected_old)
         start_index = events.index(("START", "manager"))
@@ -107,9 +112,38 @@ class Package7ManagerLossTests(unittest.TestCase):
         self.assertEqual(result["owned"], 7)
         self.assertEqual(result["orphaned"], 0)
 
-    def test_partial_zero_manager_supervisor_tree_fails_closed(self) -> None:
+    def test_partial_orphan_forest_is_resumable_after_interrupted_drain(self) -> None:
         table = orphan_table()
-        table.pop(201)
+        already_drained = {
+            "bota-updater",
+            "bota-watcher",
+            "bota-closer",
+        }
+        for pid, item in list(table.items()):
+            if item.get("argv", [])[-1:] and item["argv"][-1] in already_drained:
+                if Path(item.get("argv", [""])[0]).name == "runsv":
+                    table.pop(pid)
+
+        result, events = self.reconcile_simulated(table)
+        remaining = [
+            service for service in watchdog.SERVICES
+            if service not in already_drained
+        ]
+
+        self.assertEqual(len(result["drained_orphan_pids"]), len(remaining))
+        start_index = events.index(("START", "manager"))
+        self.assertTrue(
+            all(events.index(("exit", service)) < start_index for service in remaining)
+        )
+        self.assertTrue(
+            all(("exit", service) not in events for service in already_drained)
+        )
+        self.assertEqual(result["owned"], 7)
+        self.assertEqual(result["orphaned"], 0)
+
+    def test_ambiguous_zero_manager_supervisor_tree_fails_closed(self) -> None:
+        table = orphan_table()
+        table[201] = row("runsv", "bota-updater", ppid=999)
         command = mock.Mock()
         run_sv = mock.Mock()
 
