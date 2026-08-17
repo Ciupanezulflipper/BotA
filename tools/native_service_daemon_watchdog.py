@@ -199,44 +199,46 @@ def _native_ready(root, pidfile, table_fn):
         return False
 
 
-def _exact_pid1_orphan_tree(state):
-    return (
-        state["manager_count"] == 0
-        and state["owned"] == 0
-        and state["orphaned"] == len(SERVICES)
-        and state["invalid"] == 0
-        and state["duplicates"] == 0
-        and all(
-            state["services"][service]["runsv_count"] == 1
-            and state["services"][service]["owner"] == "pid1_orphan"
-            for service in SERVICES
-        )
-    )
+def _drainable_zero_manager_forest(state):
+    if state["manager_count"] != 0 or state["duplicates"]:
+        return False
+    for service in SERVICES:
+        row = state["services"][service]
+        if row["runsv_count"] == 0:
+            continue
+        if row["runsv_count"] != 1 or row["owner"] != "pid1_orphan":
+            return False
+    return True
 
 
 def drain_orphan_tree_before_native(root, sv, timeout, table_fn=process_table,
                                     sv_fn=sv_cmd, wait_fn=wait):
-    """Drain one exact PID-1 orphan tree before starting a new manager.
+    """Drain a safe PID-1 orphan forest before starting a new manager.
 
-    Starting a replacement runsvdir while the old orphan supervisors still own
-    their supervise locks creates retry churn and mixed ownership.  Quiesce and
-    exit the exact seven old supervisors first; then the native manager can
-    acquire every service directory cleanly in one convergence.
+    A previous drain can be interrupted after some supervisors have already
+    exited.  Treat missing supervisors as already drained, but require every
+    remaining active required `runsv` to be exactly one PID-1 orphan.  This
+    makes manager-loss recovery resumable without ever starting a replacement
+    runsvdir against an ambiguous existing supervisor.
     """
     state = topology(table_fn(), root)
-    if not _exact_pid1_orphan_tree(state):
+    if not _drainable_zero_manager_forest(state):
         raise WatchdogError(
-            "orphan_tree_not_exact:"
+            "orphan_forest_not_safe:"
             f"manager={state['manager_count']};owned={state['owned']};"
             f"orphaned={state['orphaned']};invalid={state['invalid']};"
             f"duplicates={state['duplicates']}"
         )
 
+    orphan_services = [
+        service for service in SERVICES
+        if state["services"][service]["runsv_count"] == 1
+    ]
     old_pids = [
         int(state["services"][service]["runsv_pid"])
-        for service in SERVICES
+        for service in orphan_services
     ]
-    for service in SERVICES:
+    for service in orphan_services:
         row = topology(table_fn(), root)["services"][service]
         if row["runsv_count"] != 1 or row["owner"] != "pid1_orphan":
             raise WatchdogError(
@@ -603,7 +605,7 @@ def reconcile_once(root, daemon, pidfile, sv, settle, timeout,
             row["runsv_count"] for row in initial["services"].values()
         )
         if active_runsv:
-            if not _exact_pid1_orphan_tree(initial):
+            if not _drainable_zero_manager_forest(initial):
                 raise WatchdogError(
                     "zero_manager_ambiguous_supervisor_topology:"
                     f"active={active_runsv};orphaned={initial['orphaned']};"
