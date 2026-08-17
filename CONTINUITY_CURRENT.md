@@ -7,14 +7,18 @@ This is the current operational handoff. Older dated readiness snapshots are his
 ## Current authoritative status
 
 ```text
-GITHUB_MAIN_AT_PACKAGE6=028db6ee5a993869bf33a534c4339475981d9357
-PR108_RUNTIME_RELEASE=f36836315526fd2be826e8abff1c333004b64b0c
+GITHUB_MAIN_AT_DOC_REFRESH=b0f30df9aeade1711b7e2c45045b2bc95c9954b4
+PACKAGE7_RELEASE=48db934e44ffebd0e0a419c9ca57554ecf7f372e
 PR108_STATE=MERGED
 PR113_STATE=MERGED
-PACKAGE5_TRANSACTIONAL_DEPLOYER=COMPLETE
+PR115_STATE=MERGED
 PACKAGE6_PHONE_DEPLOYMENT=PASS
-PACKAGE6_12_FILE_RUNTIME_PARITY=PASS
-PACKAGE6_POSTDEPLOY_ACCEPTANCE=BLOCKED
+PACKAGE7_MANAGER_LOSS_RECOVERY=PASS
+CURRENT_CONTROL_PLANE=HEALTHY
+PROFITLAB_RECONCILED=YES
+CLOSED_MARKET_PREMARKET_INTEGRITY=PASS
+OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
+PRODUCTION_READY=NO
 
 PAIRS=EURUSD GBPUSD USDJPY
 TIMEFRAMES=M15
@@ -24,122 +28,122 @@ POLICY_B_ADX_MAX=30
 NEWS_ON=0
 TELEGRAM_ENABLED=1
 DRY_RUN_MODE=0
-
-LATEST_CONTROL_PLANE_MANAGER_COUNT=1
-LATEST_CONTROL_PLANE_OWNED=7/7
-LATEST_CONTROL_PLANE_RUNNING=7/7
-LATEST_CONTROL_PLANE_ORPHANED=0
-LATEST_CONTROL_PLANE_DUPLICATES=0
-LATEST_CONTROL_PLANE_LIVE_CROND=1
-LATEST_CONTROL_PLANE_FAILURE=zombie_runsv_count:1
-WEEKEND_RUNTIME_STABILITY=FAIL
-PROFITLAB_PENDING_BYTES_AT_FIRST_POSTDEPLOY_GATE=271063
-OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
-PRODUCTION_READY=NO
 ```
 
-## Deployment evidence
+Current `main` is four no-op commits ahead of Package 7 due to two accidental empty placeholder create/delete pairs. GitHub compare shows zero changed files between `48db934e...` and `b0f30df...`; repository tree content is equivalent. No history rewrite is authorized without explicit operator approval.
 
-Package 6 verified remote main, the exact transactional deployer blob, the exact runtime release pin, one watcher owner before deployment, and then installed the reviewed 12-file runtime payload.
+## Package 7 production closure
+
+Package 7 watchdog runtime blob:
 
 ```text
-DEPLOYMENT=PASS
-DEPLOY_AUDIT=/data/data/com.termux/files/home/BotA/audits/transactional_phone_deploy_20260816T201256Z_31681
-RUNTIME_FILES_VERIFIED=12
-WATCHER_COUNT_AFTER=1
+7dd58b7ea0be3663d380de0a7961eeec482f1c14
 ```
 
-The initial attempt failed safely before mutation because the deployer did not find `SUPABASE_SERVICE_KEY` in `.env` / `.env.runtime`. The key already existed in local untracked `config/strategy.env`; compatibility probes against the BotA Supabase project returned HTTP 200 with the current publisher headers and with `apikey` only. The key value was never printed. It was aliased locally into ignored `.env.runtime` mode `0600`.
-
-## Post-deploy integrity findings
-
-The first post-deploy integrity gate failed only after deployment had succeeded. It exposed two stale control-plane files plus a ProfitLab backlog:
+The production phone then naturally exercised the manager-loss recovery path:
 
 ```text
-runtime_blob_mismatch:tools/start_native_service_daemon_watchdog.sh
-runtime_mode_mismatch:tools/start_native_service_daemon_watchdog.sh:700:755
-runtime_blob_mismatch:tools/control_plane_status.py
-profitlab_pending_bytes:271063
+EVENT=orphan_tree_drained_before_native
+new_manager=26290
+drained=[30851,30942,31191,31243,31325,31489,31638]
+EVENT=topology_healthy manager=26290
 ```
 
-The two stale files were repaired from the exact runtime release and reverified:
+Latest direct topology:
 
 ```text
-tools/start_native_service_daemon_watchdog.sh
-  blob=c383857b7323e1511d71e351a3becd54ca42d682
-  mode=755
-
-tools/control_plane_status.py
-  blob=45e7aa5d5b88668720d48efc009cb376c0109783
-  mode=755
-
-CONTROL_PLANE_PARITY_REPAIR=PASS
-```
-
-A subsequent control-plane snapshot showed exactly one remaining local condition:
-
-```text
-CONTROL_PLANE_HEALTHY=FALSE
+CONTROL_PLANE_HEALTHY=TRUE
 MANAGER_COUNT=1
-OWNED=7
-RUNNING=7
+MANAGER_PID=26290
+OWNED=7/7
+RUNNING=7/7
 ORPHANED=0
 DUPLICATES=0
-LIVE_CROND_COUNT=1
-FAILURE=zombie_runsv_count:1
+ZOMBIES=0
+WATCHDOG_SINGLETON=YES
 ```
 
-## Weekend runtime history is the key finding
+The shared Termux service root contains 9 services: BotA's seven required services plus `sshd` and `ssh-agent`. Two transient zombie `runsv` rows under manager 26290 disappeared without another restart and had empty cmdlines, so they could not be attributed to a BotA service.
 
-The operator reported **89 BotA Telegram messages during the weekend**. This is not a single stale alert being resent. The accumulated messages show repeated real DEGRADED/RECOVERY and DEADMAN/RECOVERY cycles between 2026-08-14 and 2026-08-17 UTC.
+Conclusion: the weekend manager-loss/orphan amplification defect is closed by real production evidence. Do not reopen broad runit surgery unless new ownership/orphan/crond flapping appears.
 
-Repeated failure families include:
+## ProfitLab closure
 
-- manager loss (`manager_count:0`);
-- ownership collapse from 6/7 down to 0/7, with PID-1 orphaning;
-- `crond` absent or not owned by the current runsv;
-- missing `crond.pid` and parent mismatch;
-- zombie `runsv` counts increasing from 1 to 2 to 3;
-- shadow DEADMAN windows of 118, 218, 245, 197, and 151 minutes, followed by recovery.
-
-This changes the release diagnosis: **runtime/control-plane flapping is still unresolved even though individual snapshots recover to 7/7**. A single healthy snapshot cannot be used as production-stability proof.
-
-## Telegram classification
-
-The message volume is unacceptable for operator use, but notification suppression is not the primary fix. Many messages correspond to genuinely different failure/recovery transitions. The correct sequence is:
-
-1. stabilize the underlying control plane;
-2. preserve truthful incident transitions;
-3. then coalesce/debounce operator messaging so one incident lifecycle is concise and useful without hiding distinct real failures.
-
-The modern GREEN/YELLOW trade-card presentation remains separate from infrastructure health messaging.
-
-## ProfitLab status
-
-The first post-deploy integrity check measured:
+The stale pending region was first classified read-only:
 
 ```text
-PROFITLAB_PENDING_BYTES=271063
+ALERTS_SIZE=1303002
+OLD_CURSOR=930393
+PENDING_BYTES=372609
+PENDING_ROWS=1450
+MALFORMED_ROWS=0
+PARTIAL_ROWS=0
+STALE_ELIGIBLE_GREEN_ROWS=5
+ELIGIBLE_BY_PAIR=USDJPY:3,GBPUSD:2
+ELIGIBLE_BY_DIRECTION=BUY:5
+CLASSIFIED_REGION_SHA256=fba1bc80ecf68cba3c8574236748fb939e2e1e1b4abb70f5b3e22969771caad6
 ```
 
-Do not bootstrap or reset the cursor merely to make the gate green. Inspect/reconcile the pending region and preserve historical delivery semantics.
-
-## Current freeze
+The region was reconciled under the ProfitLab lock with no bootstrap, no reset-to-unverified-end, and no stale publication:
 
 ```text
-DO_NOT_BOOTSTRAP_PROFITLAB=YES
-DO_NOT_RESET_CURSOR_TO_HIDE_BACKLOG=YES
-DO_NOT_LOWER_THRESHOLDS=YES
-DO_NOT_FORCE_SIGNAL_COUNT=YES
-DO_NOT_FORCE_TELEGRAM_TEST_SIGNAL=YES
-DO_NOT_HIDE_REAL_RUNTIME_FAILURES_WITH_DEDUP=YES
-DO_NOT_DECLARE_PRODUCTION_READY_FROM_SINGLE_HEALTHY_SAMPLE=YES
+PROFITLAB_RECONCILE=PASS
+NEW_CURSOR=1303002
+CURRENT_ALERTS_SIZE=1303002
+REMAINING_NEW_BYTES=0
+STALE_PUBLICATIONS_SENT=0
+AUDIT_DIRECTORY=audits/profitlab_stale_reconcile_20260817T202901Z
 ```
 
-## Exactly one next engineering action
+Post-reconciliation scheduled cron proof:
 
-Treat the recurring manager/runsv/crond ownership failures, zombie accumulation, and associated DEADMAN episodes as the single current release blocker. Use the existing evidence to close that stability defect before doing more strategy work, tooling work, presentation work, or broad repository auditing.
+```text
+PENDING_BYTES=0
+CURSOR_CAUGHT_UP=TRUE
+KEY_AVAILABLE_TO_CRON_ENV=YES
+PROFITLAB_DELIVERY=NO_NEW_ROWS x4
+```
 
-After stable control-plane acceptance, reconcile ProfitLab pending bytes, then run the natural market-open same-cycle EURUSD:M15 / GBPUSD:M15 / USDJPY:M15 acceptance on the final runtime.
+Therefore `PROFITLAB_RECONCILED=YES`.
 
-Canonical detailed evidence: `audits/PACKAGE6_PHONE_DEPLOY_AND_WEEKEND_RUNTIME_FINDINGS_2026-08-17.md`.
+## Closed-market integrity gate
+
+Final read-only pre-market gate against Package 7 release identity:
+
+```text
+PRE_MARKET_HEALTHY=TRUE
+PRE_MARKET_RC=0
+CONTROL_PLANE=TRUE
+WATCHDOG_OWNERSHIP=TRUE
+BOOT_PERSISTENCE=TRUE
+CRON_OWNERSHIP=TRUE
+RUNTIME_PARITY=TRUE
+PRODUCTION_CONFIG=TRUE
+PROFITLAB=TRUE
+MARKET_GATE=TRUE
+PROGRESS=TRUE
+TRUSTED_CLOCK=TRUE
+MARKET_STATUS=Closed
+MARKET_OPEN=False
+PROFITLAB_PENDING_BYTES=0
+FAILURE_COUNT=0
+```
+
+Phone audit:
+
+`/data/data/com.termux/files/home/BotA/audits/pre_market_integrity_20260817T203832Z.json`
+
+The closed market is expected; this does not substitute for live-market acceptance.
+
+## Remaining release work
+
+Only the following evidence remains before a final production-readiness verdict:
+
+1. during the next configured open-market window, verify the stable pipeline no longer emits `INTERNAL_ERROR:MARKET_OPEN` or missing current M15 decisions;
+2. collect one natural same-cycle EURUSD:M15 / GBPUSD:M15 / USDJPY:M15 acceptance; genuine HOLD/reject outcomes are valid;
+3. if a genuine GREEN/YELLOW qualifies, verify modern Telegram trade-card delivery and normal ProfitLab handling;
+4. confirm operational Telegram incident lifecycle is concise enough without hiding distinct real failures.
+
+No threshold lowering, forced signals, fake Telegram trade, ProfitLab bootstrap/reset, or broad unrelated audit is authorized.
+
+Canonical current evidence: `audits/PACKAGE7_RUNTIME_AND_PROFITLAB_CLOSURE_2026-08-17.md` and GitHub issue #9.

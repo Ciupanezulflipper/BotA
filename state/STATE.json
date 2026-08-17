@@ -1,33 +1,33 @@
 {
   "_meta": {
-    "schema_version": "3.0",
+    "schema_version": "3.1",
     "project": "BotA",
     "repository": "Ciupanezulflipper/BotA",
     "record_type": "repository_handoff_snapshot_not_live_runtime_state",
     "recorded_date_utc": "2026-08-17",
-    "authoritative_detail": "audits/PACKAGE6_PHONE_DEPLOY_AND_WEEKEND_RUNTIME_FINDINGS_2026-08-17.md"
+    "authoritative_detail": "audits/PACKAGE7_RUNTIME_AND_PROFITLAB_CLOSURE_2026-08-17.md"
   },
   "readiness": {
     "pr108_merged": true,
     "pr113_merged": true,
-    "package5_transactional_deployer_complete": true,
+    "pr115_merged": true,
     "package6_phone_deployed": true,
-    "package6_runtime_manifest_parity_verified": true,
-    "package6_postdeploy_acceptance": "BLOCKED",
-    "weekend_control_plane_stability": "FAIL",
-    "profitlab_reconciled": false,
+    "package7_real_manager_loss_recovery": "PASS",
+    "current_control_plane": "HEALTHY",
+    "profitlab_reconciled": true,
+    "closed_market_premarket_integrity": "PASS",
     "open_market_three_pair_live_proof": false,
+    "telegram_incident_lifecycle_usability_confirmed": false,
     "production_ready": false,
-    "classification": "DEPLOYED_RUNTIME_STABILITY_AND_PROFITLAB_BLOCKERS_REMAIN"
+    "classification": "STATIC_AND_CLOSED_MARKET_GATES_PASS_LIVE_MARKET_ACCEPTANCE_PENDING"
   },
   "release": {
-    "github_main_at_package6": "028db6ee5a993869bf33a534c4339475981d9357",
+    "github_main_at_doc_refresh": "b0f30df9aeade1711b7e2c45045b2bc95c9954b4",
+    "package7_release": "48db934e44ffebd0e0a419c9ca57554ecf7f372e",
     "pr108_runtime_release": "f36836315526fd2be826e8abff1c333004b64b0c",
-    "package5_pr": 113,
-    "package6_deploy_audit": "/data/data/com.termux/files/home/BotA/audits/transactional_phone_deploy_20260816T201256Z_31681",
-    "runtime_manifest_files_verified": 12,
-    "watcher_runsv_count_before": 1,
-    "watcher_runsv_count_after": 1
+    "package7_watchdog_blob": "7dd58b7ea0be3663d380de0a7961eeec482f1c14",
+    "main_noop_commits_after_package7": 4,
+    "main_tree_diff_vs_package7": 0
   },
   "production_scope": {
     "pairs": ["EURUSD", "GBPUSD", "USDJPY"],
@@ -38,90 +38,97 @@
     "news_on": false,
     "telegram_enabled": true,
     "dry_run_mode": false,
-    "strategy_changed_by_package6": false
+    "strategy_changed_by_package7": false
   },
-  "package6": {
-    "first_attempt": {
-      "status": "SAFE_ABORT_PREMUTATION",
-      "reason": "REQUIRED_CREDENTIALS_MISSING"
-    },
-    "credential_path_finding": {
-      "telegram_token_present": true,
-      "telegram_chat_id_present": true,
-      "supabase_service_key_present_in_config_strategy_env": true,
-      "supabase_service_key_initially_present_in_deployer_runtime_env": false,
-      "supabase_key_type": "NEW_SUPABASE_SECRET",
-      "current_publisher_headers_http": 200,
-      "apikey_only_http": 200,
-      "secret_value_recorded": false,
-      "runtime_alias_installed_to_env_runtime": true,
-      "runtime_alias_mode": "600",
-      "repository_secret_committed": false
-    },
-    "deployment": {
+  "package7": {
+    "phone_deploy": {
       "status": "PASS",
-      "runtime_parity": "PASS",
-      "runtime_files_verified": 12,
-      "watcher_singleton_after": true
+      "runtime_blob": "7dd58b7ea0be3663d380de0a7961eeec482f1c14",
+      "watchdog_singleton_after": true
     },
-    "postdeploy_parity_repair": {
+    "real_recovery_event": {
       "status": "PASS",
-      "files": {
-        "tools/start_native_service_daemon_watchdog.sh": {
-          "blob": "c383857b7323e1511d71e351a3becd54ca42d682",
-          "mode": "755"
-        },
-        "tools/control_plane_status.py": {
-          "blob": "45e7aa5d5b88668720d48efc009cb376c0109783",
-          "mode": "755"
-        }
-      }
+      "event": "orphan_tree_drained_before_native",
+      "new_manager_pid": 26290,
+      "drained_orphan_pids": [30851, 30942, 31191, 31243, 31325, 31489, 31638],
+      "next_event": "topology_healthy"
     }
   },
   "latest_control_plane_sample": {
-    "healthy": false,
+    "healthy": true,
     "manager_count": 1,
+    "manager_pid": 26290,
     "required_services": 7,
     "owned_services": 7,
     "running_services": 7,
     "orphaned_runsv": 0,
     "duplicate_service_rows": 0,
-    "live_crond_count": 1,
-    "failure_reasons": ["zombie_runsv_count:1"],
-    "watcher_running": true,
-    "watcher_singleton": true
+    "zombie_runsv_count": 0,
+    "watchdog_singleton": true,
+    "failure_reasons": []
   },
-  "weekend_runtime_evidence": {
-    "operator_reported_telegram_message_count": 89,
-    "window_utc": "2026-08-14..2026-08-17",
-    "classification": "RECURRING_REAL_DEGRADED_RECOVERY_AND_DEADMAN_RECOVERY_FLAPPING",
-    "observed_failure_families": [
-      "manager_count:0",
-      "owned_services_between_0_and_6_of_7",
-      "pid1_orphaned_runsv",
-      "running_services_6_of_7",
-      "live_crond_count:0",
-      "crond_pidfile:missing",
-      "crond_not_owned_by_current_runsv",
-      "crond_parent_not_current_runsv",
-      "zombie_runsv_count_increasing_1_to_3"
+  "termux_service_root": {
+    "service_dir_count": 9,
+    "bota_required_services": [
+      "bota-updater",
+      "bota-watcher",
+      "bota-closer",
+      "bota-shadow",
+      "bota-heartbeat",
+      "bota-supervisor",
+      "crond"
     ],
-    "shadow_deadman_minutes_reported": [118, 218, 245, 197, 151],
-    "recovery_events_observed": true,
-    "single_healthy_snapshot_is_stability_proof": false
+    "other_services": ["ssh-agent", "sshd"],
+    "transient_zombies_observed_then_disappeared": 2,
+    "zombie_service_attribution": "UNAVAILABLE_EMPTY_CMDLINE_SHARED_MANAGER"
   },
   "profitlab": {
-    "pending_bytes_at_first_postdeploy_gate": 271063,
-    "reconciled": false,
-    "bootstrap_forbidden": true,
-    "cursor_reset_to_hide_backlog_forbidden": true
+    "reconciled": true,
+    "alerts_size": 1303002,
+    "old_cursor": 930393,
+    "new_cursor": 1303002,
+    "classified_pending_bytes": 372609,
+    "classified_rows": 1450,
+    "malformed_rows": 0,
+    "partial_rows": 0,
+    "stale_eligible_green_rows": 5,
+    "eligible_by_pair": {"USDJPY": 3, "GBPUSD": 2},
+    "eligible_by_direction": {"BUY": 5},
+    "classified_region_sha256": "fba1bc80ecf68cba3c8574236748fb939e2e1e1b4abb70f5b3e22969771caad6",
+    "stale_publications_sent": 0,
+    "remaining_new_bytes": 0,
+    "cursor_caught_up": true,
+    "cron_env_service_key_available": true,
+    "post_reconcile_no_new_rows_ticks": 4,
+    "bootstrap_used": false,
+    "cursor_reset_used": false,
+    "audit_directory": "audits/profitlab_stale_reconcile_20260817T202901Z"
+  },
+  "closed_market_integrity": {
+    "healthy": true,
+    "return_code": 0,
+    "control_plane": true,
+    "watchdog_ownership": true,
+    "boot_persistence": true,
+    "cron_ownership": true,
+    "runtime_parity": true,
+    "production_config": true,
+    "profitlab": true,
+    "market_gate": true,
+    "progress": true,
+    "trusted_clock": true,
+    "market_status": "Closed",
+    "market_open": false,
+    "profitlab_pending_bytes": 0,
+    "failure_count": 0,
+    "phone_audit_file": "/data/data/com.termux/files/home/BotA/audits/pre_market_integrity_20260817T203832Z.json"
   },
   "telegram": {
     "trade_card_presentation": "MODERN_GREEN_YELLOW_TEXT_FORMAT_MERGED_IN_PR108",
     "chart_delivery": "INTENTIONALLY_DISABLED_ON_CANONICAL_PRODUCTION_PATH",
-    "weekend_operator_alert_volume": "UNACCEPTABLE",
-    "primary_cause_classification": "RUNTIME_FLAPPING_NOT_MERE_DUPLICATE_NOTIFICATION",
-    "future_alert_policy_requirement": "COALESCE_INCIDENT_LIFECYCLE_WITHOUT_HIDING_DISTINCT_REAL_FAILURES"
+    "weekend_operator_alert_volume": "89_REPORTED",
+    "underlying_control_plane_failure_family": "RESOLVED_BY_PACKAGE7_REAL_RECOVERY",
+    "incident_lifecycle_usability_confirmation": "PENDING"
   },
   "freeze": {
     "bootstrap_profitlab": false,
@@ -129,14 +136,13 @@
     "lower_thresholds_to_force_signals": false,
     "force_signal_count": false,
     "force_telegram_test_signal": false,
-    "hide_runtime_flapping_with_notification_dedup": false,
-    "declare_ready_from_single_healthy_sample": false
+    "reopen_control_plane_without_new_flapping_evidence": false,
+    "declare_ready_before_natural_open_market_proof": false
   },
   "current_blockers": [
-    "recurring_native_manager_runsv_crond_control_plane_flapping",
-    "zombie_runsv_accumulation_and_related_ownership_instability",
-    "profitlab_pending_region_unreconciled",
-    "natural_open_market_same_cycle_three_pair_acceptance_pending"
+    "verify_open_market_pipeline_has_no_INTERNAL_ERROR_MARKET_OPEN_or_missing_current_M15_decisions",
+    "natural_same_cycle_EURUSD_GBPUSD_USDJPY_M15_acceptance",
+    "confirm_operational_telegram_incident_lifecycle_is_concise_without_hiding_distinct_failures"
   ],
-  "next_action": "Close the recurring native-manager/runsv/crond ownership instability using the accumulated weekend evidence as one release blocker. Do not broaden into strategy, presentation, new tooling, or unrelated static debt. After control-plane stability is proven, reconcile the ProfitLab pending region without bootstrap/reset, then require a natural MARKET_OPEN EURUSD/GBPUSD/USDJPY M15 same-cycle acceptance on the final runtime."
+  "next_action": "During the next configured market-open window, collect one natural same-cycle EURUSD:M15 / GBPUSD:M15 / USDJPY:M15 acceptance on the stable runtime. Genuine HOLD/reject outcomes are valid. Verify INTERNAL_ERROR:MARKET_OPEN and missing current M15 decisions do not recur; if a genuine GREEN/YELLOW occurs, verify modern Telegram delivery and normal ProfitLab handling."
 }
