@@ -199,6 +199,86 @@ def _native_ready(root, pidfile, table_fn):
         return False
 
 
+def _drainable_zero_manager_forest(state):
+    if state["manager_count"] != 0 or state["duplicates"]:
+        return False
+    for service in SERVICES:
+        row = state["services"][service]
+        if row["runsv_count"] == 0:
+            continue
+        if row["runsv_count"] != 1 or row["owner"] != "pid1_orphan":
+            return False
+    return True
+
+
+def _drain_one_pid1_orphan(root, service, sv, timeout, table_fn, sv_fn):
+    row = topology(table_fn(), root)["services"][service]
+    if row["runsv_count"] != 1 or row["owner"] != "pid1_orphan":
+        raise WatchdogError(f"orphan_drain_precondition_changed:{service}")
+    for command in ("down", "exit"):
+        result = sv_fn(sv, root, service, command, timeout)
+        if result.returncode:
+            detail = (result.stdout or result.stderr).strip()
+            raise WatchdogError(
+                f"sv_{command}_failed:{service}:"
+                f"rc={result.returncode}:{detail}"
+            )
+
+
+def _orphan_forest_drained(root, table_fn):
+    table = table_fn()
+    return (
+        not managers(table, root)
+        and not any(runsv_rows(table, service) for service in SERVICES)
+    )
+
+
+def _active_required_runsv(table_fn):
+    table = table_fn()
+    return [service for service in SERVICES if runsv_rows(table, service)]
+
+
+def drain_orphan_tree_before_native(root, sv, timeout, table_fn=process_table,
+                                    sv_fn=sv_cmd, wait_fn=wait):
+    """Drain a safe PID-1 orphan forest before starting a new manager.
+
+    A previous drain can be interrupted after some supervisors have already
+    exited.  Treat missing supervisors as already drained, but require every
+    remaining active required `runsv` to be exactly one PID-1 orphan.  This
+    makes manager-loss recovery resumable without ever starting a replacement
+    runsvdir against an ambiguous existing supervisor.
+    """
+    state = topology(table_fn(), root)
+    if not _drainable_zero_manager_forest(state):
+        raise WatchdogError(
+            "orphan_forest_not_safe:"
+            f"manager={state['manager_count']};owned={state['owned']};"
+            f"orphaned={state['orphaned']};invalid={state['invalid']};"
+            f"duplicates={state['duplicates']}"
+        )
+
+    orphan_services = [
+        service for service in SERVICES
+        if state["services"][service]["runsv_count"] == 1
+    ]
+    old_pids = [
+        int(state["services"][service]["runsv_pid"])
+        for service in orphan_services
+    ]
+    for service in orphan_services:
+        _drain_one_pid1_orphan(
+            root, service, sv, timeout, table_fn, sv_fn
+        )
+
+    if not wait_fn(lambda: _orphan_forest_drained(root, table_fn), timeout):
+        active = _active_required_runsv(table_fn)
+        raise WatchdogError(
+            "orphan_tree_drain_timeout:"
+            f"active={','.join(active)}"
+        )
+    return old_pids
+
+
 def handoff(service, manager, root, sv, timeout, table_fn, sv_fn,
             running_fn, wait_fn):
     rows = runsv_rows(table_fn(), service)
@@ -523,8 +603,23 @@ def reconcile_once(root, daemon, pidfile, sv, settle, timeout,
         raise WatchdogError(f"multiple_managers:{initial['manager_count']}")
     if initial["duplicates"]:
         raise WatchdogError(f"duplicate_runsv_rows:{initial['duplicates']}")
+    drained_orphan_pids = []
     started, stale = False, None
     if initial["manager_count"] == 0:
+        active_runsv = sum(
+            row["runsv_count"] for row in initial["services"].values()
+        )
+        if active_runsv:
+            if not _drainable_zero_manager_forest(initial):
+                raise WatchdogError(
+                    "zero_manager_ambiguous_supervisor_topology:"
+                    f"active={active_runsv};orphaned={initial['orphaned']};"
+                    f"invalid={initial['invalid']};"
+                    f"duplicates={initial['duplicates']}"
+                )
+            drained_orphan_pids = drain_orphan_tree_before_native(
+                root, sv, timeout, table_fn, run_sv_fn, wait_fn
+            )
         manager, stale = start_native(root, daemon, pidfile, settle, timeout,
                                       table_fn, command_fn, wait_fn)
         started = True
@@ -536,7 +631,11 @@ def reconcile_once(root, daemon, pidfile, sv, settle, timeout,
     final = reconcile_services(
         manager, root, pidfile, crond_pidfile, sv, timeout, table_fn,
         run_sv_fn, service_running_fn, wait_fn, child_pid_fn, terminate_fn)
-    final.update(native_manager_started=started, stale_pidfile_removed=stale)
+    final.update(
+        native_manager_started=started,
+        stale_pidfile_removed=stale,
+        drained_orphan_pids=drained_orphan_pids,
+    )
     return final
 
 
@@ -617,6 +716,12 @@ def main():
                     args.service_root, args.service_daemon, args.pidfile,
                     args.sv, args.settle, args.timeout,
                     crond_pidfile=args.crond_pidfile)
+                if final.get("drained_orphan_pids"):
+                    event(
+                        args.log, "orphan_tree_drained_before_native",
+                        drained_orphan_pids=final["drained_orphan_pids"],
+                        manager_pid=final["manager_pid"],
+                    )
                 state = (
                     "healthy", final["manager_pid"],
                     json.dumps(final.get("singleton_repairs", {}), sort_keys=True),
