@@ -1,89 +1,96 @@
 # BotA Chat Handoff
 
-Last updated: **2026-08-09 UTC**
+Last updated: **2026-08-17 UTC**
 
 Read this first in any new AI session before proposing BotA changes.
 
 ## Current grounded answer
 
 ```text
-CHECKPOINT_BASE_MAIN=810441fd772e1330db7de670c3eae95606981742
-PHONE_RUNTIME_SOURCE_BASELINE=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
-PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
-PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
-PHONE_WORKTREE_DIRTY=YES
-
-PACKAGE_1_CLOCK_SESSION=PASS
-PACKAGE_2_CONTROL_PLANE_RECOVERY=PASS
-PACKAGE_2_FINALIZER_DEPLOY=PASS
-PR87_PR88_PHONE_DEPLOY=PASS
-RUNTIME_DEPENDENCY_CONTRACT=PASS
-CURRENT_CONTROL_PLANE=HEALTHY
-CURRENT_REQUIRED_SERVICES_OWNED=7/7
-CURRENT_REQUIRED_SERVICES_RUNNING=7/7
-CURRENT_ORPHANED_RUNSV=0
-CURRENT_DUPLICATE_SERVICE_ROWS=0
-WATCHDOG_SINGLETON=PASS
-BOOT_PERSISTENCE=PASS
-PROFITLAB_PRESERVED=PASS
-NATURAL_SHADOW_CYCLE=PASS
-PRE_MARKET_PRODUCTION_INTEGRITY=PASS
-PR89_WATCHDOG_GUARDIAN=BLOCKED_REVIEW_AND_CI
+GITHUB_MAIN_AT_PACKAGE6=028db6ee5a993869bf33a534c4339475981d9357
+PR108=MERGED
+PR108_RUNTIME_RELEASE=f36836315526fd2be826e8abff1c333004b64b0c
+PR113=MERGED
+PACKAGE6_PHONE_DEPLOYMENT=PASS
+PACKAGE6_RUNTIME_FILES_VERIFIED=12
+PACKAGE6_POSTDEPLOY_ACCEPTANCE=BLOCKED
+LATEST_CONTROL_PLANE=7/7_RUNNING_7/7_OWNED_WITH_1_ZOMBIE_RUNSV
+WEEKEND_CONTROL_PLANE_STABILITY=FAIL
+PROFITLAB_PENDING_BYTES_AT_FIRST_POSTDEPLOY_GATE=271063
 OPEN_MARKET_THREE_PAIR_PROOF=PENDING
-MONDAY_READY=NO
+PRODUCTION_READY=NO
 ```
 
-The phone checkout HEAD is not production identity. Runtime acceptance is based on immutable reviewed source blobs, deployed file parity, runtime state, and bounded postconditions.
+## User scope and release objective
 
-## Latest verified phone evidence
+Do not expand BotA work into unrelated audits, tools, repos, or strategy changes. The objective is a clean, reliable production signal bot using the existing EURUSD/GBPUSD/USDJPY M15 strategy and modern Telegram signal presentation.
 
-The PR #87 / #88 deployment and subsequent natural runtime proof passed:
+Do not waste phone/laptop sessions by repeatedly rediscovering already-proven facts. Use the accumulated evidence and close one actual release blocker at a time.
+
+## Package 6 phone deployment
+
+The reviewed transactional deployer from PR #113 successfully installed the 12-file PR #108 runtime payload pinned to:
 
 ```text
-requests==2.34.2
-DEPENDENCY_CONTRACT=PASS
-PIP_BASELINE_REGRESSION=NO
-CONTROL_PLANE=7_OF_7_HEALTHY
-WATCHDOG_SINGLETON=PASS
-PROFITLAB_PRESERVED=PASS
-SERVICE_RESTARTED=NO
-SHADOW_MANUALLY_EXECUTED=NO
-STRATEGY_CHANGED=NO
+f36836315526fd2be826e8abff1c333004b64b0c
 ```
 
-A later natural runit-owned shadow cycle completed successfully:
+Deployment audit:
 
 ```text
-SHADOW_STATUS=completed
-SHADOW_DETAILS=exit_code=0
-LATEST_SHADOW_HEARTBEAT=OK | 0 active signals
-LATEST_SHADOW_DONE_LOG=Shadow Manager done | 0 active signals
-NATURAL_SHADOW_ACCEPTANCE=PASS
+/data/data/com.termux/files/home/BotA/audits/transactional_phone_deploy_20260816T201256Z_31681
 ```
 
-The corrected pre-market integrity gate then passed all nine checks with zero failures:
+The first attempt safely aborted because the deployer did not find `SUPABASE_SERVICE_KEY` in `.env` / `.env.runtime`. The key already existed in local untracked `config/strategy.env`, was identified as a new Supabase secret key, and returned HTTP 200 with both the current publisher headers and `apikey` only. No secret value was printed or committed. The local ignored `.env.runtime` alias is mode `0600`.
+
+## Post-deploy findings
+
+The first production-integrity check found two stale control-plane files and a ProfitLab backlog. The two runtime files were repaired to exact release bytes/modes:
 
 ```text
-CHECK_CONTROL_PLANE=PASS
-CHECK_WATCHDOG_OWNERSHIP=PASS
-CHECK_BOOT_PERSISTENCE=PASS
-CHECK_CRON_OWNERSHIP=PASS
-CHECK_RUNTIME_PARITY=PASS
-CHECK_PRODUCTION_CONFIG=PASS
-CHECK_PROFITLAB=PASS
-CHECK_PROGRESS=PASS
-CHECK_TRUSTED_CLOCK=PASS
-FAILURE_COUNT=0
-PRE_MARKET_INTEGRITY_ACCEPTANCE=PASS
+start_native_service_daemon_watchdog.sh
+  blob=c383857b7323e1511d71e351a3becd54ca42d682
+  mode=755
+control_plane_status.py
+  blob=45e7aa5d5b88668720d48efc009cb376c0109783
+  mode=755
+CONTROL_PLANE_PARITY_REPAIR=PASS
 ```
 
-Therefore:
+The latest control-plane snapshot then showed:
 
 ```text
-INFRASTRUCTURE_AND_CLOSED_MARKET_READINESS=PASS
+MANAGER_COUNT=1
+OWNED=7/7
+RUNNING=7/7
+ORPHANED=0
+DUPLICATES=0
+LIVE_CROND_COUNT=1
+FAILURE=zombie_runsv_count:1
 ```
 
-Do **not** translate that into `MONDAY_READY=YES` yet.
+## Critical correction from weekend telemetry
+
+The operator reported **89 BotA Telegram messages during the weekend**. These were not Monday-market notifications and were not one duplicated unchanged failure.
+
+The stream shows repeated real control-plane degradation and recovery from 2026-08-14 through 2026-08-17 UTC, including:
+
+```text
+manager_count:0
+owned:0/7 .. 6/7
+orphaned:1 .. 7
+running:6/7
+live_crond_count:0
+crond_pidfile:missing
+crond_not_owned_by_current_runsv
+crond_parent_not_current_runsv
+zombie_runsv_count:1 -> 2 -> 3
+shadow DEADMAN=118m,218m,245m,197m,151m
+```
+
+The correct diagnosis is **recurring runtime/control-plane flapping**. Repeated RECOVERY messages prove self-recovery occurs, but they do not prove stability because the same failure families return.
+
+Do not treat the 89-message problem as a notification-dedup bug only. Alert coalescing is desirable later, but it must not conceal real instability.
 
 ## Current production scope
 
@@ -98,72 +105,25 @@ TELEGRAM_ENABLED=1
 DRY_RUN_MODE=0
 ```
 
-Do not lower thresholds or change signal eligibility to manufacture activity.
+No threshold lowering, forced signals, or fake Telegram trade is authorized.
 
-## Current blocker — PR #89
+## Current release blockers
 
-PR #89 `fix: persist native watchdog with fail-closed cron guardian` is still open. Current head at this checkpoint:
+1. recurring native-manager / runsv / crond ownership instability, including zombie accumulation;
+2. ProfitLab pending region (`271063` bytes at first post-deploy gate) must be reconciled without bootstrap/reset;
+3. natural market-open same-cycle EURUSD/GBPUSD/USDJPY M15 acceptance remains pending.
 
-```text
-PR89_HEAD=4f73a999634bc83c52defb0d31bfb72291ac83b9
-PR89_MERGEABLE=true
-GITHUB_ACTIONS_SECURITY_SCAN=PASS
-GITHUB_ACTIONS_NATIVE_WATCHDOG_GUARDIAN=PASS
-DEEPSOURCE_PYTHON=FAIL
-UNRESOLVED_REVIEW_THREADS=10
-DISTINCT_REMEDIATION_ITEMS=9
-```
-
-Two unresolved threads report the same unused-variable cleanup; there are therefore 10 open threads but 9 distinct fixes.
-
-The unresolved findings are concentrated in the five PR files:
-
-- `.github/workflows/native-watchdog-guardian.yml`
-- `tools/native_watchdog_guard.py`
-- `tools/native_watchdog_cron_config.py`
-- `tests/test_native_watchdog_guard.py`
-- `tests/test_native_watchdog_cron_config.py`
-
-Required fixes:
-
-1. active advisory `FLOCK` ownership rather than open-descriptor inference;
-2. shell-safe quoted cron paths plus CR/LF rejection;
-3. controlled guardian failure even if event logging itself fails;
-4. AST-based no-termination validator with negative fixtures;
-5. full rendered-crontab validation with exactly one managed active `--ensure` line;
-6. finite timeout validation (`NaN` / infinities rejected);
-7. `persist-credentials: false` on checkout;
-8. unused-variable cleanup;
-9. staticmethod cleanup in cron tests.
-
-No phone deployment of PR #89 is allowed until exact-head review/static/CI gates pass.
-
-## Remaining Monday gates
-
-```text
-PR89_REVIEW_CLEAN=PENDING
-PR89_EXACT_HEAD_STATIC_AND_CI=PASS_REQUIRED
-PR89_MERGE=PENDING
-GUARDIAN_PHONE_DEPLOY=PENDING
-GUARDIAN_WATCHDOG_ONLY_FAULT_INJECTION=PENDING
-OPEN_MARKET_EURUSD_M15=PENDING
-OPEN_MARKET_GBPUSD_M15=PENDING
-OPEN_MARKET_USDJPY_M15=PENDING
-MONDAY_READY=NO
-```
-
-Three legitimate current-cycle rejects are acceptable for the market-open proof. A Telegram signal is not required.
+Telegram operator-alert presentation should be cleaned only after the health state is trustworthy enough not to hide distinct incidents.
 
 ## Canonical current sources
 
 1. `CONTINUITY_CURRENT.md`
 2. `AI_START_HERE.md`
-3. `audits/PRE_MARKET_READINESS_CHECKPOINT_2026-08-09.md`
+3. `audits/PACKAGE6_PHONE_DEPLOY_AND_WEEKEND_RUNTIME_FINDINGS_2026-08-17.md`
 4. GitHub issue #9
-5. this file
-
-`ERRORS.md`, `RESOLVED.md`, and older dated audits preserve historical failure and repair context; current gate truth must follow the sources above when historical wording differs.
+5. `ERRORS.md`
+6. this file
 
 ## Exactly one next action
 
-Fix every still-valid unresolved PR #89 review finding on branch `fix/watchdog-persistence-guardian-20260809`, run focused validation, and stop for human confirmation before commit/push. Do not mutate the phone/runtime while fixing the GitHub PR.
+Close the recurring control-plane stability defect from the existing weekend evidence. Do not start another broad audit or another unrelated package before that blocker is causally narrowed and fixed.
