@@ -211,6 +211,33 @@ def _drainable_zero_manager_forest(state):
     return True
 
 
+def _drain_one_pid1_orphan(root, service, sv, timeout, table_fn, sv_fn):
+    row = topology(table_fn(), root)["services"][service]
+    if row["runsv_count"] != 1 or row["owner"] != "pid1_orphan":
+        raise WatchdogError(f"orphan_drain_precondition_changed:{service}")
+    for command in ("down", "exit"):
+        result = sv_fn(sv, root, service, command, timeout)
+        if result.returncode:
+            detail = (result.stdout or result.stderr).strip()
+            raise WatchdogError(
+                f"sv_{command}_failed:{service}:"
+                f"rc={result.returncode}:{detail}"
+            )
+
+
+def _orphan_forest_drained(root, table_fn):
+    table = table_fn()
+    return (
+        not managers(table, root)
+        and not any(runsv_rows(table, service) for service in SERVICES)
+    )
+
+
+def _active_required_runsv(table_fn):
+    table = table_fn()
+    return [service for service in SERVICES if runsv_rows(table, service)]
+
+
 def drain_orphan_tree_before_native(root, sv, timeout, table_fn=process_table,
                                     sv_fn=sv_cmd, wait_fn=wait):
     """Drain a safe PID-1 orphan forest before starting a new manager.
@@ -239,34 +266,12 @@ def drain_orphan_tree_before_native(root, sv, timeout, table_fn=process_table,
         for service in orphan_services
     ]
     for service in orphan_services:
-        row = topology(table_fn(), root)["services"][service]
-        if row["runsv_count"] != 1 or row["owner"] != "pid1_orphan":
-            raise WatchdogError(
-                f"orphan_drain_precondition_changed:{service}"
-            )
-        for command in ("down", "exit"):
-            result = sv_fn(sv, root, service, command, timeout)
-            if result.returncode:
-                detail = (result.stdout or result.stderr).strip()
-                raise WatchdogError(
-                    f"sv_{command}_failed:{service}:"
-                    f"rc={result.returncode}:{detail}"
-                )
-
-    def drained():
-        table = table_fn()
-        if managers(table, root):
-            return False
-        return not any(
-            runsv_rows(table, service) for service in SERVICES
+        _drain_one_pid1_orphan(
+            root, service, sv, timeout, table_fn, sv_fn
         )
 
-    if not wait_fn(drained, timeout):
-        table = table_fn()
-        active = [
-            service for service in SERVICES
-            if runsv_rows(table, service)
-        ]
+    if not wait_fn(lambda: _orphan_forest_drained(root, table_fn), timeout):
+        active = _active_required_runsv(table_fn)
         raise WatchdogError(
             "orphan_tree_drain_timeout:"
             f"active={','.join(active)}"
