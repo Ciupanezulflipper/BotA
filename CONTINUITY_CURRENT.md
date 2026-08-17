@@ -1,133 +1,21 @@
 # BotA Current Continuity State
 
-Last updated: **2026-08-09 UTC**
+Last updated: **2026-08-17 UTC**
 
-This file is the current operational handoff. Historical audits and `ERRORS.md` preserve prior incidents; do not reconstruct present production state from older snapshots.
+This is the current operational handoff. Older dated readiness snapshots are historical context only.
 
 ## Current authoritative status
 
 ```text
-CHECKPOINT_BASE_MAIN=163eae4ee7a0d651ed0ad3516dba7eaef4c09cbe
-PHONE_RUNTIME_SOURCE_BASELINE=5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
-PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
-PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
-PHONE_WORKTREE_DIRTY=YES
+GITHUB_MAIN_AT_PACKAGE6=028db6ee5a993869bf33a534c4339475981d9357
+PR108_RUNTIME_RELEASE=f36836315526fd2be826e8abff1c333004b64b0c
+PR108_STATE=MERGED
+PR113_STATE=MERGED
+PACKAGE5_TRANSACTIONAL_DEPLOYER=COMPLETE
+PACKAGE6_PHONE_DEPLOYMENT=PASS
+PACKAGE6_12_FILE_RUNTIME_PARITY=PASS
+PACKAGE6_POSTDEPLOY_ACCEPTANCE=BLOCKED
 
-PACKAGE_1_CLOCK_SESSION=PASS
-PACKAGE_2_CONTROL_PLANE_RECOVERY=PASS
-PACKAGE_2_FINALIZER_DEPLOY=PASS
-PR87_PR88_PHONE_DEPLOY=PASS
-RUNTIME_DEPENDENCY_CONTRACT=PASS
-REQUESTS_VERSION=2.34.2
-NATURAL_SHADOW_CYCLE=PASS
-PRE_MARKET_PRODUCTION_INTEGRITY=PASS
-PRE_MARKET_FAILURE_COUNT=0
-
-CURRENT_CONTROL_PLANE=HEALTHY
-CURRENT_MANAGER_COUNT=1
-CURRENT_REQUIRED_SERVICES_OWNED=7/7
-CURRENT_REQUIRED_SERVICES_RUNNING=7/7
-CURRENT_ORPHANED_RUNSV=0
-CURRENT_DUPLICATE_SERVICE_ROWS=0
-WATCHDOG_SINGLETON=PASS
-WATCHDOG_LOCK_SINGLETON=PASS
-BOOT_WATCHDOG_PERSISTENCE=PASS
-CRON_OWNERSHIP=PASS
-RUNTIME_PARITY=PASS
-PRODUCTION_CONFIG=PASS
-PROFITLAB_STATE=PASS
-TRUSTED_CLOCK=PASS
-
-PR89_WATCHDOG_GUARDIAN=BLOCKED_REVIEW_AND_CI
-OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
-MONDAY_READY=NO
-```
-
-`CHECKPOINT_BASE_MAIN` is the GitHub main commit on which this continuity correction was based. The documentation merge that contains this file will necessarily advance `main`; GitHub issue #9 carries the live current-main SHA. The phone runtime source baseline for PR #87/#88 acceptance remains `5cbfbf11...`.
-
-## Latest phone proofs
-
-### Native watchdog finalizer
-
-Phone acceptance after the hash-pinned Package #2 finalizer:
-
-```text
-manager_count=1
-owned=7/7
-running=7/7
-orphaned=0
-duplicates=0
-watchdog_pid=18153
-watchdog_lock_holder=18153
-finalizer_acceptance=PASS
-```
-
-The finalizer also installed the managed Termux:Boot watchdog block. No rollback was required.
-
-### PR #87 / PR #88 production fixes
-
-Phone deployed exact GitHub content from:
-
-```text
-5cbfbf11fd98d9a40b1d5ea28995f584ec9da080
-```
-
-Deployed/verified:
-
-```text
-tools/pre_market_integrity.py
-requirements-runtime.txt
-tools/runtime_dependency_check.py
-tools/run_shadow_manager.sh
-requests==2.34.2
-```
-
-Safety proof:
-
-```text
-PIP_EXISTING_DISTRIBUTION_CHANGE=NO
-PIP_BASELINE_UNCHANGED=PASS
-CONTROL_PLANE=7_OF_7_HEALTHY
-WATCHDOG_SINGLETON=PASS
-PROFITLAB_PRESERVED=PASS
-SERVICE_RESTARTED=NO
-SHADOW_MANUALLY_EXECUTED=NO
-STRATEGY_CHANGED=NO
-```
-
-### Natural shadow-cycle proof
-
-A natural runit-owned shadow cycle after dependency deployment produced:
-
-```text
-SHADOW_STATUS=completed
-SHADOW_DETAILS=exit_code=0
-LATEST_SHADOW_HEARTBEAT=2026-08-09T14:57:12.073212+00:00 | OK | 0 active signals
-LATEST_SHADOW_DONE_LOG=Shadow Manager done | 0 active signals
-NATURAL_SHADOW_ACCEPTANCE=PASS
-```
-
-### Corrected pre-market integrity gate
-
-The corrected PR #87 gate ran against runtime source baseline `5cbfbf11fd98d9a40b1d5ea28995f584ec9da080` and returned:
-
-```text
-CHECK_CONTROL_PLANE=PASS
-CHECK_WATCHDOG_OWNERSHIP=PASS
-CHECK_BOOT_PERSISTENCE=PASS
-CHECK_CRON_OWNERSHIP=PASS
-CHECK_RUNTIME_PARITY=PASS
-CHECK_PRODUCTION_CONFIG=PASS
-CHECK_PROFITLAB=PASS
-CHECK_PROGRESS=PASS
-CHECK_TRUSTED_CLOCK=PASS
-FAILURE_COUNT=0
-PRE_MARKET_INTEGRITY_ACCEPTANCE=PASS
-```
-
-## Production scope remains frozen
-
-```text
 PAIRS=EURUSD GBPUSD USDJPY
 TIMEFRAMES=M15
 POLICY_B_ENABLED=1
@@ -136,45 +24,122 @@ POLICY_B_ADX_MAX=30
 NEWS_ON=0
 TELEGRAM_ENABLED=1
 DRY_RUN_MODE=0
+
+LATEST_CONTROL_PLANE_MANAGER_COUNT=1
+LATEST_CONTROL_PLANE_OWNED=7/7
+LATEST_CONTROL_PLANE_RUNNING=7/7
+LATEST_CONTROL_PLANE_ORPHANED=0
+LATEST_CONTROL_PLANE_DUPLICATES=0
+LATEST_CONTROL_PLANE_LIVE_CROND=1
+LATEST_CONTROL_PLANE_FAILURE=zombie_runsv_count:1
+WEEKEND_RUNTIME_STABILITY=FAIL
+PROFITLAB_PENDING_BYTES_AT_FIRST_POSTDEPLOY_GATE=271063
+OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
+PRODUCTION_READY=NO
 ```
 
-No strategy threshold, pair/timeframe, Telegram eligibility, or ProfitLab semantics were changed by the readiness work.
+## Deployment evidence
 
-## Current blocker: PR #89 watchdog persistence guardian
-
-PR #89 is **not deployable yet**. Current head:
+Package 6 verified remote main, the exact transactional deployer blob, the exact runtime release pin, one watcher owner before deployment, and then installed the reviewed 12-file runtime payload.
 
 ```text
-PR89_HEAD=4f73a999634bc83c52defb0d31bfb72291ac83b9
-PR89_STATE=OPEN
-PR89_DEEPSOURCE_PYTHON=FAIL
+DEPLOYMENT=PASS
+DEPLOY_AUDIT=/data/data/com.termux/files/home/BotA/audits/transactional_phone_deploy_20260816T201256Z_31681
+RUNTIME_FILES_VERIFIED=12
+WATCHER_COUNT_AFTER=1
 ```
 
-Still-valid unresolved review findings include:
+The initial attempt failed safely before mutation because the deployer did not find `SUPABASE_SERVICE_KEY` in `.env` / `.env.runtime`. The key already existed in local untracked `config/strategy.env`; compatibility probes against the BotA Supabase project returned HTTP 200 with the current publisher headers and with `apikey` only. The key value was never printed. It was aliased locally into ignored `.env.runtime` mode `0600`.
 
-1. determine advisory lock ownership from active `FLOCK` state rather than merely open descriptors;
-2. shell-quote/reject line breaks in CLI-derived cron paths;
-3. preserve controlled failure RC/output when event logging itself fails;
-4. replace incomplete grep-based process-termination prohibition with AST-based validation and negative fixtures;
-5. validate the fully rendered cron entry and exactly one active `--ensure` guardian invocation;
-6. reject non-finite timeout values;
-7. clean remaining lint/test-quality findings.
+## Post-deploy integrity findings
 
-Do not deploy or fault-inject PR #89 on the phone until its exact-head CI/static/review gates pass.
+The first post-deploy integrity gate failed only after deployment had succeeded. It exposed two stale control-plane files plus a ProfitLab backlog:
+
+```text
+runtime_blob_mismatch:tools/start_native_service_daemon_watchdog.sh
+runtime_mode_mismatch:tools/start_native_service_daemon_watchdog.sh:700:755
+runtime_blob_mismatch:tools/control_plane_status.py
+profitlab_pending_bytes:271063
+```
+
+The two stale files were repaired from the exact runtime release and reverified:
+
+```text
+tools/start_native_service_daemon_watchdog.sh
+  blob=c383857b7323e1511d71e351a3becd54ca42d682
+  mode=755
+
+tools/control_plane_status.py
+  blob=45e7aa5d5b88668720d48efc009cb376c0109783
+  mode=755
+
+CONTROL_PLANE_PARITY_REPAIR=PASS
+```
+
+A subsequent control-plane snapshot showed exactly one remaining local condition:
+
+```text
+CONTROL_PLANE_HEALTHY=FALSE
+MANAGER_COUNT=1
+OWNED=7
+RUNNING=7
+ORPHANED=0
+DUPLICATES=0
+LIVE_CROND_COUNT=1
+FAILURE=zombie_runsv_count:1
+```
+
+## Weekend runtime history is the key finding
+
+The operator reported **89 BotA Telegram messages during the weekend**. This is not a single stale alert being resent. The accumulated messages show repeated real DEGRADED/RECOVERY and DEADMAN/RECOVERY cycles between 2026-08-14 and 2026-08-17 UTC.
+
+Repeated failure families include:
+
+- manager loss (`manager_count:0`);
+- ownership collapse from 6/7 down to 0/7, with PID-1 orphaning;
+- `crond` absent or not owned by the current runsv;
+- missing `crond.pid` and parent mismatch;
+- zombie `runsv` counts increasing from 1 to 2 to 3;
+- shadow DEADMAN windows of 118, 218, 245, 197, and 151 minutes, followed by recovery.
+
+This changes the release diagnosis: **runtime/control-plane flapping is still unresolved even though individual snapshots recover to 7/7**. A single healthy snapshot cannot be used as production-stability proof.
+
+## Telegram classification
+
+The message volume is unacceptable for operator use, but notification suppression is not the primary fix. Many messages correspond to genuinely different failure/recovery transitions. The correct sequence is:
+
+1. stabilize the underlying control plane;
+2. preserve truthful incident transitions;
+3. then coalesce/debounce operator messaging so one incident lifecycle is concise and useful without hiding distinct real failures.
+
+The modern GREEN/YELLOW trade-card presentation remains separate from infrastructure health messaging.
+
+## ProfitLab status
+
+The first post-deploy integrity check measured:
+
+```text
+PROFITLAB_PENDING_BYTES=271063
+```
+
+Do not bootstrap or reset the cursor merely to make the gate green. Inspect/reconcile the pending region and preserve historical delivery semantics.
 
 ## Current freeze
 
 ```text
 DO_NOT_BOOTSTRAP_PROFITLAB=YES
+DO_NOT_RESET_CURSOR_TO_HIDE_BACKLOG=YES
 DO_NOT_LOWER_THRESHOLDS=YES
 DO_NOT_FORCE_SIGNAL_COUNT=YES
 DO_NOT_FORCE_TELEGRAM_TEST_SIGNAL=YES
-DO_NOT_DEPLOY_PR89_BEFORE_REVIEW_GATES=YES
-DO_NOT_DECLARE_MONDAY_READY_BEFORE_OPEN_MARKET_PROOF=YES
+DO_NOT_HIDE_REAL_RUNTIME_FAILURES_WITH_DEDUP=YES
+DO_NOT_DECLARE_PRODUCTION_READY_FROM_SINGLE_HEALTHY_SAMPLE=YES
 ```
 
 ## Exactly one next engineering action
 
-Fix PR #89 on its existing branch `fix/watchdog-persistence-guardian-20260809`, resolve every still-valid review finding, run exact-head CI/static tests, and obtain review-clean status. Only after that should the guardian be deployed to the phone and fault-injection tested.
+Treat the recurring manager/runsv/crond ownership failures, zombie accumulation, and associated DEADMAN episodes as the single current release blocker. Use the existing evidence to close that stability defect before doing more strategy work, tooling work, presentation work, or broad repository auditing.
 
-After the guardian acceptance passes, the final readiness gate is one genuine `MARKET_OPEN` cycle proving current EURUSD:M15, GBPUSD:M15, and USDJPY:M15 decisions in the same authoritative cycle with fresh updater/shadow/data evidence, trusted server time, unique execution ownership, and one authoritative terminal watcher outcome. Three legitimate rejected decisions are acceptable; Telegram delivery is not required.
+After stable control-plane acceptance, reconcile ProfitLab pending bytes, then run the natural market-open same-cycle EURUSD:M15 / GBPUSD:M15 / USDJPY:M15 acceptance on the final runtime.
+
+Canonical detailed evidence: `audits/PACKAGE6_PHONE_DEPLOY_AND_WEEKEND_RUNTIME_FINDINGS_2026-08-17.md`.
