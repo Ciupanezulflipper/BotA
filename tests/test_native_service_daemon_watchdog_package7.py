@@ -36,6 +36,8 @@ def orphan_table() -> dict[int, dict]:
 
 
 class Package7ManagerLossTests(unittest.TestCase):
+    """Lock the recovery order: drain safe orphans, then start one manager."""
+
     @staticmethod
     def immediate(predicate, _timeout):
         return predicate()
