@@ -1,0 +1,48 @@
+name: Package 7 resumability materialize
+
+on:
+  push:
+    branches:
+      - fix/package7-control-plane-stability-20260817
+    paths:
+      - .github/workflows/package7-materialize-resume.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Materialize resumable manager-loss recovery
+        run: python ops/package7_materialize_resume.py
+
+      - name: Compile changed Python
+        run: |
+          python -m py_compile \
+            tools/native_service_daemon_watchdog.py \
+            tests/test_native_service_daemon_watchdog_package7.py
+
+      - name: Run focused control-plane tests
+        run: |
+          python -m unittest -v \
+            tests/test_native_service_daemon_watchdog.py \
+            tests/test_native_service_daemon_watchdog_package7.py \
+            tests/test_native_service_daemon_migration.py
+
+      - name: Diff hygiene
+        run: git diff --check
+
+      - name: Commit resumability hardening
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/package7-materialize-resume.yml ops/package7_materialize_resume.py
+          git add tools/native_service_daemon_watchdog.py tests/test_native_service_daemon_watchdog_package7.py
+          git diff --cached --check
+          git commit -m "fix: make manager-loss drain resumable"
+          git push origin HEAD:fix/package7-control-plane-stability-20260817
