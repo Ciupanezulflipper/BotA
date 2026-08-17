@@ -52,13 +52,15 @@ class Package7ManagerLossTests(unittest.TestCase):
         def sv_fn(_sv, _root, service, command, _timeout):
             events.append((command, service))
             if command == "exit":
-                old_pid = next(
+                matches = [
                     pid
                     for pid, item in list(state["table"].items())
                     if item.get("argv", [])[-1:] == [service]
                     and Path(item.get("argv", [""])[0]).name == "runsv"
-                )
-                state["table"].pop(old_pid)
+                ]
+                self.assertEqual(matches, [matches[0]] if matches else [])
+                self.assertEqual(len(matches), 1)
+                state["table"].pop(matches[0])
             return subprocess.CompletedProcess([], 0, "", "")
 
         temp = tempfile.TemporaryDirectory()
@@ -122,9 +124,12 @@ class Package7ManagerLossTests(unittest.TestCase):
             "bota-closer",
         }
         for pid, item in list(table.items()):
-            if item.get("argv", [])[-1:] and item["argv"][-1] in already_drained:
-                if Path(item.get("argv", [""])[0]).name == "runsv":
-                    table.pop(pid)
+            if (
+                item.get("argv", [])[-1:]
+                and item["argv"][-1] in already_drained
+                and Path(item.get("argv", [""])[0]).name == "runsv"
+            ):
+                table.pop(pid)
 
         result, events = self.reconcile_simulated(table)
         remaining = [
