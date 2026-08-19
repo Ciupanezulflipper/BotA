@@ -100,6 +100,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("shadow")
 UNIQ_CONFLICT_ERR = "no unique or exclusion constraint matching the ON CONFLICT specification"
+SCHEMA_CHECK_FAILURE_DETAIL = "SCHEMA_COMPATIBILITY_FAILURE: see shadow_manager.log"
 
 # ---------------------------------------------------------------------------
 # DATA MODEL
@@ -187,24 +188,93 @@ def oanda_base_url() -> str:
         else "https://api-fxtrade.oanda.com"
     )
 
+def _response_text(response: Any) -> str:
+    if response is None:
+        return ""
+    try:
+        return str(response.text or "")
+    except Exception:
+        return ""
+
+def _response_excerpt(response: Any, limit: int = 500) -> str:
+    text = " ".join(_response_text(response).split())
+    if not text:
+        return "<unavailable>"
+    return text[:limit]
+
+def _looks_like_schema_error(body: str) -> bool:
+    lowered = body.lower()
+    return (
+        "pgrst204" in lowered
+        or ("schema cache" in lowered and "column" in lowered)
+        or ("column" in lowered and "does not exist" in lowered)
+        or ("could not find" in lowered and "column" in lowered)
+    )
+
+def _missing_required_shadow_columns(body: str) -> List[str]:
+    if not _looks_like_schema_error(body):
+        return []
+    lowered = body.lower()
+    return [column for column in REQUIRED_SHADOW_COLS if column.lower() in lowered]
+
 def check_schema_compatibility() -> bool:
     """
     Validates shadow_log has all required columns.
     Fetches LIMIT=0 rows -- zero data transferred, column list only.
+    Connectivity/TLS/HTTP failures are classified separately from schema defects.
     """
+    global SCHEMA_CHECK_FAILURE_DETAIL
+    SCHEMA_CHECK_FAILURE_DETAIL = "SCHEMA_COMPATIBILITY_FAILURE: see shadow_manager.log"
     select_cols = ",".join(REQUIRED_SHADOW_COLS)
     try:
         sb_get("shadow_log", {"select": select_cols, "limit": "0"})
         log.info("Schema compatibility: PASS (%d required columns verified)", len(REQUIRED_SHADOW_COLS))
         return True
+    except requests.exceptions.SSLError as exc:
+        SCHEMA_CHECK_FAILURE_DETAIL = "SCHEMA_CHECK_TLS_FAILURE: see shadow_manager.log"
+        log.error("SCHEMA_CHECK_TLS_FAILURE -- Supabase TLS verification failed: %s", exc)
+        return False
+    except requests.exceptions.Timeout as exc:
+        SCHEMA_CHECK_FAILURE_DETAIL = "SCHEMA_CHECK_TIMEOUT: see shadow_manager.log"
+        log.error("SCHEMA_CHECK_TIMEOUT -- Supabase schema probe timed out: %s", exc)
+        return False
+    except requests.exceptions.ConnectionError as exc:
+        SCHEMA_CHECK_FAILURE_DETAIL = "SCHEMA_CHECK_CONNECTIVITY_FAILURE: see shadow_manager.log"
+        log.error("SCHEMA_CHECK_CONNECTIVITY_FAILURE -- Supabase unreachable during schema probe: %s", exc)
+        return False
+    except requests.exceptions.HTTPError as exc:
+        response = exc.response
+        body = _response_text(response)
+        missing = _missing_required_shadow_columns(body)
+        if missing:
+            SCHEMA_CHECK_FAILURE_DETAIL = "SCHEMA_COMPATIBILITY_FAILURE: see shadow_manager.log"
+            log.error(
+                "SCHEMA_COMPATIBILITY_FAILURE -- Supabase reported missing required column(s): %s; response=%s",
+                ",".join(missing),
+                _response_excerpt(response),
+            )
+        elif _looks_like_schema_error(body):
+            SCHEMA_CHECK_FAILURE_DETAIL = "SCHEMA_COMPATIBILITY_FAILURE: see shadow_manager.log"
+            log.error(
+                "SCHEMA_COMPATIBILITY_FAILURE -- Supabase reported a schema error but the missing required column could not be identified; response=%s",
+                _response_excerpt(response),
+            )
+        else:
+            status = getattr(response, "status_code", "unknown") if response is not None else "unknown"
+            SCHEMA_CHECK_FAILURE_DETAIL = "SCHEMA_CHECK_HTTP_FAILURE: see shadow_manager.log"
+            log.error(
+                "SCHEMA_CHECK_HTTP_FAILURE -- Supabase schema probe returned HTTP %s; response=%s",
+                status,
+                _response_excerpt(response),
+            )
+        return False
+    except requests.exceptions.RequestException as exc:
+        SCHEMA_CHECK_FAILURE_DETAIL = "SCHEMA_CHECK_REQUEST_FAILURE: see shadow_manager.log"
+        log.error("SCHEMA_CHECK_REQUEST_FAILURE -- Supabase schema probe request failed: %s", exc)
+        return False
     except Exception as exc:
-        log.error(
-            "Schema compatibility: FAIL -- %s\n"
-            "Most likely missing: last_candle_ts_processed\n"
-            "Fix in Supabase SQL Editor:\n"
-            "  ALTER TABLE shadow_log ADD COLUMN IF NOT EXISTS last_candle_ts_processed TIMESTAMPTZ;",
-            exc,
-        )
+        SCHEMA_CHECK_FAILURE_DETAIL = "SCHEMA_CHECK_UNEXPECTED_FAILURE: see shadow_manager.log"
+        log.exception("SCHEMA_CHECK_UNEXPECTED_FAILURE -- unexpected schema probe failure: %s", exc)
         return False
 
 # ---------------------------------------------------------------------------
@@ -1062,7 +1132,7 @@ def main() -> None:
         sys.exit(1)
 
     if not check_schema_compatibility():
-        write_heartbeat("ERROR", "schema compatibility check failed -- see shadow_manager.log")
+        write_heartbeat("ERROR", SCHEMA_CHECK_FAILURE_DETAIL)
         sys.exit(1)
 
     started = now_utc()
