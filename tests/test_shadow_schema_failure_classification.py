@@ -68,8 +68,8 @@ class ShadowSchemaFailureClassificationTests(unittest.TestCase):
         response.status_code = 400
         response.url = "https://example.supabase.co/rest/v1/shadow_log"
         response._content = (
-            b'{"code":"PGRST204","message":"Could not find the '
-            b"'last_candle_ts_processed' column of 'shadow_log' in the schema cache"}
+            b"{\"code\":\"PGRST204\",\"message\":\"Could not find the "
+            b"'last_candle_ts_processed' column of 'shadow_log' in the schema cache\"}"
         )
         exc = requests.exceptions.HTTPError(
             "400 Client Error",
