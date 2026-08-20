@@ -14,4 +14,5 @@ CRON_TZ=UTC
 #MIGRATED_TO_RUNIT */15 * * * * bash /data/data/com.termux/files/home/BotA/tools/run_signal_closer_live.sh >> /data/data/com.termux/files/home/BotA/logs/cron.closer.log 2>&1
 10 * * * * cd /data/data/com.termux/files/home/BotA && /data/data/com.termux/files/usr/bin/bash /data/data/com.termux/files/home/BotA/tools/daily_summary_server_gate.sh >> /data/data/com.termux/files/home/BotA/logs/cron.daily.log 2>&1
 */5 * * * * cd /data/data/com.termux/files/home/BotA && /data/data/com.termux/files/home/BotA/tools/run_runtime_health_push.sh >> /data/data/com.termux/files/home/BotA/logs/cron.runtime_health_push.wrapper.log 2>&1
+*/30 * * * * bash -lc '. "/data/data/com.termux/files/home/BotA/.env.runtime"; timeout -k 5s 25s python3 "/data/data/com.termux/files/home/BotA/tools/market_pulse_v2.py" --scheduled-send' >> /data/data/com.termux/files/home/BotA/logs/cron.market_pulse_v2.log 2>&1
 # BotA runtime END
