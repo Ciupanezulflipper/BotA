@@ -19,6 +19,7 @@ on:
       - "tools/supabase_publish.py"
       - "tools/chart_generator.py"
       - "tools/chart_generator_core.py"
+      - "tools/market_pulse_v2.py"
       - "tools/signal_watcher_pro.sh"
       - "tools/signal_watcher_core.sh"
       - "tools/data_fetch_candles.sh"
@@ -58,7 +59,8 @@ jobs:
             tools/telegram_send_guard.py \
             tools/supabase_publish.py \
             tools/chart_generator.py \
-            tools/chart_generator_core.py
+            tools/chart_generator_core.py \
+            tools/market_pulse_v2.py
       - name: Check shell syntax
         run: |
           bash -n tools/data_fetch_candles.sh
@@ -82,4 +84,5 @@ jobs:
             tests.test_telegram_commit_ordering \
             tests.test_runtime_deployment_barrier \
             tests.test_watcher_cycle_contract \
-            tests.test_watcher_evidence_retention
+            tests.test_watcher_evidence_retention \
+            tests.test_market_pulse_v2
