@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import socket
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
@@ -108,7 +109,6 @@ def test_stale_or_wrong_boot_decision_is_not_presented_as_tradeable():
 
 
 def test_scheduled_window_is_three_days_only():
-    # 2026-08-17 Monday, 19 Wednesday, 21 Friday, 20 Thursday.
     assert pulse.scheduled_window(datetime(2026, 8, 17, 8, 0, tzinfo=timezone.utc))
     assert pulse.scheduled_window(datetime(2026, 8, 19, 12, 0, tzinfo=timezone.utc))
     assert pulse.scheduled_window(datetime(2026, 8, 21, 18, 59, tzinfo=timezone.utc))
@@ -118,12 +118,16 @@ def test_scheduled_window_is_three_days_only():
 
 
 def test_timeout_is_unknown_outcome_and_dns_is_retryable():
-    with mock.patch.object(pulse.urllib.request, "urlopen", side_effect=TimeoutError("timed out")):
+    timeout_connection = mock.Mock()
+    timeout_connection.request.side_effect = TimeoutError("timed out")
+    with mock.patch.object(pulse.http.client, "HTTPSConnection", return_value=timeout_connection):
         status, _, reason = pulse.telegram_send("x", "token", "chat")
     assert status == "unknown_outcome"
     assert reason == "timeout"
 
-    dns_error = pulse.urllib.error.URLError(OSError("No address associated with hostname"))
-    with mock.patch.object(pulse.urllib.request, "urlopen", side_effect=dns_error):
-        status, _, _ = pulse.telegram_send("x", "token", "chat")
+    dns_connection = mock.Mock()
+    dns_connection.request.side_effect = socket.gaierror(-2, "Name or service not known")
+    with mock.patch.object(pulse.http.client, "HTTPSConnection", return_value=dns_connection):
+        status, _, reason = pulse.telegram_send("x", "token", "chat")
     assert status == "retryable_failure"
+    assert reason == "gaierror"
