@@ -324,7 +324,7 @@ def telegram_send(text: str, token: str, chat_id: str) -> tuple[str, int | None,
         return "retryable_failure", None, type(exc).__name__
     except TimeoutError:
         return "unknown_outcome", None, "timeout"
-    except (ConnectionResetError, http.client.HTTPException, OSError) as exc:
+    except (http.client.HTTPException, OSError) as exc:
         return "unknown_outcome", None, type(exc).__name__
     finally:
         if connection is not None:
