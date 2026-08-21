@@ -16,7 +16,7 @@ from tools import heartbeat_runtime
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / "tools" / "heartbeat.sh"
 SERVICE = ROOT / "services" / "bota-heartbeat" / "run"
-SERVER_EPOCH = 1_775_000_000
+SERVER_EPOCH = 1_775_044_800  # 2026-04-01 12:00:00 UTC, active session.
 
 
 def write_health(root: Path) -> None:
@@ -56,11 +56,11 @@ def write_progress(root: Path, boot_id: str, value: float) -> None:
     path.write_text(f"{boot_id} {value}\n", encoding="utf-8")
 
 
-def write_bucket(root: Path) -> None:
+def write_bucket(root: Path, epoch: int = SERVER_EPOCH) -> None:
     path = root / "logs" / "state" / "heartbeat_utc_bucket.txt"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        heartbeat_runtime.utc_bucket(SERVER_EPOCH) + "\n",
+        heartbeat_runtime.utc_bucket(epoch) + "\n",
         encoding="utf-8",
     )
 
@@ -97,7 +97,7 @@ class HeartbeatRuntimeSourcePolicyTests(unittest.TestCase):
 
 
 class HeartbeatRuntimeValueTests(unittest.TestCase):
-    """Verify UTC and monotonic value handling."""
+    """Verify UTC, session, and monotonic value handling."""
 
     def test_configured_server_epoch_avoids_network(self) -> None:
         with (
@@ -126,6 +126,13 @@ class HeartbeatRuntimeValueTests(unittest.TestCase):
 
         self.assertEqual(changed, ("boot_changed", None))
         self.assertEqual(future, ("invalid", None))
+
+    def test_active_session_boundaries_use_trusted_utc(self) -> None:
+        self.assertFalse(heartbeat_runtime.active_session(1_775_026_740))
+        self.assertTrue(heartbeat_runtime.active_session(1_775_026_800))
+        self.assertTrue(heartbeat_runtime.active_session(1_775_071_940))
+        self.assertFalse(heartbeat_runtime.active_session(1_775_073_600))
+        self.assertFalse(heartbeat_runtime.active_session(1_775_289_600))
 
 
 class HeartbeatRuntimeCycleTests(unittest.TestCase):
@@ -210,7 +217,7 @@ class HeartbeatRuntimeCycleTests(unittest.TestCase):
         self.assertIn("HB_UTC_RESULT=DELIVERY_FAILED", log)
         self.assertIn("HB_UTC_RESULT=RETRY_SUPPRESSED", log)
 
-    def test_stale_progress_sends_deadman_and_creates_flag(self) -> None:
+    def test_stale_progress_sends_clean_in_session_deadman(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "BotA"
             write_health(root)
@@ -243,11 +250,49 @@ class HeartbeatRuntimeCycleTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         sender.assert_called_once()
-        self.assertIn("DEADMAN", sender.call_args.args[2])
+        message = sender.call_args.args[2]
+        self.assertIn("SCAN DELAYED", message)
+        self.assertNotIn("[BotA DEADMAN]", message)
+        self.assertNotIn("last shadow", message.lower())
         self.assertTrue(flag_exists)
         self.assertIn("DEADMAN_UTC_RESULT=ALERT_SENT", log)
 
-    def test_fresh_progress_sends_recovery_and_removes_flag(self) -> None:
+    def test_stale_progress_outside_session_does_not_send_deadman(self) -> None:
+        outside_epoch = 1_775_073_600
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "BotA"
+            write_health(root)
+            write_credentials(root)
+            write_bucket(root, outside_epoch)
+            write_progress(root, "boot-a", 0.0)
+            with (
+                patch.dict(
+                    os.environ,
+                    {"HEARTBEAT_SERVER_EPOCH": str(outside_epoch)},
+                    clear=False,
+                ),
+                patch.object(heartbeat_runtime.time, "monotonic", return_value=6000.0),
+                patch.object(
+                    heartbeat_runtime.delivery,
+                    "boot_identity",
+                    return_value="boot-a",
+                ),
+                patch.object(
+                    heartbeat_runtime.delivery,
+                    "send_telegram",
+                ) as sender,
+            ):
+                result = heartbeat_runtime.run_cycle(root)
+
+            flag = root / "logs" / "state" / "deadman.flag"
+            log = (root / "logs" / "cron.heartbeat.log").read_text(encoding="utf-8")
+
+        self.assertEqual(result, 0)
+        sender.assert_not_called()
+        self.assertFalse(flag.exists())
+        self.assertIn("DEADMAN_UTC_RESULT=SKIP_OUTSIDE_SESSION", log)
+
+    def test_fresh_progress_sends_clean_recovery_and_removes_flag(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "BotA"
             write_health(root)
@@ -282,7 +327,9 @@ class HeartbeatRuntimeCycleTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         sender.assert_called_once()
-        self.assertIn("RECOVERY", sender.call_args.args[2])
+        message = sender.call_args.args[2]
+        self.assertIn("SCAN RESTORED", message)
+        self.assertNotIn("[BotA RECOVERY]", message)
         self.assertFalse(flag_exists)
         self.assertIn("DEADMAN_UTC_RESULT=RECOVERY_SENT", log)
 
