@@ -50,7 +50,7 @@ def atomic_write_text(path: Path, value: str, mode: int = 0o600) -> None:
             mode="w",
             encoding="utf-8",
             dir=path.parent,
-            prefix=f".{path.name}.",
+            prefix=f"{path.name}.",
             suffix=".tmp",
             delete=False,
         ) as handle:
@@ -299,7 +299,12 @@ def handle_heartbeat(
         return
 
     summary = delivery.build_summary(root / "state" / "runtime_health.json")
-    message = f"💓 Heartbeat — BotA alive at {utc_display(server_epoch)}\n{summary}"
+    delivery.append_log(log_path, f"HB_UTC_INTERNAL_SUMMARY={summary}")
+    message = (
+        "💓 BOTA · ONLINE\n"
+        "Runtime heartbeat received.\n"
+        "Market and system issues are reported separately."
+    )
     outcome, detail = attempt_event(
         root=root,
         message=message,
@@ -384,7 +389,6 @@ def handle_recovery(
     log_path: Path,
     deadman_flag: Path,
     recovery_state: Path,
-    last_display: str,
     now_monotonic: float,
     current_boot_id: str,
     dry_run: bool,
@@ -465,7 +469,6 @@ def handle_deadman(
         log_path=log_path,
         deadman_flag=deadman_flag,
         recovery_state=recovery_state,
-        last_display=last_display,
         now_monotonic=now_monotonic,
         current_boot_id=current_boot_id,
         dry_run=dry_run,
