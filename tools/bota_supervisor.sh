@@ -91,14 +91,23 @@ ops_issue_message() {
   local class="$1"
   if [[ -f "${OPS_UX}" ]]; then
     python3 "${OPS_UX}" issue-message "${class}" 2>/dev/null || true
+    return 0
   fi
+  printf '%s\n' \
+    '⚠️ BOTA · SYSTEM ISSUE' \
+    'BotA detected an operational health problem.' \
+    'Trading safeguards remain active. Details are logged internally.'
 }
 
 ops_recovery_message() {
   local class="$1"
   if [[ -f "${OPS_UX}" ]]; then
     python3 "${OPS_UX}" recovery-message "${class}" 2>/dev/null || true
+    return 0
   fi
+  printf '%s\n' \
+    '✅ BOTA · SYSTEM RESTORED' \
+    'BotA operational health checks are back to normal.'
 }
 
 json_failures() {
@@ -217,7 +226,7 @@ PY
 )"
 
 pipeline_rc=0
-if [[ "${market_state}" == "open" ]]; then
+if [[ "${market_state}" = "open" ]]; then
   python3 "${TOOLS}/pipeline_health.py" --market-open \
     >"${pipeline_tmp}" 2>>"${LOGS}/error.log" || pipeline_rc=$?
 else
@@ -365,19 +374,19 @@ market_detail="$(tr '\n' '|' <"${market_stderr_tmp}" | cut -c1-240)"
 log "MARKET_GATE: state=${market_state} rc=${market_rc} detail=${market_detail:-none}"
 log "CLOCK_OBSERVABILITY: status=${clock_status} runtime_failure=NO"
 
-if [[ "${BOT_MODE}" == "DEGRADED" ]]; then
+if [[ "${BOT_MODE}" = "DEGRADED" ]]; then
   log "DEGRADED: ${FAILURE_STR}"
   alert_class="$(ops_classify "${FAILURE_STR}")"
 
-  if [[ "${alert_class}" == "suppress" ]]; then
+  if [[ "${alert_class}" = "suppress" ]]; then
     log "TELEGRAM_SUPPRESSED: zombie-only control-plane noise"
     if [[ -f "${DEGRADED_FLAG}" ]]; then
       prior_value="$(cat "${DEGRADED_FLAG}" 2>/dev/null || true)"
       prior_class="$(ops_flag_class "${prior_value}")"
-      if [[ "${prior_class}" == "suppress" ]]; then
+      if [[ "${prior_class}" = "suppress" ]]; then
         rm -f "${DEGRADED_FLAG}"
         log "LEGACY_ZOMBIE_FLAG_CLEARED=YES"
-      elif [[ "${prior_class}" == "scan" || "${prior_class}" == "system" ]]; then
+      elif [[ "${prior_class}" = "scan" || "${prior_class}" = "system" ]]; then
         recovery_message="$(ops_recovery_message "${prior_class}")"
         send_telegram "${recovery_message}"
         rm -f "${DEGRADED_FLAG}"
@@ -392,12 +401,12 @@ if [[ "${BOT_MODE}" == "DEGRADED" ]]; then
   else
     prior_value="$(cat "${DEGRADED_FLAG}" 2>/dev/null || true)"
     prior_class="$(ops_flag_class "${prior_value}")"
-    if [[ "${prior_class}" == "scan" && "${alert_class}" == "system" ]]; then
+    if [[ "${prior_class}" = "scan" && "${alert_class}" = "system" ]]; then
       issue_message="$(ops_issue_message system)"
       send_telegram "${issue_message}"
       printf 'system\n' >"${DEGRADED_FLAG}"
       log "ACTION: concise system escalation alert attempted"
-    elif [[ "${prior_class}" == "suppress" ]]; then
+    elif [[ "${prior_class}" = "suppress" ]]; then
       issue_message="$(ops_issue_message "${alert_class}")"
       send_telegram "${issue_message}"
       printf '%s\n' "${alert_class}" >"${DEGRADED_FLAG}"
@@ -409,7 +418,7 @@ else
   if [[ -f "${DEGRADED_FLAG}" ]]; then
     prior_value="$(cat "${DEGRADED_FLAG}" 2>/dev/null || true)"
     prior_class="$(ops_flag_class "${prior_value}")"
-    if [[ "${prior_class}" == "scan" || "${prior_class}" == "system" ]]; then
+    if [[ "${prior_class}" = "scan" || "${prior_class}" = "system" ]]; then
       recovery_message="$(ops_recovery_message "${prior_class}")"
       send_telegram "${recovery_message}"
       log "ACTION: concise ${prior_class} recovery alert attempted"
