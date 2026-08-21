@@ -21,6 +21,7 @@ STATE="${ROOT}/state"
 RUNTIME_HEALTH="${STATE}/runtime_health.json"
 DEGRADED_FLAG="${LOGS}/state/supervisor_degraded.flag"
 CLOCK_STATUS="${LOGS}/clock_drift_status.json"
+OPS_UX="${TOOLS}/telegram_ops_ux.py"
 
 mkdir -p "${LOGS}/state" "${STATE}"
 
@@ -59,12 +60,45 @@ log() {
 
 send_telegram() {
   local message="$1"
+  [[ -z "${message}" ]] && return 0
   [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]] && return 0
   curl -sS --connect-timeout 5 --max-time 10 -X POST \
     "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
     -d "chat_id=${TELEGRAM_CHAT_ID}" \
     --data-urlencode "text=${message}" \
     >/dev/null 2>&1 || true
+}
+
+ops_classify() {
+  local raw="$1"
+  if [[ -f "${OPS_UX}" ]]; then
+    python3 "${OPS_UX}" classify "${raw}" 2>/dev/null || printf 'system\n'
+  else
+    printf 'system\n'
+  fi
+}
+
+ops_flag_class() {
+  local raw="$1"
+  if [[ -f "${OPS_UX}" ]]; then
+    python3 "${OPS_UX}" classify-flag "${raw}" 2>/dev/null || printf 'system\n'
+  else
+    printf 'system\n'
+  fi
+}
+
+ops_issue_message() {
+  local class="$1"
+  if [[ -f "${OPS_UX}" ]]; then
+    python3 "${OPS_UX}" issue-message "${class}" 2>/dev/null || true
+  fi
+}
+
+ops_recovery_message() {
+  local class="$1"
+  if [[ -f "${OPS_UX}" ]]; then
+    python3 "${OPS_UX}" recovery-message "${class}" 2>/dev/null || true
+  fi
 }
 
 json_failures() {
@@ -183,7 +217,7 @@ PY
 )"
 
 pipeline_rc=0
-if [ "${market_state}" = "open" ]; then
+if [[ "${market_state}" == "open" ]]; then
   python3 "${TOOLS}/pipeline_health.py" --market-open \
     >"${pipeline_tmp}" 2>>"${LOGS}/error.log" || pipeline_rc=$?
 else
@@ -331,19 +365,58 @@ market_detail="$(tr '\n' '|' <"${market_stderr_tmp}" | cut -c1-240)"
 log "MARKET_GATE: state=${market_state} rc=${market_rc} detail=${market_detail:-none}"
 log "CLOCK_OBSERVABILITY: status=${clock_status} runtime_failure=NO"
 
-if [ "${BOT_MODE}" = "DEGRADED" ]; then
+if [[ "${BOT_MODE}" == "DEGRADED" ]]; then
   log "DEGRADED: ${FAILURE_STR}"
-  if [[ ! -f "${DEGRADED_FLAG}" ]]; then
-    send_telegram "[BotA DEGRADED] ${FAILURE_STR} — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf '%s\n' "${FAILURE_STR}" > "${DEGRADED_FLAG}"
-    log "ACTION: transition alert attempted"
+  alert_class="$(ops_classify "${FAILURE_STR}")"
+
+  if [[ "${alert_class}" == "suppress" ]]; then
+    log "TELEGRAM_SUPPRESSED: zombie-only control-plane noise"
+    if [[ -f "${DEGRADED_FLAG}" ]]; then
+      prior_value="$(cat "${DEGRADED_FLAG}" 2>/dev/null || true)"
+      prior_class="$(ops_flag_class "${prior_value}")"
+      if [[ "${prior_class}" == "suppress" ]]; then
+        rm -f "${DEGRADED_FLAG}"
+        log "LEGACY_ZOMBIE_FLAG_CLEARED=YES"
+      elif [[ "${prior_class}" == "scan" || "${prior_class}" == "system" ]]; then
+        recovery_message="$(ops_recovery_message "${prior_class}")"
+        send_telegram "${recovery_message}"
+        rm -f "${DEGRADED_FLAG}"
+        log "ACTION: user-facing recovery attempted while zombie-only noise remained"
+      fi
+    fi
+  elif [[ ! -f "${DEGRADED_FLAG}" ]]; then
+    issue_message="$(ops_issue_message "${alert_class}")"
+    send_telegram "${issue_message}"
+    printf '%s\n' "${alert_class}" >"${DEGRADED_FLAG}"
+    log "ACTION: concise ${alert_class} transition alert attempted"
+  else
+    prior_value="$(cat "${DEGRADED_FLAG}" 2>/dev/null || true)"
+    prior_class="$(ops_flag_class "${prior_value}")"
+    if [[ "${prior_class}" == "scan" && "${alert_class}" == "system" ]]; then
+      issue_message="$(ops_issue_message system)"
+      send_telegram "${issue_message}"
+      printf 'system\n' >"${DEGRADED_FLAG}"
+      log "ACTION: concise system escalation alert attempted"
+    elif [[ "${prior_class}" == "suppress" ]]; then
+      issue_message="$(ops_issue_message "${alert_class}")"
+      send_telegram "${issue_message}"
+      printf '%s\n' "${alert_class}" >"${DEGRADED_FLAG}"
+      log "ACTION: legacy suppressed flag replaced by real ${alert_class} alert"
+    fi
   fi
 else
   log "HEALTHY: exact ownership and useful-progress gates passed"
   if [[ -f "${DEGRADED_FLAG}" ]]; then
-    send_telegram "[BotA RECOVERY] Exact ownership and useful progress restored — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    prior_value="$(cat "${DEGRADED_FLAG}" 2>/dev/null || true)"
+    prior_class="$(ops_flag_class "${prior_value}")"
+    if [[ "${prior_class}" == "scan" || "${prior_class}" == "system" ]]; then
+      recovery_message="$(ops_recovery_message "${prior_class}")"
+      send_telegram "${recovery_message}"
+      log "ACTION: concise ${prior_class} recovery alert attempted"
+    else
+      log "TELEGRAM_SUPPRESSED: recovery for zombie-only legacy state"
+    fi
     rm -f "${DEGRADED_FLAG}"
-    log "ACTION: recovery alert attempted"
   fi
 fi
 
