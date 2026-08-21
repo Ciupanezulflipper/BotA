@@ -35,6 +35,8 @@ DEFAULT_SERVER_TARGETS = (
     ("api-fxpractice.oanda.com", "/"),
     ("query1.finance.yahoo.com", "/"),
 )
+ACTIVE_SESSION_START_HOUR_UTC = 7
+ACTIVE_SESSION_END_HOUR_UTC = 20
 
 EventOutcome = Literal["sent", "failed", "suppressed", "dry_run"]
 
@@ -148,6 +150,15 @@ def utc_display(epoch: int) -> str:
     return datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
+def active_session(epoch: int) -> bool:
+    """Return whether trusted UTC is inside BotA's 07:00-20:00 weekday session."""
+    now = datetime.fromtimestamp(epoch, timezone.utc)
+    return (
+        now.weekday() < 5
+        and ACTIVE_SESSION_START_HOUR_UTC <= now.hour < ACTIVE_SESSION_END_HOUR_UTC
+    )
+
+
 def telegram_credentials(root: Path) -> tuple[str, str]:
     """Read scoped Telegram credentials without sourcing shell files."""
     runtime = delivery.parse_env_file(root / ".env.runtime")
@@ -256,7 +267,7 @@ def progress_age_seconds(
 
 
 def last_shadow_display(path: Path) -> str:
-    """Return the latest shadow-manager display timestamp for operator context."""
+    """Return the latest shadow-manager display timestamp for local diagnostics."""
     try:
         line = path.read_text(encoding="utf-8").splitlines()[-1]
     except (OSError, UnicodeError, IndexError):
@@ -288,7 +299,12 @@ def handle_heartbeat(
         return
 
     summary = delivery.build_summary(root / "state" / "runtime_health.json")
-    message = f"💓 Heartbeat — BotA alive at {utc_display(server_epoch)}\n{summary}"
+    delivery.append_log(log_path, f"HB_UTC_INTERNAL_SUMMARY={summary}")
+    message = (
+        "💓 BOTA · ONLINE\n"
+        "Runtime heartbeat received.\n"
+        "Market and system issues are reported separately."
+    )
     outcome, detail = attempt_event(
         root=root,
         message=message,
@@ -335,14 +351,15 @@ def handle_stale_progress(
     current_boot_id: str,
     dry_run: bool,
 ) -> None:
-    """Deliver or suppress a deadman alert for stale progress."""
+    """Deliver or suppress a deadman alert for stale in-session progress."""
     if deadman_flag.exists():
         emit(log_path, "DEADMAN_UTC_RESULT=ALREADY_ALERTED")
         return
     age_minutes = int(age_seconds // 60)
     message = (
-        f"[BotA DEADMAN] Pipeline stale for {age_minutes}min "
-        f"(server UTC: {utc_display(server_epoch)}) — last shadow: {last_display}"
+        "⚠️ BOTA · SCAN DELAYED\n"
+        f"No fresh pipeline progress for {age_minutes} min.\n"
+        "BotA will not present stale data as a valid setup."
     )
     outcome, detail = attempt_event(
         root=root,
@@ -353,7 +370,10 @@ def handle_stale_progress(
         dry_run=dry_run,
     )
     if outcome == "sent":
-        atomic_write_text(deadman_flag, f"{message}\n")
+        atomic_write_text(
+            deadman_flag,
+            f"scan|server_utc={utc_display(server_epoch)}|last_shadow={last_display}\n",
+        )
         emit(log_path, "DEADMAN_UTC_RESULT=ALERT_SENT")
     elif outcome == "dry_run":
         emit(log_path, "DEADMAN_UTC_RESULT=DRY_RUN_ALERT")
@@ -369,16 +389,15 @@ def handle_recovery(
     log_path: Path,
     deadman_flag: Path,
     recovery_state: Path,
-    last_display: str,
     now_monotonic: float,
     current_boot_id: str,
     dry_run: bool,
 ) -> None:
-    """Deliver or suppress recovery after a prior deadman alert."""
+    """Deliver or suppress a concise recovery after a prior deadman alert."""
     if not deadman_flag.exists():
         emit(log_path, "DEADMAN_UTC_RESULT=HEALTHY")
         return
-    message = f"[BotA RECOVERY] Pipeline alive — last shadow: {last_display}"
+    message = "✅ BOTA · SCAN RESTORED\nFresh pipeline progress has resumed."
     outcome, detail = attempt_event(
         root=root,
         message=message,
@@ -429,6 +448,9 @@ def handle_deadman(
 
     last_display = last_shadow_display(shadow_display_path)
     if age_seconds > bounded_deadman_stale_seconds():
+        if not active_session(server_epoch):
+            emit(log_path, "DEADMAN_UTC_RESULT=SKIP_OUTSIDE_SESSION")
+            return
         handle_stale_progress(
             root=root,
             log_path=log_path,
@@ -447,7 +469,6 @@ def handle_deadman(
         log_path=log_path,
         deadman_flag=deadman_flag,
         recovery_state=recovery_state,
-        last_display=last_display,
         now_monotonic=now_monotonic,
         current_boot_id=current_boot_id,
         dry_run=dry_run,
