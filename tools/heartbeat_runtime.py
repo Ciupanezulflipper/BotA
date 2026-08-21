@@ -35,6 +35,8 @@ DEFAULT_SERVER_TARGETS = (
     ("api-fxpractice.oanda.com", "/"),
     ("query1.finance.yahoo.com", "/"),
 )
+ACTIVE_START_HOUR_UTC = 7
+ACTIVE_END_HOUR_UTC = 20
 
 EventOutcome = Literal["sent", "failed", "suppressed", "dry_run"]
 
@@ -146,6 +148,26 @@ def utc_bucket(epoch: int) -> str:
 def utc_display(epoch: int) -> str:
     """Return a human-readable authoritative UTC timestamp."""
     return datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+def compact_utc_timestamp(raw: str) -> str:
+    """Render an ISO-like UTC timestamp in the same compact style as Market Pulse."""
+    value = raw.strip()
+    if not value or value == "display timestamp unavailable":
+        return "Unavailable"
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return value
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).strftime("%a %d %b · %H:%M UTC")
+
+
+def deadman_monitoring_window(server_epoch: int) -> bool:
+    """Match the production London+NY session used by market_open.sh."""
+    current = datetime.fromtimestamp(server_epoch, timezone.utc)
+    return current.weekday() < 5 and ACTIVE_START_HOUR_UTC <= current.hour < ACTIVE_END_HOUR_UTC
 
 
 def telegram_credentials(root: Path) -> tuple[str, str]:
@@ -288,7 +310,7 @@ def handle_heartbeat(
         return
 
     summary = delivery.build_summary(root / "state" / "runtime_health.json")
-    message = f"💓 Heartbeat — BotA alive at {utc_display(server_epoch)}\n{summary}"
+    message = f"💓 BOTA · HEARTBEAT\nBotA is online.\n{summary}"
     outcome, detail = attempt_event(
         root=root,
         message=message,
@@ -341,8 +363,10 @@ def handle_stale_progress(
         return
     age_minutes = int(age_seconds // 60)
     message = (
-        f"[BotA DEADMAN] Pipeline stale for {age_minutes}min "
-        f"(server UTC: {utc_display(server_epoch)}) — last shadow: {last_display}"
+        "⚠️ BOTA · SCAN DELAYED\n"
+        f"No fresh market scan for {age_minutes} min during the active session.\n"
+        f"Last scan: {compact_utc_timestamp(last_display)}\n"
+        "BotA will keep checking automatically."
     )
     outcome, detail = attempt_event(
         root=root,
@@ -378,7 +402,11 @@ def handle_recovery(
     if not deadman_flag.exists():
         emit(log_path, "DEADMAN_UTC_RESULT=HEALTHY")
         return
-    message = f"[BotA RECOVERY] Pipeline alive — last shadow: {last_display}"
+    message = (
+        "✅ BOTA · SCAN RESTORED\n"
+        "Fresh market-scan progress resumed.\n"
+        f"Last scan: {compact_utc_timestamp(last_display)}"
+    )
     outcome, detail = attempt_event(
         root=root,
         message=message,
@@ -416,6 +444,10 @@ def handle_deadman(
     dry_run: bool,
 ) -> None:
     """Evaluate monotonic useful progress and dispatch deadman or recovery."""
+    if not deadman_monitoring_window(server_epoch) and not deadman_flag.exists():
+        emit(log_path, "DEADMAN_UTC_RESULT=SKIP_OUTSIDE_ACTIVE_SESSION")
+        return
+
     status, age_seconds = progress_age_seconds(
         progress_path,
         current_boot_id,
@@ -429,6 +461,9 @@ def handle_deadman(
 
     last_display = last_shadow_display(shadow_display_path)
     if age_seconds > bounded_deadman_stale_seconds():
+        if not deadman_monitoring_window(server_epoch):
+            emit(log_path, "DEADMAN_UTC_RESULT=SKIP_OUTSIDE_ACTIVE_SESSION")
+            return
         handle_stale_progress(
             root=root,
             log_path=log_path,
