@@ -3,9 +3,13 @@
 
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from tools import telegram_ops_ux
+from tools import heartbeat_runtime, telegram_ops_ux
 
 
 class TelegramOpsUxTests(unittest.TestCase):
@@ -66,6 +70,68 @@ class TelegramOpsUxTests(unittest.TestCase):
         self.assertIn("SYSTEM RESTORED", telegram_ops_ux.recovery_message("system"))
         self.assertEqual(telegram_ops_ux.issue_message("suppress"), "")
         self.assertEqual(telegram_ops_ux.recovery_message("suppress"), "")
+
+
+class HeartbeatTelegramUxTests(unittest.TestCase):
+    def test_heartbeat_keeps_raw_diagnostics_local_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "BotA"
+            health = root / "state" / "runtime_health.json"
+            health.parent.mkdir(parents=True, exist_ok=True)
+            health.write_text(
+                json.dumps(
+                    {
+                        "bot_mode": "DEGRADED",
+                        "market_state": "open",
+                        "failure_reasons": ["control_plane:zombie_runsv_count:2"],
+                        "control_plane": {
+                            "owned": 7,
+                            "required": 7,
+                            "running": 7,
+                            "orphaned": 0,
+                        },
+                        "pipeline_progress": {"healthy": True},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            log_path = root / "logs" / "cron.heartbeat.log"
+            bucket_path = root / "logs" / "state" / "heartbeat_utc_bucket.txt"
+            state_path = root / "state" / "heartbeat_delivery.json"
+
+            with (
+                patch.object(
+                    heartbeat_runtime,
+                    "telegram_credentials",
+                    return_value=("unit-test-token", "unit-test-chat"),
+                ),
+                patch.object(
+                    heartbeat_runtime.delivery,
+                    "send_telegram",
+                    return_value=(True, "http_status:200"),
+                ) as sender,
+            ):
+                heartbeat_runtime.handle_heartbeat(
+                    root=root,
+                    log_path=log_path,
+                    bucket_path=bucket_path,
+                    state_path=state_path,
+                    server_epoch=1_775_044_800,
+                    source_count=3,
+                    now_monotonic=100.0,
+                    current_boot_id="boot-a",
+                    dry_run=False,
+                )
+
+            message = sender.call_args.args[2]
+            local_log = log_path.read_text(encoding="utf-8")
+
+        self.assertIn("BOTA · ONLINE", message)
+        self.assertNotIn("control_plane:", message)
+        self.assertNotIn("zombie_runsv_count", message)
+        self.assertNotIn("failures=", message)
+        self.assertIn("zombie_runsv_count", local_log)
+        self.assertIn("HB_UTC_INTERNAL_SUMMARY", local_log)
 
 
 if __name__ == "__main__":
