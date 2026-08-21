@@ -16,6 +16,8 @@ on:
       - "tools/telegram_delivery.py"
       - "tools/telegram_send_guard.py"
       - "tools/telegram_send.sh"
+      - "tools/telegram_ops_ux.py"
+      - "tools/heartbeat_runtime.py"
       - "tools/supabase_publish.py"
       - "tools/chart_generator.py"
       - "tools/chart_generator_core.py"
@@ -57,6 +59,8 @@ jobs:
             tools/watcher_evidence_retention.py \
             tools/telegram_delivery.py \
             tools/telegram_send_guard.py \
+            tools/telegram_ops_ux.py \
+            tools/heartbeat_runtime.py \
             tools/supabase_publish.py \
             tools/chart_generator.py \
             tools/chart_generator_core.py \
@@ -85,4 +89,7 @@ jobs:
             tests.test_runtime_deployment_barrier \
             tests.test_watcher_cycle_contract \
             tests.test_watcher_evidence_retention \
-            tests.test_market_pulse_v2
+            tests.test_market_pulse_v2 \
+            tests.test_heartbeat_runtime_policy \
+            tests.test_bota_supervisor_service_policy \
+            tests.test_telegram_ops_ux
