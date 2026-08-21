@@ -43,19 +43,25 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 import http.client
 
+if __package__:
+    from tools import bota_common as common
+else:  # direct execution or file-based module loading
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools import bota_common as common
+
 
 # -----------------------------------------------------------------------------
 # Time utilities (UTC tz-aware)
 # -----------------------------------------------------------------------------
 
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+utc_now = common.utc_now
 
 
 def _coerce_utc(dt: datetime) -> datetime:
