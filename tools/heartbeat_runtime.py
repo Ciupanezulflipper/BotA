@@ -161,8 +161,11 @@ def active_session(epoch: int) -> bool:
 
 def telegram_credentials(root: Path) -> tuple[str, str]:
     """Read scoped Telegram credentials without sourcing shell files."""
-    runtime = delivery.parse_env_file(root / ".env.runtime")
-    configured = delivery.parse_env_file(root / "config" / "tele.env")
+    code_root = Path(
+        os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT") or root
+    ).expanduser()
+    runtime = delivery.parse_env_file(code_root / ".env.runtime")
+    configured = delivery.parse_env_file(code_root / "config" / "tele.env")
     values = {**runtime, **configured}
     return (
         values.get("TELEGRAM_BOT_TOKEN", ""),
@@ -536,7 +539,12 @@ def main() -> int:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA"))),
+        default=Path(
+            os.environ.get("BOTA_MUTABLE_ROOT")
+            or os.environ.get("BOTA_CODE_ROOT")
+            or os.environ.get("BOTA_ROOT")
+            or Path.home() / "BotA"
+        ),
     )
     args = parser.parse_args()
     return run_cycle(args.root.expanduser())

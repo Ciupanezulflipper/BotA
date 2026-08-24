@@ -7,7 +7,7 @@ local bundles, avoiding a second provider request and keeping USDJPY on the same
 provider/candle state as the rest of the pipeline.
 
 Production runtime accepts pair names only. Filesystem paths are fixed beneath
-$HOME/BotA/cache and are never constructed from CLI input.
+the configured mutable cache root and are never constructed from CLI input.
 """
 
 from __future__ import annotations
@@ -21,7 +21,13 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_PAIRS = ("EURUSD", "GBPUSD", "USDJPY")
-CACHE_DIR = (Path.home() / "BotA" / "cache").resolve()
+CODE_ROOT = Path(
+    os.environ.get("BOTA_CODE_ROOT")
+    or os.environ.get("BOTA_ROOT")
+    or Path.home() / "BotA"
+).expanduser()
+MUTABLE_ROOT = Path(os.environ.get("BOTA_MUTABLE_ROOT", str(CODE_ROOT))).expanduser()
+CACHE_DIR = (MUTABLE_ROOT / "cache").resolve()
 PAIR_FILES = {
     "EURUSD": ("indicators_EURUSD_D1.json", "d1_trend_EURUSD.json"),
     "GBPUSD": ("indicators_GBPUSD_D1.json", "d1_trend_GBPUSD.json"),

@@ -1,11 +1,18 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${HOME}/BotA"
-TOOLS="${ROOT}/tools"
-LOGS="${ROOT}/logs"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+ROOT="${CODE_ROOT}"
+TOOLS="${CODE_ROOT}/tools"
+LOGS="${MUTABLE_ROOT}/logs"
 RUNTIME_ERR_LOG="${LOGS}/shadow_runtime.stderr.log"
 DEPENDENCY_CHECK="${TOOLS}/runtime_dependency_check.py"
+if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" == 1 ]]; then
+  printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nTOOLS=%s\nLOGS=%s\n' \
+    "${CODE_ROOT}" "${MUTABLE_ROOT}" "${TOOLS}" "${LOGS}"
+  exit 0
+fi
 cd "${ROOT}"
 
 mkdir -p "${LOGS}"

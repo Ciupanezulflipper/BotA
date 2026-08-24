@@ -31,7 +31,9 @@ def service_key() -> str:
 
 
 def root_path() -> Path:
-    return Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA"))).expanduser().resolve()
+    configured = os.environ.get("BOTA_MUTABLE_ROOT")
+    fallback = os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT")
+    return Path(configured or fallback or Path.home() / "BotA").expanduser().resolve()
 
 
 @contextmanager

@@ -16,10 +16,18 @@
 
 set -u
 
-ROOT="/data/data/com.termux/files/home/BotA"
-cd "$ROOT" || exit 1
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+ROOT="${CODE_ROOT}"
+if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" == 1 ]]; then
+  printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nTOOLS=%s\nCACHE=%s\nLOGS=%s\n' \
+    "${CODE_ROOT}" "${MUTABLE_ROOT}" "${CODE_ROOT}/tools" \
+    "${MUTABLE_ROOT}/cache" "${MUTABLE_ROOT}/logs"
+  exit 0
+fi
+cd "$CODE_ROOT" || exit 1
 
-mkdir -p "$ROOT/logs"
+mkdir -p "$MUTABLE_ROOT/logs"
 
 eval "$(
 python3 - <<'PY'

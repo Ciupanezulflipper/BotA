@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 ###############################################################################
 # FILE: tools/indicators_updater.sh
 # PURPOSE:
@@ -11,10 +11,19 @@
 set -euo pipefail
 shopt -s inherit_errexit 2>/dev/null || true
 
-ROOT="${HOME}/BotA"
-TOOLS="${ROOT}/tools"
-CACHE="${ROOT}/cache"
-LOGS="${ROOT}/logs"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+ROOT="${CODE_ROOT}"
+TOOLS="${CODE_ROOT}/tools"
+CACHE="${MUTABLE_ROOT}/cache"
+LOGS="${MUTABLE_ROOT}/logs"
+
+if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" == 1 ]]; then
+  printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nTOOLS=%s\nCACHE=%s\nDATA=%s\nLOGS=%s\nLOCK=%s\n' \
+    "${CODE_ROOT}" "${MUTABLE_ROOT}" "${TOOLS}" "${CACHE}" \
+    "${MUTABLE_ROOT}/data" "${LOGS}" "${MUTABLE_ROOT}/state/indicators_updater.lock"
+  exit 0
+fi
 
 PAIRS="${PAIRS:-"EURUSD GBPUSD XAUUSD USDJPY EURJPY"}"
 TIMEFRAMES="${TIMEFRAMES:-"M15 H1 H4 D1"}"
@@ -24,7 +33,7 @@ FETCH_BACKOFF_BASE="${FETCH_BACKOFF_BASE:-10}"
 FETCH_BACKOFF_MAX="${FETCH_BACKOFF_MAX:-180}"
 FETCH_MIN_GAP_SECS="${FETCH_MIN_GAP_SECS:-3}"
 
-mkdir -p "${LOGS}" "${ROOT}/state"
+mkdir -p "${LOGS}" "${MUTABLE_ROOT}/state" "${CACHE}"
 
 log() { printf '%s\n' "$*" >&2; }
 
@@ -143,7 +152,7 @@ fetch_with_retry() {
 refresh_d1_trend_cache() {
   source "${ROOT}/.env" 2>/dev/null || true
   source "${ROOT}/config/strategy.env" 2>/dev/null || true
-  export OANDA_API_TOKEN OANDA_API_URL ROOT TOOLS
+  export OANDA_API_TOKEN OANDA_API_URL ROOT TOOLS MUTABLE_ROOT
 
   python3 <<'PYEOF'
 import json
@@ -154,7 +163,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-root = Path(os.environ["ROOT"])
+root = Path(os.environ["MUTABLE_ROOT"])
 tools = Path(os.environ["TOOLS"])
 token = os.environ.get("OANDA_API_TOKEN", "")
 base = os.environ.get("OANDA_API_URL", "https://api-fxpractice.oanda.com").rstrip("/")

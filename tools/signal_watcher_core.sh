@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 ###############################################################################
 # FILE: tools/signal_watcher_pro.sh
 # VERSION: v2.0.2 — 2026-02-21 candle-timestamp staleness (weekend-safe)
@@ -33,8 +33,18 @@ set -euo pipefail
 set +x
 shopt -s inherit_errexit 2>/dev/null || true
 
-ROOT="${BOTA_ROOT:-$HOME/BotA}"
-TOOLS="${ROOT}/tools"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-$HOME/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+ROOT="${CODE_ROOT}"
+TOOLS="${CODE_ROOT}/tools"
+
+if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" == 1 ]]; then
+  printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nTOOLS=%s\nCACHE=%s\nLOGS=%s\nSTATE=%s\nPAUSE=%s\n' \
+    "${CODE_ROOT}" "${MUTABLE_ROOT}" "${TOOLS}" \
+    "${MUTABLE_ROOT}/cache" "${MUTABLE_ROOT}/logs" \
+    "${MUTABLE_ROOT}/logs/state" "${MUTABLE_ROOT}/state/pause"
+  exit 0
+fi
 
 ts_iso() { date +"%Y-%m-%dT%H:%M:%S%z"; }
 
@@ -47,13 +57,13 @@ log() {
 abs_under_root() {
   local p="${1:-}"
   if [[ -z "${p}" ]]; then
-    echo "${ROOT}"
+    echo "${MUTABLE_ROOT}"
     return 0
   fi
   if [[ "${p}" == /* ]]; then
     echo "${p}"
   else
-    echo "${ROOT}/${p}"
+    echo "${MUTABLE_ROOT}/${p}"
   fi
 }
 
@@ -875,7 +885,7 @@ process_pair_tf() {
   fi
 
   # I-10 FIX: Pause guard — skip pair if daily -3R circuit breaker triggered
-  local pause_file="${HOME}/BotA/state/pause"
+  local pause_file="${MUTABLE_ROOT}/state/pause"
   if [[ -f "${pause_file}" ]]; then
     local pause_key="PAUSE_${pair}"
     if grep -q "export ${pause_key}=1" "${pause_file}" 2>/dev/null; then
@@ -1052,7 +1062,7 @@ except Exception:
     # Send chart PNG for GREEN signals only
     if [[ "${tier}" = "GREEN" ]] && [[ -f "${TOOLS}/chart_generator.py" ]]; then
       local chart_path
-      chart_path="${ROOT}/logs/tmp/chart_${pair_o}_${tf_o}_$$.png"
+      chart_path="${MUTABLE_ROOT}/logs/tmp/chart_${pair_o}_${tf_o}_$$.png"
       python3 "${TOOLS}/chart_generator.py" \
         --pair "${pair_o}" --tf "${tf_o}" \
         --direction "${direction}" \

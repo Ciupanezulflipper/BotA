@@ -1,17 +1,26 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 # BotA Phase 5 runtime health push wrapper.
 # Cron-safe wrapper around tools/push_runtime_health_supabase.py.
 # Does not print secrets. Does not use privileged Supabase database keys.
 
 set +e
 
-ROOT="/data/data/com.termux/files/home/BotA"
-SCRIPT="$ROOT/tools/push_runtime_health_supabase.py"
-SECRET_FILE="$ROOT/config/bota_health_ingest.env"
-LOG="$ROOT/logs/cron.runtime_health_push.log"
-LOCK="$ROOT/state/runtime_health_push.lock"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+ROOT="${CODE_ROOT}"
+SCRIPT="$CODE_ROOT/tools/push_runtime_health_supabase.py"
+SECRET_FILE="$CODE_ROOT/config/bota_health_ingest.env"
+LOG="$MUTABLE_ROOT/logs/cron.runtime_health_push.log"
+LOCK="$MUTABLE_ROOT/state/runtime_health_push.lock"
 
-mkdir -p "$ROOT/logs" "$ROOT/state"
+if [ "${BOTA_PATH_CONTRACT_CHECK:-0}" = "1" ]; then
+  printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nSCRIPT=%s\nCONFIG=%s\nLOGS=%s\nSTATE=%s\nLOCK=%s\n' \
+    "$CODE_ROOT" "$MUTABLE_ROOT" "$SCRIPT" "$SECRET_FILE" \
+    "$MUTABLE_ROOT/logs" "$MUTABLE_ROOT/state" "$LOCK"
+  exit 0
+fi
+
+mkdir -p "$MUTABLE_ROOT/logs" "$MUTABLE_ROOT/state"
 
 ts_utc="$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"
 

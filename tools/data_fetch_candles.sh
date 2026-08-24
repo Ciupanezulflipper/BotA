@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 ###############################################################################
 # FILE: tools/data_fetch_candles.sh
 # ROLE: OANDA primary + Yahoo fallback with provider-specific request evidence.
@@ -6,11 +6,20 @@
 set -euo pipefail
 shopt -s inherit_errexit 2>/dev/null || true
 
-ROOT="${HOME}/BotA"
-CACHE_DIR="${ROOT}/cache"
-DATA_DIR="${ROOT}/data/candles"
-TOOLS_DIR="${ROOT}/tools"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+ROOT="${CODE_ROOT}"
+CACHE_DIR="${MUTABLE_ROOT}/cache"
+DATA_DIR="${MUTABLE_ROOT}/data/candles"
+TOOLS_DIR="${CODE_ROOT}/tools"
+LOG_DIR="${MUTABLE_ROOT}/logs"
 PROVIDER_USAGE="${TOOLS_DIR}/provider_usage.py"
+
+if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" == 1 ]]; then
+  printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nTOOLS=%s\nCACHE=%s\nDATA=%s\nLOGS=%s\n' \
+    "${CODE_ROOT}" "${MUTABLE_ROOT}" "${TOOLS_DIR}" "${CACHE_DIR}" "${DATA_DIR}" "${LOG_DIR}"
+  exit 0
+fi
 
 if [[ -f "${ROOT}/.env" ]]; then
   set -a
@@ -38,7 +47,7 @@ provider_record() {
     --status "${status}" \
     --credits 0 \
     --note "${note}" \
-    >/dev/null 2>>"${ROOT}/logs/error.log" || true
+    >/dev/null 2>>"${LOG_DIR}/error.log" || true
 }
 
 PAIR_RAW="${1:-}"
@@ -51,7 +60,7 @@ TF_RAW="${2:-}"
 PAIR="$(printf '%s' "${PAIR_RAW}" | tr -d '/ ' | tr '[:lower:]' '[:upper:]')"
 TF="$(printf '%s' "${TF_RAW}" | tr -d ' ' | tr '[:lower:]' '[:upper:]')"
 
-mkdir -p "${CACHE_DIR}" "${DATA_DIR}" "${ROOT}/logs" >/dev/null 2>&1 || true
+mkdir -p "${CACHE_DIR}" "${DATA_DIR}" "${LOG_DIR}" >/dev/null 2>&1 || true
 
 tf_minutes() {
   local tf="${1:-}" digits=""
@@ -154,7 +163,7 @@ if [[ -n "${OANDA_API_TOKEN}" && -n "${OANDA_GRAN}" ]]; then
   OANDA_OK="$(
     OANDA_API_TOKEN="${OANDA_API_TOKEN}" OANDA_API_URL="${OANDA_API_URL}" \
     OANDA_INSTRUMENT="${OANDA_INSTRUMENT}" OANDA_GRAN="${OANDA_GRAN}" \
-    TMP_JSON="${TMP_JSON}" python3 <<'PY' 2>>"${ROOT}/logs/error.log"
+    TMP_JSON="${TMP_JSON}" python3 <<'PY' 2>>"${LOG_DIR}/error.log"
 import datetime
 import json
 import os
@@ -255,7 +264,7 @@ if [[ "${PROVIDER_USED}" != "oanda" ]]; then
   if command -v curl >/dev/null 2>&1; then
     YAHOO_HTTP="$(
       curl -sSL -A "${UA}" "${URL}" -o "${TMP_JSON}" \
-        -w "%{http_code}" --max-time 15 2>>"${ROOT}/logs/error.log" || echo "000"
+        -w "%{http_code}" --max-time 15 2>>"${LOG_DIR}/error.log" || echo "000"
     )"
     if [[ "${YAHOO_HTTP}" = "429" ]]; then
       provider_record yahoo blocked "http=429"
@@ -289,7 +298,7 @@ if [[ "${PROVIDER_USED}" != "oanda" ]]; then
   log "[FETCH] Yahoo OK"
 fi
 
-PY_OUT="$(python3 - "${TMP_JSON}" "${expected_min}" "${PAIR}" "${TF}" "${TMP_CSV}" <<'PY' 2>>"${ROOT}/logs/error.log" || true
+PY_OUT="$(python3 - "${TMP_JSON}" "${expected_min}" "${PAIR}" "${TF}" "${TMP_CSV}" <<'PY' 2>>"${LOG_DIR}/error.log" || true
 import datetime
 import json
 import math

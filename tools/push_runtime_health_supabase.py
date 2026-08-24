@@ -62,7 +62,9 @@ def utc_now_iso() -> str:
 
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    configured = os.environ.get("BOTA_MUTABLE_ROOT")
+    fallback = os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT")
+    return Path(configured or fallback or Path(__file__).resolve().parents[1]).expanduser()
 
 
 def load_json(path: Path) -> dict[str, Any]:

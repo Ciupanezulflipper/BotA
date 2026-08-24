@@ -47,8 +47,13 @@ import urllib.request
 from datetime import datetime, timezone
 
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
-CACHE_DIR = ROOT / "cache"
+CODE_ROOT = pathlib.Path(
+    os.environ.get("BOTA_CODE_ROOT")
+    or os.environ.get("BOTA_ROOT")
+    or pathlib.Path(__file__).resolve().parent.parent
+).expanduser()
+MUTABLE_ROOT = pathlib.Path(os.environ.get("BOTA_MUTABLE_ROOT", str(CODE_ROOT))).expanduser()
+CACHE_DIR = MUTABLE_ROOT / "cache"
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://ozgkeslgjqbqfewojnmr.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
@@ -61,7 +66,7 @@ MAX_LOCAL_CANDLE_AGE_SECONDS = int(
 
 DEFAULT_TIMEFRAME = "M15"
 FUTURE_CANDLE_TOLERANCE_SECONDS = 300
-LOG_FILE = ROOT / "logs" / "signal_closer.log"
+LOG_FILE = MUTABLE_ROOT / "logs" / "signal_closer.log"
 
 CLOCK_ENDPOINTS = [
     "https://www.google.com",
