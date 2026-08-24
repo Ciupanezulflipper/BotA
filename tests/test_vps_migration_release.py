@@ -12,6 +12,7 @@ MODULE_PATH = ROOT / "tools" / "vps_orchestrator.py"
 SPEC = importlib.util.spec_from_file_location("vps_orchestrator", MODULE_PATH)
 assert SPEC and SPEC.loader
 vps = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = vps
 SPEC.loader.exec_module(vps)
 
 EXPECTED_POLICY = {

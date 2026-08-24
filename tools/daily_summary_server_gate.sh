@@ -21,9 +21,10 @@
 
 set -euo pipefail
 
-ROOT="${BOTA_ROOT:-${HOME}/BotA}"
-LOGDIR="${ROOT}/logs"
-STATE_DIR="${ROOT}/state"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+LOGDIR="${MUTABLE_ROOT}/logs"
+STATE_DIR="${MUTABLE_ROOT}/state"
 TARGET_HOUR_UTC="${DAILY_SUMMARY_TARGET_HOUR_UTC:-20}"
 FALLBACK_MAX_AGE_SECONDS="${DAILY_SUMMARY_LAST_GOOD_MAX_AGE_SECONDS:-28800}"
 LAST_GOOD_FILE="${LOGDIR}/clock_drift_last_good.json"
@@ -40,7 +41,7 @@ if [[ "${DAILY_SUMMARY_CLOCK_FORCE_FAIL:-0}" = "1" ]]; then
   CLOCK_JSON='{"server_clock_ok": false, "server_utc": "NA", "drift_seconds": null, "status": "FORCED_CLOCK_FAIL_FOR_TEST"}'
 else
   CLOCK_JSON="$(
-    python3 "${ROOT}/tools/clock_drift_check.py" --json --write-state 2>/dev/null || true
+    python3 "${CODE_ROOT}/tools/clock_drift_check.py" --json --write-state 2>/dev/null || true
   )"
 fi
 
@@ -190,7 +191,7 @@ echo "GATE_SEND_START server_date=${server_date} server_utc=${server_iso} drift=
 log "GATE_SEND_START server_date=${server_date} server_utc=${server_iso} drift=${drift} detail=${detail}"
 
 SEND_OUTPUT="$(
-  SUMMARY_DATE="${server_date}" DAILY_SUMMARY_SEND="${DAILY_SUMMARY_SEND:-1}" bash "${ROOT}/tools/daily_summary.sh" 2>&1 || true
+  SUMMARY_DATE="${server_date}" DAILY_SUMMARY_SEND="${DAILY_SUMMARY_SEND:-1}" bash "${CODE_ROOT}/tools/daily_summary.sh" 2>&1 || true
 )"
 
 echo "$SEND_OUTPUT"

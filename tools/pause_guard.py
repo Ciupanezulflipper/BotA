@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import os, csv, time
+from pathlib import Path
 from collections import defaultdict
 
-HOME = os.path.expanduser("~")
-CSV = os.path.join(HOME, "BotA", "logs", "trades.csv")
-PAUSE_FILE = os.path.join(HOME, "BotA", "state", "pause")
+CODE_ROOT = Path(os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT") or Path.home() / "BotA").expanduser()
+MUTABLE_ROOT = Path(os.environ.get("BOTA_MUTABLE_ROOT", str(CODE_ROOT))).expanduser()
+CSV = MUTABLE_ROOT / "logs" / "trades.csv"
+PAUSE_FILE = MUTABLE_ROOT / "state" / "pause"
 
 if not os.path.exists(CSV):
     print("no trades.csv yet"); raise SystemExit
