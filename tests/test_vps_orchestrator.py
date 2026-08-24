@@ -220,6 +220,31 @@ class OrchestratorTests(unittest.TestCase):
         self.assertEqual(env["BOTA_MUTABLE_ROOT"], str(self.mutable))
         self.assertEqual(env["POLICY_B_SCORE_MIN"], "70")
 
+    def test_manifest_backed_release_identity_and_malformed_fail_closed(self):
+        sha = "a" * 40
+        release = self.mutable / sha
+        (release / "config").mkdir(parents=True)
+        for relative in ("pyproject.toml", "requirements-runtime.txt", "config/production-vps.env"):
+            target = release / relative
+            target.write_bytes((ROOT / relative).read_bytes())
+        fingerprint = vps.effective_config_evidence(
+            policy_path=release / "config/production-vps.env",
+            dependency_path=release / "requirements-runtime.txt",
+            pyproject_path=release / "pyproject.toml")["fingerprint_sha256"]
+        manifest = {"schema_version": "1.0", "git_commit_sha": sha,
+                    "git_tree_sha": "b" * 40,
+                    "effective_config_fingerprint": fingerprint}
+        (release / vps.RELEASE_MANIFEST_FILENAME).write_text(json.dumps(manifest))
+        orch = vps.Orchestrator(release, self.mutable / "runtime", (),
+                                require_release_manifest=True)
+        health = orch.health()
+        self.assertEqual(health["release_git_sha"], sha)
+        self.assertEqual(health["effective_config_fingerprint"], fingerprint)
+        manifest["git_commit_sha"] = "c" * 40
+        (release / vps.RELEASE_MANIFEST_FILENAME).write_text(json.dumps(manifest))
+        with self.assertRaises(vps.ContractError):
+            vps.Orchestrator(release, self.mutable / "bad", (), require_release_manifest=True)
+
     def test_updater_environment_is_exact_and_cannot_leak(self):
         jobs = {job.name: job for job in vps.production_jobs()}
         hostile = {"TIMEFRAMES": "HOSTILE", "FETCH_RETRIES": "999"}

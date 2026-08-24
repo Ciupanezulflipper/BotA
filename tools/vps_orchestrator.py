@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
+import importlib.metadata
 import json
 import os
 import re
@@ -28,6 +30,8 @@ PYPROJECT_PATH = ROOT / "pyproject.toml"
 SOURCE_GENERATION = "0212d9848ecb8e8b464da215c2ac115d62dae2f4"
 HEALTH_FILENAME = "vps_orchestrator_health.json"
 LOCK_FILENAME = "vps_orchestrator.lock"
+RELEASE_MANIFEST_FILENAME = ".bota-release.json"
+RELEASE_MANIFEST_SCHEMA = "1.0"
 OUTPUT_LIMIT = 32768
 # Existing outer envelopes are preserved for updater/watcher/shadow/ProfitLab/
 # Market Pulse. Jobs without a source-grounded envelope get a deliberately
@@ -144,14 +148,45 @@ def declared_python_contract(path: Path = PYPROJECT_PATH) -> str:
     return contract
 
 
-def runtime_python_result() -> dict[str, object]:
+def runtime_python_result(pyproject_path: Path = PYPROJECT_PATH) -> dict[str, object]:
     healthy = sys.version_info[:2] == (3, 14)
     return {
-        "contract": declared_python_contract(),
+        "contract": declared_python_contract(pyproject_path),
         "executable": sys.executable,
         "healthy": healthy,
         "version": ".".join(map(str, sys.version_info[:3])),
     }
+
+
+def release_preflight(code_root: Path) -> dict[str, object]:
+    """Validate a staged release without locks, jobs, mutable state, or I/O."""
+    checks: dict[str, object] = {}
+    try:
+        release = load_release_manifest(code_root, allow_staging=True)
+        runtime = runtime_python_result(code_root / "pyproject.toml")
+        commands = command_preflight()
+        dependencies = parse_dependency_manifest(code_root / "requirements-runtime.txt")
+        installed = {
+            item["name"]: importlib.metadata.version(item["name"]) for item in dependencies
+        }
+        imported = []
+        for item in dependencies:
+            importlib.import_module(item["name"].replace("-", "_"))
+            imported.append(item["name"])
+        versions_ok = all(installed[item["name"]] == item["version"] for item in dependencies)
+        policy = load_frozen_policy(code_root / "config" / "production-vps.env", {})
+        checks = {"release_manifest": release, "python": runtime,
+                  "commands": commands, "dependencies": installed,
+                  "required_imports": imported,
+                  "dependency_versions_match": versions_ok,
+                  "policy_keys": sorted(policy)}
+        healthy = bool(runtime["healthy"] and commands["healthy"] and versions_ok)
+    except (ContractError, ImportError, OSError, ValueError,
+            importlib.metadata.PackageNotFoundError) as exc:
+        healthy = False
+        checks["failure"] = f"{type(exc).__name__}:{exc}"
+    return {"schema_version": "1.0", "healthy": healthy, "checks": checks,
+            "side_effects_enabled": False}
 
 
 def effective_config_document(
@@ -159,6 +194,7 @@ def effective_config_document(
     ambient: Mapping[str, str] | None = None,
     policy_path: Path = POLICY_PATH,
     dependency_path: Path = DEPENDENCY_PATH,
+    pyproject_path: Path = PYPROJECT_PATH,
     commands: Sequence[str] = REQUIRED_COMMANDS,
 ) -> dict[str, object]:
     """Build an allowlist-only document; credential-bearing input is ignored."""
@@ -166,7 +202,7 @@ def effective_config_document(
         "schema_version": "1.0",
         "release": {"source_generation": SOURCE_GENERATION},
         "runtime": {
-            "python_contract": declared_python_contract(),
+            "python_contract": declared_python_contract(pyproject_path),
             "dependencies": parse_dependency_manifest(dependency_path),
             "required_commands": sorted(commands),
         },
@@ -182,6 +218,39 @@ def effective_config_evidence(**kwargs: object) -> dict[str, object]:
         "effective_config": document,
         "fingerprint_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
     }
+
+
+def load_release_manifest(code_root: Path, *, allow_staging: bool = False) -> dict[str, str]:
+    """Load and validate deployment identity from the finalized release itself."""
+    root = code_root.resolve()
+    path = root / RELEASE_MANIFEST_FILENAME
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise ContractError("release_manifest_unreadable") from exc
+    if not isinstance(value, dict) or value.get("schema_version") != RELEASE_MANIFEST_SCHEMA:
+        raise ContractError("release_manifest_schema")
+    commit = value.get("git_commit_sha")
+    tree = value.get("git_tree_sha")
+    fingerprint = value.get("effective_config_fingerprint")
+    if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise ContractError("release_manifest_commit")
+    if not isinstance(tree, str) or not re.fullmatch(r"[0-9a-f]{40}", tree):
+        raise ContractError("release_manifest_tree")
+    if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
+        raise ContractError("release_manifest_fingerprint")
+    valid_staging = allow_staging and root.name.startswith(f".staging-{commit}-")
+    if root.name != commit and not valid_staging:
+        raise ContractError("release_manifest_directory_mismatch")
+    expected = effective_config_evidence(
+        policy_path=root / "config" / "production-vps.env",
+        dependency_path=root / "requirements-runtime.txt",
+        pyproject_path=root / "pyproject.toml",
+    )["fingerprint_sha256"]
+    if fingerprint != expected:
+        raise ContractError("release_manifest_fingerprint_mismatch")
+    return {"git_commit_sha": commit, "git_tree_sha": tree,
+            "effective_config_fingerprint": fingerprint}
 
 
 @dataclass(frozen=True)
@@ -317,7 +386,8 @@ class Orchestrator:
     """Own scheduling, process groups, reaping, and useful-progress evidence."""
 
     def __init__(self, code_root: Path, mutable_root: Path,
-                 jobs: Sequence[Job] | None = None, *, term_grace: float = 5.0):
+                 jobs: Sequence[Job] | None = None, *, term_grace: float = 5.0,
+                 require_release_manifest: bool = False):
         self.code_root = code_root.resolve()
         self.mutable_root = mutable_root.resolve()
         self.state_dir = self.mutable_root / "state"
@@ -326,7 +396,15 @@ class Orchestrator:
         self.runtime_instance_id = str(uuid.uuid4())
         self.start_utc = _utc()
         self.start_monotonic = time.monotonic()
-        self.policy = load_frozen_policy()
+        if require_release_manifest:
+            self.release = load_release_manifest(self.code_root)
+        else:
+            self.release = {
+                "git_commit_sha": SOURCE_GENERATION,
+                "git_tree_sha": "0" * 40,
+                "effective_config_fingerprint": effective_config_evidence()["fingerprint_sha256"],
+            }
+        self.policy = load_frozen_policy(self.code_root / "config" / "production-vps.env")
         canonical_policy = json.dumps(self.policy, sort_keys=True, separators=(",", ":"))
         self.policy_fingerprint = hashlib.sha256(canonical_policy.encode("utf-8")).hexdigest()
         self.stop_event = threading.Event()
@@ -395,6 +473,9 @@ class Orchestrator:
                 "orchestrator_start_utc": self.start_utc,
                 "orchestrator_start_monotonic": self.start_monotonic,
                 "release_source_generation": SOURCE_GENERATION,
+                "release_git_sha": self.release["git_commit_sha"],
+                "release_git_tree_sha": self.release["git_tree_sha"],
+                "effective_config_fingerprint": self.release["effective_config_fingerprint"],
                 "policy_fingerprint": self.policy_fingerprint,
                 "last_loop_progress_utc": self.last_loop_utc,
                 "process_liveness": self.lifecycle in {"STARTING", "RUNNING", "STOPPING"},
@@ -608,13 +689,22 @@ class Orchestrator:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    del argv
+    arguments = list(argv if argv is not None else sys.argv[1:])
     code_root = Path(os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT") or ROOT)
+    if arguments == ["--release-preflight"]:
+        result = release_preflight(code_root)
+        print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+        return 0 if result["healthy"] else 1
+    if arguments:
+        print("unsupported arguments", file=sys.stderr)
+        return 2
     mutable = os.environ.get("BOTA_MUTABLE_ROOT")
     if not mutable:
         print("BOTA_MUTABLE_ROOT is required", file=sys.stderr)
         return 2
-    orchestrator = Orchestrator(code_root, Path(mutable))
+    production_release = str(code_root).startswith("/opt/bota/")
+    orchestrator = Orchestrator(code_root, Path(mutable),
+                                require_release_manifest=production_release)
     def stop(_signum: int, _frame: object) -> None:
         orchestrator.stop_event.set()
     signal.signal(signal.SIGTERM, stop)
