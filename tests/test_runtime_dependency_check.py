@@ -13,7 +13,15 @@ class ManifestTests(unittest.TestCase):
     def test_repository_manifest_exactly_pins_requests(self) -> None:
         root = Path(__file__).resolve().parents[1]
         pins = dependency_check.parse_manifest(root / "requirements-runtime.txt")
-        self.assertEqual(pins, [("requests", "2.34.2")])
+        self.assertEqual(
+            pins,
+            [
+                ("requests", "2.34.2"),
+                ("matplotlib", "3.11.1"),
+                ("numpy", "2.5.1"),
+                ("pandas", "3.0.5"),
+            ],
+        )
 
     def test_manifest_rejects_unpinned_requirement(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
