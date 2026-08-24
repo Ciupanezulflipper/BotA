@@ -1,0 +1,26 @@
+[Unit]
+Description=BotA VPS orchestrator
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=bota
+Group=bota
+WorkingDirectory=/opt/bota/current
+EnvironmentFile=/etc/bota/runtime.env
+Environment=BOTA_CODE_ROOT=/opt/bota/current
+Environment=BOTA_ROOT=/opt/bota/current
+Environment=BOTA_MUTABLE_ROOT=/var/lib/bota
+ExecStart=/opt/bota/current/.venv/bin/python /opt/bota/current/tools/vps_orchestrator.py
+Restart=always
+RestartSec=5s
+KillMode=control-group
+TimeoutStopSec=120s
+SendSIGKILL=yes
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
