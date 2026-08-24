@@ -1,10 +1,10 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 # Canonical watcher boundary. The historical watcher implementation is preserved
 # in signal_watcher_core.sh; this wrapper enforces the crash-consistent
 # cycle/delivery context required by the evidence layer.
 set -euo pipefail
-ROOT="${BOTA_ROOT:-${HOME}/BotA}"
-TOOLS="${ROOT}/tools"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+TOOLS="${CODE_ROOT}/tools"
 CORE="${TOOLS}/signal_watcher_core.sh"
 SENDER="${TOOLS}/telegram_send.sh"
 RECOVERY="${TOOLS}/watcher_pending_delivery_recovery.py"
@@ -49,23 +49,6 @@ if [[ -n "${STATE:-}" && "${STATE}" != "${BOTA_DELIVERY_STATE_DIR}" ]]; then
   exit 64
 fi
 export STATE="${BOTA_DELIVERY_STATE_DIR}"
-
-# GitHub's contents API does not preserve executable mode for newly created
-# files. Repair only this reviewed sender's owner-only execute metadata when
-# needed; never mutate its bytes. If permission repair fails, do not allow the
-# historical core to fall through to its inline urllib sender.
-if [[ ! -x "${SENDER}" ]]; then
-  if ! chmod 700 "${SENDER}"; then
-    printf '[WATCHER_BOUNDARY] canonical_sender_chmod_failed=%s -> fail_closed\n' \
-      "${SENDER}" >&2
-    exit 66
-  fi
-fi
-if [[ ! -x "${SENDER}" ]]; then
-  printf '[WATCHER_BOUNDARY] canonical_sender_not_executable=%s -> fail_closed\n' \
-    "${SENDER}" >&2
-  exit 66
-fi
 
 # A confirmed Telegram send whose legacy hash is not yet committed represents
 # an incomplete Telegram->Supabase transaction. Clear only its stale cooldown so

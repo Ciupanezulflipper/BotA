@@ -390,6 +390,8 @@ class Orchestrator:
                  require_release_manifest: bool = False):
         self.code_root = code_root.resolve()
         self.mutable_root = mutable_root.resolve()
+        self.require_release_manifest = require_release_manifest
+        self.release_bin = self.code_root / ".venv" / "bin"
         self.state_dir = self.mutable_root / "state"
         self.jobs = tuple(jobs if jobs is not None else production_jobs(self.code_root))
         self.term_grace = term_grace
@@ -398,6 +400,9 @@ class Orchestrator:
         self.start_monotonic = time.monotonic()
         if require_release_manifest:
             self.release = load_release_manifest(self.code_root)
+            release_python = self.release_bin / "python3"
+            if not release_python.is_file() or not os.access(release_python, os.X_OK):
+                raise ContractError("release_python_unusable")
         else:
             self.release = {
                 "git_commit_sha": SOURCE_GENERATION,
@@ -459,6 +464,13 @@ class Orchestrator:
         root = str(self.code_root)
         env.update(BOTA_CODE_ROOT=root, BOTA_ROOT=root,
                    BOTA_MUTABLE_ROOT=str(self.mutable_root))
+        # Shell children must resolve python3 from the same immutable release
+        # environment that starts this orchestrator.  Local/unit runs retain
+        # their ambient interpreter fallback when no release venv is present.
+        if self.release_bin.is_dir():
+            env["PATH"] = f"{self.release_bin}{os.pathsep}{env.get('PATH', os.defpath)}"
+        elif self.require_release_manifest:
+            raise ContractError("release_python_unusable")
         if job is not None:
             env.update(job.env_overrides)
         return env

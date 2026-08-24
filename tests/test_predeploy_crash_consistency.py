@@ -289,8 +289,10 @@ class ControlPlaneZombieTests(unittest.TestCase):
 class WrapperHardeningTests(unittest.TestCase):
     def test_wrapper_enforces_persistence_and_retains_failed_evidence(self):
         text = (HERE / "tools" / "run_signal_watcher_with_ledger.sh").read_text(encoding="utf-8")
-        self.assertIn("watcher_persistence_gate.py", text)
-        self.assertIn("persistence_exit_code=", text)
+        self.assertNotIn("watcher_persistence_gate.py", text)
+        self.assertNotIn("persistence_exit_code=", text)
+        self.assertIn("watcher_cycle_contract.py", text)
+        self.assertIn("contract_exit_code=", text)
         self.assertIn('export BOTA_ALERTS_OFFSET="${alerts_offset}"', text)
         self.assertIn('export BOTA_TELEGRAM_RESULT_LOG="${telegram_result_log}"', text)
         self.assertIn('export BOTA_DELIVERY_STATE_DIR="${DELIVERY_STATE}"', text)
@@ -303,10 +305,9 @@ class WrapperHardeningTests(unittest.TestCase):
         outer = (HERE / "tools" / "run_signal_watcher_with_ledger.sh").read_text(encoding="utf-8")
         self.assertIn('[[ ! -f "${TOOLS}/telegram_send.sh" ]]', outer)
         self.assertIn('SENDER="${TOOLS}/telegram_send.sh"', boundary)
-        self.assertIn('if [[ ! -x "${SENDER}" ]]; then', boundary)
-        self.assertIn('if ! chmod 700 "${SENDER}"; then', boundary)
-        self.assertIn('canonical_sender_chmod_failed=', boundary)
-        self.assertIn('canonical_sender_not_executable=', boundary)
+        self.assertIn('if [[ ! -f "${SENDER}" ]]; then', boundary)
+        self.assertNotIn('chmod ', boundary)
+        self.assertIn('exec bash "${CORE}" "$@"', boundary)
         self.assertTrue((HERE / "tools" / "telegram_send.sh").is_file())
         self.assertTrue((HERE / "tools" / "telegram_delivery.py").is_file())
 

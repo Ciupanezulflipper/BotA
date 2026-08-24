@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import tempfile
+import json
+import os
 import unittest
 from importlib import metadata
 from pathlib import Path
@@ -123,6 +125,18 @@ class DependencyTests(unittest.TestCase):
         self.assertTrue(
             any(reason.startswith("import_failed:requests:ImportError") for reason in result["failure_reasons"])
         )
+
+    def test_pass_evidence_is_owner_only_and_machine_readable(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "state/runtime_dependency/shadow-latest.json"
+            result = {"schema_version":"1.0", "healthy":True,
+                      "python_executable":"/opt/bota/current/.venv/bin/python3",
+                      "python_version":"3.14.0", "manifest":"requirements-runtime.txt",
+                      "dependencies":{}, "failure_reasons":[], "observed_at_utc":"2026-08-23T00:00:00Z"}
+            dependency_check.write_evidence(path, result)
+            self.assertEqual(json.loads(path.read_text()), result)
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+            self.assertEqual(result["python_executable"], "/opt/bota/current/.venv/bin/python3")
 
 
 class ShadowRuntimeContractTests(unittest.TestCase):

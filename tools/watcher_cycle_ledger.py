@@ -72,9 +72,14 @@ def expected_scope() -> tuple[tuple[str, str], ...]:
 EXPECTED = DEFAULT_EXPECTED
 
 
-def root_dir() -> Path:
-    value = os.environ.get("BOTA_ROOT", "").strip()
+def code_root() -> Path:
+    value = os.environ.get("BOTA_CODE_ROOT", "").strip() or os.environ.get("BOTA_ROOT", "").strip()
     return Path(value).expanduser() if value else Path(__file__).resolve().parent.parent
+
+
+def mutable_root() -> Path:
+    value = os.environ.get("BOTA_MUTABLE_ROOT", "").strip() or os.environ.get("BOTA_ROOT", "").strip()
+    return Path(value).expanduser() if value else code_root()
 
 
 def read_new_bytes(path: Path, offset: int) -> str:
@@ -358,7 +363,7 @@ def ledger_decision(*, cycle_id, server_epoch, pair, timeframe, row, lines,
     candle_timestamp, candle_age = extract_stale_fields(lines)
     decision_failed = malformed or outcome in UNHEALTHY_OUTCOMES
     command = [
-        sys.executable, str(root_dir() / "tools" / "pipeline_ledger.py"), "decision",
+        sys.executable, str(code_root() / "tools" / "pipeline_ledger.py"), "decision",
         "--component", "watcher", "--status", "failed" if decision_failed else "completed",
         "--cycle-id", cycle_id, "--pair", pair, "--timeframe", timeframe, "--outcome", outcome,
         "--provider", row.get("provider", "unknown") or "unknown", "--candle-timestamp", candle_timestamp,
@@ -391,9 +396,9 @@ def main() -> int:
     parser.add_argument("--server-epoch", type=int, default=0)
     args = parser.parse_args()
 
-    root = root_dir()
-    alerts = root / "logs" / "alerts.csv"
-    log_path = args.log_path if args.log_path is not None else root / "logs" / "cron.signals.log"
+    runtime_root = mutable_root()
+    alerts = runtime_root / "logs" / "alerts.csv"
+    log_path = args.log_path if args.log_path is not None else runtime_root / "logs" / "cron.signals.log"
     rows = parse_new_rows(alerts, args.alerts_offset)
     log_text = read_new_bytes(log_path, args.log_offset)
     telegram_results, telegram_malformed = parse_telegram_results(args.telegram_result_path)
@@ -444,7 +449,7 @@ def main() -> int:
     )
     status = "completed" if healthy else "failed"
     subprocess.run([
-        sys.executable, str(root / "tools" / "pipeline_ledger.py"), "component",
+        sys.executable, str(code_root() / "tools" / "pipeline_ledger.py"), "component",
         "--component", "watcher", "--status", status, "--cycle-id", args.cycle_id,
         "--details", json.dumps(results, separators=(",", ":")), "--server-epoch", str(effective_epoch),
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)

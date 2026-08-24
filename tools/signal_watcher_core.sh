@@ -801,8 +801,8 @@ send_telegram_message() {
     return 1
   fi
 
-  if [[ -x "${TOOLS}/telegram_send.sh" ]]; then
-    if "${TOOLS}/telegram_send.sh" "${msg}" 2>>"${ERRLOG}"; then
+  if [[ -f "${TOOLS}/telegram_send.sh" ]]; then
+    if bash "${TOOLS}/telegram_send.sh" "${msg}" 2>>"${ERRLOG}"; then
       log "TELEGRAM" "SENT: via tools/telegram_send.sh"
       network_fail_reset
       return 0
@@ -812,42 +812,9 @@ send_telegram_message() {
       return 1
     fi
   fi
-
-  # Python urllib send (token never printed; errors are sanitized to type only)
-  if TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN}" TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID}" MSG="${msg}" \
-    python3 -c '
-import os, sys, urllib.parse, urllib.request
-
-token = os.environ.get("TELEGRAM_BOT_TOKEN","")
-chat_id = os.environ.get("TELEGRAM_CHAT_ID","")
-msg = os.environ.get("MSG","")
-
-if not token or not chat_id:
-  sys.stderr.write("[TELEGRAM] missing token/chat_id\n")
-  sys.exit(1)
-
-url = f"https://api.telegram.org/bot{token}/sendMessage"
-msg = msg.replace("\\n", "\n")
-data = urllib.parse.urlencode({"chat_id": chat_id, "text": msg}).encode("utf-8")
-req = urllib.request.Request(url, data=data, method="POST")
-
-try:
-  with urllib.request.urlopen(req, timeout=15) as r:
-    r.read()
-  sys.exit(0)
-except Exception as e:
-  # SECURITY: do NOT print str(e) (may include URL). Print type only.
-  sys.stderr.write(f"[TELEGRAM] send failed: {type(e).__name__}\n")
-  sys.exit(1)
-' 2>>"${ERRLOG}"; then
-    log "TELEGRAM" "SENT: via python urllib"
-    network_fail_reset
-    return 0
-  else
-    log "TELEGRAM" "FAILED: python urllib error"
-    network_fail_increment
-    return 1
-  fi
+  log "TELEGRAM" "FAILED: canonical telegram sender missing"
+  network_fail_increment
+  return 1
 }
 
 format_telegram_signal_message() {
@@ -1059,29 +1026,6 @@ except Exception:
     "${score}" "${conf}" "${entry}" "${sl}" "${tp}")"
 
   if send_telegram_message "${msg}"; then
-    # Send chart PNG for GREEN signals only
-    if [[ "${tier}" = "GREEN" ]] && [[ -f "${TOOLS}/chart_generator.py" ]]; then
-      local chart_path
-      chart_path="${MUTABLE_ROOT}/logs/tmp/chart_${pair_o}_${tf_o}_$$.png"
-      python3 "${TOOLS}/chart_generator.py" \
-        --pair "${pair_o}" --tf "${tf_o}" \
-        --direction "${direction}" \
-        --entry "${entry}" --sl "${sl}" --tp "${tp}" \
-        --score "${score_int}" --confidence "${score_int}" \
-        --out "${chart_path}" >/dev/null 2>>"${ERRLOG}" || true
-      if [[ -f "${chart_path}" ]]; then
-        curl -s --max-time 15 \
-          "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
-          -F "chat_id=${TELEGRAM_CHAT_ID}" \
-          -F "photo=@${chart_path}" \
-          -F "caption=${pair_o} ${tf_o} ${direction} score=${score_int}" \
-          >>"${ERRLOG}" 2>&1 || true
-        rm -f "${chart_path}" 2>/dev/null || true
-        log "CHART" "${pair_o} ${tf_o} chart sent"
-      else
-        log "CHART" "${pair_o} ${tf_o} chart generation failed"
-      fi
-    fi
     # Cooldown is meaningful only after a real successful send.
     if ! is_true "${DRY_RUN_MODE:-false}" && ! is_false "${TELEGRAM_ENABLED:-1}"; then
       telegram_cooldown_mark "${pair_o}" "${tf_o}"

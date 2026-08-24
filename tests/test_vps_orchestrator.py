@@ -235,6 +235,8 @@ class OrchestratorTests(unittest.TestCase):
                     "git_tree_sha": "b" * 40,
                     "effective_config_fingerprint": fingerprint}
         (release / vps.RELEASE_MANIFEST_FILENAME).write_text(json.dumps(manifest))
+        (release / ".venv/bin").mkdir(parents=True)
+        os.symlink(sys.executable, release / ".venv/bin/python3")
         orch = vps.Orchestrator(release, self.mutable / "runtime", (),
                                 require_release_manifest=True)
         health = orch.health()
@@ -244,6 +246,21 @@ class OrchestratorTests(unittest.TestCase):
         (release / vps.RELEASE_MANIFEST_FILENAME).write_text(json.dumps(manifest))
         with self.assertRaises(vps.ContractError):
             vps.Orchestrator(release, self.mutable / "bad", (), require_release_manifest=True)
+
+    def test_shell_python_resolves_release_venv_despite_hostile_path(self):
+        release = self.mutable / "release"
+        (release / "config").mkdir(parents=True)
+        (release / "config/production-vps.env").write_bytes((ROOT / "config/production-vps.env").read_bytes())
+        fake_bin = release / ".venv/bin"
+        fake_bin.mkdir(parents=True)
+        os.symlink(sys.executable, fake_bin / "python3")
+        orch = vps.Orchestrator(release, self.mutable / "runtime", ())
+        with mock.patch.dict(os.environ, {"PATH": "/hostile/bin:/usr/bin:/bin"}):
+            env = orch.child_env()
+        self.assertEqual(env["PATH"].split(os.pathsep)[0], str(fake_bin))
+        resolved = subprocess.run(["bash", "-c", "command -v python3"], env=env,
+                                  text=True, capture_output=True, check=True).stdout.strip()
+        self.assertEqual(Path(resolved), fake_bin / "python3")
 
     def test_updater_environment_is_exact_and_cannot_leak(self):
         jobs = {job.name: job for job in vps.production_jobs()}

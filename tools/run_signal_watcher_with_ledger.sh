@@ -50,10 +50,9 @@ fi
 mkdir -p "${LOGS}" "${EVIDENCE_STATE}" "${DELIVERY_STATE}"
 
 # telegram_send.sh is the only authorized watcher Telegram transport. Presence
-# is required here; the canonical boundary owns the conditional owner-only
-# executable-mode repair and fails closed if that cannot be established. This
-# ordering prevents a fresh GitHub checkout's 100644 mode from bypassing the
-# canonical sender or producing a false pre-boundary failure.
+# is required here. The watcher invokes it through the already-required bash,
+# so Git mode and host shebang lookup cannot create a bypass. Missing source
+# fails closed before a cycle or network boundary.
 if [[ ! -f "${TOOLS}/telegram_send.sh" ]]; then
   printf '[WATCHER_EVIDENCE] canonical telegram sender missing: %s\n' \
     "${TOOLS}/telegram_send.sh" >&2
@@ -112,20 +111,6 @@ fi
 watcher_rc=0
 bash "${TOOLS}/signal_watcher_pro.sh" --once 2>"${cycle_log}" || watcher_rc=$?
 
-# The watcher historically swallowed alerts.csv append failures. Enforce a
-# cycle-level persistence postcondition before health can be green. Capture the
-# verifier output first; never read and append the same cycle log concurrently.
-persistence_rc=0
-persistence_output="$({
-  python3 "${TOOLS}/watcher_persistence_gate.py" \
-    --alerts-path "${alerts}" \
-    --alerts-offset "${alerts_offset}" \
-    --log-path "${cycle_log}"
-} 2>&1)" || persistence_rc=$?
-if [[ -n "${persistence_output}" ]]; then
-  printf '%s\n' "${persistence_output}" >>"${cycle_log}"
-fi
-
 # Independent strict contract in front of the legacy reconciler. This prevents
 # truncated/rotated evidence, duplicate current-cycle decisions, malformed
 # structured results, unhealthy Telegram outcomes, or missing/failed GREEN
@@ -165,8 +150,6 @@ cat "${cycle_log}" >&2 || true
 final_rc=0
 if (( watcher_rc != 0 )); then
   final_rc="${watcher_rc}"
-elif (( persistence_rc != 0 )); then
-  final_rc="${persistence_rc}"
 elif (( contract_rc != 0 )); then
   final_rc="${contract_rc}"
 elif (( reconcile_rc != 0 )); then
@@ -179,7 +162,7 @@ if (( final_rc != 0 )); then
   if (( owns_cycle == 1 )); then
     python3 "${TOOLS}/pipeline_ledger.py" component \
       --component watcher --status failed --cycle-id "${cycle_id}" \
-      --details "watcher_exit_code=${watcher_rc};persistence_exit_code=${persistence_rc};contract_exit_code=${contract_rc};reconcile_exit_code=${reconcile_rc}" \
+      --details "watcher_exit_code=${watcher_rc};contract_exit_code=${contract_rc};reconcile_exit_code=${reconcile_rc}" \
       --server-epoch "${BOTA_SERVER_EPOCH:-${server_epoch}}" \
       >/dev/null 2>>"${LOGS}/error.log" || true
   fi

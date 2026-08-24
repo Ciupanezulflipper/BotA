@@ -8,6 +8,7 @@ TOOLS="${CODE_ROOT}/tools"
 LOGS="${MUTABLE_ROOT}/logs"
 RUNTIME_ERR_LOG="${LOGS}/shadow_runtime.stderr.log"
 DEPENDENCY_CHECK="${TOOLS}/runtime_dependency_check.py"
+DEPENDENCY_EVIDENCE="${MUTABLE_ROOT}/state/runtime_dependency/shadow-latest.json"
 if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" == 1 ]]; then
   printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nTOOLS=%s\nLOGS=%s\n' \
     "${CODE_ROOT}" "${MUTABLE_ROOT}" "${TOOLS}" "${LOGS}"
@@ -51,8 +52,8 @@ runtime_error() {
 
 ledger started
 
-if dependency_output="$(python3 "${DEPENDENCY_CHECK}" 2>&1)"; then
-  :
+if dependency_output="$(python3 "${DEPENDENCY_CHECK}" --manifest "${ROOT}/requirements-runtime.txt" --evidence "${DEPENDENCY_EVIDENCE}" 2>&1)"; then
+  runtime_error "dependency_check_passed evidence=${DEPENDENCY_EVIDENCE}"
 else
   rc=$?
   runtime_error "dependency_check_failed rc=${rc}"

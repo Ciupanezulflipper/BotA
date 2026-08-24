@@ -21,8 +21,11 @@ from typing import Any
 MAX_STATE_BYTES = 131_072
 
 
-def root_path() -> Path:
-    return Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA"))).expanduser().resolve()
+def mutable_root() -> Path:
+    value = os.environ.get("BOTA_MUTABLE_ROOT", "").strip()
+    if not value:
+        value = os.environ.get("BOTA_ROOT", "").strip()
+    return Path(value or Path.home() / "BotA").expanduser().resolve()
 
 
 def legacy_hash(identity: dict[str, Any]) -> str:
@@ -45,7 +48,7 @@ def read_regular_json(path: Path) -> dict[str, Any]:
 
 
 def main() -> int:
-    root = root_path()
+    root = mutable_root()
     expected_delivery = (root / "logs" / "state").resolve()
     raw_delivery = os.environ.get("BOTA_DELIVERY_STATE_DIR", "").strip()
     if not raw_delivery:
