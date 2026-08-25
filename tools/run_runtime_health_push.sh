@@ -38,6 +38,16 @@ if [ ! -f "$SCRIPT" ]; then
   exit 0
 fi
 
+# R5 is an observation-only VPS experiment. Build the normal payload locally,
+# but do not read any ingest secret and never cross the Supabase write boundary.
+if [ "${BOTA_R5_SHADOW:-0}" = "1" ]; then
+  python3 "$SCRIPT" >> "$LOG" 2>&1
+  rc=$?
+  echo "RESULT=R5_SHADOW_LOCAL_ONLY rc=$rc" >> "$LOG" 2>&1
+  echo "=== BotA runtime health push end ===" >> "$LOG" 2>&1
+  exit 0
+fi
+
 if [ ! -f "$SECRET_FILE" ]; then
   echo "RESULT=FAIL_MISSING_SECRET_FILE" >> "$LOG" 2>&1
   echo "=== BotA runtime health push end ===" >> "$LOG" 2>&1

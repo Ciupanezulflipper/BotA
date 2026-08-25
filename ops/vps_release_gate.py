@@ -21,19 +21,22 @@ EXPECTED = {
 }
 SHELLS = ("tools/run_shadow_manager.sh", "tools/watcher_gated_cycle.sh",
           "tools/run_signal_watcher_with_ledger.sh", "tools/signal_watcher_pro.sh",
-          "tools/signal_watcher_core.sh", "tools/telegram_send.sh")
+          "tools/signal_watcher_core.sh", "tools/telegram_send.sh",
+          "tools/run_runtime_health_push.sh")
 PYTHONS = ("tools/vps_orchestrator.py", "tools/runtime_dependency_check.py",
            "tools/telegram_delivery.py", "tools/telegram_send_guard.py",
            "tools/telegram_delivery_boundary.py", "tools/watcher_cycle_contract.py",
            "tools/watcher_pending_delivery_recovery.py", "tools/watcher_cycle_ledger.py",
-           "tools/pipeline_ledger.py",
+           "tools/pipeline_ledger.py", "tools/r5_no_side_effect_preflight.py",
+           "r5_bootstrap/sitecustomize.py",
            "ops/vps_deploy.py", "ops/vps_state_handoff.py", "ops/vps_release_gate.py")
 LOCAL_SUITES = ("tests.test_runtime_dependency_check", "tests.test_vps_orchestrator",
                 "tests.test_vps_systemd_contract", "tests.test_vps_deploy",
                 "tests.test_vps_migration_release", "tests.test_watcher_cycle_contract",
                 "tests.test_watcher_cycle_integration", "tests.test_telegram_commit_ordering",
                 "tests.test_telegram_evidence_fail_closed", "tests.test_telegram_split_root",
-                "tests.test_vps_state_handoff", "tests.test_watcher_production_split_root")
+                "tests.test_vps_state_handoff", "tests.test_watcher_production_split_root",
+                "tests.test_r5_no_side_effect_shadow")
 
 
 def env_file(path: Path) -> dict[str, str]:
