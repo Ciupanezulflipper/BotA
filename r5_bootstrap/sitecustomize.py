@@ -8,19 +8,21 @@ credentials, request bodies, or response payloads.
 """
 from __future__ import annotations
 
-import fcntl
-import http.client
-import io
-import json
 import os
-import socket
-import sys
-import time
-import urllib.parse
-import urllib.request
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
+
+if os.environ.get("BOTA_R5_SHADOW") == "1":
+    import fcntl
+    import http.client
+    import io
+    import json
+    import socket
+    import sys
+    import time
+    import urllib.parse
+    import urllib.request
+    from datetime import datetime, timezone
+    from pathlib import Path
+    from typing import Any
 
 R5_SENTINEL = "R5_SHADOW_NO_NETWORK"
 SENSITIVE_KEYS = (

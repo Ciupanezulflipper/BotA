@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import shlex
 import sys
 import unittest
 from pathlib import Path
@@ -47,22 +48,50 @@ class VPSSystemdContractTests(unittest.TestCase):
         self.assertEqual(self.one("Group"), "bota")
         self.assertEqual(self.one("Type"), "simple")
         self.assertEqual(self.one("WorkingDirectory"), "/opt/bota/current")
-        self.assertEqual(
-            self.one("ExecStart"),
-            "/opt/bota/current/.venv/bin/python /opt/bota/current/tools/vps_orchestrator.py",
-        )
-
-    def test_roots_and_required_external_secret_environment(self) -> None:
-        self.assertCountEqual(self.unit["Environment"], [
+        prefix = [
+            "/usr/bin/env",
             "BOTA_CODE_ROOT=/opt/bota/current",
             "BOTA_ROOT=/opt/bota/current",
             "BOTA_MUTABLE_ROOT=/var/lib/bota",
+            "PYTHONPATH=/opt/bota/current/r5_bootstrap",
+            "/opt/bota/current/.venv/bin/python",
+        ]
+        self.assertEqual(shlex.split(self.one("ExecStartPre")), prefix + [
+            "/opt/bota/current/tools/r5_no_side_effect_preflight.py",
         ])
+        self.assertEqual(shlex.split(self.one("ExecStart")), prefix + [
+            "/opt/bota/current/tools/vps_orchestrator.py",
+        ])
+
+    def test_roots_and_required_external_secret_environment(self) -> None:
+        self.assertNotIn("Environment", self.unit)
         self.assertEqual(self.one("EnvironmentFile"), "/etc/bota/runtime.env")
         self.assertNotIn("Environment=HOME=", self.text)
         secret_markers = ("token=", "chat_id=", "service_key=", "api_key=", "password=")
         lowered = self.text.lower()
         self.assertFalse(any(marker in lowered for marker in secret_markers))
+
+    def test_environment_file_cannot_override_reserved_entrypoint_values(self) -> None:
+        hostile = {
+            "BOTA_CODE_ROOT": "/hostile/code",
+            "BOTA_ROOT": "/hostile/root",
+            "BOTA_MUTABLE_ROOT": "/hostile/mutable",
+            "PYTHONPATH": "/hostile/bootstrap",
+        }
+        expected = {
+            "BOTA_CODE_ROOT": "/opt/bota/current",
+            "BOTA_ROOT": "/opt/bota/current",
+            "BOTA_MUTABLE_ROOT": "/var/lib/bota",
+            "PYTHONPATH": "/opt/bota/current/r5_bootstrap",
+        }
+        for directive in ("ExecStartPre", "ExecStart"):
+            command = shlex.split(self.one(directive))
+            self.assertEqual(command[0], "/usr/bin/env")
+            effective = dict(hostile)
+            for assignment in command[1:5]:
+                key, value = assignment.split("=", 1)
+                effective[key] = value
+            self.assertEqual(effective, expected)
 
     def test_restart_cleanup_and_shutdown_budget(self) -> None:
         self.assertEqual(self.one("Restart"), "always")

@@ -54,6 +54,7 @@ class VPSMigrationReleaseTests(unittest.TestCase):
 
     def test_missing_required_command_fails_closed(self) -> None:
         self.assertIn("jq", vps.REQUIRED_COMMANDS)
+        self.assertIn("env", vps.REQUIRED_COMMANDS)
         result = vps.command_preflight(("definitely-not-a-bota-command",), path="")
         self.assertFalse(result["healthy"])
         self.assertEqual(result["missing"], ["definitely-not-a-bota-command"])
