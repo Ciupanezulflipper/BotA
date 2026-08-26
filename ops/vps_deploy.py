@@ -366,14 +366,21 @@ class Deployer:
         finally:
             sys.path.pop(0)
 
-    def _stage(self, commit: str, tree: str) -> tuple[Path, dict[str, object]]:
+    def _stage(self, commit: str, tree: str) -> tuple[Path, dict[str, object], bool]:
         final = self.paths.release_root / commit
         self.paths.release_root.parent.mkdir(parents=True, exist_ok=True)
         os.chmod(self.paths.release_root.parent, 0o755)
         self.paths.release_root.mkdir(parents=True, exist_ok=True)
         os.chmod(self.paths.release_root, 0o755)
         if final.exists():
-            return final, validate_finalized_release(final, commit, tree)
+            manifest = validate_finalized_release(final, commit, tree)
+            try:
+                actual_fingerprint = self._fingerprint(final)
+            except Exception as exc:
+                raise DeployError("finalized_release_fingerprint_unverifiable") from exc
+            if manifest["effective_config_fingerprint"] != actual_fingerprint:
+                raise DeployError("finalized_release_fingerprint_mismatch")
+            return final, manifest, True
         previous_umask = os.umask(0o022)
         staging: Path | None = None
         try:
@@ -404,7 +411,7 @@ class Deployer:
             os.chmod(staging, 0o755)
             os.replace(staging, final)
             self.directory_fsync(self.paths.release_root)
-            return final, manifest
+            return final, manifest, False
         except BaseException:
             if staging is not None:
                 shutil.rmtree(staging, ignore_errors=True)
@@ -515,7 +522,7 @@ class Deployer:
         with DeployLock(self.paths.deploy_lock):
             self._recover_incomplete()
             commit, tree = resolve_exact_commit(self.repo, requested, self.runner)
-            final, manifest = self._stage(commit, tree)
+            final, manifest, _reused = self._stage(commit, tree)
             previous = self._current_target()
             previous_health = self._read_health_optional()
             previous_instance = (previous_health or {}).get("runtime_instance_id")
@@ -551,18 +558,41 @@ class Deployer:
                     self._rollback(exc)
                 raise
 
+    def stage_only(self, requested: str) -> dict[str, object]:
+        """Finalize an exact immutable release without inspecting or changing runtime state."""
+        with DeployLock(self.paths.deploy_lock):
+            commit, tree = resolve_exact_commit(self.repo, requested, self.runner)
+            final, manifest, reused = self._stage(commit, tree)
+            return {
+                "healthy": True,
+                "operation": "STAGE_ONLY",
+                "requested_sha": requested,
+                "resolved_commit_sha": commit,
+                "tree_sha": tree,
+                "finalized_release_path": str(final),
+                "effective_config_fingerprint": manifest["effective_config_fingerprint"],
+                "reused_existing_release": reused,
+                "service_touched": False,
+                "current_release_changed": False,
+            }
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("git_commit_sha")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
+    parser.add_argument("--stage-only", action="store_true")
     args = parser.parse_args(argv)
     try:
-        result = Deployer(args.repo).deploy(args.git_commit_sha)
+        deployer = Deployer(args.repo)
+        if args.stage_only:
+            result = deployer.stage_only(args.git_commit_sha)
+        else:
+            result = {"healthy": True, "journal": deployer.deploy(args.git_commit_sha)}
     except DeployError as exc:
         print(json.dumps({"healthy": False, "failure": str(exc)}, sort_keys=True))
         return 1
-    print(json.dumps({"healthy": True, "journal": result}, sort_keys=True))
+    print(json.dumps(result, sort_keys=True))
     return 0
 
 
