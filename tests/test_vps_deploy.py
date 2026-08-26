@@ -226,7 +226,7 @@ class VPSDeployTests(unittest.TestCase):
 
     def test_finalized_release_reuse_is_immutable_and_modes_fail_closed(self):
         subject, *_ = self.make()
-        release, _ = subject._stage(self.sha, self.tree)
+        release, _, _ = subject._stage(self.sha, self.tree)
         manifest = release / deploy.MANIFEST_NAME
         before = {path: (path.stat().st_ino, path.stat().st_mode, path.read_bytes())
                   for path in (release / "ordinary.txt", manifest)}
@@ -235,8 +235,9 @@ class VPSDeployTests(unittest.TestCase):
         with mock.patch.object(deploy.os, "chmod",
                                side_effect=lambda path, mode: (chmod_paths.append(Path(path)),
                                                                 real_chmod(path, mode))[1]):
-            reused, _ = subject._stage(self.sha, self.tree)
+            reused, _, reused_existing = subject._stage(self.sha, self.tree)
         self.assertEqual(reused, release)
+        self.assertTrue(reused_existing)
         self.assertNotIn(release, chmod_paths)
         self.assertNotIn(manifest, chmod_paths)
         after = {path: (path.stat().st_ino, path.stat().st_mode, path.read_bytes())
@@ -254,6 +255,72 @@ class VPSDeployTests(unittest.TestCase):
         manifest.write_text("{malformed")
         with self.assertRaisesRegex(deploy.DeployError, "invalid_json"):
             subject._stage(self.sha, self.tree)
+
+    def test_stage_only_finalizes_without_runtime_or_current_changes(self):
+        subject, _runner, systemd, _ = self.make()
+        activation = mock.Mock(side_effect=AssertionError("activation must not run"))
+        subject._prove_activation = activation
+        result = subject.stage_only(self.sha)
+        release = self.paths.release_root / self.sha
+        self.assertTrue(release.is_dir())
+        self.assertEqual(result, {
+            "healthy": True,
+            "operation": "STAGE_ONLY",
+            "requested_sha": self.sha,
+            "resolved_commit_sha": self.sha,
+            "tree_sha": self.tree,
+            "finalized_release_path": str(release),
+            "effective_config_fingerprint": json.loads(
+                (release / deploy.MANIFEST_NAME).read_text())["effective_config_fingerprint"],
+            "reused_existing_release": False,
+            "service_touched": False,
+            "current_release_changed": False,
+        })
+        self.assertEqual(systemd.events, [])
+        self.assertFalse(os.path.lexists(self.paths.current))
+        activation.assert_not_called()
+
+    def test_stage_only_reuses_valid_release_and_corruption_fails_closed(self):
+        subject, *_ = self.make()
+        first = subject.stage_only(self.sha)
+        second, runner, systemd, _ = self.make()
+        reused = second.stage_only(self.sha)
+        self.assertFalse(first["reused_existing_release"])
+        self.assertTrue(reused["reused_existing_release"])
+        self.assertFalse(any(command[:2] == ("git", "archive") for command in runner.commands))
+        self.assertEqual(systemd.events, [])
+        self.assertFalse(os.path.lexists(self.paths.current))
+
+        policy = self.paths.release_root / self.sha / "config/production-vps.env"
+        policy.write_text(policy.read_text() + "\nPAIRS=CORRUPTED\n")
+        corrupted, *_ = self.make()
+        with self.assertRaisesRegex(deploy.DeployError, "fingerprint_"):
+            corrupted.stage_only(self.sha)
+
+    def test_stage_only_keeps_exact_sha_requirement(self):
+        subject, *_ = self.make()
+        with self.assertRaisesRegex(deploy.DeployError, "full_lowercase_40"):
+            subject.stage_only(self.sha.upper())
+
+    def test_stage_only_cli_emits_direct_machine_readable_evidence(self):
+        evidence = {"healthy": True, "operation": "STAGE_ONLY",
+                    "requested_sha": self.sha, "service_touched": False,
+                    "current_release_changed": False}
+        output = io.StringIO()
+        with mock.patch.object(deploy.Deployer, "stage_only", return_value=evidence) as stage, \
+                mock.patch("sys.stdout", output):
+            self.assertEqual(deploy.main((self.sha, "--repo", str(self.repo), "--stage-only")), 0)
+        self.assertEqual(json.loads(output.getvalue()), evidence)
+        stage.assert_called_once_with(self.sha)
+
+    def test_normal_deploy_still_stops_switches_starts_and_activates(self):
+        subject, _runner, systemd, _ = self.make()
+        real_activation = subject._prove_activation
+        subject._prove_activation = mock.Mock(side_effect=real_activation)
+        subject.deploy(self.sha)
+        self.assertEqual(systemd.events[:4], ["is_active", "stop", "prove_stopped", "start"])
+        self.assertEqual(Path(os.readlink(self.paths.current)), self.paths.release_root / self.sha)
+        subject._prove_activation.assert_called_once()
 
     def test_pre_stop_failure_leaves_runtime_and_no_prepared_stop(self):
         subject, _runner, systemd, _ = self.make()
@@ -556,7 +623,7 @@ class VPSDeployTests(unittest.TestCase):
                                         ("ACTIVATING", True, True)):
             with self.subTest(phase=phase, switched=switched, active=active):
                 subject, _runner, systemd, _ = self.make()
-                final, _manifest = subject._stage(self.sha, self.tree)
+                final, _manifest, _reused = subject._stage(self.sha, self.tree)
                 if switched:
                     subject._switch(final)
                 systemd.active = active

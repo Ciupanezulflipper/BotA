@@ -23,6 +23,7 @@ def _base_env(mutable: Path) -> dict[str, str]:
         "BOTA_CODE_ROOT": str(ROOT),
         "BOTA_ROOT": str(ROOT),
         "BOTA_MUTABLE_ROOT": str(mutable),
+        "PYTHONPATH": str(ROOT / "r5_bootstrap"),
     })
     for key in (
         "TELEGRAM_BOT_TOKEN", "TELEGRAM_TOKEN", "BOT_TOKEN",
@@ -33,22 +34,24 @@ def _base_env(mutable: Path) -> dict[str, str]:
     return env
 
 
-def _explicit_bootstrap_prefix() -> str:
-    return (
-        "import importlib.util,sys;"
-        f"p={str(BOOTSTRAP)!r};"
-        "s=importlib.util.spec_from_file_location('sitecustomize',p);"
-        "m=importlib.util.module_from_spec(s);sys.modules['sitecustomize']=m;"
-        "s.loader.exec_module(m);"
-    )
-
-
 class R5NoSideEffectShadowTests(unittest.TestCase):
+    def test_fresh_interpreter_auto_loads_exact_bootstrap_before_user_code(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            env = _base_env(Path(temporary))
+            code = (
+                "import os,pathlib,sys;"
+                "assert os.environ['BOTA_R5_BOOTSTRAP_ACTIVE']=='1';"
+                f"assert pathlib.Path(sys.modules['sitecustomize'].__file__).resolve()==pathlib.Path({str(BOOTSTRAP)!r}).resolve()"
+            )
+            completed = subprocess.run([sys.executable, "-c", code], env=env, cwd=ROOT,
+                                       text=True, capture_output=True, timeout=10)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+
     def test_active_bootstrap_suppresses_known_transports_and_records_sanitized_ledger(self):
         with tempfile.TemporaryDirectory() as temporary:
             mutable = Path(temporary)
             env = _base_env(mutable)
-            code = _explicit_bootstrap_prefix() + (
+            code = (
                 "import http.client,json,socket,urllib.request,os;"
                 "r=urllib.request.Request('https://api.telegram.org/botSECRET_DO_NOT_LOG/sendMessage',data=b'x',method='POST');"
                 "u=urllib.request.urlopen(r,timeout=1);"
@@ -75,7 +78,7 @@ class R5NoSideEffectShadowTests(unittest.TestCase):
             env = _base_env(Path(temporary))
             secret = "dont-print-me-production-secret"
             env["SUPABASE_SERVICE_KEY"] = secret
-            code = _explicit_bootstrap_prefix() + (
+            code = (
                 "import os;"
                 "print(os.environ['BOTA_R5_PRODUCTION_SECRET_PRESENT']);"
                 "print(os.environ['BOTA_R5_REJECTED_SECRET_KEYS']);"
@@ -94,10 +97,7 @@ class R5NoSideEffectShadowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             mutable = Path(temporary)
             env = _base_env(mutable)
-            code = _explicit_bootstrap_prefix() + (
-                "import runpy;runpy.run_path(" + repr(str(PREFLIGHT)) + ",run_name='__main__')"
-            )
-            completed = subprocess.run([sys.executable, "-c", code], env=env, cwd=ROOT,
+            completed = subprocess.run([sys.executable, str(PREFLIGHT)], env=env, cwd=ROOT,
                                        text=True, capture_output=True, timeout=10)
             self.assertEqual(completed.returncode, 0, completed.stderr)
             result = json.loads(completed.stdout.strip().splitlines()[-1])
@@ -108,15 +108,55 @@ class R5NoSideEffectShadowTests(unittest.TestCase):
             self.assertTrue(result["checks"]["suppression_ledger_grew"])
 
     def test_preflight_fails_when_r5_is_required_but_bootstrap_is_not_active(self):
-        env = dict(os.environ)
-        env.pop("BOTA_R5_SHADOW", None)
-        env["BOTA_REQUIRE_R5_SHADOW"] = "1"
-        completed = subprocess.run([sys.executable, str(PREFLIGHT)], env=env, cwd=ROOT,
-                                   text=True, capture_output=True, timeout=10)
-        self.assertEqual(completed.returncode, 2)
-        result = json.loads(completed.stdout.strip())
-        self.assertFalse(result["healthy"])
-        self.assertEqual(result["checks"]["failure"], "r5_shadow_required_but_inactive")
+        for shadow in (None, "0"):
+            with self.subTest(shadow=shadow):
+                env = dict(os.environ)
+                if shadow is None:
+                    env.pop("BOTA_R5_SHADOW", None)
+                else:
+                    env["BOTA_R5_SHADOW"] = shadow
+                env["BOTA_REQUIRE_R5_SHADOW"] = "1"
+                completed = subprocess.run([sys.executable, str(PREFLIGHT)], env=env, cwd=ROOT,
+                                           text=True, capture_output=True, timeout=10)
+                self.assertEqual(completed.returncode, 2)
+                result = json.loads(completed.stdout.strip())
+                self.assertFalse(result["healthy"])
+                self.assertEqual(result["checks"]["failure"], "r5_shadow_required_but_inactive")
+
+    def test_r5_active_with_missing_or_wrong_bootstrap_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_path = Path(temporary)
+            wrong = temporary_path / "wrong"
+            wrong.mkdir()
+            (wrong / "sitecustomize.py").write_text(
+                "import os\nos.environ['BOTA_R5_BOOTSTRAP_ACTIVE']='1'\n",
+                encoding="utf-8",
+            )
+            for bootstrap_path in (temporary_path / "missing", wrong):
+                with self.subTest(bootstrap_path=bootstrap_path):
+                    env = _base_env(temporary_path)
+                    env["PYTHONPATH"] = str(bootstrap_path)
+                    completed = subprocess.run([sys.executable, str(PREFLIGHT)], env=env, cwd=ROOT,
+                                               text=True, capture_output=True, timeout=10)
+                    self.assertEqual(completed.returncode, 2)
+                    result = json.loads(completed.stdout.strip())
+                    self.assertEqual(result["checks"]["failure"], "r5_bootstrap_not_proven")
+
+    def test_non_r5_auto_load_is_inert(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            env = _base_env(Path(temporary))
+            env.pop("BOTA_R5_SHADOW")
+            env.pop("BOTA_REQUIRE_R5_SHADOW")
+            env["TELEGRAM_BOT_TOKEN"] = "unchanged-non-r5-value"
+            code = (
+                "import os,pathlib,sys;"
+                f"assert pathlib.Path(sys.modules['sitecustomize'].__file__).resolve()==pathlib.Path({str(BOOTSTRAP)!r}).resolve();"
+                "assert 'BOTA_R5_BOOTSTRAP_ACTIVE' not in os.environ;"
+                "assert os.environ.get('TELEGRAM_BOT_TOKEN')=='unchanged-non-r5-value'"
+            )
+            completed = subprocess.run([sys.executable, "-c", code], env=env, cwd=ROOT,
+                                       text=True, capture_output=True, timeout=10)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
 
     def test_runtime_health_r5_branch_precedes_secret_file_loading(self):
         text = HEALTH_WRAPPER.read_text(encoding="utf-8")

@@ -61,7 +61,11 @@ def evaluate(root: Path) -> dict[str, object]:
     deploy = (root / "ops/vps_deploy.py").read_text(encoding="utf-8")
     checks["transactional_deploy_contract"] = all(x in deploy for x in ("os.replace", "fsync", "_rollback", '("git", "archive"'))
     unit = (root / "ops/systemd/bota.service").read_text(encoding="utf-8")
-    checks["one_systemd_authority"] = "ExecStart=/opt/bota/current/.venv/bin/python" in unit and "KillMode=control-group" in unit
+    checks["one_systemd_authority"] = (
+        "ExecStart=/usr/bin/env BOTA_CODE_ROOT=/opt/bota/current" in unit
+        and "/opt/bota/current/.venv/bin/python /opt/bota/current/tools/vps_orchestrator.py" in unit
+        and "KillMode=control-group" in unit
+    )
     runner = (root / "tools/run_signal_watcher_with_ledger.sh").read_text()
     core = (root / "tools/signal_watcher_core.sh").read_text()
     delivery = (root / "tools/telegram_delivery.py").read_text()

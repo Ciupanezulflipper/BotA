@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shlex
 import signal
 import subprocess
 import sys
@@ -261,6 +262,50 @@ class OrchestratorTests(unittest.TestCase):
         resolved = subprocess.run(["bash", "-c", "command -v python3"], env=env,
                                   text=True, capture_output=True, check=True).stdout.strip()
         self.assertEqual(Path(resolved), fake_bin / "python3")
+
+    def test_child_environment_replaces_bootstrap_path_with_exact_release(self):
+        orch = self.orch()
+        with mock.patch.dict(os.environ, {"PYTHONPATH": "/hostile/bootstrap"}):
+            env = orch.child_env()
+        self.assertEqual(env["PYTHONPATH"], str(ROOT / "r5_bootstrap"))
+
+    def test_direct_and_shell_python_children_auto_load_exact_release_bootstrap(self):
+        orch = self.orch()
+        env = orch.child_env()
+        env.update(BOTA_R5_SHADOW="1", BOTA_REQUIRE_R5_SHADOW="1")
+        assertion = (
+            "import os,pathlib,sys;"
+            "assert os.environ['BOTA_R5_BOOTSTRAP_ACTIVE']=='1';"
+            f"assert pathlib.Path(sys.modules['sitecustomize'].__file__).resolve()==pathlib.Path({str(ROOT / 'r5_bootstrap/sitecustomize.py')!r}).resolve()"
+        )
+        direct = subprocess.run([sys.executable, "-c", assertion], env=env, cwd=ROOT,
+                                text=True, capture_output=True, timeout=10)
+        self.assertEqual(direct.returncode, 0, direct.stderr)
+        shell = subprocess.run(["bash", "-c", f"python3 -c {shlex.quote(assertion)}"],
+                               env=env, cwd=ROOT, text=True, capture_output=True, timeout=10)
+        self.assertEqual(shell.returncode, 0, shell.stderr)
+
+    def test_orchestrator_main_fails_closed_for_unproven_r5_bootstrap(self):
+        with mock.patch.dict(os.environ, {"BOTA_R5_SHADOW": "1",
+                                          "BOTA_R5_BOOTSTRAP_ACTIVE": "1"}, clear=False):
+            with mock.patch.object(vps.sys, "modules", dict(vps.sys.modules)):
+                vps.sys.modules.pop("sitecustomize", None)
+                with mock.patch("sys.stderr"):
+                    self.assertEqual(vps.main([]), 78)
+
+    def test_orchestrator_main_fails_closed_when_r5_required_but_inactive(self):
+        for shadow in (None, "0"):
+            with self.subTest(shadow=shadow):
+                environment = {"BOTA_REQUIRE_R5_SHADOW": "1"}
+                if shadow is not None:
+                    environment["BOTA_R5_SHADOW"] = shadow
+                with mock.patch.dict(os.environ, environment, clear=True):
+                    with mock.patch("sys.stderr"):
+                        self.assertEqual(vps.main([]), 78)
+
+    def test_orchestrator_r5_guard_is_inert_without_r5_flags(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            vps.require_r5_bootstrap(ROOT)
 
     def test_updater_environment_is_exact_and_cannot_leak(self):
         jobs = {job.name: job for job in vps.production_jobs()}

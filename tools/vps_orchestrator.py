@@ -55,7 +55,7 @@ POLICY_KEYS = (
     "CANDLE_MAX_AGE_SECS",
 )
 REQUIRED_COMMANDS = (
-    "bash", "python3", "curl", "flock", "timeout", "git", "systemctl", "jq",
+    "bash", "python3", "curl", "env", "flock", "timeout", "git", "systemctl", "jq",
     "cat", "chmod", "date", "find", "grep", "head", "mkdir", "mktemp",
     "rm", "sed", "sort", "stat", "tail", "tee", "tr",
 )
@@ -382,6 +382,25 @@ class InstanceLocked(RuntimeError):
     pass
 
 
+def require_r5_bootstrap(code_root: Path) -> None:
+    """Reject R5 startup unless startup auto-loaded this release's bootstrap."""
+    required = os.environ.get("BOTA_REQUIRE_R5_SHADOW") == "1"
+    active = os.environ.get("BOTA_R5_SHADOW") == "1"
+    if required and not active:
+        raise ContractError("r5_shadow_required_but_inactive")
+    if not active:
+        return
+    module = sys.modules.get("sitecustomize")
+    module_file = getattr(module, "__file__", None) if module is not None else None
+    expected = (code_root / "r5_bootstrap" / "sitecustomize.py").resolve()
+    try:
+        actual = Path(module_file).resolve() if module_file else None
+    except OSError:
+        actual = None
+    if os.environ.get("BOTA_R5_BOOTSTRAP_ACTIVE") != "1" or actual != expected:
+        raise ContractError("r5_bootstrap_not_proven")
+
+
 class Orchestrator:
     """Own scheduling, process groups, reaping, and useful-progress evidence."""
 
@@ -463,7 +482,8 @@ class Orchestrator:
         env.update(self.policy)
         root = str(self.code_root)
         env.update(BOTA_CODE_ROOT=root, BOTA_ROOT=root,
-                   BOTA_MUTABLE_ROOT=str(self.mutable_root))
+                   BOTA_MUTABLE_ROOT=str(self.mutable_root),
+                   PYTHONPATH=str(self.code_root / "r5_bootstrap"))
         # Shell children must resolve python3 from the same immutable release
         # environment that starts this orchestrator.  Local/unit runs retain
         # their ambient interpreter fallback when no release venv is present.
@@ -703,6 +723,11 @@ class Orchestrator:
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(argv if argv is not None else sys.argv[1:])
     code_root = Path(os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT") or ROOT)
+    try:
+        require_r5_bootstrap(code_root.resolve())
+    except ContractError as exc:
+        print(str(exc), file=sys.stderr)
+        return 78
     if arguments == ["--release-preflight"]:
         result = release_preflight(code_root)
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
