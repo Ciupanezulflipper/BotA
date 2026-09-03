@@ -1,11 +1,27 @@
 #!/data/data/com.termux/files/usr/bin/python3
-"""Transactional installer for the pinned Package 5 BotA runtime delta."""
+"""Transactional installer for the pinned BotA runtime delta.
+
+Two independent invariants gate a green runtime generation report:
+
+* MANIFEST_PARITY  - every file in MANIFEST is resolvable from the pinned
+  RELEASE and its staged bytes hash to the pinned blob.
+* DEPENDENCY_CLOSURE - every local runtime dependency reachable from those
+  manifest files is either included in the deployed payload or already
+  present on the target with content matching the pinned RELEASE blob.
+
+Manifest parity alone must never be reported as full runtime parity; the
+Package-6 (2026-08-16) incident where a 12-file manifest silently omitted
+watcher_persistence_gate.py and telegram_delivery.py is the reason this
+distinction exists.
+"""
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -255,9 +271,216 @@ def validate_deployment_space(root: Path, objects: dict[str, tuple[str, str]]) -
         raise Abort("INSUFFICIENT_DEPLOYMENT_SPACE")
 
 
+# Bounded, explainable dependency parser.
+#
+# The parser looks only for two well-scoped signals in the pinned RELEASE
+# blobs of the MANIFEST files:
+#
+#   1. Shell references of the form ${TOOLS}/name.(py|sh) or
+#      ${SCRIPT_DIR}/name.(py|sh) (with or without braces). These are how the
+#      BotA watcher shell layer invokes its Python and shell helpers.
+#   2. Python "import name" / "from name import ..." statements where the
+#      module resolves to tools/<name>.py in the same RELEASE tree. Stdlib
+#      and third-party imports are ignored by construction.
+#
+# The Python signal is scanned in both .py files (via ast) and in .sh files
+# (via a bounded regex), because the BotA shell scripts embed python3
+# heredocs whose "from news_filter_real import ..." lines are real runtime
+# dependencies. Only names that resolve against the release's tools/
+# directory are ever counted, so spurious matches on unrelated text do not
+# produce ghost dependencies.
+_SHELL_TOOLS_REF = re.compile(
+    r"\$\{?(?:TOOLS|SCRIPT_DIR)\}?/(?P<name>[A-Za-z0-9_.-]+\.(?:py|sh))\b"
+)
+_PY_IMPORT_LINE = re.compile(
+    r"^\s*(?:from\s+([A-Za-z_][A-Za-z0-9_]*)\s+import|"
+    r"import\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s|$|,))",
+    re.MULTILINE,
+)
+
+
+def _list_release_python_modules(root: Path, source: str) -> set[str]:
+    """Return the set of top-level module names present as tools/<name>.py at RELEASE."""
+    result = run(["git", "ls-tree", "-r", "--name-only", source, "--", "tools/"], root)
+    modules: set[str] = set()
+    for line in result.stdout.splitlines():
+        name = line.strip()
+        if not name.endswith(".py"):
+            continue
+        # Only top-level tools/<name>.py (no nested packages).
+        rest = name[len("tools/"):]
+        if "/" in rest:
+            continue
+        modules.add(rest[: -len(".py")])
+    return modules
+
+
+def _release_blob_id(root: Path, source: str, path: str) -> str | None:
+    result = run(["git", "ls-tree", source, "--", path], root, check=False)
+    if result.returncode != 0:
+        return None
+    parts = result.stdout.split()
+    if len(parts) < 4 or parts[1] != "blob":
+        return None
+    return parts[2]
+
+
+def _release_blob_text(root: Path, source: str, path: str) -> str:
+    return run(["git", "cat-file", "-p", f"{source}:{path}"], root).stdout
+
+
+def _scan_shell_tool_refs(text: str) -> set[str]:
+    refs: set[str] = set()
+    for match in _SHELL_TOOLS_REF.finditer(text):
+        name = match.group("name")
+        if "/" in name or ".." in name:
+            continue
+        refs.add(f"tools/{name}")
+    return refs
+
+
+def _scan_python_local_imports(text: str, release_modules: set[str]) -> set[str]:
+    refs: set[str] = set()
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        # Fall back to the same bounded regex used for embedded heredocs.
+        for match in _PY_IMPORT_LINE.finditer(text):
+            name = match.group(1) or match.group(2)
+            if name in release_modules:
+                refs.add(f"tools/{name}.py")
+        return refs
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                top = alias.name.split(".")[0]
+                if top in release_modules:
+                    refs.add(f"tools/{top}.py")
+        elif isinstance(node, ast.ImportFrom):
+            if node.level == 0 and node.module:
+                top = node.module.split(".")[0]
+                if top in release_modules:
+                    refs.add(f"tools/{top}.py")
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if (isinstance(func, ast.Attribute)
+                    and isinstance(func.value, ast.Name)
+                    and func.value.id == "runpy"
+                    and func.attr in ("run_path", "run_module")
+                    and node.args):
+                first = node.args[0]
+                if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                    literal = first.value
+                    if literal.endswith(".py") and "/" not in literal:
+                        module = literal[: -len(".py")]
+                        if module in release_modules:
+                            refs.add(f"tools/{module}.py")
+    return refs
+
+
+def _scan_shell_embedded_python_imports(text: str, release_modules: set[str]) -> set[str]:
+    refs: set[str] = set()
+    for match in _PY_IMPORT_LINE.finditer(text):
+        name = match.group(1) or match.group(2)
+        if name in release_modules:
+            refs.add(f"tools/{name}.py")
+    return refs
+
+
+def _scan_local_refs(path: str, text: str, modules: set[str]) -> set[str]:
+    """Return local (tools/) dependency refs discoverable from `text`.
+
+    Shell scripts and .py files use the same scanners, because both may embed
+    the other (shell heredocs contain python; python spawns subprocesses that
+    reference ${TOOLS}/foo). The scanners themselves are bounded and only
+    accept names that resolve against the pinned RELEASE tools/ tree.
+    """
+    if path.endswith(".sh"):
+        return _scan_shell_tool_refs(text) | _scan_shell_embedded_python_imports(text, modules)
+    return _scan_shell_tool_refs(text) | _scan_python_local_imports(text, modules)
+
+
+def _transitive_closure(
+    entries: set[str],
+    modules: set[str],
+    resolve_text,
+) -> set[str]:
+    """Return the transitive fixed-point closure of `entries` under `resolve_text`.
+
+    resolve_text(path) must return the text content of the pinned RELEASE blob
+    at that path, or None if the path is not resolvable at RELEASE. The scan
+    iterates until no new dependency is discovered; unresolvable frontier
+    entries are still retained in the closure so the caller can fail closed
+    with an explanation. Cycles are handled by the `seen` set.
+    """
+    seen: set[str] = set()
+    frontier: set[str] = set(entries)
+    while frontier:
+        current = frontier.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        text = resolve_text(current)
+        if text is None:
+            continue
+        for ref in _scan_local_refs(current, text, modules):
+            if ref not in seen:
+                frontier.add(ref)
+    return seen
+
+
+def discover_runtime_dependencies(root: Path, source: str) -> set[str]:
+    """Return runtime deps transitively reachable from MANIFEST, excluding MANIFEST itself.
+
+    The scan is a true fixed-point closure: every newly discovered local
+    dependency is itself scanned for further local dependencies until no new
+    dependency is observed. That is what makes the invariant meaningful --
+    a MANIFEST -> B -> C chain where C only appears in B (not in MANIFEST)
+    is still discovered and gated.
+    """
+    modules = _list_release_python_modules(root, source)
+
+    def resolve_text(path: str) -> str | None:
+        if _release_blob_id(root, source, path) is None:
+            return None
+        return _release_blob_text(root, source, path)
+
+    manifest_set = set(MANIFEST)
+    closure = _transitive_closure(manifest_set, modules, resolve_text)
+    return {dep for dep in closure if dep not in manifest_set}
+
+
+def verify_dependency_closure(root: Path, source: str) -> list[str]:
+    """Fail closed unless every discovered runtime dep matches its RELEASE blob.
+
+    Returns the sorted list of dependencies that were verified successfully.
+    """
+    deps = sorted(discover_runtime_dependencies(root, source))
+    for dep in deps:
+        expected_blob = _release_blob_id(root, source, dep)
+        if expected_blob is None:
+            emit("DEPENDENCY_CLOSURE=FAIL")
+            emit(f"DEPENDENCY_UNRESOLVABLE_AT_RELEASE={dep}")
+            raise Abort(f"DEPENDENCY_UNRESOLVABLE_AT_RELEASE:{dep}")
+        target = root / dep
+        if not target.is_file():
+            emit("DEPENDENCY_CLOSURE=FAIL")
+            emit(f"DEPENDENCY_MISSING={dep}")
+            raise Abort(f"DEPENDENCY_MISSING:{dep}")
+        actual_blob = git(root, "hash-object", str(target))
+        if actual_blob != expected_blob:
+            emit("DEPENDENCY_CLOSURE=FAIL")
+            emit(f"DEPENDENCY_STALE={dep}")
+            raise Abort(f"DEPENDENCY_STALE:{dep}")
+    emit("DEPENDENCY_CLOSURE=PASS")
+    return deps
+
+
 def preflight(root: Path, source: str) -> dict[str, tuple[str, str]]:
     validate_preflight_environment(root, source)
     objects = resolve_source_objects(root, source)
+    emit("MANIFEST_PARITY=PASS")
+    verify_dependency_closure(root, source)
     validate_deployment_space(root, objects)
     service(root, "status", check=False)
     return objects
@@ -353,6 +576,7 @@ def finish_if_current(root: Path, active: Path, audit: Path, stage: Path, source
     active.unlink()
     shutil.rmtree(stage)
     emit("DEPLOYMENT=ALREADY_CURRENT")
+    emit("RUNTIME_GENERATION=PASS MANIFEST_PARITY=PASS DEPENDENCY_CLOSURE=PASS")
     emit(f"AUDIT_DIRECTORY={audit}")
     return True
 
@@ -448,6 +672,7 @@ def deploy(root: Path, source: str) -> int:
         atomic_json(active, {"schema": 1, "phase": "complete", "source": source, "audit": str(audit)})
         active.unlink()
         emit("DEPLOYMENT=PASS")
+        emit("RUNTIME_GENERATION=PASS MANIFEST_PARITY=PASS DEPENDENCY_CLOSURE=PASS")
         emit(f"AUDIT_DIRECTORY={audit}")
         return 0
     except Exception:
