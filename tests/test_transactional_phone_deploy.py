@@ -75,6 +75,14 @@ def assert_no_deployment_audit(root: Path) -> None:
     assert not list((root / "audits").glob("transactional_phone_deploy_*"))
 
 
+def _load_executor():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("transactional_phone_deploy", Path(EXECUTOR))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class TransactionalPhoneDeployTests(unittest.TestCase):
   def setUp(self):
     self.temporary = tempfile.TemporaryDirectory()
@@ -292,6 +300,199 @@ class TransactionalPhoneDeployTests(unittest.TestCase):
     assert result.returncode == 0, result.stdout + result.stderr
     assert Path(env["FAKE_SV_STATE"]).read_text().strip() == "down"
     assert "up" not in Path(env["FAKE_SV_LOG"]).read_text().splitlines()
+
+
+  def test_dependency_closure_reports_pass_when_all_runtime_deps_intact(self):
+    root, env = self.root, self.env
+    result = apply(root, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "MANIFEST_PARITY=PASS" in result.stdout
+    assert "DEPENDENCY_CLOSURE=PASS" in result.stdout
+    assert "RUNTIME_GENERATION=PASS" in result.stdout
+
+
+  def test_missing_watcher_persistence_gate_dep_fails_closed(self):
+    # The Aug-16 (Package-6) incident: watcher_persistence_gate.py is invoked
+    # by the deployed run_signal_watcher_with_ledger.sh but is not part of the
+    # MANIFEST. Removing it from the target must be caught before any mutation.
+    root, env = self.root, self.env
+    dep = root / "tools/watcher_persistence_gate.py"
+    assert dep.is_file()
+    dep.unlink()
+    before = (root / CHANGED).read_bytes()
+    result = apply(root, env)
+    assert result.returncode != 0
+    assert "MANIFEST_PARITY=PASS" in result.stdout
+    assert "DEPENDENCY_CLOSURE=FAIL" in result.stdout
+    assert "DEPENDENCY_MISSING=tools/watcher_persistence_gate.py" in result.stdout
+    assert "DEPLOYMENT=PASS" not in result.stdout
+    assert "RUNTIME_GENERATION=PASS" not in result.stdout
+    assert (root / CHANGED).read_bytes() == before
+    assert_no_deployment_audit(root)
+
+
+  def test_missing_telegram_delivery_dep_fails_closed(self):
+    # telegram_send_guard.py imports telegram_delivery; telegram_delivery.py is
+    # not in MANIFEST. Removing it must be caught by Python-import closure.
+    root, env = self.root, self.env
+    dep = root / "tools/telegram_delivery.py"
+    assert dep.is_file()
+    dep.unlink()
+    before = (root / CHANGED).read_bytes()
+    result = apply(root, env)
+    assert result.returncode != 0
+    assert "MANIFEST_PARITY=PASS" in result.stdout
+    assert "DEPENDENCY_CLOSURE=FAIL" in result.stdout
+    assert "DEPENDENCY_MISSING=tools/telegram_delivery.py" in result.stdout
+    assert "DEPLOYMENT=PASS" not in result.stdout
+    assert (root / CHANGED).read_bytes() == before
+    assert_no_deployment_audit(root)
+
+
+  def test_stale_dependency_on_disk_fails_closed(self):
+    # Even if the required dep file exists, if its content differs from the
+    # pinned RELEASE blob the runtime generation is mixed and must fail closed.
+    root, env = self.root, self.env
+    dep = root / "tools/watcher_cycle_ledger.py"
+    assert dep.is_file()
+    dep.write_text("# stale generation, not the pinned RELEASE\n", encoding="utf-8")
+    before = (root / CHANGED).read_bytes()
+    result = apply(root, env)
+    assert result.returncode != 0
+    assert "MANIFEST_PARITY=PASS" in result.stdout
+    assert "DEPENDENCY_CLOSURE=FAIL" in result.stdout
+    assert "DEPENDENCY_STALE=tools/watcher_cycle_ledger.py" in result.stdout
+    assert "DEPLOYMENT=PASS" not in result.stdout
+    assert (root / CHANGED).read_bytes() == before
+    assert_no_deployment_audit(root)
+
+
+  def test_dependency_discovery_covers_persistence_gate_and_telegram_delivery(self):
+    # Unit-level check that the bounded parser actually surfaces the two
+    # dependencies whose absence caused the Aug-16 (Package-6) false-green.
+    # Import inline so that this file can also be executed standalone.
+    module = _load_executor()
+    root, _ = self.root, self.env
+    deps = module.discover_runtime_dependencies(root, RELEASE)
+    assert "tools/watcher_persistence_gate.py" in deps
+    assert "tools/telegram_delivery.py" in deps
+    # And the historically stale-observed files must also be classified as deps
+    # so that generation mismatches on them are caught.
+    assert "tools/watcher_cycle_ledger.py" in deps
+    assert "tools/pipeline_ledger.py" in deps
+    # Embedded python heredoc dep in signal_watcher_core.sh.
+    assert "tools/news_filter_real.py" in deps
+    # Manifest members are never re-reported as separate dependencies.
+    assert not (deps & set([
+      "tools/chart_generator.py",
+      "tools/chart_generator_core.py",
+      "tools/signal_watcher_pro.sh",
+      "tools/telegram_send_guard.py",
+      "tools/telegram_send.sh",
+    ]))
+
+
+  def test_dependency_discovery_reaches_transitive_fixed_point(self):
+    # The RELEASE has real second-level dependencies that only appear because
+    # a first-level dependency imports them (not the MANIFEST). A single-pass
+    # scan would miss all of these -- their presence in the closure is proof
+    # the recursion runs to fixed point.
+    module = _load_executor()
+    deps = module.discover_runtime_dependencies(self.root, RELEASE)
+    # Second-level: reached only via calendar_guard.py / news_filter_real.py /
+    # scoring_engine.sh imports of `trusted_time`.
+    assert "tools/trusted_time.py" in deps
+    # Second-level: reached only via m15_h1_fusion.sh (a first-level shell dep
+    # invoked from signal_watcher_core.sh).
+    assert "tools/emit_snapshot.py" in deps
+    assert "tools/news_sentiment.py" in deps
+    assert "tools/production_signal_policy.py" in deps
+    # Second-level: reached only via scoring_engine.sh (first-level shell dep).
+    assert "tools/market_open.sh" in deps
+    assert "tools/sr_score.py" in deps
+
+
+  def test_transitive_closure_recurses_through_A_B_C_chain(self):
+    # Controlled A -> B -> C chain. Only A is in the entry set; B is
+    # discoverable only from A; C is discoverable only from B. A single-pass
+    # scan would find only {B}. A fixed-point closure must yield {A, B, C}.
+    module = _load_executor()
+    modules = {"a_mod", "b_mod", "c_mod"}
+    texts = {
+        "tools/a_mod.py": "from b_mod import go\n",
+        "tools/b_mod.py": "from c_mod import here\n",
+        "tools/c_mod.py": "# leaf module\n",
+    }
+    def resolve(path):
+        return texts.get(path)
+    closure = module._transitive_closure({"tools/a_mod.py"}, modules, resolve)
+    assert closure == {"tools/a_mod.py", "tools/b_mod.py", "tools/c_mod.py"}
+
+
+  def test_transitive_closure_terminates_on_cycles(self):
+    # A dependency cycle (A -> B -> A) must not loop forever.
+    module = _load_executor()
+    modules = {"a_mod", "b_mod"}
+    texts = {
+        "tools/a_mod.py": "from b_mod import x\n",
+        "tools/b_mod.py": "from a_mod import y\n",
+    }
+    def resolve(path):
+        return texts.get(path)
+    closure = module._transitive_closure({"tools/a_mod.py"}, modules, resolve)
+    assert closure == {"tools/a_mod.py", "tools/b_mod.py"}
+
+
+  def test_transitive_chain_missing_C_fails_before_mutation(self):
+    # Real end-to-end proof that a second-level dependency is discovered and
+    # then gated: trusted_time.py is only reachable via calendar_guard.py /
+    # news_filter_real.py / scoring_engine.sh, none of which are in MANIFEST.
+    # Removing trusted_time.py must be caught, and the failure must occur
+    # before any deployment mutation begins.
+    root, env = self.root, self.env
+    a_path = root / "tools/calendar_guard.py"
+    b_path = root / "tools/news_filter_real.py"
+    c_path = root / "tools/trusted_time.py"
+    assert a_path.is_file(), "A (calendar_guard.py) must exist at RELEASE"
+    assert b_path.is_file(), "B (news_filter_real.py) must exist at RELEASE"
+    assert c_path.is_file(), "C (trusted_time.py) must exist at RELEASE"
+    c_path.unlink()
+    before = (root / CHANGED).read_bytes()
+    log_before = Path(env["FAKE_SV_LOG"]).read_text() if Path(env["FAKE_SV_LOG"]).exists() else ""
+    result = apply(root, env)
+    assert result.returncode != 0
+    assert "MANIFEST_PARITY=PASS" in result.stdout
+    assert "DEPENDENCY_CLOSURE=FAIL" in result.stdout
+    assert "DEPENDENCY_MISSING=tools/trusted_time.py" in result.stdout
+    assert "DEPLOYMENT=PASS" not in result.stdout
+    assert "RUNTIME_GENERATION=PASS" not in result.stdout
+    # Pre-mutation ordering: no service quiesce, no generation marker, no audit.
+    log_after = Path(env["FAKE_SV_LOG"]).read_text() if Path(env["FAKE_SV_LOG"]).exists() else ""
+    new_actions = [l for l in log_after[len(log_before):].splitlines() if l.strip()]
+    assert "down" not in new_actions, f"service was quiesced pre-check: {new_actions}"
+    assert "up" not in new_actions
+    assert not (root / "state/transactional_phone_deploy/runtime_deploy_in_progress.json").exists()
+    assert (root / CHANGED).read_bytes() == before
+    assert_no_deployment_audit(root)
+
+
+  def test_transitive_chain_stale_C_fails_before_mutation(self):
+    # Same A -> B -> C chain, but C exists with wrong content. Content drift
+    # against the pinned RELEASE blob must be caught pre-mutation.
+    root, env = self.root, self.env
+    c_path = root / "tools/trusted_time.py"
+    assert c_path.is_file()
+    c_path.write_text("# not the pinned RELEASE content\n", encoding="utf-8")
+    before = (root / CHANGED).read_bytes()
+    result = apply(root, env)
+    assert result.returncode != 0
+    assert "MANIFEST_PARITY=PASS" in result.stdout
+    assert "DEPENDENCY_CLOSURE=FAIL" in result.stdout
+    assert "DEPENDENCY_STALE=tools/trusted_time.py" in result.stdout
+    assert "DEPLOYMENT=PASS" not in result.stdout
+    assert "RUNTIME_GENERATION=PASS" not in result.stdout
+    assert (root / CHANGED).read_bytes() == before
+    assert_no_deployment_audit(root)
 
 
   def test_no_secret_value_in_audit_or_output(self):
