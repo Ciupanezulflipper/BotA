@@ -1,6 +1,6 @@
 # BotA AI Start Here
 
-Last updated: **2026-09-03 UTC**
+Last updated: **2026-09-04 UTC**
 
 Read this before proposing any BotA strategy, deployment, Telegram, ProfitLab, Android/Termux, VPS/Hetzner, replay, historical-data, or runtime action.
 
@@ -8,32 +8,33 @@ Read this before proposing any BotA strategy, deployment, Telegram, ProfitLab, A
 
 ```text
 PROJECT=BotA
-FINAL_STRATEGY_VERDICT=CLOSE
-ACTIVE_TRADING_STRATEGY_VALIDATION=STOP
-PRODUCTION_READY=NO
-PRODUCTION_CUTOVER_AUTHORIZED=NO
-HETZNER_PRODUCTION_CUTOVER=BLOCKED
-STRATEGY_TUNING_AUTHORIZED=NO
-ADDITIONAL_HISTORY_ACQUISITION_AUTHORIZED=NO
-PROFITLAB_BOTA_DEPENDENCY=PARKED
+BOTA_EDGE_STATUS=UNVALIDATED
+BOTA_SHADOW_RESEARCH=REOPENED_BY_OWNER
+HISTORICAL_RETROSPECTIVE_VALIDATION_PROJECT=CLOSED
+HISTORICAL_CORPUS_GATE_RESULT=FAIL_195_LT_400
+LIVE_MONEY_TRADING=NO
+COMMERCIAL_PROFITLAB=NO
+PRIVATE_PROFITLAB_ANALYTICS=YES
+PRIMARY_RUNTIME_TARGET=HETZNER
+CURRENT_HETZNER_RUNTIME_STATE=UNPROVEN
+ANDROID_ACTIVE_SCANNER=NO
+NEXT_PHASE=STAGE_0_MEASUREMENT_PILOT
+PILOT_STARTED=NO
+STRATEGY_TUNING_DURING_PILOT=NO
+MEASUREMENT_HARDENING_DURING_PILOT=YES
+NEXT_ACTION=READ_ONLY_HETZNER_FORENSIC_INSPECTION
+FURTHER_BROAD_AI_REVIEW=STOP
 ```
 
-Canonical closure record:
+Canonical current decision:
+
+`audits/BOTA_SHADOW_REOPEN_MEASUREMENT_PILOT_2026-09-04.md`
+
+Historical closure record remains valid historical evidence:
 
 `audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md`
 
-## Why BotA is closed
-
-A corpus governance rule was fixed before the final frozen Policy-B count was known:
-
-```text
-POLICY_B_ACCEPTED < 400 -> KILL
-400-599                -> continue only if economics are exceptional
-600-799                -> borderline
->=800                  -> corpus gate PASS
-```
-
-The exact deterministic full frozen replay produced:
+## Historical corpus result — preserve exactly
 
 ```text
 DATASET_ID=oanda-warmup-20240101-20260801-20260807-r3
@@ -44,100 +45,112 @@ DECISION_ROWS=32641
 POLICY_A_ACCEPTED=478
 POLICY_B_ACCEPTED=195
 POLICY_C_ACCEPTED=164
+PRE_REGISTERED_KILL_THRESHOLD=400
 CORPUS_GATE=FAIL
 ```
 
-Read-only proof from the count run:
+Interpretation:
 
 ```text
-REPOSITORY_STATE_UNCHANGED=YES
-DATASET_MANIFEST_UNCHANGED=YES
-PRODUCTION_CACHE_UNCHANGED=YES
-PRODUCTION_STRATEGY_MUTATED=NO
-```
-
-The pre-registered rule is therefore honored:
-
-```text
-195 < 400 -> CLOSE
-```
-
-## Important corrections
-
-Do not repeat these superseded claims:
-
-1. **Do not claim 500 D1 bars are practically necessary because EMA/Wilder memory is recursive.** Old-state influence is numerically negligible after sufficiently long warm-up. The 500-bar rule is retained because it defines the frozen replay protocol, not because 500 is a mathematical law.
-2. **Do not claim a 200-bar replay would produce ~500-550 Policy-B candidates.** That replay has not been executed; the count is unknown.
-3. **Do not present 40% as the observed win rate of the 195 candidates.** Complete outcomes for the 195 frozen candidates are unresolved.
-4. **Do not present 13 trades/month as the observed corpus rate.** It was an illustrative economics scenario.
-5. **Do not treat multi-model agreement as independent proof.** Kimi, Perplexity, Grok, DeepSeek and Gemini reviewed the same framing package; their useful contribution is the specific adversarial criticism, not vote counting.
-
-## What closure does and does not mean
-
-```text
+EXISTING_HISTORICAL_CORPUS_SUFFICIENT_FOR_PRIOR_GATE=NO
 STRATEGY_EDGE_VALIDATED=NO
 STRATEGY_PROFITABILITY_PROVEN_NEGATIVE=NO
-CORPUS_SUFFICIENCY_GATE_FAILED=YES
 ```
 
-BotA is being closed because the active validation project failed its pre-registered corpus gate and the remaining path would reopen the same data/replay/tuning cycle the gate was created to stop.
+The 2026-09-03 closure stopped the then-active retrospective validation path. The owner has now explicitly authorized a **new prospective shadow-research path**. This does not erase or rewrite the old result.
 
-## Hetzner / VPS status
+## Statistical correction that must survive handoff
 
-Historical VPS work reached an R5 **no-side-effect shadow**, not Production cutover. Market opening is no longer a release gate.
+A genuinely new, frozen, single-hypothesis prospective test does **not** automatically inherit the historical multiple-testing Bonferroni penalty. Claude explicitly withdrew that prior application.
+
+Do not treat any of these as the final required sample size:
+
+```text
+N=400
+N=500
+N=682
+N=1446
+```
+
+The confirmatory sample size and sequential stopping boundaries must be derived after the measurement pilot establishes the empirical Net-R distribution, execution-cost distribution, ambiguity rate and dependence structure.
+
+Primary future scientific endpoint is expected to be **Net R after realistic execution costs**, not raw win rate. Exact hypothesis is not frozen yet.
+
+`60%` win rate is a future business/product aspiration only, not the primary scientific edge gate.
+
+## Execution/evidence corrections
+
+Do not assume:
+
+- decision/model price equals subscriber-executable price;
+- spread is always 1 pip;
+- every win is exactly +2R and loss exactly -1R;
+- EURUSD and GBPUSD signals are independent;
+- M15 OHLC can order TP and SL when both touch in the same candle;
+- Telegram API success proves a human saw the message.
+
+Repository evidence confirms that same-candle TP-first logic exists and has been documented as potentially optimistic.
+
+## Existing measurement infrastructure — do not rewrite blindly
+
+The repository already contains substantial controls:
+
+- `tools/watcher_cycle_ledger.py` — bounded current-cycle reconciliation and terminal decision evidence;
+- `tools/pipeline_ledger.py` — append-only event ledger with UUID event IDs, process-shared `flock`, UTC display time, monotonic/boot-aware time and atomic compact state updates;
+- watcher stale-candle handling that fails closed on missing/unparseable/stale candle evidence.
+
+Therefore do not assume a rewrite is needed. Inspect actual Hetzner runtime first, then harden only the missing measurement controls.
+
+## Stage 0 contract
+
+The measurement pilot may improve observation only:
+
+- run/signal/host identity;
+- config fingerprinting;
+- UTC timestamp semantics;
+- expected-scan completeness;
+- provider identity;
+- bid/ask/spread evidence;
+- publication timing;
+- ambiguity handling;
+- lower-timeframe resolver evidence where justified;
+- idempotency/crash reconciliation;
+- automated integrity reports.
+
+It must not change:
+
+- Policy B;
+- ADX/RSI/score rules;
+- pair/timeframe scope;
+- higher-timeframe confirmation logic;
+- TP/SL strategy logic;
+- baseline trading rules.
+
+Pilot observations **do not count** toward the later confirmatory sample.
+
+## Hetzner / VPS boundary
+
+Historical VPS work reached R5 **no-side-effect shadow**, not Production cutover.
 
 ```text
 VPS_R5_ENGINEERING_ARTIFACT=PRESERVE
-VPS_PRODUCTION_CUTOVER=DO_NOT_PROCEED
-PR120_MERGE_AUTHORITY=REVOKED_BY_CLOSURE
-OPEN_MARKET_LIVE_ACCEPTANCE=NO_LONGER_REQUIRED
+CURRENT_HETZNER_RUNTIME_STATE=UNPROVEN
+HETZNER_LIVE_MONEY_CUTOVER=NO
 ```
 
-Do not infer from this file that any running Hetzner service has been stopped. Host cleanup requires separate fresh host evidence.
+Do not infer current host state from GitHub.
 
-## ProfitLab status
+## ProfitLab
 
 ```text
-PROFITLAB_SHELL=PRESERVE_AS_INFRASTRUCTURE
-PROFITLAB_BOTA_SIGNAL_DEPENDENCY=PARKED
-PROFITLAB_VALIDATED_BUSINESS=NO
+PROFITLAB_PUBLIC_PRODUCT=NO
+PROFITLAB_PRIVATE_ANALYTICS=YES
+PROFITLAB_SOURCE_OF_TRUTH=NO
+BOTA_EVIDENCE_SOURCE_OF_TRUTH=YES
 ```
 
-ProfitLab must not be used as justification to restart BotA.
+## Exactly one current action
 
-## Optional final outcome record
+Perform a **read-only Hetzner forensic inspection** before any restart or deployment.
 
-A one-time read-only resolution of the 195 frozen Policy-B candidates may be performed only as a historical closing record, with this constraint fixed before execution:
-
-```text
-OUTCOME_RESULT_CAN_REOPEN_BOTA=NO
-STRATEGY_CHANGE=NO
-PROTOCOL_CHANGE=NO
-PRODUCTION_DEPLOYMENT=NO
-```
-
-## Prohibited next actions
-
-Do not:
-
-- tune Policy B;
-- lower thresholds;
-- add GEMs, filters, indicators, pairs, or strategy rules;
-- change the warm-up and call the result the original frozen experiment;
-- acquire more historical data to rescue validation;
-- build another open-ended PnL/replay project;
-- pursue natural market-open proof as a readiness gate;
-- merge or deploy the VPS migration as Production;
-- use ProfitLab as a reason to resume signal development.
-
-## Read first
-
-1. `audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md`
-2. `CONTINUITY_CURRENT.md`
-3. `DECISIONS.md`
-4. `state/STATE.json`
-5. historical audit/runtime files only when their dated evidence is needed
-
-## Exactly one current project action
-
-**Preserve and archive the engineering evidence. Do not continue BotA strategy validation or Production cutover.**
+No service start/stop/restart, deploy, checkout, config edit, Supabase mutation, Telegram test send, strategy change or live-money action is authorized until that inspection is reconciled with repository evidence.
