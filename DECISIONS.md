@@ -1,234 +1,176 @@
 # BotA Decisions Register
 
-Last updated: **2026-08-09 UTC**
+Last updated: **2026-09-03 UTC**
 
-This file records active decisions. Older decisions remain in Git history and dated audits. Explicit supersession here controls current work.
+This file records active decisions. Older operational decisions remain in Git history and dated audits. Explicit supersession here controls current work.
 
-## Active locked decisions
+## 2026-09-03 — BotA closes as an active trading-strategy project
 
-### 2026-08-09 — Deployed production release after Package #1
+- Status: **LOCKED / FINAL**
+- Canonical evidence: `audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md`.
 
-- Status: **LOCKED**
-- Current deployed runtime release: `8728de6b5a2ed0f4647374ef4fa6ed72f9eb03c0`.
-- Package #1 (`Clock & Session Time`) is **PASS**: merged, hash-pinned, deployed, byte-parity verified, and live-proven.
-- Package #2 (`Pre-Market Production Integrity`) is **PENDING** despite successful live control-plane repairs.
-- `MONDAY_READY=NO` until Package #2 passes and a genuine open-market three-pair cycle passes.
-- Canonical dated proof: `audits/PACKAGE1_CLOCK_AND_PACKAGE2_CONTROL_PLANE_2026-08-09.md`.
-
-### 2026-08-09 — One trusted strategy/event instant per watcher cycle
-
-- Status: **LOCKED**
-- `BOTA_SERVER_EPOCH` is authoritative for market/session/economic-event semantics within a production watcher cycle.
-- Nested market gates and scorer/calendar/news consumers must reuse the inherited trusted epoch rather than independently reading Android wall clock or establishing unrelated `now` values.
-- CLOCK_BOOTTIME/monotonic remains authoritative for elapsed-duration health, cadence, cooldown, and same-boot freshness.
-- Fail closed when trusted strategy/event time is required but unavailable.
-- Package #1 changed the time source, not score thresholds or session-score values.
-
-### 2026-08-09 — Calendar before/after semantics are directional
-
-- Status: **LOCKED**
-- For `minutes_away = event_time - now`, positive values mean before the event and negative values mean after it.
-- The prior sign inversion was fixed in Package #1.
-- Current configured windows retain their intended values; only the direction/application bug was corrected.
-
-### 2026-08-09 — Service liveness and service ownership are separate health dimensions
-
-- Status: **LOCKED**
-- `sv status=run`, a live wrapper PID, or continuing cron jobs are not sufficient proof of a healthy control plane.
-- Every readiness/control-plane check must separately establish:
+Pre-registered corpus governance:
 
 ```text
-one native runsvdir manager
-one runsv supervisor per required service
-all seven required supervisors owned by that manager
-all seven services running
-zero PID-1 orphan supervisors
-zero duplicate service rows
-singleton child/resource owner correct where applicable
+POLICY_B_ACCEPTED < 400       -> KILL
+400-599                       -> continue only if economics exceptional
+600-799                       -> borderline
+POLICY_B_ACCEPTED >= 800      -> PASS
 ```
 
-- The Package #2 incident proved this distinction: cron jobs were executing while the current manager-owned `runsv crond` could not own the live daemon.
-
-### 2026-08-09 — Stale live singleton child is not the same as stale dead pidfile
-
-- Status: **LOCKED**
-- A pidfile/resource lock must not be deleted merely because the current supervisor cannot start its service.
-- Before terminating or removing anything, prove whether the recorded owner PID is alive, its command identity, and its parent/ownership lineage.
-- Exact incident: stale live `crond` PID 4107, PPID 1, held `crond.pid` while current manager-owned `runsv crond` PID 24583 retried replacements.
-- The accepted live repair was: quiesce current restart loop -> verify stale daemon identity -> terminate stale daemon -> let current `runsv` start one replacement -> verify replacement parentage/stability.
-- Package #2 must automate this class safely rather than rely on manual operator repair.
-
-### 2026-08-09 — Persistent watchdog remains a Package #2 gate
-
-- Status: **LOCKED**
-- The watchdog source matching GitHub and a one-shot RC 0 are not equivalent to persistent recovery.
-- Current phone boot launcher explicitly has `RUNSVDIR_GUARD_START=DISABLED`.
-- Package #2 must prove a single-instance persistent watchdog after Termux service-manager startup without creating a second manager/supervisor generation.
-- It must recover or safely classify manager loss, orphaned `runsv`, down services, duplicate supervisors, stale dead pidfiles, and live stale singleton-child/resource-owner conditions.
-
-### 2026-08-09 — Current production scope
-
-- Status: **LOCKED**
+Exact frozen replay result:
 
 ```text
-PAIRS=EURUSD GBPUSD USDJPY
-TIMEFRAMES=M15
-POLICY_B_ENABLED=1
-POLICY_B_SCORE_MIN=70
-POLICY_B_ADX_MAX=30
-NEWS_ON=0
-TELEGRAM_ENABLED=1
-DRY_RUN_MODE=0
+POLICY_B_ACCEPTED=195
+KILL_THRESHOLD=400
+CORPUS_GATE=FAIL
+FINAL_STRATEGY_VERDICT=CLOSE
 ```
 
-- The old EURUSD/GBPUSD-only scope is superseded.
-- Do not add/remove pairs or loosen thresholds as an operational recovery mechanism.
-
-### 2026-08-09 — Signal frequency is not a readiness criterion
-
-- Status: **LOCKED**
-- Do not lower score, ADX, H1/H4/D1, Telegram, cooldown, or eligibility thresholds to manufacture signals.
-- Three legitimate rejected/HOLD decisions can satisfy the final open-market execution-path proof.
-- A Telegram signal is not required.
-- Operational failure must not be reclassified as strategy rejection.
-
-### 2026-08-09 — Exactly one watcher owner
-
-- Status: **LOCKED**
-- Production watcher ownership is runit-only.
-- Active direct watcher cron count must remain zero.
-- Active physical wrapper:
-  `/data/data/com.termux/files/home/.config/bota-sv/bota-watcher/run`.
-- Every readiness check must prove current unique ownership.
-
-### 2026-08-09 — Deployment identity is not phone Git HEAD
-
-- Status: **LOCKED**
+Decision:
 
 ```text
-PHONE_LOCAL_BRANCH=deploy/repaired-core-20260802T215531Z
-PHONE_LOCAL_HEAD=4339543551aae2e2bcbf727aefe96e3eb103b665
+ACTIVE_TRADING_STRATEGY_VALIDATION=STOP
+STRATEGY_TUNING_AUTHORIZED=NO
+ADDITIONAL_HISTORY_FOR_RESCUE=NO
+HETZNER_PRODUCTION_CUTOVER=NO
+MARKET_OPEN_ACCEPTANCE_GATE=SUPERSEDED
 ```
 
-- Deployed identity requires immutable approved SHA, bounded file blob/mode parity, active-wrapper parity, runtime config, and live proof.
-- Do not reset/clean the phone merely to make its checkout resemble production.
+### Rationale
 
-### 2026-08-09 — Deployment/readiness gates remain distinct
+The kill rule was fixed before the exact full frozen Policy-B count was known. The deterministic read-only corpus run returned 195, materially below the 400 kill threshold. The rule exists specifically to prevent post-result parameter changes, data expansion, replay expansion, and indefinite continuation.
+
+This decision does **not** claim that every BotA trade loses. It claims that the active project failed its own pre-committed evidence-sufficiency gate.
+
+---
+
+## 2026-09-03 — 500-bar warm-up remains procedural, not mathematical
+
+- Status: **LOCKED CORRECTION**
+
+The previous claim that 500 D1 bars are practically necessary because EMA/Wilder smoothing retains recursive dependence is withdrawn as materially overstated.
+
+Decision:
+
+```text
+500_BAR_RULE=FROZEN_PROTOCOL_CHOICE
+500_BAR_RULE=NOT_A_PHYSICS_REQUIREMENT
+200_BAR_REPLAY=UNEXECUTED_SENSITIVITY
+200_BAR_POLICY_B_COUNT=UNKNOWN
+```
+
+Changing warm-up after observing the 195 result would create a different experiment. It may be scientifically interesting as sensitivity analysis, but it is not the original frozen test and is not authorized as a rescue path.
+
+Earlier estimates around 500-550 Policy-B accepts under a 200-bar convention are withdrawn as unobserved extrapolation.
+
+---
+
+## 2026-09-03 — Economic claims must remain hypothetical until outcomes are resolved
+
+- Status: **LOCKED EVIDENCE BOUNDARY**
+
+The full 195 Policy-B candidate outcomes have not been resolved in the final corpus run.
+
+Therefore:
+
+```text
+OBSERVED_POLICY_B_WIN_RATE_FOR_195=UNKNOWN
+40_PERCENT_WIN_RATE=ILLUSTRATIVE_ONLY
+13_TRADES_PER_MONTH=ILLUSTRATIVE_ONLY
+STRATEGY_PROFITABILITY_PROVEN_NEGATIVE=NO
+STRATEGY_EDGE_VALIDATED=NO
+```
+
+The prior illustrative model—+2R/-1R, 40% win rate, 16.56-pip risk, 1-pip baseline cost, ~+0.14R/trade and ~2.3-pip additional edge-erasure threshold—may be retained only as execution-fragility context.
+
+---
+
+## 2026-09-03 — Optional outcome resolution cannot reopen BotA
+
+- Status: **LOCKED BEFORE ANY FUTURE OUTCOME RUN**
+
+A one-time read-only resolution of the 195 frozen Policy-B candidates is allowed only as a historical closing record.
+
+```text
+OUTCOME_RESOLUTION_PURPOSE=DEATH_CERTIFICATE_ONLY
+OUTCOME_RESULT_CAN_REOPEN_BOTA=NO
+STRATEGY_CHANGE=NO
+PROTOCOL_CHANGE=NO
+PRODUCTION_DEPLOYMENT=NO
+```
+
+A strong result is historically informative but cannot retroactively erase the failed pre-registered corpus gate.
+
+---
+
+## 2026-09-03 — Hetzner/VPS migration authority revoked by strategy closure
 
 - Status: **LOCKED**
 
-```text
-CODE_READY
-MERGED_TO_MAIN
-DEPLOYMENT_READY
-DEPLOYED_TO_PHONE
-RUNTIME_PARITY_VERIFIED
-LIVE_PIPELINE_VERIFIED
-PRE_MARKET_PRODUCTION_INTEGRITY
-OPEN_MARKET_THREE_PAIR_PROOF
-MONDAY_READY
-```
+Historical R5 VPS work remains valuable engineering evidence. It was a no-side-effect shadow, not Production cutover.
 
-- Passing an earlier gate does not imply later gates.
-- Package #2 live repair does not imply Package #2 persistent hardening is complete.
-
-### 2026-08-09 — Every watcher cycle needs one authoritative terminal outcome
-
-- Status: **LOCKED**
-- Every scheduled watcher cycle must end in an observable terminal outcome.
-- One cycle ID remains coherent across gate -> watcher -> reconciler -> ledger.
-- Terminal-ledger persistence failure is operational failure.
-
-Latest Package #1 live proof:
+Decision:
 
 ```text
-cycle_id=b32a66a6-1a91-4b61-b759-c32851cbae6b:144452448476926
-terminal_outcome=MARKET_CLOSED
-market_reason=MARKET_CLOSED_SUNDAY
-time_source=server_epoch
+R5_ENGINEERING_ARTIFACT=PRESERVE
+PR120_MERGE_AUTHORITY=REVOKED
+VPS_PRODUCTION_CUTOVER=DO_NOT_PROCEED
+OPEN_MARKET_R5_ACCEPTANCE=NO_LONGER_REQUIRED
 ```
 
-### 2026-08-09 — ProfitLab state is independent and preserved
+Any shutdown/removal of an already-running shadow service is a separate host-cleanup operation and requires fresh host evidence. Documentation must not claim that cleanup happened unless verified.
+
+---
+
+## 2026-09-03 — ProfitLab is decoupled from BotA closure
 
 - Status: **LOCKED**
 
 ```text
-cursor_offset=897734
-alerts_csv_size=897734
-pending_bytes=0
+PROFITLAB_SHELL=PRESERVE_AS_INFRASTRUCTURE
+PROFITLAB_BOTA_SIGNAL_DEPENDENCY=PARKED
+PROFITLAB_VALIDATED_BUSINESS=NO
 ```
 
-- Do not run `profitlab_delivery.py --bootstrap` on current production.
-- Do not replay historical alerts during routine deployments/recovery.
+ProfitLab must not be described as a validated business waiting only for BotA signals, and it must not be used as a reason to reopen BotA.
 
-### 2026-08-09 — Package #2 acceptance contract
+---
 
-- Status: **LOCKED**
-- Before persistent phone changes, Package #2 must have isolated fault tests for at least:
+## 2026-09-03 — AI consensus is not independent evidence when framing is shared
 
-```text
-manager loss
-PID-1 orphaned runsv handoff
-single service down
-dead stale pidfile
-live stale singleton child/resource owner
-duplicate supervisor
-multiple manager attempt
-watchdog duplicate attempt
-release/blob/config drift
-missing/stale updater or shadow/data readiness
-```
+- Status: **LOCKED LESSON**
 
-- The production implementation must preserve one native manager and one owner per required service.
-- Strategy behavior is out of scope.
+Kimi, Perplexity, Grok, DeepSeek and Gemini all returned CLOSE, but they reviewed the same supplied evidence/framing package.
 
-### 2026-08-09 — Final open-market readiness gate
+Decision rule:
 
-- Status: **LOCKED**
-- After Package #2 passes, the first genuine `MARKET_OPEN` cycle must show:
+> Use model outputs for adversarial error discovery, not vote counting. Shared-prompt agreement is correlated evidence.
 
-```text
-EURUSD:M15 current decision present
-GBPUSD:M15 current decision present
-USDJPY:M15 current decision present
-same current cycle identity proven
-fresh updater/data evidence
-fresh shadow evidence
-one authoritative terminal watcher outcome
-trusted server time
-no active direct watcher cron
-no second watcher owner
-7/7 correctly owned and running
-```
+The substantive corrections surfaced by the audits are retained; the numerical consensus itself is not treated as proof.
 
-- Three legitimate rejects are acceptable.
-- Delivery evidence is checked only if a signal genuinely qualifies.
+---
 
-## Separate behavior-changing work
+## Historical operational decisions — status after closure
 
-Do not mix these into Package #2:
+The following prior classes remain valid as engineering lessons for their historical generations but no longer create BotA release obligations:
 
-1. **Signal-closer lifecycle** — draft PR #7 is stale; do not merge wholesale.
-2. **H1/ADX override contract** — separate strategy behavior review.
-3. **Legacy/redundant provider refresh cleanup** — separate behavior/performance change.
-4. **Compact state-schema normalization** — deferred bookkeeping unless it becomes operationally material.
-5. **Android system-clock correction** — separate operational/device task; trusted server epoch remains trading truth.
+- claim-specific evidence authority;
+- repository state != deployed runtime state;
+- one execution owner per responsibility;
+- trusted server epoch for trading/session semantics;
+- useful progress != process liveness;
+- immutable generation-specific deployment;
+- evaluation evidence != delivery evidence;
+- generation barriers and terminal watcher evidence;
+- no threshold lowering to manufacture activity.
 
-## Repository workflow decision
+Historical runtime/reliability work may be reused in future systems. It is not authorization to resume BotA strategy validation.
 
-- Status: **LOCKED**
-- Normal flow:
+## Current repository workflow decision
 
-```text
-inspect current truth
--> bounded branch
--> complete-file changes
--> verify exact diff
--> PR
--> exact-head static/review gates
--> resolve findings
--> merge
--> separate deployment gate when runtime files changed
-```
+Normal changes remain branch/PR based. This closure is documentation/governance work only; it does not authorize code, runtime, strategy, phone, Supabase, Telegram, or Hetzner Production mutation.
 
-Never push normal work directly to `main`.
+## Exactly one current decision
+
+**Preserve the project and its engineering lessons. Do not continue BotA trading-strategy validation or Production deployment.**

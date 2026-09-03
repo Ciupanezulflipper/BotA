@@ -1,148 +1,95 @@
 {
   "_meta": {
-    "schema_version": "3.1",
+    "schema_version": "4.0",
     "project": "BotA",
     "repository": "Ciupanezulflipper/BotA",
     "record_type": "repository_handoff_snapshot_not_live_runtime_state",
-    "recorded_date_utc": "2026-08-17",
-    "authoritative_detail": "audits/PACKAGE7_RUNTIME_AND_PROFITLAB_CLOSURE_2026-08-17.md"
+    "recorded_date_utc": "2026-09-03",
+    "authoritative_detail": "audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md"
   },
-  "readiness": {
-    "pr108_merged": true,
-    "pr113_merged": true,
-    "pr115_merged": true,
-    "package6_phone_deployed": true,
-    "package7_real_manager_loss_recovery": "PASS",
-    "current_control_plane": "HEALTHY",
-    "profitlab_reconciled": true,
-    "closed_market_premarket_integrity": "PASS",
-    "open_market_three_pair_live_proof": false,
-    "telegram_incident_lifecycle_usability_confirmed": false,
+  "strategy_project": {
+    "final_verdict": "CLOSE",
+    "active_validation": false,
+    "closure_reason": "PRE_REGISTERED_CORPUS_GATE_FAILED",
+    "strategy_edge_validated": false,
+    "profitability_proven_negative": false,
+    "strategy_tuning_authorized": false,
+    "additional_history_for_rescue_authorized": false
+  },
+  "corpus_gate": {
+    "policy": "Policy B = current production acceptance AND score >= 70 AND ADX < 30",
+    "kill_threshold": 400,
+    "conditional_economics_min": 400,
+    "borderline_min": 600,
+    "pass_min": 800,
+    "exact_policy_a_accepted": 478,
+    "exact_policy_b_accepted": 195,
+    "exact_policy_c_accepted": 164,
+    "decision_rows": 32641,
+    "status": "FAIL"
+  },
+  "frozen_replay": {
+    "dataset_id": "oanda-warmup-20240101-20260801-20260807-r3",
+    "replay_source_commit": "6b437179cc58021aa358b1d0b04c121d9304c660",
+    "raw_start_utc": "2024-01-01T00:00:00Z",
+    "raw_end_utc_exclusive": "2026-08-01T00:00:00Z",
+    "evaluation_start_utc": "2025-12-03T22:00:00Z",
+    "evaluation_end_utc_exclusive": "2026-08-01T00:00:00Z",
+    "min_warmup_bars": 500,
+    "replay_status": "COMPLETE",
+    "replay_grade": "DETERMINISTIC_PRODUCTION_RULES_WITH_PROVIDER_SUBSTITUTION",
+    "repository_state_unchanged": true,
+    "dataset_manifest_unchanged": true,
+    "production_cache_unchanged": true,
+    "production_strategy_mutated": false
+  },
+  "warmup_correction": {
+    "five_hundred_bar_rule_classification": "FROZEN_PROTOCOL_CHOICE_NOT_PHYSICS_REQUIREMENT",
+    "recursive_ema_practical_dependency_claim_withdrawn": true,
+    "two_hundred_bar_replay_executed": false,
+    "two_hundred_bar_policy_b_count": null,
+    "prior_500_to_550_projection_withdrawn": true,
+    "invalidates_exact_195_count": false
+  },
+  "economics_evidence": {
+    "full_195_outcomes_resolved": false,
+    "observed_policy_b_win_rate": null,
+    "illustrative_win_rate": 0.40,
+    "illustrative_payoff": "+2R/-1R",
+    "illustrative_average_risk_pips": 16.56,
+    "illustrative_baseline_cost_pips": 1.0,
+    "illustrative_net_expectancy_r": 0.14,
+    "illustrative_additional_edge_erasure_pips": 2.3,
+    "thirteen_trades_per_month_is_observed": false
+  },
+  "deployment": {
     "production_ready": false,
-    "classification": "STATIC_AND_CLOSED_MARKET_GATES_PASS_LIVE_MARKET_ACCEPTANCE_PENDING"
-  },
-  "release": {
-    "github_main_at_doc_refresh": "b0f30df9aeade1711b7e2c45045b2bc95c9954b4",
-    "package7_release": "48db934e44ffebd0e0a419c9ca57554ecf7f372e",
-    "pr108_runtime_release": "f36836315526fd2be826e8abff1c333004b64b0c",
-    "package7_watchdog_blob": "7dd58b7ea0be3663d380de0a7961eeec482f1c14",
-    "main_noop_commits_after_package7": 4,
-    "main_tree_diff_vs_package7": 0
-  },
-  "production_scope": {
-    "pairs": ["EURUSD", "GBPUSD", "USDJPY"],
-    "timeframes": ["M15"],
-    "policy_b_enabled": true,
-    "policy_b_score_min": 70,
-    "policy_b_adx_max": 30,
-    "news_on": false,
-    "telegram_enabled": true,
-    "dry_run_mode": false,
-    "strategy_changed_by_package7": false
-  },
-  "package7": {
-    "phone_deploy": {
-      "status": "PASS",
-      "runtime_blob": "7dd58b7ea0be3663d380de0a7961eeec482f1c14",
-      "watchdog_singleton_after": true
-    },
-    "real_recovery_event": {
-      "status": "PASS",
-      "event": "orphan_tree_drained_before_native",
-      "new_manager_pid": 26290,
-      "drained_orphan_pids": [30851, 30942, 31191, 31243, 31325, 31489, 31638],
-      "next_event": "topology_healthy"
-    }
-  },
-  "latest_control_plane_sample": {
-    "healthy": true,
-    "manager_count": 1,
-    "manager_pid": 26290,
-    "required_services": 7,
-    "owned_services": 7,
-    "running_services": 7,
-    "orphaned_runsv": 0,
-    "duplicate_service_rows": 0,
-    "zombie_runsv_count": 0,
-    "watchdog_singleton": true,
-    "failure_reasons": []
-  },
-  "termux_service_root": {
-    "service_dir_count": 9,
-    "bota_required_services": [
-      "bota-updater",
-      "bota-watcher",
-      "bota-closer",
-      "bota-shadow",
-      "bota-heartbeat",
-      "bota-supervisor",
-      "crond"
-    ],
-    "other_services": ["ssh-agent", "sshd"],
-    "transient_zombies_observed_then_disappeared": 2,
-    "zombie_service_attribution": "UNAVAILABLE_EMPTY_CMDLINE_SHARED_MANAGER"
+    "market_open_acceptance_required": false,
+    "hetzner_production_cutover_authorized": false,
+    "r5_shadow_engineering_artifact_preserved": true,
+    "pr120_merge_authorized": false,
+    "host_shadow_service_stopped_by_this_record": false
   },
   "profitlab": {
-    "reconciled": true,
-    "alerts_size": 1303002,
-    "old_cursor": 930393,
-    "new_cursor": 1303002,
-    "classified_pending_bytes": 372609,
-    "classified_rows": 1450,
-    "malformed_rows": 0,
-    "partial_rows": 0,
-    "stale_eligible_green_rows": 5,
-    "eligible_by_pair": {"USDJPY": 3, "GBPUSD": 2},
-    "eligible_by_direction": {"BUY": 5},
-    "classified_region_sha256": "fba1bc80ecf68cba3c8574236748fb939e2e1e1b4abb70f5b3e22969771caad6",
-    "stale_publications_sent": 0,
-    "remaining_new_bytes": 0,
-    "cursor_caught_up": true,
-    "cron_env_service_key_available": true,
-    "post_reconcile_no_new_rows_ticks": 4,
-    "bootstrap_used": false,
-    "cursor_reset_used": false,
-    "audit_directory": "audits/profitlab_stale_reconcile_20260817T202901Z"
+    "shell_preserve_as_infrastructure": true,
+    "bota_signal_dependency": "PARKED",
+    "validated_business": false
   },
-  "closed_market_integrity": {
-    "healthy": true,
-    "return_code": 0,
-    "control_plane": true,
-    "watchdog_ownership": true,
-    "boot_persistence": true,
-    "cron_ownership": true,
-    "runtime_parity": true,
-    "production_config": true,
-    "profitlab": true,
-    "market_gate": true,
-    "progress": true,
-    "trusted_clock": true,
-    "market_status": "Closed",
-    "market_open": false,
-    "profitlab_pending_bytes": 0,
-    "failure_count": 0,
-    "phone_audit_file": "/data/data/com.termux/files/home/BotA/audits/pre_market_integrity_20260817T203832Z.json"
+  "optional_closing_record": {
+    "resolve_195_outcomes_allowed": true,
+    "purpose": "HISTORICAL_CLOSING_RECORD_ONLY",
+    "result_can_reopen_bota": false,
+    "strategy_change_allowed": false,
+    "protocol_change_allowed": false,
+    "production_deployment_allowed": false
   },
-  "telegram": {
-    "trade_card_presentation": "MODERN_GREEN_YELLOW_TEXT_FORMAT_MERGED_IN_PR108",
-    "chart_delivery": "INTENTIONALLY_DISABLED_ON_CANONICAL_PRODUCTION_PATH",
-    "weekend_operator_alert_volume": "89_REPORTED",
-    "underlying_control_plane_failure_family": "RESOLVED_BY_PACKAGE7_REAL_RECOVERY",
-    "incident_lifecycle_usability_confirmation": "PENDING"
+  "external_audit": {
+    "reviewers": ["Kimi", "Perplexity", "Grok", "DeepSeek", "Gemini"],
+    "all_returned_close": true,
+    "confidence_range_percent": [87, 95],
+    "shared_framing_means_independent_consensus": false,
+    "claude_executive_review": "CLOSE"
   },
-  "freeze": {
-    "bootstrap_profitlab": false,
-    "reset_profitlab_cursor_to_hide_backlog": false,
-    "lower_thresholds_to_force_signals": false,
-    "force_signal_count": false,
-    "force_telegram_test_signal": false,
-    "reopen_control_plane_without_new_flapping_evidence": false,
-    "declare_ready_before_natural_open_market_proof": false
-  },
-  "current_blockers": [
-    "verify_open_market_pipeline_has_no_INTERNAL_ERROR_MARKET_OPEN_or_missing_current_M15_decisions",
-    "natural_same_cycle_EURUSD_GBPUSD_USDJPY_M15_acceptance",
-    "confirm_operational_telegram_incident_lifecycle_is_concise_without_hiding_distinct_failures"
-  ],
-  "next_action": "During the next configured market-open window, collect one natural same-cycle EURUSD:M15 / GBPUSD:M15 / USDJPY:M15 acceptance on the stable runtime. Genuine HOLD/reject outcomes are valid. Verify INTERNAL_ERROR:MARKET_OPEN and missing current M15 decisions do not recur; if a genuine GREEN/YELLOW occurs, verify modern Telegram delivery and normal ProfitLab handling."
+  "current_blockers": [],
+  "next_action": "Preserve and archive engineering/research evidence. Do not continue BotA strategy validation or Hetzner Production cutover."
 }

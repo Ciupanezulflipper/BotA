@@ -1,149 +1,149 @@
 # BotA Current Continuity State
 
-Last updated: **2026-08-17 UTC**
+Last updated: **2026-09-03 UTC**
 
-This is the current operational handoff. Older dated readiness snapshots are historical context only.
+This is the current operational handoff. Older readiness, Android, VPS migration and market-open acceptance records remain historical evidence only.
 
 ## Current authoritative status
 
 ```text
-GITHUB_MAIN_AT_DOC_REFRESH=b0f30df9aeade1711b7e2c45045b2bc95c9954b4
-PACKAGE7_RELEASE=48db934e44ffebd0e0a419c9ca57554ecf7f372e
-PR108_STATE=MERGED
-PR113_STATE=MERGED
-PR115_STATE=MERGED
-PACKAGE6_PHONE_DEPLOYMENT=PASS
-PACKAGE7_MANAGER_LOSS_RECOVERY=PASS
-CURRENT_CONTROL_PLANE=HEALTHY
-PROFITLAB_RECONCILED=YES
-CLOSED_MARKET_PREMARKET_INTEGRITY=PASS
-OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
+GITHUB_MAIN_BEFORE_CLOSURE_DOCS=0212d9848ecb8e8b464da215c2ac115d62dae2f4
+FINAL_STRATEGY_VERDICT=CLOSE
+ACTIVE_TRADING_STRATEGY_VALIDATION=STOP
 PRODUCTION_READY=NO
-
-PAIRS=EURUSD GBPUSD USDJPY
-TIMEFRAMES=M15
-POLICY_B_ENABLED=1
-POLICY_B_SCORE_MIN=70
-POLICY_B_ADX_MAX=30
-NEWS_ON=0
-TELEGRAM_ENABLED=1
-DRY_RUN_MODE=0
+PRODUCTION_CUTOVER_AUTHORIZED=NO
+HETZNER_PRODUCTION_CUTOVER=BLOCKED
+MARKET_OPEN_ACCEPTANCE_REQUIRED=NO
+STRATEGY_CHANGE_AUTHORIZED=NO
+MORE_HISTORY_FOR_RESCUE_AUTHORIZED=NO
+PROFITLAB_BOTA_DEPENDENCY=PARKED
 ```
 
-Current `main` is four no-op commits ahead of Package 7 due to two accidental empty placeholder create/delete pairs. GitHub compare shows zero changed files between `48db934e...` and `b0f30df...`; repository tree content is equivalent. No history rewrite is authorized without explicit operator approval.
+Canonical closure evidence: `audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md`.
 
-## Package 7 production closure
+## Final corpus gate
 
-Package 7 watchdog runtime blob:
+The pre-registered Policy-B governance thresholds were fixed before the final count:
 
 ```text
-7dd58b7ea0be3663d380de0a7961eeec482f1c14
+<400    -> KILL
+400-599 -> continue only if economics are exceptional
+600-799 -> borderline
+>=800   -> PASS
 ```
 
-The production phone then naturally exercised the manager-loss recovery path:
+The exact read-only frozen replay result was:
 
 ```text
-EVENT=orphan_tree_drained_before_native
-new_manager=26290
-drained=[30851,30942,31191,31243,31325,31489,31638]
-EVENT=topology_healthy manager=26290
+DATASET_ID=oanda-warmup-20240101-20260801-20260807-r3
+REPLAY_SOURCE_COMMIT=6b437179cc58021aa358b1d0b04c121d9304c660
+EVALUATION_START_UTC=2025-12-03T22:00:00Z
+EVALUATION_END_UTC_EXCLUSIVE=2026-08-01T00:00:00Z
+DECISION_ROWS=32641
+POLICY_A_ACCEPTED=478
+POLICY_B_ACCEPTED=195
+POLICY_C_ACCEPTED=164
+REPOSITORY_STATE_UNCHANGED=YES
+DATASET_MANIFEST_UNCHANGED=YES
+PRODUCTION_CACHE_UNCHANGED=YES
 ```
 
-Latest direct topology:
+Therefore:
 
 ```text
-CONTROL_PLANE_HEALTHY=TRUE
-MANAGER_COUNT=1
-MANAGER_PID=26290
-OWNED=7/7
-RUNNING=7/7
-ORPHANED=0
-DUPLICATES=0
-ZOMBIES=0
-WATCHDOG_SINGLETON=YES
+195 < 400
+CORPUS_GATE=FAIL
+BOTA_STRATEGY_PROJECT=CLOSED
 ```
 
-The shared Termux service root contains 9 services: BotA's seven required services plus `sshd` and `ssh-agent`. Two transient zombie `runsv` rows under manager 26290 disappeared without another restart and had empty cmdlines, so they could not be attributed to a BotA service.
-
-Conclusion: the weekend manager-loss/orphan amplification defect is closed by real production evidence. Do not reopen broad runit surgery unless new ownership/orphan/crond flapping appears.
-
-## ProfitLab closure
-
-The stale pending region was first classified read-only:
+## What is proven vs not proven
 
 ```text
-ALERTS_SIZE=1303002
-OLD_CURSOR=930393
-PENDING_BYTES=372609
-PENDING_ROWS=1450
-MALFORMED_ROWS=0
-PARTIAL_ROWS=0
-STALE_ELIGIBLE_GREEN_ROWS=5
-ELIGIBLE_BY_PAIR=USDJPY:3,GBPUSD:2
-ELIGIBLE_BY_DIRECTION=BUY:5
-CLASSIFIED_REGION_SHA256=fba1bc80ecf68cba3c8574236748fb939e2e1e1b4abb70f5b3e22969771caad6
+EXACT_POLICY_B_CORPUS_UNDER_FROZEN_500_BAR_PROTOCOL=195
+STRATEGY_EDGE_VALIDATED=NO
+STRATEGY_PROFITABILITY_PROVEN_NEGATIVE=NO
+FULL_195_OUTCOMES_RESOLVED=NO
 ```
 
-The region was reconciled under the ProfitLab lock with no bootstrap, no reset-to-unverified-end, and no stale publication:
+The closure is a governance/sample-sufficiency decision, not a claim that all 195 candidates lose money.
+
+## Warm-up issue — final classification
+
+The 500-bar D1 requirement is a frozen replay/verifier protocol choice. The prior argument that 500 bars are practically required by recursive EMA/Wilder memory is withdrawn as materially overstated.
+
+A 200-bar replay would be a legitimate sensitivity experiment but has not been executed. Any prior estimate around 500-550 Policy-B accepts under a 200-bar convention is withdrawn as speculation.
 
 ```text
-PROFITLAB_RECONCILE=PASS
-NEW_CURSOR=1303002
-CURRENT_ALERTS_SIZE=1303002
-REMAINING_NEW_BYTES=0
-STALE_PUBLICATIONS_SENT=0
-AUDIT_DIRECTORY=audits/profitlab_stale_reconcile_20260817T202901Z
+500_BAR_PROTOCOL_INVALIDATES_195=NO
+200_BAR_CORPUS_COUNT=UNKNOWN
+200_BAR_REPLAY_AUTHORIZED_AS_RESCUE=NO
 ```
 
-Post-reconciliation scheduled cron proof:
+## Economic evidence — bounded statement only
+
+Previous economics used an illustrative 40% true win rate, +2R/-1R payoff, 16.56-pip risk and 1-pip baseline cost, producing an illustrative ~+0.14R/trade and ~2.3-pip additional edge-erasure threshold.
+
+Important corrections:
+
+- 40% is not the observed win rate of the 195 candidates;
+- 13 trades/month was an illustrative scenario, not the observed corpus frequency;
+- complete outcomes for the 195 frozen candidates remain unresolved;
+- the economic case must therefore not be presented as measured BotA performance.
+
+The economics are useful only as execution-fragility context. They are not the primary closure proof.
+
+## External adversarial audit
+
+Kimi, Perplexity, Grok, DeepSeek and Gemini all returned `CLOSE`. Claude's final executive review also supported closure.
+
+Do not treat this as six independent votes. The five external models saw the same framing package. Durable value comes from the criticisms they surfaced: hypothetical economics, unresolved outcomes, non-independence/clustering risk, warm-up protocol distinction, and invalidity of the unexecuted 200-bar count extrapolation.
+
+## Android / Termux historical state
+
+The previous phone/runtime reliability work remains historically valid for the generations and timestamps it proved. It no longer creates a release obligation.
+
+No new natural market-open phone proof is required for project closure.
+
+## Hetzner / VPS disposition
+
+Issue #9 records that the exact VPS release reached R5 no-side-effect shadow operation, with the phone still Production and Production side effects suppressed. The project closed before VPS Production cutover.
 
 ```text
-PENDING_BYTES=0
-CURSOR_CAUGHT_UP=TRUE
-KEY_AVAILABLE_TO_CRON_ENV=YES
-PROFITLAB_DELIVERY=NO_NEW_ROWS x4
+R5_ENGINEERING_WORK=PRESERVE
+R5_PRODUCTION_CUTOVER=STOP
+PR120_MERGE=DO_NOT_PROCEED
+MARKET_OPEN_R5_ACCEPTANCE=NO_LONGER_REQUIRED
 ```
 
-Therefore `PROFITLAB_RECONCILED=YES`.
+This repository record does not claim the existing shadow service has been stopped on the host. Any service shutdown/removal is separate operational cleanup requiring fresh Hetzner evidence.
 
-## Closed-market integrity gate
+## ProfitLab disposition
 
-Final read-only pre-market gate against Package 7 release identity:
+ProfitLab's application/auth/subscription infrastructure may be retained, but BotA is no longer an authorized signal source or reason to continue strategy work.
 
 ```text
-PRE_MARKET_HEALTHY=TRUE
-PRE_MARKET_RC=0
-CONTROL_PLANE=TRUE
-WATCHDOG_OWNERSHIP=TRUE
-BOOT_PERSISTENCE=TRUE
-CRON_OWNERSHIP=TRUE
-RUNTIME_PARITY=TRUE
-PRODUCTION_CONFIG=TRUE
-PROFITLAB=TRUE
-MARKET_GATE=TRUE
-PROGRESS=TRUE
-TRUSTED_CLOCK=TRUE
-MARKET_STATUS=Closed
-MARKET_OPEN=False
-PROFITLAB_PENDING_BYTES=0
-FAILURE_COUNT=0
+PROFITLAB_SHELL=PRESERVE
+PROFITLAB_BOTA_PIPELINE=PARK
+PROFITLAB_VALIDATED_BUSINESS=NO
 ```
 
-Phone audit:
+## Optional final historical result
 
-`/data/data/com.termux/files/home/BotA/audits/pre_market_integrity_20260817T203832Z.json`
+The existing frozen decision rows may later be resolved to outcomes once as a read-only closing record only. Before any such run, the following stays locked:
 
-The closed market is expected; this does not substitute for live-market acceptance.
+```text
+OUTCOME_RESULT_CAN_REOPEN_BOTA=NO
+STRATEGY_CHANGE=NO
+PROTOCOL_CHANGE=NO
+PRODUCTION_DEPLOYMENT=NO
+```
 
-## Remaining release work
+## Current blockers
 
-Only the following evidence remains before a final production-readiness verdict:
+There are no remaining blockers to BotA strategy closure.
 
-1. during the next configured open-market window, verify the stable pipeline no longer emits `INTERNAL_ERROR:MARKET_OPEN` or missing current M15 decisions;
-2. collect one natural same-cycle EURUSD:M15 / GBPUSD:M15 / USDJPY:M15 acceptance; genuine HOLD/reject outcomes are valid;
-3. if a genuine GREEN/YELLOW qualifies, verify modern Telegram trade-card delivery and normal ProfitLab handling;
-4. confirm operational Telegram incident lifecycle is concise enough without hiding distinct real failures.
+The former blockers—live-market three-pair acceptance, R5 observation acceptance, VPS cutover and ProfitLab live-signal continuation—are **superseded by project closure**.
 
-No threshold lowering, forced signals, fake Telegram trade, ProfitLab bootstrap/reset, or broad unrelated audit is authorized.
+## Exactly one next action
 
-Canonical current evidence: `audits/PACKAGE7_RUNTIME_AND_PROFITLAB_CLOSURE_2026-08-17.md` and GitHub issue #9.
+**Archive/preserve the engineering and research evidence. Do not deploy BotA to Hetzner Production and do not resume strategy validation.**

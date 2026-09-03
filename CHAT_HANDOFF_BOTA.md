@@ -1,127 +1,113 @@
 # BotA Chat Handoff
 
-Last updated: **2026-08-17 UTC**
+Last updated: **2026-09-03 UTC**
 
-Read this first in any new AI session before proposing BotA changes.
+Read this first in any new AI session before proposing BotA work.
 
 ## Current grounded answer
 
 ```text
-GITHUB_MAIN_AT_DOC_REFRESH=b0f30df9aeade1711b7e2c45045b2bc95c9954b4
-PACKAGE7_RELEASE=48db934e44ffebd0e0a419c9ca57554ecf7f372e
-PR108=MERGED
-PR113=MERGED
-PR115=MERGED
-PACKAGE6_PHONE_DEPLOYMENT=PASS
-PACKAGE7_REAL_MANAGER_LOSS_RECOVERY=PASS
-CURRENT_CONTROL_PLANE=HEALTHY
-PROFITLAB_RECONCILED=YES
-CLOSED_MARKET_PREMARKET_INTEGRITY=PASS
-OPEN_MARKET_THREE_PAIR_PROOF=PENDING
+FINAL_STRATEGY_VERDICT=CLOSE
+BOTA_ACTIVE_TRADING_STRATEGY_PROJECT=NO
 PRODUCTION_READY=NO
+HETZNER_PRODUCTION_CUTOVER=NO
+MARKET_OPEN_ACCEPTANCE_NEXT_STEP=NO
+STRATEGY_TUNING=NO
+ADDITIONAL_HISTORY_TO_RESCUE=NO
+PROFITLAB_BOTA_DEPENDENCY=PARKED
 ```
 
-## Scope
+Canonical final record:
 
-Do not expand BotA work into unrelated audits, tools, repos, or strategy changes. The production scope remains EURUSD/GBPUSD/USDJPY M15 with the existing thresholds and modern text-only Telegram trade presentation.
+`audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md`
+
+## Decisive evidence
+
+A corpus governance rule was fixed before seeing the final frozen Policy-B count:
 
 ```text
-PAIRS=EURUSD GBPUSD USDJPY
-TIMEFRAMES=M15
-POLICY_B_ENABLED=1
-POLICY_B_SCORE_MIN=70
-POLICY_B_ADX_MAX=30
-NEWS_ON=0
-TELEGRAM_ENABLED=1
-DRY_RUN_MODE=0
+<400 -> KILL
+400-599 -> only if economics exceptional
+600-799 -> borderline
+>=800 -> PASS
 ```
 
-No threshold lowering, forced signals, fake Telegram trades, or chart reintroduction is authorized.
-
-## Package 7 result
-
-Production watchdog blob:
-
-`7dd58b7ea0be3663d380de0a7961eeec482f1c14`
-
-Real production manager-loss recovery occurred after deployment:
+Exact read-only replay result:
 
 ```text
-EVENT=orphan_tree_drained_before_native
-new_manager=26290
-drained=[30851,30942,31191,31243,31325,31489,31638]
-EVENT=topology_healthy manager=26290
+DATASET_ID=oanda-warmup-20240101-20260801-20260807-r3
+REPLAY_SOURCE_COMMIT=6b437179cc58021aa358b1d0b04c121d9304c660
+EVALUATION_START_UTC=2025-12-03T22:00:00Z
+EVALUATION_END_UTC_EXCLUSIVE=2026-08-01T00:00:00Z
+DECISION_ROWS=32641
+POLICY_A_ACCEPTED=478
+POLICY_B_ACCEPTED=195
+POLICY_C_ACCEPTED=164
+CORPUS_GATE=FAIL
 ```
 
-Latest direct control plane:
+Read-only proof passed: repository state, dataset manifest and production cache were unchanged.
+
+## Required interpretation
+
+BotA closes because **195 failed the pre-registered <400 kill gate**.
+
+Do not claim this proves the 195 candidates are unprofitable. Their complete outcomes have not been resolved in this final corpus run.
+
+## Corrections that must survive handoff
+
+- 500 D1 bars are part of the frozen replay protocol; they are not practically required by long-tail EMA/Wilder memory.
+- A 200-bar replay has not been run. Its Policy-B count is unknown. Prior ~500-550 projections are withdrawn.
+- 40% win rate is an illustrative economic assumption, not the observed Policy-B win rate.
+- 13 trades/month was an illustrative scenario, not the observed corpus rate.
+- Five external AI CLOSE verdicts are not independent evidence because they reviewed the same framing package.
+
+## VPS / Hetzner
+
+The exact release reached R5 no-side-effect shadow operation; Production side effects remained suppressed and the phone remained Production in the last recorded readiness state.
+
+Project closure supersedes the migration acceptance path:
 
 ```text
-CONTROL_PLANE_HEALTHY=TRUE
-MANAGER_PID=26290
-OWNED=7/7
-RUNNING=7/7
-ORPHANED=0
-DUPLICATES=0
-ZOMBIES=0
-WATCHDOG_SINGLETON=YES
+PR120_MERGE_AUTHORITY=REVOKED_BY_CLOSURE
+R5_PRODUCTION_CUTOVER=STOP
+OPEN_MARKET_R5_OBSERVATION=NOT_REQUIRED
 ```
 
-Two transient zombie `runsv` rows disappeared without another restart. The Termux service root is shared by BotA plus `sshd` and `ssh-agent`, and the zombie cmdlines were empty, so those rows could not be attributed to a BotA service. Do not reopen runit surgery unless new real ownership/orphan/crond flapping appears.
+Do not infer that the running R5 shadow service has been stopped. Host cleanup is a separate operational action requiring fresh host evidence.
 
-## ProfitLab result
-
-The 372609-byte stale region was classified before mutation: 1450 rows, 5 eligible historical GREEN rows, 0 malformed, 0 partial. Reconciliation advanced only the exact verified region and published no stale trade.
+## ProfitLab
 
 ```text
-OLD_CURSOR=930393
-NEW_CURSOR=1303002
-STALE_PUBLICATIONS_SENT=0
-PENDING_BYTES=0
-CURSOR_CAUGHT_UP=TRUE
-KEY_AVAILABLE_TO_CRON_ENV=YES
-PROFITLAB_DELIVERY=NO_NEW_ROWS x4
-PROFITLAB_RECONCILED=YES
+SHELL_AND_INFRASTRUCTURE=MAY_BE_PRESERVED
+BOTA_AS_SIGNAL_SOURCE=PARKED
+VALIDATED_BUSINESS=NO
 ```
 
-No `--bootstrap` or reset-to-end shortcut was used.
+Do not describe ProfitLab as a business waiting only for BotA signals.
 
-## Closed-market final gate
+## Optional outcome resolution
+
+One read-only frozen outcome resolution may be run later for historical completeness only if this condition remains pre-committed:
 
 ```text
-PRE_MARKET_HEALTHY=TRUE
-PRE_MARKET_RC=0
-CONTROL_PLANE=TRUE
-WATCHDOG_OWNERSHIP=TRUE
-BOOT_PERSISTENCE=TRUE
-CRON_OWNERSHIP=TRUE
-RUNTIME_PARITY=TRUE
-PRODUCTION_CONFIG=TRUE
-PROFITLAB=TRUE
-MARKET_GATE=TRUE
-PROGRESS=TRUE
-TRUSTED_CLOCK=TRUE
-MARKET_STATUS=Closed
-PROFITLAB_PENDING_BYTES=0
-FAILURE_COUNT=0
+OUTCOME_RESULT_CAN_REOPEN_BOTA=NO
 ```
 
-Phone audit:
+It is a death-certificate record, not an appeal.
 
-`/data/data/com.termux/files/home/BotA/audits/pre_market_integrity_20260817T203832Z.json`
+## Prohibited continuation paths
 
-## GitHub identity note
+Do not:
 
-Current `main` is four no-op commits ahead of Package 7 due to two accidental empty placeholder create/delete pairs. GitHub compare shows zero changed files between `48db934e...` and `b0f30df...`. Do not force-rewrite `main` without explicit operator authorization.
-
-## Remaining blockers
-
-1. natural open-market same-cycle EURUSD:M15 / GBPUSD:M15 / USDJPY:M15 acceptance;
-2. verify `INTERNAL_ERROR:MARKET_OPEN` and missing current M15 decisions do not recur on the stable runtime;
-3. if a genuine GREEN/YELLOW occurs, verify modern Telegram delivery plus normal ProfitLab handling;
-4. confirm operational Telegram incident lifecycle is concise enough without hiding distinct failures.
-
-A genuine HOLD/reject is a valid acceptance outcome. Do not manufacture a trade.
+- lower thresholds or change Policy B;
+- add GEMs, indicators or filters;
+- change warm-up and use the result to evade the original gate;
+- acquire older history to restart validation;
+- pursue market-open proof;
+- promote Hetzner to Production;
+- use ProfitLab as justification to resume BotA.
 
 ## Exactly one next action
 
-Wait for the next configured market-open window and collect the natural three-pair M15 acceptance. No more phone mutation is justified tonight by current evidence.
+**Preserve/archive the project evidence. BotA strategy validation and Production cutover are closed.**
