@@ -1,187 +1,225 @@
 # BotA Errors and Silent-Failure Register
 
-Last updated: **2026-08-17 UTC**
+Last updated: **2026-09-03 UTC**
 
-Purpose: preserve verified failure classes, current open risks, fixed solutions, and prevention rules without letting old snapshots masquerade as current production truth.
+Purpose: preserve verified engineering and reasoning failure classes that future work must not repeat.
 
-Canonical current sources:
+Current canonical sources:
 
-- `CONTINUITY_CURRENT.md`
+- `audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md`
 - `AI_START_HERE.md`
-- `CHAT_HANDOFF_BOTA.md`
-- `audits/PACKAGE7_RUNTIME_AND_PROFITLAB_CLOSURE_2026-08-17.md`
-- GitHub issue #9
+- `CONTINUITY_CURRENT.md`
+- `DECISIONS.md`
+- `state/STATE.json`
 
 ## Current verdict
 
 ```text
-PACKAGE7_RELEASE=48db934e44ffebd0e0a419c9ca57554ecf7f372e
-PR108=MERGED
-PR113=MERGED
-PR115=MERGED
-PACKAGE6_PHONE_DEPLOYMENT=PASS
-PACKAGE7_MANAGER_LOSS_RECOVERY=PASS
-CURRENT_CONTROL_PLANE=HEALTHY
-PROFITLAB_RECONCILED=YES
-CLOSED_MARKET_PREMARKET_INTEGRITY=PASS
-OPEN_MARKET_THREE_PAIR_LIVE_PROOF=PENDING
-PRODUCTION_READY=NO
+FINAL_STRATEGY_VERDICT=CLOSE
+EXACT_POLICY_B_CORPUS=195
+PRE_REGISTERED_KILL_THRESHOLD=400
+CORPUS_GATE=FAIL
+ACTIVE_TRADING_STRATEGY_VALIDATION=STOP
+HETZNER_PRODUCTION_CUTOVER=NO
+PROFITLAB_BOTA_DEPENDENCY=PARKED
 ```
 
-## Historical failure classes retained
+The prior runtime/reliability error classes remain preserved in Git history and dated audits. This current register emphasizes the failure patterns that control all future BotA reasoning.
 
-### E001 — Scope branching / mixed phases
-Repository, runtime, documentation, deployment, and strategy work were mixed. Prevention: one actual release blocker at a time.
+## E001 — Repository state mistaken for deployed/runtime state
 
-### E002 — Repository state mistaken for deployed runtime
-GitHub HEAD is not deployment identity. Prevention: immutable source pin + deployed blob/mode parity + runtime evidence.
+**Status:** Durable prevention rule.
 
-### E003 — Duplicate execution ownership
-Cron/runit/boot/wrappers can own the same job. Current watcher rule remains one runit owner.
+GitHub merge/HEAD does not prove what is running on Android or VPS. Runtime claims require fresh host evidence.
 
-### E004 — Dead manager / orphaned service topology
-`runsv` supervisors can survive manager loss as PID-1 orphans. Package 7 now closes the recovery amplification path; see E026.
+## E002 — Process liveness mistaken for useful progress
 
-### E005 — Device wall-clock leakage into trading semantics
-Audited strategy/event-time paths use trusted server epoch. Wall-clock scheduling remains an operational warning.
+**Status:** Durable prevention rule.
 
-### E006 — Partial pair observability
-Health cannot pass while a required pair disappears. Current scope: EURUSD/GBPUSD/USDJPY M15.
+A running service can be stalled, orphaned, duplicate-owned, or producing no authoritative decisions. Health requires useful progress and ownership evidence.
 
-### E007 — Pre-journal dedup / lost decision evidence
-Persist decisions independently from delivery/dedup state.
+## E003 — Competing execution authorities
 
-### E008 — Inner watcher failure hidden by semantic aggregation
-Current inner nonzero execution must dominate semantic aggregation.
+**Status:** Durable prevention rule.
 
-### E009 — Watcher cycle without terminal outcome
-Require cycle ID, append-only evidence, and authoritative terminal outcome.
+Cron/runit/boot/watchdog/systemd ownership must not overlap for the same responsibility.
 
-### E010 — Moving GitHub release target during deployment
-Use immutable release pins and verify immediately before mutation.
+## E004 — Device wall clock used as trading truth
 
-### E011 — Non-executable runit wrapper
-Git mode matters; watcher wrapper must be executable.
+**Status:** Historically resolved; rule retained.
 
-### E012 — Wrong service-root assumption
-Canonical Termux service root is `$PREFIX/var/service`; the manager also owns non-BotA services such as `sshd` and `ssh-agent`.
+Trading/session semantics use trusted server time; monotonic time is for elapsed-duration health.
 
-### E013 — Deployment manifest drift
-Deployment manifest must be exact, pinned, reviewed, and parity-verified.
+## E005 — Delivery evidence confused with decision evidence
 
-### E014 — ProfitLab cursor replay risk
-Do not bootstrap/reset production cursor to make a gate green. Historical rows must not be replayed accidentally.
+**Status:** Durable prevention rule.
 
-### E015 — Persisted compact-state schema label lag
-Bookkeeping debt unless behavior changes.
+Telegram, ProfitLab/Supabase publication, decision persistence and lifecycle outcome are distinct evidence streams.
 
-### E016 — Stale event mistaken for current failure
-Timestamp/cycle must be compared against deployment and current boot.
+## E006 — Runtime failure used to erase strategy evidence
 
-### E017 — Stale overlapping PRs
-Old-base PRs are not deployment authority merely because they remain open.
+**Status:** Durable prevention rule.
 
-### E018 — Calendar before/after exclusion-window sign inversion
-Resolved in Package #1.
+Infrastructure instability can reduce evidence quality; it does not automatically invalidate negative outcomes or prove strategy edge.
 
-### E019 — Nested components established inconsistent cycle time
-Resolved by inherited `BOTA_SERVER_EPOCH` through audited strategy/event paths.
+## E007 — Strategy losses used to explain infrastructure failure
 
-### E020 — Stale live singleton daemon blocked manager-owned service
-Historical `crond` incident repaired with exact identity checks; Package 7 later closed the broader manager-loss recovery amplification path.
+**Status:** Durable prevention rule.
 
-### E021 — Health gate checked service liveness without owner lineage
-Health must include manager count, owner lineage, duplicate count, service liveness, and singleton-child ownership.
+Trading results and runtime reliability are separate claim domains.
 
-### E022 — Watchdog source existed while persistent startup was unproven
-Boot persistence is now proven and the latest pre-market integrity gate passes.
+## E008 — Small selected subsets promoted to validated edge
 
-### E023 — Independent watchdog-liveness guardian
-Historical safeguard; not the current release blocker.
+**Status:** Durable prevention rule.
 
-### E024 — Deployment preflight configuration-source mismatch
+Tiny in-sample or post-selected Policy/ADX/RSI subsets are hypotheses, not durable edge proof.
 
-**Observed:** first Package 6 deploy safely aborted with `REQUIRED_CREDENTIALS_MISSING` although the service key already existed in local untracked `config/strategy.env`.
+## E009 — Replay acceptance counts promoted to PnL evidence
 
-**Containment:** the existing key was aliased locally into ignored `.env.runtime`, mode `0600`; no secret value was printed or committed.
+**Status:** Durable prevention rule.
 
-**Prevention:** deployment preflight and runtime must share one documented credential-source contract.
+A deterministic replay count proves reconstructed candidate frequency under its contract. It does not by itself prove outcomes or profitability.
 
-### E025 — Transactional runtime manifest did not cover stale control-plane parity
+## E010 — Raw dataset range mistaken for valid evaluation range
 
-**Observed:** two control-plane files were stale after the 12-file Package 6 deployment.
+**Status:** RESOLVED / CRITICAL ANALYTICAL CORRECTION.
 
-**Repair:** exact release blobs/modes were restored and verified.
+The canonical dataset contains raw candles from 2024-01-01, but the frozen verifier requires 500 pre-evaluation candles for every stream including D1. Most early history was warm-up, not eligible evaluation history.
 
-**Prevention:** post-deploy integrity must verify release-critical control-plane files even when outside the transactional payload.
+This mistake originally produced an invalid extrapolation of roughly 791 Policy-B candidates over the entire raw interval.
 
-### E026 — Recurring native-manager / runsv / crond control-plane flapping
+Correct rule:
 
-**Status: RESOLVED BY PACKAGE 7 / REAL PRODUCTION RECOVERY PROVEN.**
+> Raw acquisition coverage is not evaluation coverage. Derive the earliest verifier-valid evaluation instant from the strictest timeframe before estimating corpus size.
 
-Weekend evidence showed repeated manager loss, partial ownership, PID-1 orphans, crond ownership/pidfile failures, and zombie accumulation.
-
-Package 7 changed manager-loss recovery ordering so a safe PID-1 orphan forest is drained before starting a replacement native manager. Production then naturally exercised that path:
+Exact corrected full frozen result:
 
 ```text
-EVENT=orphan_tree_drained_before_native
-new_manager=26290
-drained=[30851,30942,31191,31243,31325,31489,31638]
-EVENT=topology_healthy manager=26290
+EVALUATION_START_UTC=2025-12-03T22:00:00Z
+POLICY_B_ACCEPTED=195
 ```
 
-Latest direct state:
+## E011 — Technical truth used as practical justification without magnitude check
+
+**Status:** RESOLVED / REASONING CORRECTION.
+
+The statement "EMA/Wilder values depend recursively on all earlier supplied bars" is mathematically true but was used incorrectly to imply that all 500 D1 bars were practically necessary.
+
+Old-state influence after long warm-up is numerically negligible for normal Forex decision precision.
+
+Correct classification:
 
 ```text
-CONTROL_PLANE_HEALTHY=TRUE
-OWNED=7/7
-RUNNING=7/7
-ORPHANED=0
-DUPLICATES=0
-ZOMBIES=0
+500_BAR_REQUIREMENT=FROZEN_PROTOCOL_CHOICE
+NOT=PRACTICAL_500_BAR_INDICATOR_NECESSITY
 ```
 
-Do not reopen E026 without new real ownership/orphan/crond flapping evidence.
+Rule:
 
-### E027 — DEADMAN/recovery flapping and operator alert overload
+> When invoking a mathematically nonzero effect, quantify its magnitude before calling it decision-relevant.
 
-**Status: UNDERLYING CONTROL-PLANE CAUSE CLOSED; PRESENTATION FOLLOW-UP REMAINS.**
+## E012 — Unexecuted sensitivity estimate stated too strongly
 
-The weekend 89-message volume was unacceptable. Runtime stabilization came first. Remaining work is to confirm incident lifecycle messaging is concise without hiding distinct real failures.
+**Status:** RESOLVED / WITHDRAWN.
 
-### E028 — ProfitLab post-deploy backlog
+Earlier discussion suggested a 200-bar warm-up might yield roughly 500-550 Policy-B candidates. No such replay was executed.
 
-**Status: RESOLVED.**
-
-The pending region was 372609 bytes at final classification, containing 1450 rows and 5 eligible historical GREEN rows. It was reconciled under the worker lock without bootstrap/reset and without stale publication:
+Correct state:
 
 ```text
-OLD_CURSOR=930393
-NEW_CURSOR=1303002
-STALE_PUBLICATIONS_SENT=0
-PENDING_BYTES=0
-PROFITLAB_DELIVERY=NO_NEW_ROWS x4
+200_BAR_REPLAY=NOT_RUN
+200_BAR_POLICY_B_COUNT=UNKNOWN
 ```
 
-### E029 — GitHub no-op commit pollution
+Rule:
 
-**Status: CONTAINED, NOT HISTORY-REWRITTEN.**
+> Never let linear/regime extrapolation become an observed result. Label it explicitly as an estimate or do not use it for governance.
 
-Two accidental empty placeholder create/delete pairs produced four commits after Package 7. GitHub compare from `48db934e...` to `b0f30df...` shows zero changed files. Repository content is unchanged. Do not force-rewrite `main` without explicit operator authorization.
+## E013 — Illustrative economics presented too close to observed economics
+
+**Status:** RESOLVED / EVIDENCE BOUNDARY LOCKED.
+
+The following are illustrative assumptions, not measured outcomes of the exact 195 Policy-B corpus:
+
+```text
+WIN_RATE=40%
+PAYOFF=+2R/-1R
+AVERAGE_RISK=16.56 pips
+BASELINE_COST=1 pip
+NET_EXPECTANCY≈+0.14R/trade
+ADDITIONAL_EDGE_ERASURE≈2.3 pips
+```
+
+The full 195 outcomes are unresolved. Therefore no final BotA win rate or realized expectancy can be inferred from these assumptions.
+
+## E014 — Illustrative 13 trades/month treated as observed frequency
+
+**Status:** RESOLVED / CORRECTION.
+
+The 13/month figure was an economics scenario, not the observed corpus rate. The exact corpus contains 195 Policy-B accepts over roughly eight evaluation months, implying a simple average around 24/month before accounting for regime clustering or operational/live differences.
+
+Rule:
+
+> Keep scenario inputs and measured sample properties explicitly separated.
+
+## E015 — Shared-prompt AI agreement treated as independent convergence
+
+**Status:** RESOLVED / GOVERNANCE RULE.
+
+Kimi, Perplexity, Grok, DeepSeek and Gemini all reviewed the same framing package and all returned CLOSE. Their agreement is correlated because the evidence and framing were shared.
+
+Rule:
+
+> Use multiple models to surface distinct attacks, calculations and contradictions. Do not count identical-prompt votes as independent evidence.
+
+## E016 — Post-result escape hatch threatens pre-registered governance
+
+**Status:** CLOSED BY FINAL DECISION.
+
+The exact frozen Policy-B count is 195 against a pre-registered `<400 -> KILL` rule.
+
+Changing warm-up, obtaining older data, tuning Policy B, adding GEMs, or building another replay/PnL layer as a rescue would reopen researcher discretion after the gate result.
+
+Final prevention rule:
+
+```text
+195 < 400 -> CLOSE
+REOPEN_WITH_TUNING=NO
+REOPEN_WITH_MORE_HISTORY=NO
+REOPEN_WITH_200_BAR_SENSITIVITY=NO
+```
+
+## E017 — Market-open urgency can override evidence discipline
+
+**Status:** PREVENTION RULE.
+
+A market opening soon is not a reason to deploy a strategy that has failed its validation governance.
+
+Current consequence:
+
+```text
+OPEN_MARKET_PROOF=NO_LONGER_REQUIRED
+HETZNER_PRODUCTION_CUTOVER=BLOCKED
+```
+
+## E018 — Working product infrastructure mistaken for validated business
+
+**Status:** PREVENTION RULE.
+
+ProfitLab may have functioning application/auth/subscription infrastructure, but that is not evidence of customer demand or a validated signal business.
+
+```text
+PROFITLAB_SHELL=PRESERVE
+PROFITLAB_VALIDATED_BUSINESS=NO
+BOTA_SIGNAL_DEPENDENCY=PARKED
+```
 
 ## Current open risks
 
-```text
-CONTROL_PLANE=HEALTHY
-PROFITLAB=RECONCILED
-CLOSED_MARKET_INTEGRITY=PASS
-OPEN_MARKET_PIPELINE_PROOF=PENDING
-NATURAL_THREE_PAIR_M15_ACCEPTANCE=PENDING
-TELEGRAM_INCIDENT_LIFECYCLE_USABILITY=PENDING
-STRATEGY_CHANGE=FROZEN
-PRODUCTION_READY=NO
-```
+No remaining risk blocks the BotA **strategy closure**.
 
-## Exactly one next engineering action
+Operational cleanup may remain for any running phone/VPS shadow services, but cleanup is not a strategy-validation gate and must not be used to restart the project.
 
-During the next configured market-open window, collect one natural same-cycle EURUSD:M15 / GBPUSD:M15 / USDJPY:M15 acceptance and verify that `INTERNAL_ERROR:MARKET_OPEN` / missing current M15 decisions do not recur. Genuine HOLD/reject outcomes are valid. Do not force a signal.
+## Exactly one next action
+
+**Preserve/archive evidence. Do not resume BotA strategy validation or Hetzner Production deployment.**
