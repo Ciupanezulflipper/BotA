@@ -1,20 +1,36 @@
 {
   "_meta": {
-    "schema_version": "4.0",
+    "schema_version": "4.1",
     "project": "BotA",
     "repository": "Ciupanezulflipper/BotA",
     "record_type": "repository_handoff_snapshot_not_live_runtime_state",
-    "recorded_date_utc": "2026-09-03",
-    "authoritative_detail": "audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md"
+    "recorded_date_utc": "2026-09-04",
+    "authoritative_detail": "audits/BOTA_SHADOW_REOPEN_MEASUREMENT_PILOT_2026-09-04.md"
   },
-  "strategy_project": {
-    "final_verdict": "CLOSE",
-    "active_validation": false,
+  "current_project": {
+    "edge_status": "UNVALIDATED",
+    "shadow_research_reopened_by_owner": true,
+    "live_money_trading_authorized": false,
+    "commercial_profitlab_authorized": false,
+    "private_profitlab_analytics_authorized": true,
+    "primary_runtime_target": "HETZNER",
+    "current_hetzner_runtime_state": "UNPROVEN",
+    "android_active_scanner": false,
+    "android_role": "CONTROL_AND_OBSERVATION_ONLY",
+    "next_phase": "STAGE_0_MEASUREMENT_PILOT",
+    "pilot_started": false,
+    "strategy_tuning_during_pilot": false,
+    "measurement_hardening_during_pilot": true,
+    "pilot_counts_toward_confirmatory_sample": false,
+    "further_broad_ai_review": false
+  },
+  "historical_closure": {
+    "record": "audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md",
+    "retrospective_validation_project_closed": true,
     "closure_reason": "PRE_REGISTERED_CORPUS_GATE_FAILED",
     "strategy_edge_validated": false,
     "profitability_proven_negative": false,
-    "strategy_tuning_authorized": false,
-    "additional_history_for_rescue_authorized": false
+    "current_action_prohibition_superseded_by_owner": true
   },
   "corpus_gate": {
     "policy": "Policy B = current production acceptance AND score >= 70 AND ADX < 30",
@@ -26,7 +42,8 @@
     "exact_policy_b_accepted": 195,
     "exact_policy_c_accepted": 164,
     "decision_rows": 32641,
-    "status": "FAIL"
+    "historical_status": "FAIL",
+    "result_preserved": true
   },
   "frozen_replay": {
     "dataset_id": "oanda-warmup-20240101-20260801-20260807-r3",
@@ -43,53 +60,72 @@
     "production_cache_unchanged": true,
     "production_strategy_mutated": false
   },
-  "warmup_correction": {
-    "five_hundred_bar_rule_classification": "FROZEN_PROTOCOL_CHOICE_NOT_PHYSICS_REQUIREMENT",
-    "recursive_ema_practical_dependency_claim_withdrawn": true,
-    "two_hundred_bar_replay_executed": false,
-    "two_hundred_bar_policy_b_count": null,
-    "prior_500_to_550_projection_withdrawn": true,
-    "invalidates_exact_195_count": false
+  "statistical_corrections": {
+    "fresh_single_preregistered_prospective_test_valid_in_principle": true,
+    "historical_bonferroni_automatically_carried_forward": false,
+    "fixed_n_400_authorized": false,
+    "fixed_n_500_authorized": false,
+    "fixed_n_682_authorized": false,
+    "fixed_n_1446_authorized": false,
+    "preferred_future_primary_endpoint": "NET_R_AFTER_REALISTIC_EXECUTION_COSTS",
+    "sequential_early_stopping_preferred_in_principle": true,
+    "sequential_boundaries_derived": false,
+    "sixty_percent_win_rate_is_primary_scientific_gate": false
   },
-  "economics_evidence": {
-    "full_195_outcomes_resolved": false,
-    "observed_policy_b_win_rate": null,
-    "illustrative_win_rate": 0.40,
-    "illustrative_payoff": "+2R/-1R",
-    "illustrative_average_risk_pips": 16.56,
-    "illustrative_baseline_cost_pips": 1.0,
-    "illustrative_net_expectancy_r": 0.14,
-    "illustrative_additional_edge_erasure_pips": 2.3,
-    "thirteen_trades_per_month_is_observed": false
+  "measurement_pilot": {
+    "required": true,
+    "purpose": "PROVE_MEASUREMENT_EXECUTION_AND_EVIDENCE_CHAIN_BEFORE_CONFIRMATION",
+    "strategy_changes_allowed": false,
+    "measurement_changes_allowed": true,
+    "completion_is_sample_count_based": false,
+    "required_controls": [
+      "EXPECTED_SCAN_ACCOUNTING",
+      "AUTHORITATIVE_ENGINE_SINGLETON",
+      "RUN_IDENTITY",
+      "SIGNAL_IDENTITY",
+      "CONFIG_FINGERPRINT",
+      "CLOSED_BAR_DISCIPLINE",
+      "PROVIDER_IDENTITY",
+      "EXECUTION_PRICE_EVIDENCE",
+      "PUBLICATION_TIMESTAMP_RECONCILIATION",
+      "SINGLE_VERSIONED_RESOLVER",
+      "EXPLICIT_SAME_BAR_AMBIGUITY",
+      "IDEMPOTENT_RESTART_BEHAVIOR",
+      "MISSING_SCAN_VS_NO_SIGNAL_DISTINCTION",
+      "LIFECYCLE_COMPLETENESS_RECONCILIATION"
+    ]
+  },
+  "repository_measurement_evidence": {
+    "watcher_cycle_ledger_present": true,
+    "pipeline_ledger_append_only": true,
+    "pipeline_ledger_uuid_event_ids": true,
+    "pipeline_ledger_process_shared_flock": true,
+    "pipeline_ledger_utc_timestamps": true,
+    "pipeline_ledger_monotonic_boot_aware_time": true,
+    "pipeline_ledger_atomic_state_replace": true,
+    "watcher_fail_closed_stale_candle_logic_present": true,
+    "same_candle_tp_first_logic_present": true,
+    "full_rewrite_required": "NO_EVIDENCE"
+  },
+  "profitlab": {
+    "public_product": false,
+    "private_analytics": true,
+    "source_of_truth": false,
+    "authoritative_signal_source": "BOTA_EVIDENCE"
   },
   "deployment": {
     "production_ready": false,
-    "market_open_acceptance_required": false,
-    "hetzner_production_cutover_authorized": false,
+    "live_money_cutover_authorized": false,
     "r5_shadow_engineering_artifact_preserved": true,
-    "pr120_merge_authorized": false,
-    "host_shadow_service_stopped_by_this_record": false
+    "historical_vps_production_cutover_completed": false,
+    "host_current_state_proven": false
   },
-  "profitlab": {
-    "shell_preserve_as_infrastructure": true,
-    "bota_signal_dependency": "PARKED",
-    "validated_business": false
-  },
-  "optional_closing_record": {
-    "resolve_195_outcomes_allowed": true,
-    "purpose": "HISTORICAL_CLOSING_RECORD_ONLY",
-    "result_can_reopen_bota": false,
-    "strategy_change_allowed": false,
-    "protocol_change_allowed": false,
-    "production_deployment_allowed": false
-  },
-  "external_audit": {
-    "reviewers": ["Kimi", "Perplexity", "Grok", "DeepSeek", "Gemini"],
-    "all_returned_close": true,
-    "confidence_range_percent": [87, 95],
-    "shared_framing_means_independent_consensus": false,
-    "claude_executive_review": "CLOSE"
-  },
-  "current_blockers": [],
-  "next_action": "Preserve and archive engineering/research evidence. Do not continue BotA strategy validation or Hetzner Production cutover."
+  "next_action": {
+    "action": "READ_ONLY_HETZNER_FORENSIC_INSPECTION",
+    "runtime_mutation_authorized": false,
+    "strategy_mutation_authorized": false,
+    "supabase_mutation_authorized": false,
+    "telegram_test_send_authorized": false,
+    "android_reactivation_authorized": false
+  }
 }
