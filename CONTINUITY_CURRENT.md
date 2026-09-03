@@ -1,29 +1,41 @@
 # BotA Current Continuity State
 
-Last updated: **2026-09-03 UTC**
+Last updated: **2026-09-04 UTC**
 
-This is the current operational handoff. Older readiness, Android, VPS migration and market-open acceptance records remain historical evidence only.
+This is the current operational handoff. The 2026-09-03 final strategy closure remains preserved as historical evidence, but its current-action prohibition has been superseded by an explicit owner-authorized shadow-research reopening.
 
 ## Current authoritative status
 
 ```text
-GITHUB_MAIN_BEFORE_CLOSURE_DOCS=0212d9848ecb8e8b464da215c2ac115d62dae2f4
-FINAL_STRATEGY_VERDICT=CLOSE
-ACTIVE_TRADING_STRATEGY_VALIDATION=STOP
-PRODUCTION_READY=NO
-PRODUCTION_CUTOVER_AUTHORIZED=NO
-HETZNER_PRODUCTION_CUTOVER=BLOCKED
-MARKET_OPEN_ACCEPTANCE_REQUIRED=NO
-STRATEGY_CHANGE_AUTHORIZED=NO
-MORE_HISTORY_FOR_RESCUE_AUTHORIZED=NO
-PROFITLAB_BOTA_DEPENDENCY=PARKED
+BOTA_EDGE_STATUS=UNVALIDATED
+BOTA_SHADOW_RESEARCH=REOPENED_BY_OWNER
+HISTORICAL_RETROSPECTIVE_VALIDATION_PROJECT=CLOSED
+HISTORICAL_CORPUS_GATE_RESULT=FAIL_195_LT_400
+LIVE_MONEY_TRADING=NO
+COMMERCIAL_PROFITLAB=NO
+PRIVATE_PROFITLAB_ANALYTICS=YES
+PRIMARY_RUNTIME_TARGET=HETZNER
+CURRENT_HETZNER_RUNTIME_STATE=UNPROVEN
+ANDROID_ACTIVE_SCANNER=NO
+ANDROID_ROLE=CONTROL_AND_OBSERVATION_ONLY
+NEXT_PHASE=STAGE_0_MEASUREMENT_PILOT
+PILOT_STARTED=NO
+STRATEGY_TUNING_DURING_PILOT=NO
+MEASUREMENT_HARDENING_DURING_PILOT=YES
+NEXT_ACTION=READ_ONLY_HETZNER_FORENSIC_INSPECTION
 ```
 
-Canonical closure evidence: `audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md`.
+Canonical current record:
 
-## Final corpus gate
+`audits/BOTA_SHADOW_REOPEN_MEASUREMENT_PILOT_2026-09-04.md`
 
-The pre-registered Policy-B governance thresholds were fixed before the final count:
+Historical closure record:
+
+`audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md`
+
+## Historical corpus gate — unchanged
+
+The pre-registered historical corpus thresholds were:
 
 ```text
 <400    -> KILL
@@ -32,7 +44,7 @@ The pre-registered Policy-B governance thresholds were fixed before the final co
 >=800   -> PASS
 ```
 
-The exact read-only frozen replay result was:
+The deterministic frozen replay produced:
 
 ```text
 DATASET_ID=oanda-warmup-20240101-20260801-20260807-r3
@@ -48,102 +60,171 @@ DATASET_MANIFEST_UNCHANGED=YES
 PRODUCTION_CACHE_UNCHANGED=YES
 ```
 
-Therefore:
+Therefore the old retrospective validation project correctly closed under its own rule:
 
 ```text
 195 < 400
-CORPUS_GATE=FAIL
-BOTA_STRATEGY_PROJECT=CLOSED
+HISTORICAL_CORPUS_GATE=FAIL
 ```
 
-## What is proven vs not proven
+That result does not prove negative profitability and does not mathematically prohibit a new independent prospective experiment.
+
+## Why the project is now reopened
+
+The owner clarified that the intended project objective was always to debug BotA until it ran reliably and then keep collecting prospective signals long enough to evaluate the system. The 2026-09-03 closure moved beyond that intent by treating the failed historical corpus gate as a reason to stop all future collection.
+
+The owner has now explicitly overridden that current-action decision while retaining the historical evidence.
 
 ```text
-EXACT_POLICY_B_CORPUS_UNDER_FROZEN_500_BAR_PROTOCOL=195
-STRATEGY_EDGE_VALIDATED=NO
-STRATEGY_PROFITABILITY_PROVEN_NEGATIVE=NO
-FULL_195_OUTCOMES_RESOLVED=NO
+HUMAN_OVERRIDE=AUTHORIZED
+REOPEN_SCOPE=SHADOW_DATA_COLLECTION_AND_MEASUREMENT_ONLY
+STRATEGY_VALIDATION_CLAIM=NO
+LIVE_TRADING=NO
 ```
 
-The closure is a governance/sample-sufficiency decision, not a claim that all 195 candidates lose money.
+## Final multi-AI audit synthesis
 
-## Warm-up issue — final classification
+The final adversarial review cycle used Claude, Gemini, Grok, DeepSeek and Perplexity for distinct roles.
 
-The 500-bar D1 requirement is a frozen replay/verifier protocol choice. The prior argument that 500 bars are practically required by recursive EMA/Wilder memory is withdrawn as materially overstated.
+Durable conclusions:
 
-A 200-bar replay would be a legitimate sensitivity experiment but has not been executed. Any prior estimate around 500-550 Policy-B accepts under a 200-bar convention is withdrawn as speculation.
+1. **Prospective test validity:** a new frozen single-hypothesis prospective test is methodologically legitimate; the old historical Bonferroni penalty is not automatically carried forward.
+2. **No magical N:** 400, 500, 682 and 1446 are not accepted as final BotA sample requirements.
+3. **Economic endpoint:** Net R after realistic costs is preferred over raw win rate as the primary scientific endpoint.
+4. **Execution realism:** model price, fixed 1-pip costs, binary +2R/-1R outcomes and M15 TP-first ties are too crude for final confirmation.
+5. **Dependence:** EURUSD/GBPUSD and temporally overlapping trades may be correlated and require dependence-aware analysis.
+6. **Sequential design:** early stopping is preferred in principle, but exact futility/success boundaries must be pre-specified and derived after empirical pilot data exists.
+7. **Measurement pilot first:** do not begin confirmatory collection until fill/latency/resolver/completeness evidence is proven.
+8. **No further broad AI review loop:** the external review stage is complete.
+
+## Repository cross-check against audit claims
+
+Several DeepSeek warnings were directionally useful but overstated because repository evidence already contains meaningful measurement controls.
+
+Proven current repository infrastructure includes:
+
+- `tools/watcher_cycle_ledger.py`: bounded watcher-cycle reconciliation, expected pair/timeframe decisions, structured Telegram/Supabase evidence and fail-closed unhealthy-cycle classification;
+- `tools/pipeline_ledger.py`: append-only event ledger with UUID event IDs, process-shared `flock`, UTC display time, monotonic/boot-aware timing and atomic state replacement;
+- watcher staleness logic based on candle timestamps with fail-closed skip behavior.
+
+Therefore:
 
 ```text
-500_BAR_PROTOCOL_INVALIDATES_195=NO
-200_BAR_CORPUS_COUNT=UNKNOWN
-200_BAR_REPLAY_AUTHORIZED_AS_RESCUE=NO
+REWRITE_REQUIRED=NO_EVIDENCE
+MEASUREMENT_HARDENING_APPROACH=INCREMENTAL
 ```
 
-## Economic evidence — bounded statement only
+Repository evidence also confirms that same-candle TP-first behavior exists and is documented as potentially optimistic when both TP and SL are touched in one M15 candle.
 
-Previous economics used an illustrative 40% true win rate, +2R/-1R payoff, 16.56-pip risk and 1-pip baseline cost, producing an illustrative ~+0.14R/trade and ~2.3-pip additional edge-erasure threshold.
+## Stage 0 — measurement pilot
 
-Important corrections:
+The pilot is an instrumentation/measurement phase, not a strategy optimization phase.
 
-- 40% is not the observed win rate of the 195 candidates;
-- 13 trades/month was an illustrative scenario, not the observed corpus frequency;
-- complete outcomes for the 195 frozen candidates remain unresolved;
-- the economic case must therefore not be presented as measured BotA performance.
+### Allowed
 
-The economics are useful only as execution-fragility context. They are not the primary closure proof.
+- stronger run/signal identity;
+- host/deployment/process identity;
+- config/strategy fingerprints;
+- explicit UTC event semantics;
+- expected-scan accounting;
+- provider identity and fail-closed provider handling;
+- bid/ask/spread evidence where available;
+- Telegram/API publication timestamps;
+- explicit ambiguity states;
+- lower-timeframe evidence where justified;
+- resolver versioning;
+- append-only/correction-safe lifecycle evidence;
+- idempotency/crash reconciliation;
+- automated weekly integrity reports.
 
-## External adversarial audit
+### Not allowed
 
-Kimi, Perplexity, Grok, DeepSeek and Gemini all returned `CLOSE`. Claude's final executive review also supported closure.
+- Policy-B changes;
+- ADX/RSI/score changes;
+- pair/timeframe changes;
+- H1/H4/D1 confirmation changes;
+- TP/SL strategy changes;
+- weekly baseline tuning.
 
-Do not treat this as six independent votes. The five external models saw the same framing package. Durable value comes from the criticisms they surfaced: hypothetical economics, unresolved outcomes, non-independence/clustering risk, warm-up protocol distinction, and invalidity of the unexecuted 200-bar count extrapolation.
+Pilot observations do not count toward the confirmatory sample.
 
-## Android / Termux historical state
+## Pilot completion gate
 
-The previous phone/runtime reliability work remains historically valid for the generations and timestamps it proved. It no longer creates a release obligation.
+Pilot completion is based on evidence quality, not an arbitrary number of signals.
 
-No new natural market-open phone proof is required for project closure.
-
-## Hetzner / VPS disposition
-
-Issue #9 records that the exact VPS release reached R5 no-side-effect shadow operation, with the phone still Production and Production side effects suppressed. The project closed before VPS Production cutover.
+Required end state includes:
 
 ```text
-R5_ENGINEERING_WORK=PRESERVE
-R5_PRODUCTION_CUTOVER=STOP
-PR120_MERGE=DO_NOT_PROCEED
-MARKET_OPEN_R5_ACCEPTANCE=NO_LONGER_REQUIRED
+EXPECTED_SCANS_ACCOUNTED_FOR=YES
+AUTHORITATIVE_ENGINE_SINGLETON_PROVEN=YES
+RUN_IDENTITY_COMPLETE=YES
+SIGNAL_IDENTITY_COMPLETE=YES
+CONFIG_FINGERPRINT_STABLE=YES
+CLOSED_BAR_DISCIPLINE_PROVEN=YES
+PROVIDER_IDENTITY_PROVEN=YES
+EXECUTION_PRICE_EVIDENCE_PROVEN=YES
+PUBLICATION_TIMESTAMPS_RECONCILED=YES
+OUTCOME_RESOLVER_SINGLE_AND_VERSIONED=YES
+SAME_BAR_AMBIGUITY_NOT_SILENTLY_TP_FIRST=YES
+RESTART_DUPLICATION_TEST=PASS
+MISSING_SCAN_VS_NO_SIGNAL_DISTINGUISHABLE=YES
+LIFECYCLE_RECONCILIATION_NO_UNEXPLAINED_GAPS=YES
 ```
 
-This repository record does not claim the existing shadow service has been stopped on the host. Any service shutdown/removal is separate operational cleanup requiring fresh Hetzner evidence.
+## Confirmatory test — not yet started
 
-## ProfitLab disposition
+After Stage 0 passes:
 
-ProfitLab's application/auth/subscription infrastructure may be retained, but BotA is no longer an authorized signal source or reason to continue strategy work.
+1. freeze the measurement model;
+2. define the confirmatory population;
+3. pre-register one primary hypothesis based on Net R after realistic costs;
+4. define dependence treatment;
+5. derive valid sequential success/futility rules;
+6. start a fresh sample from observation #1.
 
 ```text
-PROFITLAB_SHELL=PRESERVE
-PROFITLAB_BOTA_PIPELINE=PARK
-PROFITLAB_VALIDATED_BUSINESS=NO
+FIXED_N_400=NO
+FIXED_N_500=NO
+FIXED_N_682=NO
+FIXED_N_1446=NO
+60_PERCENT_WR_AS_PRIMARY_EDGE_GATE=NO
 ```
 
-## Optional final historical result
+## ProfitLab
 
-The existing frozen decision rows may later be resolved to outcomes once as a read-only closing record only. Before any such run, the following stays locked:
+ProfitLab remains private and subordinate to BotA evidence.
 
 ```text
-OUTCOME_RESULT_CAN_REOPEN_BOTA=NO
-STRATEGY_CHANGE=NO
-PROTOCOL_CHANGE=NO
-PRODUCTION_DEPLOYMENT=NO
+PROFITLAB_PUBLIC_PRODUCT=NO
+PROFITLAB_PRIVATE_ANALYTICS=YES
+PROFITLAB_SOURCE_OF_TRUTH=NO
+BOTA_EVIDENCE_SOURCE_OF_TRUTH=YES
 ```
 
-## Current blockers
+## Android / Termux
 
-There are no remaining blockers to BotA strategy closure.
+The phone execution plane remains stopped. Android is not to be reactivated as a parallel scanner.
 
-The former blockers—live-market three-pair acceptance, R5 observation acceptance, VPS cutover and ProfitLab live-signal continuation—are **superseded by project closure**.
+```text
+ANDROID_ACTIVE_SCANNER=NO
+ANDROID_ROLE=MONITOR_CONTROL_ONLY
+```
+
+This avoids split-brain signal generation and reduces dependence on ship connectivity/Android background-process behavior.
+
+## Hetzner / VPS
+
+Historical evidence proves R5 no-side-effect shadow engineering work existed. It does not prove the current physical host state.
+
+```text
+VPS_R5_HISTORICAL_STATE=NO_SIDE_EFFECT_SHADOW
+CURRENT_HETZNER_RUNTIME_STATE=UNPROVEN
+```
 
 ## Exactly one next action
 
-**Archive/preserve the engineering and research evidence. Do not deploy BotA to Hetzner Production and do not resume strategy validation.**
+Perform a **read-only forensic inspection of Hetzner** before any restart or deployment.
+
+Collect host identity/time sync, repository/commit, services/processes, all execution authorities, R5 state, configuration fingerprints without secrets, provider wiring, Telegram/Supabase/ProfitLab wiring, ledgers/logs and last-run evidence.
+
+No runtime mutation is authorized until that evidence is reconciled against this repository.
