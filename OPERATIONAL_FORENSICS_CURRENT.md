@@ -8,6 +8,7 @@ Canonical evidence:
 
 - `audits/OPERATIONAL_RUNTIME_AND_DELIVERY_FORENSICS_2026-09-03.md`
 - `audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md`
+- `audits/BOTA_EXECUTION_PLANE_STOP_2026-09-03.md`
 - PR #125 / merge commit `17345c3c6d5403d968cfbc204ec49a1d5a118dbc`
 
 ## Final governance state
@@ -19,6 +20,7 @@ STRATEGY_TUNING_AUTHORIZED=NO
 PRODUCTION_READY=NO
 HETZNER_PRODUCTION_CUTOVER=NO
 BOTA_OPERATIONAL_FORENSICS=CLOSED
+BOTA_EXECUTION_PLANE=STOPPED
 DELIVERY_ROW_ARCHAEOLOGY=STOP
 FURTHER_BOTA_RUNTIME_INVESTIGATION=NO
 ```
@@ -134,6 +136,32 @@ REASON=NON_DECISION_RELEVANT_ARCHAEOLOGY_AFTER_STRATEGY_CLOSURE
 
 The known deployment defect has been fixed at the reusable system layer. Additional signal-delivery reconstruction would not change any authorized action.
 
+## Execution plane — stopped
+
+The final phone-side inventory found all six BotA runit services active and multiple BotA cron jobs still installed, including the one-minute native watchdog guard capable of ensuring the runit services.
+
+The decommission therefore removed BotA cron/watchdog authority first, then created persistent runit `down` sentinels and stopped the six BotA workloads. The separate dividend-capture-scanner cron block was preserved.
+
+Final proof:
+
+```text
+bota-closer=DOWN
+bota-heartbeat=DOWN
+bota-shadow=DOWN
+bota-supervisor=DOWN
+bota-updater=DOWN
+bota-watcher=DOWN
+ALL_SIX_DOWN_SENTINELS=PRESENT
+ACTIVE_BOTA_CRON=0
+BOTA_WORKLOAD_PROCESSES=0
+DIVIDEND_SCANNER_CRON_PRESERVED=YES
+BOTA_EXECUTION_PLANE=STOPPED
+BOTA_FILES_DELETED=NO
+BOTA_STRATEGY_CHANGED=NO
+```
+
+Detailed record: `audits/BOTA_EXECUTION_PLANE_STOP_2026-09-03.md`.
+
 ## Final non-actions
 
 ```text
@@ -148,4 +176,4 @@ DO_NOT_CREATE_ANOTHER_BOTA_FORENSIC_GATE=YES
 
 ## Final action
 
-**Archive/preserve BotA evidence and remove BotA from the active-work queue. Move decision effort to projects with an authorized future.**
+**Archive/preserve BotA evidence and keep BotA out of the active-work queue. Move decision effort to projects with an authorized future.**
