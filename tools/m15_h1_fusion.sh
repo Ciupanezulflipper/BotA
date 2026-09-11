@@ -9,9 +9,11 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-$HOME/BotA}}"
 MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${BOTA_ROOT:-${CODE_ROOT}}}"
-LEGACY="${CODE_ROOT}/tools/m15_h1_fusion_legacy.sh"
+PRIMARY_LEGACY="${CODE_ROOT}/tools/m15_h1_fusion_legacy.sh"
+SIBLING_LEGACY="${SCRIPT_DIR}/m15_h1_fusion_legacy.sh"
 VIEW="${MUTABLE_ROOT}/runtime_root"
 
 fail() {
@@ -19,7 +21,17 @@ fail() {
   exit 78
 }
 
-[[ -f "${LEGACY}" ]] || fail "legacy fusion missing: ${LEGACY}"
+# Production resolves the legacy implementation from the immutable code root.
+# Fixture/unit harnesses intentionally replace BOTA_ROOT with a synthetic tree;
+# in that case the wrapper itself still lives in the checkout, so use its exact
+# sibling legacy implementation while routing tools/cache through the fixture.
+if [[ -f "${PRIMARY_LEGACY}" ]]; then
+  LEGACY="${PRIMARY_LEGACY}"
+elif [[ -f "${SIBLING_LEGACY}" ]]; then
+  LEGACY="${SIBLING_LEGACY}"
+else
+  fail "legacy fusion missing: ${PRIMARY_LEGACY}"
+fi
 
 mkdir -p \
   "${MUTABLE_ROOT}/cache" \
@@ -49,7 +61,7 @@ link_exact cache "${MUTABLE_ROOT}/cache"
 link_exact logs "${MUTABLE_ROOT}/logs"
 link_exact state "${MUTABLE_ROOT}/state"
 
-# Immutable generation surfaces required by the legacy stack.
+# Immutable/synthetic-code surfaces required by the legacy stack.
 link_exact tools "${CODE_ROOT}/tools"
 link_exact config "${CODE_ROOT}/config"
 if [[ -e "${CODE_ROOT}/data" ]]; then
