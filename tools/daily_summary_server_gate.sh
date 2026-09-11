@@ -1,10 +1,9 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # FILE: tools/daily_summary_server_gate.sh
-# ROLE: Server-UTC gate for BotA daily proof-of-work summary.
+# ROLE: Server-UTC gate for BotA daily professional Telegram report.
 #
-# Termux cron uses device/local time. On ship mode, Android time can drift.
-# This wrapper checks server UTC first, then sends daily_summary.sh only during
-# the target server-UTC hour, once per server date.
+# This wrapper checks trusted server UTC first, then sends one daily report only
+# during the target server-UTC hour, once per server date.
 #
 # Daily-summary-only fallback:
 # - If live server clock is unavailable, use logs/clock_drift_last_good.json.
@@ -15,7 +14,8 @@
 # Safety:
 # - No strategy changes
 # - No threshold changes
-# - No H1 logic changes
+# - No pair/timeframe changes
+# - No H1/H4/D1 logic changes
 # - No signal generation changes
 # - No market_open.sh changes
 
@@ -191,7 +191,11 @@ echo "GATE_SEND_START server_date=${server_date} server_utc=${server_iso} drift=
 log "GATE_SEND_START server_date=${server_date} server_utc=${server_iso} drift=${drift} detail=${detail}"
 
 SEND_OUTPUT="$(
-  SUMMARY_DATE="${server_date}" DAILY_SUMMARY_SEND="${DAILY_SUMMARY_SEND:-1}" bash "${CODE_ROOT}/tools/daily_summary.sh" 2>&1 || true
+  BOTA_CODE_ROOT="${CODE_ROOT}" \
+  BOTA_MUTABLE_ROOT="${MUTABLE_ROOT}" \
+  SUMMARY_DATE="${server_date}" \
+  DAILY_SUMMARY_SEND="${DAILY_SUMMARY_SEND:-1}" \
+  python3 "${CODE_ROOT}/tools/daily_report_modern.py" --send --date "${server_date}" 2>&1 || true
 )"
 
 echo "$SEND_OUTPUT"
