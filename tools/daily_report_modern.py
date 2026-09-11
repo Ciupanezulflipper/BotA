@@ -256,31 +256,35 @@ def _quality_issues(
     return issues
 
 
-def build_report(
-    *,
-    day: str,
-    alerts: list[dict[str, Any]],
-    events: list[dict[str, Any]],
-    health: dict[str, Any],
-) -> str:
-    pair_scans = Counter(row["pair"] for row in alerts if row["pair"] in PAIRS)
-    qualified = _unique_signals(alerts)
-    pair_qualified = Counter(row["pair"] for row in qualified)
-    watcher_cycles = _watcher_cycle_ids(events)
-    delivered_identities, delivery_failures = _delivery_stats(events)
-    online, lifecycle, release, runtime_instance = _runtime_snapshot(health)
-
+def _collection_status(
+    *, online: bool, pair_scans: Counter[str], watcher_cycles: set[str]
+) -> tuple[bool, bool, str, str]:
     all_pairs_seen = all(pair_scans[pair] > 0 for pair in PAIRS)
     clean_collection = online and all_pairs_seen and bool(watcher_cycles)
     status_icon = "🟢" if clean_collection else "🟠"
     status_text = "NORMAL" if clean_collection else "REVIEW REQUIRED"
-    issues = _quality_issues(
-        online=online,
-        watcher_cycles=watcher_cycles,
-        pair_scans=pair_scans,
-        delivery_failures=delivery_failures,
-    )
+    return all_pairs_seen, clean_collection, status_icon, status_text
 
+
+def _render_report_lines(
+    *,
+    day: str,
+    online: bool,
+    lifecycle: str,
+    release: str,
+    runtime_instance: str,
+    watcher_cycles: set[str],
+    pair_scans: Counter[str],
+    pair_qualified: Counter[str],
+    qualified: list[dict[str, Any]],
+    delivered_identities: set[tuple[str, str, str, str]],
+    delivery_failures: int,
+    all_pairs_seen: bool,
+    clean_collection: bool,
+    status_icon: str,
+    status_text: str,
+    issues: list[str],
+) -> list[str]:
     lines = [
         "📊 BOTA · DAILY MARKET REPORT",
         f"{_day_label(day)} · UTC",
@@ -318,6 +322,51 @@ def build_report(
             "",
             f"BOTA • STATUS: {status_text}",
         ]
+    )
+    return lines
+
+
+def build_report(
+    *,
+    day: str,
+    alerts: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+    health: dict[str, Any],
+) -> str:
+    pair_scans = Counter(row["pair"] for row in alerts if row["pair"] in PAIRS)
+    qualified = _unique_signals(alerts)
+    pair_qualified = Counter(row["pair"] for row in qualified)
+    watcher_cycles = _watcher_cycle_ids(events)
+    delivered_identities, delivery_failures = _delivery_stats(events)
+    online, lifecycle, release, runtime_instance = _runtime_snapshot(health)
+    all_pairs_seen, clean_collection, status_icon, status_text = _collection_status(
+        online=online,
+        pair_scans=pair_scans,
+        watcher_cycles=watcher_cycles,
+    )
+    issues = _quality_issues(
+        online=online,
+        watcher_cycles=watcher_cycles,
+        pair_scans=pair_scans,
+        delivery_failures=delivery_failures,
+    )
+    lines = _render_report_lines(
+        day=day,
+        online=online,
+        lifecycle=lifecycle,
+        release=release,
+        runtime_instance=runtime_instance,
+        watcher_cycles=watcher_cycles,
+        pair_scans=pair_scans,
+        pair_qualified=pair_qualified,
+        qualified=qualified,
+        delivered_identities=delivered_identities,
+        delivery_failures=delivery_failures,
+        all_pairs_seen=all_pairs_seen,
+        clean_collection=clean_collection,
+        status_icon=status_icon,
+        status_text=status_text,
+        issues=issues,
     )
     return "\n".join(lines)
 
