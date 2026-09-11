@@ -14,9 +14,13 @@ on:
       - "tools/watcher_evidence_retention.py"
       - "tools/run_signal_watcher_with_ledger.sh"
       - "tools/telegram_delivery.py"
+      - "tools/telegram_delivery_boundary.py"
+      - "tools/telegram_public_presentation.py"
       - "tools/telegram_send_guard.py"
       - "tools/telegram_send.sh"
       - "tools/telegram_ops_ux.py"
+      - "tools/daily_report_modern.py"
+      - "tools/daily_summary_server_gate.sh"
       - "tools/heartbeat_runtime.py"
       - "tools/supabase_publish.py"
       - "tools/chart_generator.py"
@@ -59,8 +63,11 @@ jobs:
             tools/watcher_persistence_gate.py \
             tools/watcher_evidence_retention.py \
             tools/telegram_delivery.py \
+            tools/telegram_delivery_boundary.py \
+            tools/telegram_public_presentation.py \
             tools/telegram_send_guard.py \
             tools/telegram_ops_ux.py \
+            tools/daily_report_modern.py \
             tools/heartbeat_runtime.py \
             tools/supabase_publish.py \
             tools/chart_generator.py \
@@ -72,6 +79,7 @@ jobs:
           bash -n tools/indicators_updater.sh
           bash -n tools/run_signal_watcher_with_ledger.sh
           bash -n tools/telegram_send.sh
+          bash -n tools/daily_summary_server_gate.sh
           bash -n tools/signal_watcher_pro.sh
           bash -n tools/signal_watcher_core.sh
           bash -n tools/run_shadow_manager.sh
@@ -95,4 +103,6 @@ jobs:
             tests.test_bota_supervisor_service_policy \
             tests.test_telegram_ops_ux \
             tests.test_signal_watcher_calendar_guard \
-            tests.test_r5_measurement_hardening
+            tests.test_r5_measurement_hardening \
+            tests.test_telegram_public_presentation \
+            tests.test_daily_report_modern
