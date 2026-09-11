@@ -8,17 +8,18 @@ from __future__ import annotations
 
 import argparse
 import csv
+import http.client
 import json
 import os
 import urllib.parse
-import urllib.request
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 
 PAIRS = ("EURUSD", "GBPUSD", "USDJPY")
+TELEGRAM_HOST = "api.telegram.org"
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -54,7 +55,7 @@ def _load_env_file(path: Path) -> None:
 def _load_json(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, UnicodeError):
+    except (OSError, ValueError):
         return {}
     return value if isinstance(value, dict) else {}
 
@@ -132,8 +133,13 @@ def _unique_signals(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if row["direction"] not in {"BUY", "SELL"} or row["rejected"]:
             continue
         identity = (
-            row["pair"], row["tf"], row["direction"], f"{row['score']:.2f}",
-            row["entry"], row["sl"], row["tp"],
+            row["pair"],
+            row["tf"],
+            row["direction"],
+            f"{row['score']:.2f}",
+            row["entry"],
+            row["sl"],
+            row["tp"],
         )
         if identity in seen:
             continue
@@ -154,18 +160,8 @@ def _pair_display(pair: str) -> str:
     return f"{pair[:3]}/{pair[3:]}" if len(pair) == 6 else pair
 
 
-def build_report(
-    *,
-    day: str,
-    alerts: list[dict[str, Any]],
-    events: list[dict[str, Any]],
-    health: dict[str, Any],
-) -> str:
-    pair_scans = Counter(row["pair"] for row in alerts if row["pair"] in PAIRS)
-    qualified = _unique_signals(alerts)
-    pair_qualified = Counter(row["pair"] for row in qualified)
-
-    watcher_cycles = {
+def _watcher_cycle_ids(events: list[dict[str, Any]]) -> set[str]:
+    cycle_ids = {
         str(event.get("cycle_id"))
         for event in events
         if event.get("component") == "watcher"
@@ -173,10 +169,13 @@ def build_report(
         and event.get("status") == "completed"
         and event.get("market_reason") == "MARKET_OPEN"
     }
-    watcher_cycles.discard("")
+    cycle_ids.discard("")
+    return cycle_ids
 
-    delivered_identities: set[tuple[str, str, str, str]] = set()
-    delivery_failures = 0
+
+def _delivery_stats(events: list[dict[str, Any]]) -> tuple[set[tuple[str, str, str, str]], int]:
+    delivered: set[tuple[str, str, str, str]] = set()
+    failures = 0
     for event in events:
         if event.get("event_type") != "decision":
             continue
@@ -188,71 +187,62 @@ def build_report(
             str(event.get("server_epoch", "")),
         )
         if result in {"sent", "reconciled_sent", "pass", "success"}:
-            delivered_identities.add(identity)
+            delivered.add(identity)
         elif result in {"failed", "definite_failure", "unknown_outcome"}:
-            delivery_failures += 1
+            failures += 1
+    return delivered, failures
 
+
+def _runtime_snapshot(health: dict[str, Any]) -> tuple[bool, str, str, str]:
     lifecycle = str(health.get("lifecycle", health.get("bot_mode", "UNKNOWN"))).upper()
     process_liveness = health.get("process_liveness")
     online = lifecycle in {"RUNNING", "HEALTHY"} and process_liveness is not False
     release = str(health.get("release_git_sha", "unknown"))
     runtime_instance = str(health.get("runtime_instance_id", "unknown"))
+    return online, lifecycle, release, runtime_instance
 
-    all_pairs_seen = all(pair_scans[pair] > 0 for pair in PAIRS)
-    clean_collection = online and all_pairs_seen and bool(watcher_cycles)
 
-    status_icon = "🟢" if clean_collection else "🟠"
-    status_text = "NORMAL" if clean_collection else "REVIEW REQUIRED"
-
+def _day_label(day: str) -> str:
     try:
-        day_label = datetime.strptime(day, "%Y-%m-%d").strftime("%d %b %Y").upper()
+        return datetime.strptime(day, "%Y-%m-%d").strftime("%d %b %Y").upper()
     except ValueError:
-        day_label = day
+        return day
 
-    lines = [
-        "📊 BOTA · DAILY MARKET REPORT",
-        f"{day_label} · UTC",
-        "",
-        f"{status_icon} SYSTEM STATUS",
-        f"Runtime: {'ONLINE' if online else lifecycle or 'UNKNOWN'}",
-        f"Market-open watcher cycles: {len(watcher_cycles)}",
-        f"Release: {release[:12] if release != 'unknown' else 'unknown'}",
-        "",
-        "📈 PAIR ACTIVITY",
+
+def _pair_activity_lines(pair_scans: Counter[str], pair_qualified: Counter[str]) -> list[str]:
+    return [
+        f"{_pair_display(pair)} · {pair_scans[pair]} scans · {pair_qualified[pair]} qualified"
+        for pair in PAIRS
     ]
 
-    for pair in PAIRS:
-        lines.append(
-            f"{_pair_display(pair)} · {pair_scans[pair]} scans · "
-            f"{pair_qualified[pair]} qualified"
-        )
 
-    lines.extend(
-        [
-            "",
-            "🎯 SIGNALS",
-            f"Qualified setups: {len(qualified)}",
-            f"Telegram confirmed: {len(delivered_identities)}",
-        ]
-    )
-
-    if delivery_failures:
-        lines.append(f"Delivery issues: {delivery_failures}")
-
-    lines.extend(["", "🧾 SESSION SUMMARY"])
+def _session_summary_lines(
+    *,
+    clean_collection: bool,
+    qualified: list[dict[str, Any]],
+    delivered_count: int,
+) -> list[str]:
     if clean_collection and not qualified:
-        lines.append("0 signals — market scanned normally; no setup satisfied BotA policy.")
-    elif qualified:
-        by_direction = Counter(row["direction"] for row in qualified)
-        lines.append(
-            f"{len(qualified)} unique qualified setup(s): "
-            f"{by_direction['BUY']} BUY · {by_direction['SELL']} SELL."
-        )
-        if not delivered_identities:
-            lines.append("No Telegram delivery confirmation is present in today's decision ledger.")
-    else:
-        lines.append("No qualified signals recorded; collection evidence is incomplete or requires review.")
+        return ["0 signals — market scanned normally; no setup satisfied BotA policy."]
+    if not qualified:
+        return ["No qualified signals recorded; collection evidence is incomplete or requires review."]
+    by_direction = Counter(row["direction"] for row in qualified)
+    lines = [
+        f"{len(qualified)} unique qualified setup(s): "
+        f"{by_direction['BUY']} BUY · {by_direction['SELL']} SELL."
+    ]
+    if delivered_count == 0:
+        lines.append("No Telegram delivery confirmation is present in today's decision ledger.")
+    return lines
 
+
+def _quality_issues(
+    *,
+    online: bool,
+    watcher_cycles: set[str],
+    pair_scans: Counter[str],
+    delivery_failures: int,
+) -> list[str]:
     issues: list[str] = []
     if not online:
         issues.append("runtime not proven online")
@@ -263,7 +253,61 @@ def build_report(
         issues.append("missing pair activity: " + ", ".join(missing_pairs))
     if delivery_failures:
         issues.append(f"Telegram delivery failures: {delivery_failures}")
+    return issues
 
+
+def build_report(
+    *,
+    day: str,
+    alerts: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+    health: dict[str, Any],
+) -> str:
+    pair_scans = Counter(row["pair"] for row in alerts if row["pair"] in PAIRS)
+    qualified = _unique_signals(alerts)
+    pair_qualified = Counter(row["pair"] for row in qualified)
+    watcher_cycles = _watcher_cycle_ids(events)
+    delivered_identities, delivery_failures = _delivery_stats(events)
+    online, lifecycle, release, runtime_instance = _runtime_snapshot(health)
+
+    all_pairs_seen = all(pair_scans[pair] > 0 for pair in PAIRS)
+    clean_collection = online and all_pairs_seen and bool(watcher_cycles)
+    status_icon = "🟢" if clean_collection else "🟠"
+    status_text = "NORMAL" if clean_collection else "REVIEW REQUIRED"
+    issues = _quality_issues(
+        online=online,
+        watcher_cycles=watcher_cycles,
+        pair_scans=pair_scans,
+        delivery_failures=delivery_failures,
+    )
+
+    lines = [
+        "📊 BOTA · DAILY MARKET REPORT",
+        f"{_day_label(day)} · UTC",
+        "",
+        f"{status_icon} SYSTEM STATUS",
+        f"Runtime: {'ONLINE' if online else lifecycle or 'UNKNOWN'}",
+        f"Market-open watcher cycles: {len(watcher_cycles)}",
+        f"Release: {release[:12] if release != 'unknown' else 'unknown'}",
+        "",
+        "📈 PAIR ACTIVITY",
+        *_pair_activity_lines(pair_scans, pair_qualified),
+        "",
+        "🎯 SIGNALS",
+        f"Qualified setups: {len(qualified)}",
+        f"Telegram confirmed: {len(delivered_identities)}",
+    ]
+    if delivery_failures:
+        lines.append(f"Delivery issues: {delivery_failures}")
+
+    lines.extend(["", "🧾 SESSION SUMMARY"])
+    lines.extend(
+        _session_summary_lines(
+            clean_collection=clean_collection,
+            qualified=qualified,
+            delivered_count=len(delivered_identities),
+        )
+    )
     lines.extend(
         [
             "",
@@ -288,17 +332,24 @@ def _telegram_credentials() -> tuple[str, str]:
 
 def send_report(text: str) -> bool:
     token, chat_id = _telegram_credentials()
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
     body = urllib.parse.urlencode(
         {"chat_id": chat_id, "text": text, "disable_web_page_preview": "true"}
     ).encode("utf-8")
-    request = urllib.request.Request(url, data=body, method="POST")
+    connection = http.client.HTTPSConnection(TELEGRAM_HOST, timeout=20)
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except Exception:
+        connection.request(
+            "POST",
+            f"/bot{token}/sendMessage",
+            body=body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        response = connection.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError, http.client.HTTPException):
         return False
-    return isinstance(payload, dict) and payload.get("ok") is True
+    finally:
+        connection.close()
+    return 200 <= response.status < 300 and isinstance(payload, dict) and payload.get("ok") is True
 
 
 def main() -> int:
