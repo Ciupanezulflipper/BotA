@@ -1,0 +1,28 @@
+name: Phone observability deployment
+
+on:
+  pull_request:
+    paths:
+      - "ops/phone_deploy_observability.py"
+      - "tests/test_phone_deploy_observability.py"
+      - ".github/workflows/phone-deploy-observability.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile installer
+        run: python -m py_compile ops/phone_deploy_observability.py tests/test_phone_deploy_observability.py
+      - name: Run transactional and fault-injection tests
+        run: python -m unittest -v tests.test_phone_deploy_observability
