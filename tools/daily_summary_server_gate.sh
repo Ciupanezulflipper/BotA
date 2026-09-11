@@ -3,8 +3,8 @@
 # ROLE: Server-UTC gate for BotA daily proof-of-work summary.
 #
 # Termux cron uses device/local time. On ship mode, Android time can drift.
-# This wrapper checks server UTC first, then sends daily_summary.sh only during
-# the target server-UTC hour, once per server date.
+# This wrapper checks server UTC first, then sends the modern daily report only
+# during the target server-UTC hour, once per server date.
 #
 # Daily-summary-only fallback:
 # - If live server clock is unavailable, use logs/clock_drift_last_good.json.
@@ -191,7 +191,8 @@ echo "GATE_SEND_START server_date=${server_date} server_utc=${server_iso} drift=
 log "GATE_SEND_START server_date=${server_date} server_utc=${server_iso} drift=${drift} detail=${detail}"
 
 SEND_OUTPUT="$(
-  SUMMARY_DATE="${server_date}" DAILY_SUMMARY_SEND="${DAILY_SUMMARY_SEND:-1}" bash "${CODE_ROOT}/tools/daily_summary.sh" 2>&1 || true
+  SUMMARY_DATE="${server_date}" DAILY_SUMMARY_SEND="${DAILY_SUMMARY_SEND:-1}" \
+    python3 "${CODE_ROOT}/tools/daily_report_modern.py" --date "${server_date}" 2>&1 || true
 )"
 
 echo "$SEND_OUTPUT"
