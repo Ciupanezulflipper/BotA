@@ -1,25 +1,60 @@
 # BotA — Operating Scope and Telegram Presentation
 
-Date: **2026-09-11 UTC**
-Status: **OWNER-LOCKED CURRENT DIRECTION**
+Date: **2026-09-11 UTC**  
+Verification update: **2026-09-15 UTC**  
+Status: **OWNER-LOCKED CURRENT DIRECTION / NATURAL RUNTIME PROVEN**
 
 ## Purpose
 
 BotA is not being replaced or rebuilt. The owner explicitly rejected a BotA2/rewrite lane.
 
-BotA now has exactly two operating objectives.
+BotA has two operating objectives:
 
-## Objective 1 — prove BotA online during the open FX market and report professionally
+1. prove the existing Hetzner runtime works naturally during the open FX market and report professionally;
+2. collect several months of trustworthy evidence before strategy tuning.
 
-BotA must first prove, from natural market-open execution, that the existing Hetzner runtime is actually scanning and evaluating all three configured pairs correctly:
+## Objective 1 — natural open-market runtime proof
 
-- EURUSD
-- GBPUSD
-- USDJPY
+Required natural evidence was defined for:
 
-The proof must come from real open-market watcher cycles, not synthetic/forced signals and not process-liveness alone.
+- EURUSD;
+- GBPUSD;
+- USDJPY;
+- M15 decision evaluation;
+- real open-market watcher cycles;
+- no forced/synthetic signal requirement.
 
-Required proof:
+### Verification result — 2026-09-15
+
+The exact deployed PR #134 head was observed live:
+
+```text
+RELEASE_SHA=d81c0a3da3363089ed200e264ae066fdf15fb5ba
+RELEASE_TREE=c083de54f407061d6b744b26b51e1f3fab4212a2
+CONFIG_FINGERPRINT=c9b636e1597743df11daa439f37b311e2434c7bc2ce7589e306739b6207e1b7b
+BOTA_SERVICE=active
+ORCHESTRATOR_LIFECYCLE=RUNNING
+ORCHESTRATOR_LIVENESS=PASS
+```
+
+Natural evidence since the FX reopen anchor `2026-09-13T21:05:00Z`:
+
+```text
+POST_REOPEN_EVENTS=2390
+MALFORMED_LEDGER_ROWS=0
+MARKET_OPEN_COMPLETED_CYCLES=212
+EURUSD_M15_DECISIONS=212
+GBPUSD_M15_DECISIONS=212
+USDJPY_M15_DECISIONS=212
+THREE_PAIR_COMPLETE_CYCLES=212
+THREE_PAIR_SCAN_GATE=PASS
+NATURAL_RUNTIME_GATE=PASS
+POST_REOPEN_NON_FILTER_REJECTED=0
+```
+
+All 212 observed market-open terminal watcher outcomes were `EVALUATED_REJECTED`. This is valid no-signal operation, not a runtime failure.
+
+Therefore:
 
 ```text
 HETZNER_RUNTIME_ACTIVE=YES
@@ -27,95 +62,19 @@ MARKET_OPEN_NATURAL_CYCLES=YES
 EURUSD_SCANNED=YES
 GBPUSD_SCANNED=YES
 USDJPY_SCANNED=YES
-FRESH_PRICE_CONTEXT=YES
-FRESH_INDICATORS=YES
-ATR_VOLATILITY_CONTEXT_VALID=YES
 DECISION_PATH_VALID=YES
-SYSTEMATIC_PRODUCTION_POLICY_FAILURE=NO
-SYSTEMATIC_ATR_ZERO_PATHOLOGY=NO
-SYSTEMATIC_ENTRY_ZERO_PATHOLOGY=NO
-SYSTEMATIC_MISSING_INDICATOR_PATHOLOGY=NO
+NATURAL_RUNTIME_GATE=PASS
 ```
 
-Current deployed release under proof:
+The full proof is recorded in:
 
-```text
-RELEASE_SHA=e9e6bc31b1a0bba74a9947060372f7bd19ddaac3
-RELEASE_TREE=6031cef811d07af5a27a95077f29b4164701697f
-```
+`audits/BOTA_PR134_POST_DEPLOY_RUNTIME_PROOF_2026-09-15.md`
 
-Once this natural market-open proof passes, engineering work stops unless a concrete reliability defect invalidates data collection.
-
-### Telegram signal presentation
+## Telegram signal presentation
 
 Qualified signals must be presented in a modern professional forex-channel style. Presentation changes must not alter qualification logic, thresholds, entry, stop, target, score, or any strategy semantics.
 
-Telegram should receive only real BotA-calculated values.
-
-#### BUY example
-
-```text
-🟢 BOTA · BUY SIGNAL
-
-EUR/USD · M15
-
-🎯 Entry: 1.16840
-🛑 Stop Loss: 1.16680
-💰 Take Profit: 1.17160
-⚖️ R:R: 1:2.0
-
-Signal Score: 78/100 🟢
-Trend: Bullish
-H1: Aligned ✓
-ADX: 24.6
-Session: London
-
-Setup: Momentum + trend continuation
-
-🕒 09:45 UTC · 11 Sep 2026
-BOTA • EURUSD • M15
-```
-
-#### SELL example
-
-```text
-🔴 BOTA · SELL SIGNAL
-
-GBP/USD · M15
-
-🎯 Entry: 1.35210
-🛑 Stop Loss: 1.35400
-💰 Take Profit: 1.34830
-⚖️ R:R: 1:2.0
-
-Signal Score: 81/100 🟢
-Trend: Bearish
-H1: Aligned ✓
-ADX: 22.8
-Session: New York
-
-Setup: Bearish momentum continuation
-
-🕒 14:30 UTC · 11 Sep 2026
-BOTA • GBPUSD • M15
-```
-
-#### Closed-trade example
-
-```text
-✅ TRADE CLOSED · TP HIT
-
-EUR/USD · BUY
-Entry 1.16840 → Exit 1.17160
-Result: +2.0R
-
-⏱ Duration: 3h 45m
-
-BotA Performance
-Today: 2W · 1L · +2.7R
-
-BOTA • VERIFIED OUTCOME
-```
+Only real BotA-calculated values may be displayed.
 
 Rules:
 
@@ -130,34 +89,60 @@ FAKE_CONFIDENCE_OR_MARKETING_CLAIMS=NO
 
 HOLD/REJECT decisions remain in the evidence ledger so silence can be distinguished from valid no-signal behavior.
 
-### End-of-day report
+Because the inspected post-reopen window contained zero genuine qualifying setups, the deployed qualified-signal Telegram presentation path has not yet been naturally exercised. Do not force a signal to prove it.
 
-At the end of each trading day BotA should send one concise modern Telegram report summarizing what actually happened.
+## End-of-day report
 
-Required content where evidence exists:
+The modern daily-report renderer was proven against live production evidence on 2026-09-15:
 
-- date/session status;
-- BotA online/healthy status during the market-open window;
-- expected versus completed scans;
-- per-pair scan/qualification counts;
-- qualified signals generated;
-- Telegram delivery results;
-- closed outcomes and net R where resolved;
-- active/open signals;
-- data/runtime issues;
-- exact release identity.
+```text
+Runtime: ONLINE
+Market-open watcher cycles: 56
+EUR/USD: 56 scans, 0 qualified
+GBP/USD: 56 scans, 0 qualified
+USD/JPY: 56 scans, 0 qualified
+Qualified setups: 0
+All 3 pairs observed: YES
+Runtime issues: None observed
+TELEGRAM_SEND=SKIPPED
+```
 
-If there were zero valid signals, the report must say so explicitly, e.g.:
+The report correctly stated:
 
 ```text
 0 signals — market scanned normally; no setup satisfied BotA policy.
 ```
 
-A broken or incomplete day must never be described as a clean zero-signal day.
+### Daily-summary delivery blocker
+
+Actual scheduled Telegram delivery is not yet proven.
+
+Observed gate evidence:
+
+```text
+2026-09-12 20:10 UTC GATE_DRY_RUN would_send=YES
+2026-09-13 20:10 UTC GATE_DRY_RUN would_send=YES
+2026-09-14 20:10 UTC GATE_DRY_RUN would_send=YES
+DAILY_SUMMARY_SENT_MARKER=ABSENT
+```
+
+The deployed gate enters this path only when `DAILY_SUMMARY_GATE_DRY_RUN=1` is present. The frozen `config/production-vps.env` does not define that key.
+
+Current classification:
+
+```text
+DAILY_REPORT_RENDER=PASS
+DAILY_REPORT_GATE_TIMING=PASS
+DAILY_REPORT_ACTUAL_TELEGRAM_SEND=NOT_PROVEN
+DAILY_SUMMARY_RUNTIME_MODE=DRY_RUN
+DRY_RUN_ORIGIN=RUNTIME_AMBIENT_ENVIRONMENT_NOT_YET_LOCATED
+```
+
+Do not silently disable dry-run. Locate its provenance read-only first. Any production mutation enabling real scheduled daily Telegram sends requires explicit owner authorization.
 
 ## Objective 2 — collect several months before strategy tuning
 
-After market-open runtime proof passes, BotA enters **collect + report mode**.
+The natural runtime gate has passed, so BotA is in **COLLECT_AND_REPORT** mode.
 
 During this period:
 
@@ -172,7 +157,7 @@ FORCED_SIGNAL_GENERATION=NO
 RELIABILITY_FIXES_IF_DATA_INVALID=YES
 ```
 
-Collect trustworthy evidence for several months before considering strategy changes.
+Collect trustworthy prospective evidence for several months before considering strategy changes.
 
 Future analysis should evaluate at minimum:
 
@@ -188,12 +173,24 @@ Future analysis should evaluate at minimum:
 - delivery reliability;
 - missing-scan/data-quality incidents.
 
-Only after this prospective evidence exists should the owner consider adjusting or tweaking BotA.
+## PR #134 state
+
+As checked on 2026-09-15:
+
+```text
+PR134_STATE=OPEN
+PR134_DRAFT=YES
+PR134_MERGEABLE=YES
+PR134_MERGED=NO
+PR134_HEAD=d81c0a3da3363089ed200e264ae066fdf15fb5ba
+```
+
+The exact PR head is deployed. Merge remains a separate action and is not authorized by the deployment approval.
 
 ## Immediate next action
 
 ```text
-NEXT=FIRST_NATURAL_MARKET_OPEN_RUNTIME_AND_SCORING_PROOF
+NEXT=READ_ONLY_DAILY_SUMMARY_DRY_RUN_PROVENANCE_CHECK
 ```
 
-No rebuild, no new bot, no broad AI review, and no strategy optimization before that proof.
+No rebuild, no new bot, no broad AI review, no strategy optimization, no forced signal, and no PR merge as part of this next proof step.
