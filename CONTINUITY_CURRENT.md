@@ -1,8 +1,8 @@
 # BotA Current Continuity State
 
-Last updated: **2026-09-15 UTC**
+Last updated: **2026-09-27 UTC**
 
-This is the current operational handoff. Historical strategy-closure and measurement-pilot records remain preserved as dated evidence; current runtime truth is established by the 2026-09-15 post-deploy proof.
+This is the current operational handoff. Historical audits and strategy records remain preserved as dated evidence. Forward recovery scope is governed by `docs/BOTA_EXECUTION_RECOVERY_PRD_2026-09-27.md`.
 
 ## Current authoritative status
 
@@ -12,161 +12,161 @@ LIVE_MONEY_TRADING=NO
 COMMERCIAL_PROFITLAB=NO
 PRIVATE_PROFITLAB_ANALYTICS=YES
 PRIMARY_RUNTIME_TARGET=HETZNER
-CURRENT_HETZNER_RUNTIME_STATE=PROVEN_ACTIVE
+CURRENT_HETZNER_RUNTIME_STATE=ACTIVE_SCANNING_BUT_USER_DELIVERY_BLOCKED
 ANDROID_ACTIVE_SCANNER=NO
 ANDROID_ROLE=CONTROL_AND_OBSERVATION_ONLY
-MODE=COLLECT_AND_REPORT
+MODE=EXECUTION_RECOVERY
 PR134_DEPLOYED=YES
 PR134_MERGED=NO
-NATURAL_MARKET_OPEN_RUNTIME_GATE=PASS
-THREE_PAIR_M15_SCAN_GATE=PASS
-DAILY_REPORT_RENDER=PASS
-DAILY_REPORT_ACTUAL_SEND=PENDING
+THREE_PAIR_M15_SCAN=RUNNING
+MARKET_DATA=UPDATING
+PIPELINE=UPDATING
+BOTA_R5_SHADOW=1
+BOTA_REQUIRE_R5_SHADOW=1
+REAL_TELEGRAM_SIGNAL_DELIVERY=BLOCKED_BY_SHADOW_BOUNDARY
+REAL_DAILY_REPORT_DELIVERY=BLOCKED_BY_SHADOW_BOUNDARY
+SUPABASE_SIDE_EFFECTS=SUPPRESSED_BY_SHADOW_BOUNDARY
 STRATEGY_TUNING=NO
-THRESHOLD_TUNING=NO
 PAIR_CHANGES=NO
 TIMEFRAME_CHANGES=NO
 FORCED_SIGNAL_GENERATION=NO
-NEXT_ACTION=LOCATE_DAILY_SUMMARY_DRY_RUN_RUNTIME_ORIGIN_READ_ONLY
-FURTHER_BROAD_AI_REVIEW=STOP
+RECOVERY_PRD=docs/BOTA_EXECUTION_RECOVERY_PRD_2026-09-27.md
+NEXT_ACTION=CURSOR_CLAUDE_IMPLEMENT_MINIMUM_RECOVERY_PATH_THEN_ONE_ASTRA_CODEX_RED_TEAM
 ```
 
-## Current canonical records
+## Latest direct Hetzner proof — 2026-09-23 UTC
 
-- `audits/BOTA_OPERATING_SCOPE_AND_TELEGRAM_PRESENTATION_2026-09-11.md`
-- `audits/BOTA_PR134_POST_DEPLOY_RUNTIME_PROOF_2026-09-15.md`
-
-Historical records remain authoritative for their dated conclusions:
-
-- `audits/BOTA_SHADOW_REOPEN_MEASUREMENT_PILOT_2026-09-04.md`
-- `audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md`
-
-## PR #134 deployment identity
-
-PR #134 remains open, draft, mergeable, and unmerged.
+Read-only Termux→Hetzner evidence proved:
 
 ```text
-PR=134
-HEAD_SHA=d81c0a3da3363089ed200e264ae066fdf15fb5ba
-DEPLOYED_SHA=d81c0a3da3363089ed200e264ae066fdf15fb5ba
-DEPLOYED_TREE=c083de54f407061d6b744b26b51e1f3fab4212a2
-EFFECTIVE_CONFIG_FINGERPRINT=c9b636e1597743df11daa439f37b311e2434c7bc2ce7589e306739b6207e1b7b
-PR134_MERGED=NO
-```
-
-Deployment and merge remain separate states. The existing deployment authorization did not authorize merging PR #134.
-
-## Runtime proof — 2026-09-15
-
-Read-only Hetzner evidence proved:
-
-```text
+CURRENT_RELEASE=/opt/bota/releases/d81c0a3da3363089ed200e264ae066fdf15fb5ba
 BOTA_SERVICE=active
-SERVICE_GATE=PASS
-HEALTH_LIFECYCLE=RUNNING
-HEALTH_PROCESS_LIVENESS=True
-ORCHESTRATOR_SHA_GATE=PASS
-ORCHESTRATOR_LIFECYCLE_GATE=PASS
-ORCHESTRATOR_LIVENESS_GATE=PASS
-POST_REOPEN_EVENTS=2390
-MALFORMED_LEDGER_ROWS=0
+ActiveState=active
+SubState=running
+ExecMainStatus=0
+NRestarts=0
+ORCHESTRATOR_LIFECYCLE=RUNNING
+ORCHESTRATOR_LIVENESS=True
+RUNTIME_INSTANCE_ID=7a0284b0-7406-4a1b-91a8-eba0548e6169
+LAST_LOOP_PROGRESS_UTC=2026-09-23T18:53:18.366554Z
+FILES_UPDATED_SINCE_SEP19=64
+ALERTS_CSV=UPDATING
+PIPELINE_EVENTS=UPDATING
+PROVIDER_DATA=UPDATING
+BOTA_R5_SHADOW=1
+BOTA_REQUIRE_R5_SHADOW=1
+```
+
+Therefore Hetzner is not dead and the scanner is not generally stopped.
+
+## Proven delivery blocker
+
+`r5_bootstrap/sitecustomize.py` is active when `BOTA_R5_SHADOW=1`. It:
+
+- replaces sensitive Telegram/Supabase credentials with the R5 sentinel;
+- suppresses Telegram and Supabase external side effects;
+- returns deterministic synthetic success responses for intercepted paths;
+- forces `HEARTBEAT_DRY_RUN=1`;
+- forces `DAILY_SUMMARY_GATE_DRY_RUN=1`;
+- forces `DAILY_SUMMARY_SEND=0`;
+- forces `RUNTIME_HEALTH_PUSH_DRY_RUN=1`.
+
+The old statement `DRY_RUN_ORIGIN=UNKNOWN` is superseded.
+
+```text
+DRY_RUN_ORIGIN=PROVEN_R5_SHADOW_BOOTSTRAP
+DAILY_REPORT_CODE_DEFECT=NOT_PROVEN
+HETZNER_RUNTIME_DEAD=NO
+REAL_USER_DELIVERY_WORKING=NO
+```
+
+## Telegram credential state
+
+A later attempted collect/report cutover was designed but did not complete. It stopped before runtime mutation because a recovered historical Telegram token failed Telegram `getMe` authentication.
+
+```text
+CUTOVER_COMPLETED=NO
+R5_SHADOW_REMOVED=NO
+RECOVERED_TELEGRAM_TOKEN=INVALID_OR_STALE
+VALID_CURRENT_TELEGRAM_CREDENTIAL=UNRESOLVED
+```
+
+Do not treat that failed cutover as a production change.
+
+## Historical natural signal evidence
+
+The September 15 natural-runtime proof remains valid for that inspected window:
+
+```text
 MARKET_OPEN_COMPLETED_CYCLES=212
 EURUSD_M15_DECISIONS=212
 GBPUSD_M15_DECISIONS=212
 USDJPY_M15_DECISIONS=212
 THREE_PAIR_COMPLETE_CYCLES=212
-THREE_PAIR_SCAN_GATE=PASS
-NATURAL_RUNTIME_GATE=PASS
 POST_REOPEN_NON_FILTER_REJECTED=0
-```
-
-All 212 natural market-open cycles in the inspected post-reopen window completed with three-pair M15 decision evidence. All terminal watcher outcomes were `EVALUATED_REJECTED`; no genuine qualifying setup occurred in the inspected window.
-
-Therefore the old `CURRENT_HETZNER_RUNTIME_STATE=UNPROVEN` status is superseded.
-
-## Telegram and daily-report state
-
-The read-only daily-report renderer produced a healthy modern report for 2026-09-15:
-
-```text
-Runtime: ONLINE
-Market-open watcher cycles: 56
-EUR/USD: 56 scans, 0 qualified
-GBP/USD: 56 scans, 0 qualified
-USD/JPY: 56 scans, 0 qualified
-Qualified setups: 0
-All 3 pairs observed: YES
-Runtime issues: None observed
-TELEGRAM_SEND=SKIPPED
-```
-
-This proves report rendering, not actual Telegram delivery.
-
-The daily-summary gate log contains:
-
-```text
-2026-09-12 20:10 UTC GATE_DRY_RUN would_send=YES
-2026-09-13 20:10 UTC GATE_DRY_RUN would_send=YES
-2026-09-14 20:10 UTC GATE_DRY_RUN would_send=YES
-```
-
-No `daily_summary_sent_*.ok` marker was observed.
-
-The deployed gate enters this path only when `DAILY_SUMMARY_GATE_DRY_RUN=1` is present. That key is not part of the frozen `config/production-vps.env` strategy policy, so its runtime provenance still needs to be located.
-
-```text
-DAILY_REPORT_GATE_TIMING=PASS
-DAILY_REPORT_RENDER=PASS
-DAILY_REPORT_ACTUAL_TELEGRAM_SEND=NOT_PROVEN
-DAILY_SUMMARY_RUNTIME_MODE=DRY_RUN
-DRY_RUN_ORIGIN=UNKNOWN_PENDING_READ_ONLY_PROVENANCE_CHECK
-```
-
-Do not silently disable the dry-run setting. Enabling real daily Telegram sending is a production mutation and requires explicit owner authorization after provenance is established.
-
-## Signal-delivery proof status
-
-Because all 636 post-reopen pair decisions were rejected by policy:
-
-```text
 TELEGRAM_RESULTS={not_attempted:636}
 SUPABASE_RESULTS={not_attempted:636}
-POST_REOPEN_NON_FILTER_REJECTED=0
 ```
 
-This is consistent with healthy no-signal operation. It does not yet prove the new presentation path on a genuine qualified signal, duplicate suppression under a genuine send, or crash-consistent Telegram/Supabase behavior under the deployed head.
+No genuine qualified signal occurred in that sampled window. This is separate from the current delivery blocker: even a zero-signal day must still deliver a real daily report under the recovery PRD.
 
-Do not force a signal to close those gates.
+## Recovery decision — 2026-09-27
 
-## Strategy / research direction
+Do not continue broad archaeology or preserve nonessential architecture by default.
 
-The historical corpus result remains preserved:
+The product objective is now bounded to:
 
 ```text
-HISTORICAL_RETROSPECTIVE_VALIDATION_PROJECT=CLOSED
-HISTORICAL_CORPUS_GATE_RESULT=FAIL_195_LT_400
-STRATEGY_EDGE_VALIDATED=NO
-STRATEGY_PROFITABILITY_PROVEN_NEGATIVE=NO
+EURUSD / GBPUSD / USDJPY
+→ M15 scan
+→ frozen strategy decision
+→ auditable terminal decision
+→ genuine qualified setup → real Telegram
+→ SL/TP closure → real Telegram
+→ real daily report
 ```
 
-BotA is now in prospective collection mode. Several months of trustworthy evidence are required before strategy tuning is reconsidered.
+Everything outside this path must justify its existence.
 
-Primary future analysis remains based on Net R after realistic costs where measurable, pair, score band, ADX/regime, direction, session/time of day, rejection reasons, delivery reliability, missing scans, and data-quality incidents.
+## Acceptance gate
 
-## Android / Termux
+BotA is not finished until all are proven:
 
-Android remains control/observation only and must not become a second scanner.
+1. three-pair M15 scanning;
+2. fresh/timeframe-correct market data;
+3. auditable decision every scan;
+4. genuine qualified signal reaches real Telegram;
+5. SL/TP closure reaches real Telegram;
+6. zero-signal daily report reaches real Telegram;
+7. clean restart recovery;
+8. duplicate suppression;
+9. no forced production signal required;
+10. GitHub + Obsidian match deployed runtime.
+
+## AI execution rule
 
 ```text
-ANDROID_ACTIVE_SCANNER=NO
-ANDROID_ROLE=CONTROL_AND_OBSERVATION_ONLY
-PRIMARY_RUNTIME_TARGET=HETZNER
+CHATGPT=CONTROL_PLANE_AND_EVIDENCE_RECONCILER
+CURSOR_CLAUDE_CODE=PRIMARY_IMPLEMENTATION_LANE
+ASTRA_CODEX=ONE_BOUNDED_FINAL_RED_TEAM_REVIEW
+CONCURRENT_IMPLEMENTATION_WRITERS=NO
 ```
 
-Termux now has successful read-only SSH access to Hetzner using the phone's existing `id_ed25519` key. This changes access capability only; it does not change BotA execution authority.
+No AI carousel. If Astra finds a concrete defect, return one bounded repair to Cursor and re-run only the affected proof.
+
+## Canonical records
+
+Current forward contract:
+
+- `docs/BOTA_EXECUTION_RECOVERY_PRD_2026-09-27.md`
+
+Still-valid historical/current evidence:
+
+- `audits/BOTA_OPERATING_SCOPE_AND_TELEGRAM_PRESENTATION_2026-09-11.md`
+- `audits/BOTA_PR134_POST_DEPLOY_RUNTIME_PROOF_2026-09-15.md`
+- `audits/BOTA_SHADOW_REOPEN_MEASUREMENT_PILOT_2026-09-04.md`
+- `audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md`
 
 ## Exactly one next action
 
-Perform a **read-only provenance check** for `DAILY_SUMMARY_GATE_DRY_RUN=1` on the Hetzner runtime.
-
-Do not redeploy, merge PR #134, change strategy/config, disable dry-run, or force a signal during that check.
+Use Cursor/Claude Code against the current repository and latest Hetzner evidence to implement the **minimum recovery path required by the 2026-09-27 PRD**. Do not tune strategy, add pairs, merge PR #134 merely for cleanup, or create another broad audit cycle.
