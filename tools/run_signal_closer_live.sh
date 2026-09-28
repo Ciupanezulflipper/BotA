@@ -3,12 +3,14 @@
 # BotA signal closer live wrapper.
 #
 # Purpose:
-# - Load only the Supabase env values required by tools/signal_closer.py.
+# - Load only the Supabase/Telegram env values required by tools/signal_closer.py.
 # - Run signal_closer.py in explicit LIVE mode.
 # - Keep signal_closer.py safe defaults unchanged.
 #
 # Safety:
-# - No Telegram sends.
+# - Telegram closure notifications are attempted independently of the Supabase
+#   lifecycle update (see tools/telegram_closure_delivery.py); a failure in
+#   either sink never blocks or reverses the other.
 # - No strategy changes.
 # - Live DB writes only happen when ACTIVE Supabase signals need closing.
 # - Max batch is capped by SIGNAL_CLOSER_MAX_BATCH, default 5.
@@ -40,6 +42,9 @@ allowed = {
     "SUPABASE_URL",
     "SIGNAL_MAX_AGE_HOURS",
     "SIGNAL_CLOSER_MAX_BATCH",
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_TOKEN",
+    "TELEGRAM_CHAT_ID",
 }
 
 for filename in ("config/strategy.env", ".env", ".env.runtime"):

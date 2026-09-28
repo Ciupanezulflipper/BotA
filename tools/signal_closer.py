@@ -46,6 +46,11 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 
+_TOOLS_DIR = str(pathlib.Path(__file__).resolve().parent)
+if _TOOLS_DIR not in sys.path:
+    sys.path.insert(0, _TOOLS_DIR)
+import telegram_closure_delivery  # noqa: E402 - sibling module resolved above
+
 
 CODE_ROOT = pathlib.Path(
     os.environ.get("BOTA_CODE_ROOT")
@@ -359,6 +364,34 @@ def close_signal(
         log(f"ERROR closing {signal_id}: {exc}")
 
 
+def notify_closure_telegram(
+    signal_id: str,
+    pair: str,
+    direction: str,
+    status: str,
+    result_pips: float,
+    entry: float,
+    dry_run: bool,
+) -> None:
+    """Attempt the independent Telegram closure sink.
+
+    This is deliberately unconditional on the Supabase PATCH outcome above:
+    the two sinks fan out from the same already-computed outcome and must not
+    gate each other. Telegram failures are logged, never raised.
+    """
+    if dry_run:
+        log(f"DRY-RUN: would send Telegram closure for {signal_id} -> {status}")
+        return
+    try:
+        sent = telegram_closure_delivery.send_closure(
+            signal_id, pair, direction, status, result_pips, entry
+        )
+        if not sent:
+            log(f"TELEGRAM closure not confirmed for {signal_id} (see telegram_closure log)")
+    except Exception as exc:  # noqa: BLE001 - Telegram must never block the Supabase lifecycle
+        log(f"TELEGRAM closure error for {signal_id}: {type(exc).__name__}")
+
+
 def safety_gate(args: argparse.Namespace) -> bool:
     """
     Returns True if execution should be dry-run, False if live is approved.
@@ -657,6 +690,7 @@ def main() -> None:
                 f"age={age_hours:.1f}h reason={reason} -> CANCELLED"
             )
             close_signal(sig_id, "CANCELLED", 0.0, dry_run, closed_at_iso)
+            notify_closure_telegram(sig_id, pair, direction, "CANCELLED", 0.0, entry, dry_run)
             cancelled += 1
         elif outcome in ("WIN", "LOSS"):
             log(
@@ -664,6 +698,7 @@ def main() -> None:
                 f"reason={reason} -> {result_pips:+.1f} pips"
             )
             close_signal(sig_id, "CLOSED", result_pips, dry_run, closed_at_iso)
+            notify_closure_telegram(sig_id, pair, direction, "CLOSED", result_pips, entry, dry_run)
             closed += 1
 
     log(

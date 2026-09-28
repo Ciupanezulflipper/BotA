@@ -46,6 +46,24 @@ UPDATER_ENV = {
     "FETCH_BACKOFF_MAX": "20",
     "FETCH_MIN_GAP_SECS": "1",
 }
+# R5 shadow (r5_bootstrap/sitecustomize.py) is a fail-closed sandbox applied
+# uniformly to every job via the orchestrator's ambient environment. Exactly
+# four jobs constitute the approved dual-delivery contract (qualified-signal
+# Telegram + Supabase/ProfitLab publish, lifecycle closure, and the daily
+# report); every other job (heartbeat, runtime_health_push, market_pulse,
+# shadow research, updater, etc.) must remain inside the R5 sandbox. Rather
+# than disabling R5 globally — which would also unsuppress those unrelated
+# jobs' network side effects — only these four jobs receive an explicit,
+# exact-match environment override that turns R5 off for their exact process
+# tree. This is intentionally the only other allowed override alongside
+# UPDATER_ENV; see Job.__post_init__.
+R5_LIVE_DELIVERY_ENV = {
+    "BOTA_R5_SHADOW": "0",
+    "BOTA_REQUIRE_R5_SHADOW": "0",
+}
+R5_LIVE_DELIVERY_JOBS = frozenset({
+    "watcher", "profitlab_delivery", "closer", "daily_summary_server_gate",
+})
 POLICY_KEYS = (
     "PAIRS", "TIMEFRAMES", "POLICY_B_ENABLED", "POLICY_B_SCORE_MIN",
     "POLICY_B_ADX_MAX", "FILTER_SCORE_MIN", "FILTER_SCORE_MIN_ALL",
@@ -301,9 +319,16 @@ class Job:
             raise ContractError(f"stage_deadline_count:{self.name}")
         if self.stage_names and len(self.stage_names) != len(self.commands):
             raise ContractError(f"stage_name_count:{self.name}")
-        if self.env_overrides and (self.name != "updater"
-                                   or dict(self.env_overrides) != UPDATER_ENV):
-            raise ContractError(f"job_environment_not_allowed:{self.name}")
+        if self.env_overrides:
+            overrides = dict(self.env_overrides)
+            if self.name == "updater":
+                allowed = overrides == UPDATER_ENV
+            elif self.name in R5_LIVE_DELIVERY_JOBS:
+                allowed = overrides == R5_LIVE_DELIVERY_ENV
+            else:
+                allowed = False
+            if not allowed:
+                raise ContractError(f"job_environment_not_allowed:{self.name}")
 
     def deadline_for_stage(self, index: int) -> float:
         return self.stage_deadlines[index] if self.stage_deadlines else self.deadline_seconds
@@ -327,13 +352,16 @@ def production_jobs(code_root: Path = ROOT) -> tuple[Job, ...]:
             stage_deadlines=(600, CONSERVATIVE_DEADLINE_SECONDS),
             env_overrides=tuple(UPDATER_ENV.items()),
             stage_names=("indicators_updater", "d1_sync")),
-        Job("watcher", ((bash, str(tool / "watcher_gated_cycle.sh")),), EVERY_5_MINUTES, 720),
+        Job("watcher", ((bash, str(tool / "watcher_gated_cycle.sh")),), EVERY_5_MINUTES, 720,
+            env_overrides=tuple(R5_LIVE_DELIVERY_ENV.items())),
         Job("shadow", ((bash, str(tool / "run_shadow_manager.sh")),), EVERY_15_MINUTES, 720),
         Job("closer", ((bash, str(tool / "run_signal_closer_live.sh")),), EVERY_15_MINUTES,
-            CONSERVATIVE_DEADLINE_SECONDS),
+            CONSERVATIVE_DEADLINE_SECONDS,
+            env_overrides=tuple(R5_LIVE_DELIVERY_ENV.items())),
         Job("heartbeat", ((bash, str(tool / "heartbeat.sh")),), EVERY_MINUTE,
             CONSERVATIVE_DEADLINE_SECONDS),
-        Job("profitlab_delivery", ((python, str(tool / "profitlab_delivery.py")),), EVERY_MINUTE, 45),
+        Job("profitlab_delivery", ((python, str(tool / "profitlab_delivery.py")),), EVERY_MINUTE, 45,
+            env_overrides=tuple(R5_LIVE_DELIVERY_ENV.items())),
         Job("runtime_health_push", ((bash, str(tool / "run_runtime_health_push.sh")),), EVERY_5_MINUTES,
             CONSERVATIVE_DEADLINE_SECONDS),
         Job("market_pulse", ((python, str(tool / "market_pulse_v2.py"), "--scheduled-send"),), EVERY_30_MINUTES, 25),
@@ -346,7 +374,8 @@ def production_jobs(code_root: Path = ROOT) -> tuple[Job, ...]:
         Job("signal_accuracy", ((python, str(tool / "signal_accuracy.py")),), SUNDAY_0100,
             CONSERVATIVE_DEADLINE_SECONDS),
         Job("daily_summary_server_gate", ((bash, str(tool / "daily_summary_server_gate.sh")),),
-            HOURLY_MINUTE_10, CONSERVATIVE_DEADLINE_SECONDS),
+            HOURLY_MINUTE_10, CONSERVATIVE_DEADLINE_SECONDS,
+            env_overrides=tuple(R5_LIVE_DELIVERY_ENV.items())),
     )
 
 
