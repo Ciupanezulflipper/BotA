@@ -375,6 +375,42 @@ class ClosureLifecycleIndependenceTests(unittest.TestCase):
         self.assertFalse(result)
 
 
+class ClosureStateDirectoryFsyncTests(unittest.TestCase):
+    """Blocker 2 regression: a successful state write must fsync both the
+    temp file before rename and the containing directory after os.replace,
+    so the rename itself survives a host crash instead of only the file's
+    own contents."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_state_write_fsyncs_file_then_directory_and_leaves_valid_json(self) -> None:
+        target = self.root / "state" / "telegram_closure" / "sig-fsync.json"
+        fsynced_kinds: list[str] = []
+        real_fsync = os.fsync
+
+        def spy_fsync(fd: int) -> None:
+            kind = "dir" if stat.S_ISDIR(os.fstat(fd).st_mode) else "file"
+            fsynced_kinds.append(kind)
+            real_fsync(fd)
+
+        with mock.patch.object(telegram_closure_delivery.os, "fsync", side_effect=spy_fsync) as fsync_mock:
+            telegram_closure_delivery._write_json_durable(
+                target, {"status": "sent", "signal_id": "sig-fsync"}
+            )
+
+        self.assertEqual(fsync_mock.call_count, 2)
+        self.assertEqual(fsynced_kinds, ["file", "dir"])
+        self.assertEqual(
+            json.loads(target.read_text(encoding="utf-8")),
+            {"status": "sent", "signal_id": "sig-fsync"},
+        )
+
+
 class ClosureRetryOutboxTests(unittest.TestCase):
     """Blocker 2 regression: a Supabase-confirmed closure whose Telegram send
     could not be confirmed must never be lost. Requirements 1-6 of the
@@ -571,6 +607,27 @@ class SignalCloserRetryWiringTests(unittest.TestCase):
             signal_closer.main()
         retry.assert_not_called()
 
+    def test_live_run_still_scans_retries_when_active_signal_fetch_fails(self) -> None:
+        """Blocker 3 regression: a prior Supabase PATCH may already have
+        succeeded, leaving a Telegram closure in the durable retry outbox.
+        A later Supabase outage on get_active_signals() must not suppress
+        that already-pending retry -- the retry scan runs independently of
+        the active-signal fetch, exactly once, and the process still reports
+        failure for the fetch itself without duplicating the retry."""
+        with mock.patch.object(signal_closer, "SUPABASE_KEY", "k"), \
+             mock.patch.object(signal_closer, "compute_server_clock_epoch", return_value=2000000000), \
+             mock.patch.object(signal_closer, "get_active_signals",
+                                side_effect=OSError("supabase unreachable")), \
+             mock.patch.object(signal_closer.time, "sleep"), \
+             mock.patch.object(telegram_closure_delivery, "retry_pending_closures",
+                                return_value={"candidates": 1, "sent": 1, "skipped": 0}) as retry, \
+             mock.patch.object(sys, "argv",
+                                ["signal_closer.py", "--live", "--confirm", "CLOSE_SIGNALS", "--max-batch", "5"]):
+            with self.assertRaises(SystemExit) as ctx:
+                signal_closer.main()
+        self.assertEqual(ctx.exception.code, 1)
+        retry.assert_called_once()
+
 
 class R5JobScopingTests(unittest.TestCase):
     """Requirement 9: only the four approved delivery jobs may bypass R5 shadow;
@@ -581,7 +638,9 @@ class R5JobScopingTests(unittest.TestCase):
     def test_exactly_the_four_approved_jobs_carry_the_r5_bypass_override(self) -> None:
         jobs = {job.name: job for job in vps.production_jobs()}
         for name, job in jobs.items():
-            if name in self.APPROVED:
+            if name == "daily_summary_server_gate":
+                self.assertEqual(dict(job.env_overrides), vps.DAILY_SUMMARY_LIVE_DELIVERY_ENV, name)
+            elif name in self.APPROVED:
                 self.assertEqual(dict(job.env_overrides), vps.R5_LIVE_DELIVERY_ENV, name)
             elif name == "updater":
                 self.assertEqual(dict(job.env_overrides), vps.UPDATER_ENV, name)
@@ -723,7 +782,8 @@ jobs = {job.name: job for job in vps.production_jobs()}
 
 result = {
     "parent": {key: os.environ.get(key) for key in
-               ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "SUPABASE_SERVICE_KEY", "BOTA_R5_SHADOW")},
+               ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "SUPABASE_SERVICE_KEY", "BOTA_R5_SHADOW",
+                "DAILY_SUMMARY_GATE_DRY_RUN", "DAILY_SUMMARY_SEND")},
     "children": {},
     "errors": {},
 }
@@ -735,7 +795,8 @@ for name in %(names)r:
         continue
     result["children"][name] = {
         key: env.get(key) for key in
-        ("BOTA_R5_SHADOW", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "SUPABASE_SERVICE_KEY")
+        ("BOTA_R5_SHADOW", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "SUPABASE_SERVICE_KEY",
+         "DAILY_SUMMARY_GATE_DRY_RUN", "DAILY_SUMMARY_SEND")
     }
     result["children"][name]["has_telegram_bot_token"] = "TELEGRAM_BOT_TOKEN" in env
     result["children"][name]["has_supabase_service_key"] = "SUPABASE_SERVICE_KEY" in env
@@ -814,6 +875,11 @@ class R5ParentCredentialPoisonRecoveryTests(unittest.TestCase):
         self.assertEqual(result["parent"]["TELEGRAM_BOT_TOKEN"], self.SENTINEL)
         self.assertEqual(result["parent"]["SUPABASE_SERVICE_KEY"], self.SENTINEL)
         self.assertEqual(result["parent"]["BOTA_R5_SHADOW"], "1")
+        # Blocker 1: r5_bootstrap/sitecustomize.py forces these two keys in
+        # the parent whenever R5 shadow activates; the parent process itself
+        # must remain exactly as forced.
+        self.assertEqual(result["parent"]["DAILY_SUMMARY_GATE_DRY_RUN"], "1")
+        self.assertEqual(result["parent"]["DAILY_SUMMARY_SEND"], "0")
         self.assertEqual(result["errors"], {})
 
         children = result["children"]
@@ -822,26 +888,40 @@ class R5ParentCredentialPoisonRecoveryTests(unittest.TestCase):
         self.assertEqual(watcher["TELEGRAM_BOT_TOKEN"], "live-token")
         self.assertEqual(watcher["TELEGRAM_CHAT_ID"], "live-chat")
         self.assertEqual(watcher["SUPABASE_SERVICE_KEY"], "live-key")
+        # watcher is an approved live-delivery job but not the daily summary
+        # gate: it must not receive the gate-specific override either.
+        self.assertEqual(watcher["DAILY_SUMMARY_GATE_DRY_RUN"], "1")
+        self.assertEqual(watcher["DAILY_SUMMARY_SEND"], "0")
 
         profitlab = children["profitlab_delivery"]
         self.assertEqual(profitlab["SUPABASE_SERVICE_KEY"], "live-key")
         self.assertFalse(profitlab["has_telegram_bot_token"])
+        self.assertEqual(profitlab["DAILY_SUMMARY_GATE_DRY_RUN"], "1")
+        self.assertEqual(profitlab["DAILY_SUMMARY_SEND"], "0")
 
         closer = children["closer"]
         self.assertEqual(closer["SUPABASE_SERVICE_KEY"], "live-key")
         self.assertEqual(closer["TELEGRAM_BOT_TOKEN"], "live-token")
         self.assertEqual(closer["TELEGRAM_CHAT_ID"], "live-chat")
+        self.assertEqual(closer["DAILY_SUMMARY_GATE_DRY_RUN"], "1")
+        self.assertEqual(closer["DAILY_SUMMARY_SEND"], "0")
 
         gate = children["daily_summary_server_gate"]
         self.assertEqual(gate["TELEGRAM_BOT_TOKEN"], "live-token")
         self.assertEqual(gate["TELEGRAM_CHAT_ID"], "live-chat")
         self.assertFalse(gate["has_supabase_service_key"])
+        # Blocker 1 fix: only the approved gate child clears the forced
+        # dry-run/no-send suppression, and only for its own process tree.
+        self.assertEqual(gate["DAILY_SUMMARY_GATE_DRY_RUN"], "0")
+        self.assertEqual(gate["DAILY_SUMMARY_SEND"], "1")
 
         for unrelated in ("heartbeat", "shadow"):
             env_for = children[unrelated]
             self.assertEqual(env_for["BOTA_R5_SHADOW"], "1")
             self.assertEqual(env_for["TELEGRAM_BOT_TOKEN"], self.SENTINEL)
             self.assertEqual(env_for["SUPABASE_SERVICE_KEY"], self.SENTINEL)
+            self.assertEqual(env_for["DAILY_SUMMARY_GATE_DRY_RUN"], "1")
+            self.assertEqual(env_for["DAILY_SUMMARY_SEND"], "0")
 
     def test_missing_secret_source_fails_closed_before_launch(self) -> None:
         env = self._poisoned_parent_env()

@@ -644,11 +644,13 @@ def main() -> None:
         f"dry_run={dry_run}, pair_filter={args.pair or 'ALL'})"
     )
 
+    fetch_error: Exception | None = None
     try:
         signals = get_active_signals()
     except Exception as exc:
         log(f"ERROR fetching active signals: {exc}")
-        sys.exit(1)
+        signals = []
+        fetch_error = exc
 
     if args.pair:
         signals = [
@@ -715,6 +717,9 @@ def main() -> None:
         f"Done — closed={closed} cancelled={cancelled} "
         f"still_open={still_open} dry_run={dry_run}"
     )
+
+    if fetch_error is not None:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

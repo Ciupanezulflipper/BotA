@@ -61,6 +61,18 @@ R5_LIVE_DELIVERY_ENV = {
     "BOTA_R5_SHADOW": "0",
     "BOTA_REQUIRE_R5_SHADOW": "0",
 }
+# r5_bootstrap/sitecustomize.py additionally forces DAILY_SUMMARY_GATE_DRY_RUN=1
+# and DAILY_SUMMARY_SEND=0 in the parent (see its FORCED_ENV). Turning R5 back
+# off for daily_summary_server_gate's process tree does not touch those two
+# keys, so without an explicit override the approved gate child would still
+# inherit the forced dry-run/no-send values and never actually deliver. This
+# override is exact-match validated in Job.__post_init__ and applies to no
+# other job.
+DAILY_SUMMARY_LIVE_DELIVERY_ENV = {
+    **R5_LIVE_DELIVERY_ENV,
+    "DAILY_SUMMARY_GATE_DRY_RUN": "0",
+    "DAILY_SUMMARY_SEND": "1",
+}
 R5_LIVE_DELIVERY_JOBS = frozenset({
     "watcher", "profitlab_delivery", "closer", "daily_summary_server_gate",
 })
@@ -425,6 +437,8 @@ class Job:
             overrides = dict(self.env_overrides)
             if self.name == "updater":
                 allowed = overrides == UPDATER_ENV
+            elif self.name == "daily_summary_server_gate":
+                allowed = overrides == DAILY_SUMMARY_LIVE_DELIVERY_ENV
             elif self.name in R5_LIVE_DELIVERY_JOBS:
                 allowed = overrides == R5_LIVE_DELIVERY_ENV
             else:
@@ -477,7 +491,7 @@ def production_jobs(code_root: Path = ROOT) -> tuple[Job, ...]:
             CONSERVATIVE_DEADLINE_SECONDS),
         Job("daily_summary_server_gate", ((bash, str(tool / "daily_summary_server_gate.sh")),),
             HOURLY_MINUTE_10, CONSERVATIVE_DEADLINE_SECONDS,
-            env_overrides=tuple(R5_LIVE_DELIVERY_ENV.items())),
+            env_overrides=tuple(DAILY_SUMMARY_LIVE_DELIVERY_ENV.items())),
     )
 
 

@@ -89,6 +89,15 @@ def _signal_lock(signal_id: str) -> Iterator[None]:
 
 
 def _write_json_durable(path: Path, payload: dict[str, Any]) -> None:
+    """Atomically write, then fsync both the file and its containing directory.
+
+    A bare os.replace() is only durable once the directory entry pointing at
+    the new inode survives a crash; without an explicit directory fsync, a
+    host crash right after a successful Telegram send can lose the rename
+    and resurrect the pre-send "intent"/retryable state on restart, risking
+    a duplicate closure message. Both the intent and terminal-state writes
+    go through this helper, so both transitions are crash durable.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
     tmp = Path(tmp_name)
@@ -104,6 +113,11 @@ def _write_json_durable(path: Path, payload: dict[str, Any]) -> None:
             tmp.unlink()
         except FileNotFoundError:
             pass
+    dir_fd = os.open(str(path.parent), os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
 
 
 def _read_state(path: Path) -> dict[str, Any] | None:
