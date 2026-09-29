@@ -161,12 +161,18 @@ def load_live_delivery_secrets(path: Path | None = None) -> dict[str, str]:
     This is the *only* place real Telegram/Supabase credentials may enter an
     approved child's environment once R5 shadow poisons the parent process
     (see R5_SENSITIVE_ENV_ALIASES above). No shell eval: plain KEY=VALUE
-    lines, restricted to LIVE_DELIVERY_ALLOWED_KEYS, no duplicates, complete
-    (all three canonical keys present and non-empty), and the file must not
-    be group/other readable. Any violation raises ContractError so the caller
-    fails closed before the approved job is launched.
+    lines, restricted to LIVE_DELIVERY_ALLOWED_KEYS, no duplicates, no
+    symlinks, and the file must not be group/other readable. The three
+    canonical keys are independent: any non-empty subset of them may be
+    present, and each present key must be non-empty. Per-job completeness is
+    enforced separately by _live_delivery_env_for_job so that, e.g., a
+    Supabase-only file still unblocks profitlab_delivery even though it
+    cannot satisfy watcher/closer. Any violation raises ContractError so the
+    caller fails closed before the approved job is launched.
     """
     target = path if path is not None else _live_delivery_secret_path()
+    if target.is_symlink():
+        raise ContractError("live_delivery_secret_source_symlink_rejected")
     try:
         mode = target.stat().st_mode
     except OSError as exc:
@@ -196,8 +202,7 @@ def load_live_delivery_secrets(path: Path | None = None) -> dict[str, str]:
         if not value or value == R5_SENTINEL_VALUE:
             raise ContractError("live_delivery_secret_source_value_missing")
         parsed[key] = value
-    missing = sorted(set(LIVE_DELIVERY_ALLOWED_KEYS) - parsed.keys())
-    if missing:
+    if not parsed:
         raise ContractError("live_delivery_secret_source_incomplete")
     return parsed
 

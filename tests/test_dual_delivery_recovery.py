@@ -624,6 +624,86 @@ def write_live_delivery_secrets(path: Path, **overrides: str) -> Path:
     return path
 
 
+class LiveDeliveryPartialSecretScopeTests(unittest.TestCase):
+    """The three canonical live-delivery keys are independently optional at
+    the secret-source level; each approved job enforces only its own
+    required subset (Blocker-3 fix: a Supabase-only or Telegram-only file
+    must not re-couple the two independent delivery sinks)."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.mutable = Path(self.tmp.name) / "mutable"
+        self.mutable.mkdir()
+        self.secrets_path = Path(self.tmp.name) / "live-delivery.env"
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _jobs(self) -> dict[str, "vps.Job"]:
+        return {job.name: job for job in vps.production_jobs()}
+
+    def test_supabase_only_file_unblocks_profitlab_delivery_only(self) -> None:
+        self.secrets_path.write_text("SUPABASE_SERVICE_KEY=live-key\n", encoding="utf-8")
+        self.secrets_path.chmod(0o600)
+        orch = vps.Orchestrator(REPO, self.mutable, ())
+        jobs = self._jobs()
+        with mock.patch.dict(os.environ, {vps.LIVE_DELIVERY_SECRET_PATH_ENV: str(self.secrets_path)}):
+            env = orch.child_env(jobs["profitlab_delivery"])
+            self.assertEqual(env["SUPABASE_SERVICE_KEY"], "live-key")
+            self.assertNotIn("TELEGRAM_BOT_TOKEN", env)
+            self.assertNotIn("TELEGRAM_CHAT_ID", env)
+
+            for name in ("watcher", "closer", "daily_summary_server_gate"):
+                with self.assertRaises(vps.ContractError) as ctx:
+                    orch.child_env(jobs[name])
+                self.assertEqual(str(ctx.exception), "live_delivery_secret_missing_required_key")
+
+    def test_telegram_only_file_unblocks_daily_summary_gate_only(self) -> None:
+        self.secrets_path.write_text(
+            "TELEGRAM_BOT_TOKEN=live-token\nTELEGRAM_CHAT_ID=live-chat\n", encoding="utf-8")
+        self.secrets_path.chmod(0o600)
+        orch = vps.Orchestrator(REPO, self.mutable, ())
+        jobs = self._jobs()
+        with mock.patch.dict(os.environ, {vps.LIVE_DELIVERY_SECRET_PATH_ENV: str(self.secrets_path)}):
+            env = orch.child_env(jobs["daily_summary_server_gate"])
+            self.assertEqual(env["TELEGRAM_BOT_TOKEN"], "live-token")
+            self.assertEqual(env["TELEGRAM_CHAT_ID"], "live-chat")
+            self.assertNotIn("SUPABASE_SERVICE_KEY", env)
+
+            for name in ("watcher", "profitlab_delivery", "closer"):
+                with self.assertRaises(vps.ContractError) as ctx:
+                    orch.child_env(jobs[name])
+                self.assertEqual(str(ctx.exception), "live_delivery_secret_missing_required_key")
+
+    def test_unrelated_jobs_stay_r5_shadowed_regardless_of_partial_secrets(self) -> None:
+        self.secrets_path.write_text("SUPABASE_SERVICE_KEY=live-key\n", encoding="utf-8")
+        self.secrets_path.chmod(0o600)
+        orch = vps.Orchestrator(REPO, self.mutable, ())
+        jobs = self._jobs()
+        with mock.patch.dict(os.environ, {"BOTA_R5_SHADOW": "1", "BOTA_REQUIRE_R5_SHADOW": "1",
+                                          vps.LIVE_DELIVERY_SECRET_PATH_ENV: str(self.secrets_path)}):
+            for name in ("heartbeat", "market_pulse", "runtime_health_push", "shadow"):
+                env = orch.child_env(jobs[name])
+                self.assertEqual(env["BOTA_R5_SHADOW"], "1")
+                self.assertNotIn("SUPABASE_SERVICE_KEY", env)
+                self.assertNotIn("TELEGRAM_BOT_TOKEN", env)
+
+    def test_symlinked_secret_file_is_rejected_fail_closed(self) -> None:
+        real = Path(self.tmp.name) / "real-secrets.env"
+        write_live_delivery_secrets(real)
+        self.secrets_path.symlink_to(real)
+        with self.assertRaises(vps.ContractError) as ctx:
+            vps.load_live_delivery_secrets(self.secrets_path)
+        self.assertEqual(str(ctx.exception), "live_delivery_secret_source_symlink_rejected")
+
+    def test_empty_secret_file_still_fails_closed_at_source_level(self) -> None:
+        self.secrets_path.write_text("# no keys here\n", encoding="utf-8")
+        self.secrets_path.chmod(0o600)
+        with self.assertRaises(vps.ContractError) as ctx:
+            vps.load_live_delivery_secrets(self.secrets_path)
+        self.assertEqual(str(ctx.exception), "live_delivery_secret_source_incomplete")
+
+
 PROBE_JOB_NAMES = ("watcher", "profitlab_delivery", "closer",
                     "daily_summary_server_gate", "heartbeat", "shadow")
 
@@ -782,12 +862,12 @@ class R5ParentCredentialPoisonRecoveryTests(unittest.TestCase):
         for approved in ("watcher", "profitlab_delivery", "closer", "daily_summary_server_gate"):
             self.assertIn("insecure_permissions", result["errors"][approved])
 
-    def test_malformed_duplicate_and_incomplete_secret_sources_fail_closed(self) -> None:
+    def test_malformed_duplicate_and_empty_secret_sources_fail_closed(self) -> None:
         cases = {
             "malformed": "not-a-key-value-line\n",
             "duplicate": "TELEGRAM_BOT_TOKEN=a\nTELEGRAM_BOT_TOKEN=b\nTELEGRAM_CHAT_ID=c\nSUPABASE_SERVICE_KEY=d\n",
             "unknown_key": "TELEGRAM_BOT_TOKEN=a\nTELEGRAM_CHAT_ID=b\nSUPABASE_SERVICE_KEY=c\nEXTRA_KEY=d\n",
-            "incomplete": "TELEGRAM_BOT_TOKEN=a\nTELEGRAM_CHAT_ID=b\n",
+            "empty": "# no keys here\n",
             "sentinel_value": f"TELEGRAM_BOT_TOKEN={self.SENTINEL}\nTELEGRAM_CHAT_ID=b\nSUPABASE_SERVICE_KEY=c\n",
         }
         for label, content in cases.items():
@@ -799,6 +879,26 @@ class R5ParentCredentialPoisonRecoveryTests(unittest.TestCase):
                 result = self._run_probe(env)
                 self.assertNotIn("watcher", result["children"])
                 self.assertTrue(result["errors"]["watcher"].startswith("live_delivery_secret_source_"))
+
+    def test_partial_but_incomplete_for_job_source_recovers_other_independent_job(self) -> None:
+        """A file with only Telegram keys is a *valid* partial source (no
+        source-level error) but is still incomplete for watcher, which also
+        needs Supabase; profitlab_delivery must fail too since it has no
+        Supabase key, while daily_summary_server_gate -- which only needs
+        Telegram -- must succeed from that same file."""
+        self.secrets_path.write_text("TELEGRAM_BOT_TOKEN=a\nTELEGRAM_CHAT_ID=b\n", encoding="utf-8")
+        self.secrets_path.chmod(0o600)
+        env = self._poisoned_parent_env()
+        env["BOTA_LIVE_DELIVERY_SECRET_PATH"] = str(self.secrets_path)
+        result = self._run_probe(env)
+        self.assertNotIn("watcher", result["children"])
+        self.assertEqual(result["errors"]["watcher"], "live_delivery_secret_missing_required_key")
+        self.assertNotIn("profitlab_delivery", result["children"])
+        self.assertEqual(result["errors"]["profitlab_delivery"], "live_delivery_secret_missing_required_key")
+        gate = result["children"]["daily_summary_server_gate"]
+        self.assertEqual(gate["TELEGRAM_BOT_TOKEN"], "a")
+        self.assertEqual(gate["TELEGRAM_CHAT_ID"], "b")
+        self.assertFalse(gate["has_supabase_service_key"])
 
     def test_preflight_remains_valid_for_the_still_shadowed_parent_process(self) -> None:
         """tools/r5_no_side_effect_preflight.py must keep passing for the
