@@ -701,6 +701,16 @@ def main() -> None:
             notify_closure_telegram(sig_id, pair, direction, "CLOSED", result_pips, entry, dry_run)
             closed += 1
 
+    if not dry_run:
+        try:
+            retry_summary = telegram_closure_delivery.retry_pending_closures()
+            log(
+                f"TELEGRAM retry scan candidates={retry_summary['candidates']} "
+                f"sent={retry_summary['sent']} skipped={retry_summary['skipped']}"
+            )
+        except Exception as exc:  # noqa: BLE001 - retry scan must never block closer completion
+            log(f"TELEGRAM retry scan error: {type(exc).__name__}")
+
     log(
         f"Done — closed={closed} cancelled={cancelled} "
         f"still_open={still_open} dry_run={dry_run}"

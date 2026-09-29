@@ -64,6 +64,39 @@ R5_LIVE_DELIVERY_ENV = {
 R5_LIVE_DELIVERY_JOBS = frozenset({
     "watcher", "profitlab_delivery", "closer", "daily_summary_server_gate",
 })
+# r5_bootstrap/sitecustomize.py replaces every one of these keys in the
+# *parent* orchestrator process with R5_SENTINEL_VALUE the moment R5 shadow
+# activates (it runs ahead of Orchestrator via PYTHONPATH). That poisoning
+# happens uniformly to the whole parent environment, so os.environ still
+# carries the sentinel even for the four approved live-delivery jobs above
+# once BOTA_R5_SHADOW is turned back off for their child_env(). These aliases
+# must be stripped from an approved child's environment before the real
+# secrets (see below) are injected, otherwise the sentinel silently survives
+# and any credential loader that reads it treats it as a literal token/id.
+R5_SENSITIVE_ENV_ALIASES = (
+    "TELEGRAM_BOT_TOKEN", "TELEGRAM_TOKEN", "BOT_TOKEN",
+    "TELEGRAM_CHAT_ID", "CHAT_ID", "TG_CHAT_ID",
+    "SUPABASE_SERVICE_KEY", "BOTA_HEALTH_INGEST_SECRET",
+)
+# Must match r5_bootstrap.sitecustomize.R5_SENTINEL exactly; duplicated here
+# (rather than imported) because sitecustomize is only importable once R5
+# shadow activates it via PYTHONPATH, not as an ordinary package dependency.
+R5_SENTINEL_VALUE = "R5_SHADOW_NO_NETWORK"
+LIVE_DELIVERY_SECRET_PATH_ENV = "BOTA_LIVE_DELIVERY_SECRET_PATH"
+DEFAULT_LIVE_DELIVERY_SECRET_PATH = Path("/etc/bota/live-delivery.env")
+LIVE_DELIVERY_ALLOWED_KEYS = ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "SUPABASE_SERVICE_KEY")
+# Minimum keys each approved job needs, per the dual-delivery contract:
+# watcher fans out Telegram + Supabase/ProfitLab; profitlab_delivery only
+# republishes to Supabase; closer performs the SL/TP lifecycle PATCH plus its
+# independent Telegram closure sink; the daily summary gate is Telegram-only.
+R5_LIVE_DELIVERY_JOB_SECRET_KEYS = {
+    "watcher": ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "SUPABASE_SERVICE_KEY"),
+    "profitlab_delivery": ("SUPABASE_SERVICE_KEY",),
+    "closer": ("SUPABASE_SERVICE_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
+    "daily_summary_server_gate": ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
+}
+assert set(R5_LIVE_DELIVERY_JOB_SECRET_KEYS) == R5_LIVE_DELIVERY_JOBS
+LIVE_DELIVERY_ENV_LINE = re.compile(r"^([A-Z][A-Z0-9_]*)=(.*)$")
 POLICY_KEYS = (
     "PAIRS", "TIMEFRAMES", "POLICY_B_ENABLED", "POLICY_B_SCORE_MIN",
     "POLICY_B_ADX_MAX", "FILTER_SCORE_MIN", "FILTER_SCORE_MIN_ALL",
@@ -115,6 +148,70 @@ def load_frozen_policy(
         raise ContractError(f"policy_missing:{','.join(missing)}")
     effective.update(parsed)
     return {key: effective[key] for key in POLICY_KEYS}
+
+
+def _live_delivery_secret_path() -> Path:
+    override = os.environ.get(LIVE_DELIVERY_SECRET_PATH_ENV, "").strip()
+    return Path(override) if override else DEFAULT_LIVE_DELIVERY_SECRET_PATH
+
+
+def load_live_delivery_secrets(path: Path | None = None) -> dict[str, str]:
+    """Fail-closed parse of the external live-delivery secret source.
+
+    This is the *only* place real Telegram/Supabase credentials may enter an
+    approved child's environment once R5 shadow poisons the parent process
+    (see R5_SENSITIVE_ENV_ALIASES above). No shell eval: plain KEY=VALUE
+    lines, restricted to LIVE_DELIVERY_ALLOWED_KEYS, no duplicates, complete
+    (all three canonical keys present and non-empty), and the file must not
+    be group/other readable. Any violation raises ContractError so the caller
+    fails closed before the approved job is launched.
+    """
+    target = path if path is not None else _live_delivery_secret_path()
+    try:
+        mode = target.stat().st_mode
+    except OSError as exc:
+        raise ContractError("live_delivery_secret_source_unreadable") from exc
+    if not target.is_file():
+        raise ContractError("live_delivery_secret_source_unreadable")
+    if mode & 0o077:
+        raise ContractError("live_delivery_secret_source_insecure_permissions")
+    try:
+        lines = target.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise ContractError("live_delivery_secret_source_unreadable") from exc
+    parsed: dict[str, str] = {}
+    for number, raw in enumerate(lines, 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = LIVE_DELIVERY_ENV_LINE.fullmatch(line)
+        if not match:
+            raise ContractError(f"live_delivery_secret_source_malformed:line={number}")
+        key, value = match.groups()
+        if key not in LIVE_DELIVERY_ALLOWED_KEYS:
+            raise ContractError("live_delivery_secret_source_key_not_allowed")
+        if key in parsed:
+            raise ContractError("live_delivery_secret_source_duplicate_key")
+        value = _unquote(value.strip())
+        if not value or value == R5_SENTINEL_VALUE:
+            raise ContractError("live_delivery_secret_source_value_missing")
+        parsed[key] = value
+    missing = sorted(set(LIVE_DELIVERY_ALLOWED_KEYS) - parsed.keys())
+    if missing:
+        raise ContractError("live_delivery_secret_source_incomplete")
+    return parsed
+
+
+def _live_delivery_env_for_job(job: "Job") -> dict[str, str]:
+    """Return only the credential keys this approved job is allowed to see."""
+    keys = R5_LIVE_DELIVERY_JOB_SECRET_KEYS.get(job.name)
+    if not keys:
+        return {}
+    secrets = load_live_delivery_secrets()
+    missing = sorted(key for key in keys if not secrets.get(key))
+    if missing:
+        raise ContractError("live_delivery_secret_missing_required_key")
+    return {key: secrets[key] for key in keys}
 
 
 def parse_dependency_manifest(path: Path = DEPENDENCY_PATH) -> list[dict[str, str]]:
@@ -522,6 +619,10 @@ class Orchestrator:
             raise ContractError("release_python_unusable")
         if job is not None:
             env.update(job.env_overrides)
+            if job.name in R5_LIVE_DELIVERY_JOB_SECRET_KEYS:
+                for alias in R5_SENSITIVE_ENV_ALIASES:
+                    env.pop(alias, None)
+                env.update(_live_delivery_env_for_job(job))
         return env
 
     def health(self) -> dict[str, object]:
@@ -659,6 +760,9 @@ class Orchestrator:
                                       "deadline_seconds": stage_deadline,
                                       "exit_code": exit_code,
                                       "duration_seconds": round(time.monotonic() - stage_started, 6)})
+        except ContractError as exc:
+            status, failure = "LAUNCH_ERROR", str(exc)
+            failed_stage = current_stage
         except (OSError, ValueError) as exc:
             status, failure = "LAUNCH_ERROR", type(exc).__name__
             failed_stage = current_stage

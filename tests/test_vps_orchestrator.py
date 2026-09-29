@@ -24,6 +24,16 @@ sys.modules[SPEC.name] = vps
 SPEC.loader.exec_module(vps)
 
 
+def write_live_delivery_secrets(path: Path, **overrides: str) -> Path:
+    values = {"TELEGRAM_BOT_TOKEN": "test-token", "TELEGRAM_CHAT_ID": "test-chat",
+              "SUPABASE_SERVICE_KEY": "test-key"}
+    values.update(overrides)
+    path.write_text("".join(f"{key}={value}\n" for key, value in values.items()),
+                    encoding="utf-8")
+    path.chmod(0o600)
+    return path
+
+
 def wait_until(predicate, timeout=5.0):
     until = time.monotonic() + timeout
     while time.monotonic() < until:
@@ -357,6 +367,8 @@ class OrchestratorTests(unittest.TestCase):
     def test_updater_environment_is_exact_and_cannot_leak(self):
         jobs = {job.name: job for job in vps.production_jobs()}
         hostile = {"TIMEFRAMES": "HOSTILE", "FETCH_RETRIES": "999"}
+        secrets = write_live_delivery_secrets(self.mutable / "live-delivery.env")
+        hostile[vps.LIVE_DELIVERY_SECRET_PATH_ENV] = str(secrets)
         with mock.patch.dict(os.environ, hostile):
             orch = self.orch()
             updater = orch.child_env(jobs["updater"])

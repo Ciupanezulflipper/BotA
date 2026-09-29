@@ -21,9 +21,20 @@ this Telegram attempt.
 Per-signal-id durable state prevents a duplicate Telegram closure message
 on watcher/cron restart or retry: once a signal_id is durably marked
 "sent", every subsequent call for that same signal_id is a no-op.
+
+The state file also doubles as a safe retry outbox. If Supabase already
+closed the row but this module could not confirm a Telegram send (missing
+credentials, or a definite HTTP rejection), the non-secret closure payload
+(signal_id, pair, direction, closure_status, result_pips, entry) is kept
+durably in a retryable status so ``retry_pending_closures()`` can resend it
+on a later run without requiring the signal to still be ACTIVE in Supabase.
+An "unknown_outcome" (indeterminate network/response state) is never
+retried automatically, since a duplicate send cannot be ruled out.
 """
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import os
 import sys
@@ -32,7 +43,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
+
+RETRYABLE_STATUSES = frozenset({"definite_failure", "missing_credentials"})
 
 
 def mutable_root() -> Path:
@@ -42,10 +55,37 @@ def mutable_root() -> Path:
     return Path(value or Path.home() / "BotA").expanduser().resolve()
 
 
-def state_path(signal_id: str) -> Path:
+def _state_dir() -> Path:
     directory = mutable_root() / "state" / "telegram_closure"
     directory.mkdir(parents=True, exist_ok=True)
-    return directory / f"{signal_id}.json"
+    return directory
+
+
+def state_path(signal_id: str) -> Path:
+    return _state_dir() / f"{signal_id}.json"
+
+
+def _lock_path(signal_id: str) -> Path:
+    return _state_dir() / f"{signal_id}.lock"
+
+
+@contextlib.contextmanager
+def _signal_lock(signal_id: str) -> Iterator[None]:
+    """Serialize read-state/intent/send/state-transition per signal_id.
+
+    Uses a dedicated lock file (not the state JSON itself) so a crash mid
+    write never leaves a stale exclusive lock baked into the state file's
+    own lifecycle. flock() is scoped to the open file description, so two
+    independent open() calls -- from separate threads or separate closer
+    invocations -- block each other even within the same process.
+    """
+    lock_path = _lock_path(signal_id)
+    with open(lock_path, "a+", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _write_json_durable(path: Path, payload: dict[str, Any]) -> None:
@@ -143,44 +183,90 @@ def send_closure(
     attempt that must not be blindly resent). Never raises: a Telegram
     problem here must never propagate into the caller's Supabase lifecycle
     update.
+
+    The Supabase row may already be CLOSED by the time this fails, so every
+    non-terminal outcome durably persists the closure payload (no secrets)
+    under a retryable status. retry_pending_closures() is the only other
+    caller allowed to resend from that durable state.
     """
+    payload = {"signal_id": signal_id, "pair": pair, "direction": direction,
+               "closure_status": status, "result_pips": result_pips, "entry": entry}
     try:
-        path = state_path(signal_id)
-        prior = _read_state(path)
-        if prior:
-            prior_status = str(prior.get("status", ""))
-            if prior_status == "sent":
-                return True
-            if prior_status in {"intent", "unknown_outcome"}:
-                print(
-                    f"[telegram_closure] BLOCK signal_id={signal_id} unknown_outcome_no_blind_resend",
-                    file=sys.stderr,
-                )
+        with _signal_lock(signal_id):
+            path = state_path(signal_id)
+            prior = _read_state(path)
+            if prior:
+                prior_status = str(prior.get("status", ""))
+                if prior_status == "sent":
+                    return True
+                if prior_status in {"intent", "unknown_outcome"}:
+                    print(
+                        f"[telegram_closure] BLOCK signal_id={signal_id} unknown_outcome_no_blind_resend",
+                        file=sys.stderr,
+                    )
+                    return False
+
+            token, chat_id = _telegram_credentials()
+            if not token or not chat_id:
+                _write_json_durable(path, {**payload, "status": "missing_credentials"})
+                print(f"[telegram_closure] SKIP signal_id={signal_id} credentials_missing", file=sys.stderr)
                 return False
 
-        token, chat_id = _telegram_credentials()
-        if not token or not chat_id:
-            print(f"[telegram_closure] SKIP signal_id={signal_id} credentials_missing", file=sys.stderr)
-            return False
+            message = format_closure_message(pair, direction, status, result_pips, entry)
+            _write_json_durable(path, {**payload, "status": "intent"})
 
-        message = format_closure_message(pair, direction, status, result_pips, entry)
-        intent = {"status": "intent", "signal_id": signal_id, "pair": pair,
-                  "direction": direction, "closure_status": status}
-        _write_json_durable(path, intent)
-
-        outcome, detail = _send_request(message, token, chat_id)
-        if outcome == "sent":
-            _write_json_durable(path, {**intent, **detail, "status": "sent"})
-            print(f"[telegram_closure] SENT signal_id={signal_id} message_id={detail['message_id']}",
-                  file=sys.stderr)
-            return True
-        if outcome == "definite_failure":
-            _write_json_durable(path, {**intent, **detail, "status": "definite_failure"})
-            print(f"[telegram_closure] FAILED signal_id={signal_id} definite_rejection", file=sys.stderr)
+            outcome, detail = _send_request(message, token, chat_id)
+            if outcome == "sent":
+                _write_json_durable(path, {**payload, **detail, "status": "sent"})
+                print(f"[telegram_closure] SENT signal_id={signal_id} message_id={detail['message_id']}",
+                      file=sys.stderr)
+                return True
+            if outcome == "definite_failure":
+                _write_json_durable(path, {**payload, **detail, "status": "definite_failure"})
+                print(f"[telegram_closure] FAILED signal_id={signal_id} definite_rejection", file=sys.stderr)
+                return False
+            _write_json_durable(path, {**payload, **detail, "status": "unknown_outcome"})
+            print(f"[telegram_closure] UNKNOWN_OUTCOME signal_id={signal_id}", file=sys.stderr)
             return False
-        _write_json_durable(path, {**intent, **detail, "status": "unknown_outcome"})
-        print(f"[telegram_closure] UNKNOWN_OUTCOME signal_id={signal_id}", file=sys.stderr)
-        return False
     except Exception as exc:  # noqa: BLE001 - closure notification must never crash the caller
         print(f"[telegram_closure] ERROR signal_id={signal_id} {type(exc).__name__}", file=sys.stderr)
         return False
+
+
+def retry_pending_closures() -> dict[str, int]:
+    """Scan the durable outbox and retry only retryable closure states.
+
+    Only entries whose persisted status is "definite_failure" or
+    "missing_credentials" are retried -- both mean the Telegram closure
+    attempt never definitely happened. "sent" is terminal and "unknown_outcome"
+    (and a leftover "intent" from a crash mid-send) are deliberately never
+    retried automatically since a duplicate send cannot be ruled out.
+
+    Every file in the outbox directory is treated as untrusted input: this
+    only ever resends payloads durably written by send_closure() itself, so
+    malformed, unrelated, or historical files are skipped rather than raised.
+    """
+    summary = {"candidates": 0, "sent": 0, "skipped": 0}
+    directory = _state_dir()
+    for path in sorted(directory.glob("*.json")):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            summary["skipped"] += 1
+            continue
+        if not isinstance(record, dict) or record.get("status") not in RETRYABLE_STATUSES:
+            continue
+        try:
+            signal_id = str(record["signal_id"])
+            pair = str(record["pair"])
+            direction = str(record["direction"])
+            closure_status = str(record["closure_status"])
+            result_pips = float(record["result_pips"])
+            entry = float(record["entry"])
+        except (KeyError, TypeError, ValueError):
+            summary["skipped"] += 1
+            continue
+        summary["candidates"] += 1
+        if send_closure(signal_id, pair, direction, closure_status, result_pips, entry):
+            summary["sent"] += 1
+    return summary
