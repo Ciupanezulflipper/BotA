@@ -45,6 +45,13 @@ import sys
 import time
 import urllib.request
 from datetime import datetime, timezone
+from pathlib import Path
+
+if __package__:
+    from tools import bota_common as common
+else:  # direct execution or file-based module loading
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools import bota_common as common
 
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -83,8 +90,7 @@ def log(msg: str) -> None:
         pass
 
 
-def pip_size(pair: str) -> float:
-    return 0.01 if "JPY" in pair.upper() else 0.0001
+pip_size = common.fx_pip_size
 
 
 def pips(diff: float, pair: str) -> float:

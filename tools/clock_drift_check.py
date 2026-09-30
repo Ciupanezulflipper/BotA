@@ -21,6 +21,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+if __package__:
+    from tools import bota_common as common
+else:  # direct execution or file-based module loading
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools import bota_common as common
+
 
 DEFAULT_URLS = [
     "https://www.google.com",
@@ -42,8 +48,7 @@ class ServerClockResult:
     reason: str
 
 
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+utc_now = common.utc_now
 
 
 def iso_z(dt: datetime) -> str:

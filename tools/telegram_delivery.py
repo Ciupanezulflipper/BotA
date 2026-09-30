@@ -30,16 +30,14 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-LEGACY_FIELDS = (
-    "timestamp", "pair", "tf", "direction", "score", "confidence", "entry", "sl", "tp",
-    "provider", "rejected", "filter_str", "reasons",
-)
-CURRENT_FIELDS = (
-    "ts", "pair", "tf", "direction", "score", "confidence", "entry", "sl", "tp", "provider",
-    "filter_rejected", "filter_reasons", "reasons", "ema_comp", "rsi_comp", "macd_comp",
-    "adx_comp", "adx_raw", "rsi_raw", "macd_hist_raw", "macro6", "h1_trend", "tier", "session",
-    "adx_regime",
-)
+if __package__:
+    from tools import bota_common as common
+else:  # direct execution or file-based module loading
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools import bota_common as common
+
+LEGACY_FIELDS = common.LEGACY_ALERT_FIELDS
+CURRENT_FIELDS = common.CURRENT_ALERT_FIELDS
 PAIR_RE = re.compile(r"\bBotA\s+([A-Z]{6})\s+([A-Z0-9]+)\s+(BUY|SELL)\b")
 SCORE_RE = re.compile(r"(?:Score:\s*|score=)([0-9]+(?:\.[0-9]+)?)", re.I)
 ENTRY_RE = re.compile(r"Entry:\s*([0-9]+(?:\.[0-9]+)?)", re.I)
@@ -56,8 +54,7 @@ def root_path() -> Path:
     return Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA"))).expanduser().resolve()
 
 
-def truthy(value: Any) -> bool:
-    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+truthy = common.truthy
 
 
 def parse_message(message: str) -> dict[str, str]:

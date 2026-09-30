@@ -16,17 +16,20 @@ import os
 import sys
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
+
+if __package__:
+    from tools import bota_common as common
+else:  # direct execution or file-based module loading
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools import bota_common as common
 
 SCHEMA_VERSION = "1.0"
 KNOWN_PROVIDERS = {"oanda", "yahoo", "twelvedata", "unknown"}
 
 
-def utc_now() -> datetime:
-    """Return an aware UTC timestamp."""
-    return datetime.now(timezone.utc)
+utc_now = common.utc_now
 
 
 def utc_day() -> str:
