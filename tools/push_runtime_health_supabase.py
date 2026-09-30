@@ -21,6 +21,7 @@ import os
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +30,7 @@ from typing import Any
 BOT_ID = "bota-termux-primary"
 DEFAULT_FUNCTION_URL = "https://ozgkeslgjqbqfewojnmr.supabase.co/functions/v1/bot-health-ingest"
 DEFAULT_SECRET_ENV = "BOTA_HEALTH_INGEST_SECRET"
+ALLOWED_INGEST_HOSTS = {"ozgkeslgjqbqfewojnmr.supabase.co"}
 MAX_TEXT = 240
 ALLOWED_BOT_MODES = {"HEALTHY", "DEGRADED", "UNKNOWN"}
 
@@ -177,6 +179,20 @@ def build_payload(root: Path) -> dict[str, Any]:
     return payload
 
 
+def validate_ingest_url(url: str) -> str | None:
+    """Reject any destination that must never receive the ingest secret."""
+    parsed = urllib.parse.urlparse(url)
+
+    if parsed.scheme != "https":
+        return "scheme_not_https"
+    if parsed.hostname not in ALLOWED_INGEST_HOSTS:
+        return "host_not_allowed"
+    if parsed.username or parsed.password:
+        return "credentials_in_url"
+
+    return None
+
+
 def post_payload(url: str, secret: str, payload: dict[str, Any]) -> tuple[int, str]:
     body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
 
@@ -217,6 +233,11 @@ def main() -> int:
     secret = os.environ.get(args.secret_env, "")
     if not secret:
         print(f"SEND_BLOCKED_MISSING_ENV={args.secret_env}", file=sys.stderr)
+        return 2
+
+    url_error = validate_ingest_url(args.url)
+    if url_error:
+        print(f"SEND_BLOCKED_INVALID_URL={url_error}", file=sys.stderr)
         return 2
 
     status, text = post_payload(args.url, secret, payload)

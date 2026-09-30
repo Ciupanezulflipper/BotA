@@ -25,7 +25,7 @@ def _throttle(name: str, per_min: int):
 def _dedupe(x: list):
     seen, out = set(), []
     for it in x:
-        k = it.get("id") or hashlib.sha1((it.get("url","")+it.get("title","")).encode()).hexdigest()[:12]
+        k = it.get("id") or hashlib.sha1((it.get("url","")+it.get("title","")).encode(), usedforsecurity=False).hexdigest()[:12]
         if k in seen: continue
         seen.add(k); it["id"] = k; out.append(it)
     return out

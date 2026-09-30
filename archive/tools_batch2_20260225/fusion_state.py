@@ -30,7 +30,7 @@ class DecisionGate:
 
     def signature(self, symbol: str, decision: str, tech_bucket: str, news_bucket: str) -> str:
         raw = f"{symbol}|{decision}|{tech_bucket}|{news_bucket}"
-        return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+        return hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
 
     def should_send(self, symbol: str, sig_hex: str) -> bool:
         st = _load()
