@@ -36,7 +36,8 @@ LIVE_DELIVERY_CONTRACT=PASS
 
 TELEGRAM_CREDENTIAL_VALIDATED=YES
 SUPABASE_SERVICE_CREDENTIAL_VALIDATED=YES
-REAL_TELEGRAM_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
+REAL_TELEGRAM_NON_TRADING_DELIVERY_POST_ACTIVATION=PASS
+REAL_TELEGRAM_TRADING_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
 REAL_PROFITLAB_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
 DELIVERY_NOT_OBSERVED_REASON=NO_QUALIFIED_SIGNAL_IN_SAMPLED_POST_ACTIVATION_CYCLES
 
@@ -67,6 +68,18 @@ MAINPID=4104125
 ```
 
 The release is live on Hetzner and configured to start automatically after reboot.
+
+## Real Telegram proof
+
+A bounded, explicitly non-trading system message was sent from the Hetzner production environment using the scoped production Telegram credentials.
+
+```text
+TELEGRAM_REAL_SEND=PASS
+```
+
+Therefore Hetzner → Telegram external delivery is proven after activation.
+
+This is distinct from proving one genuine watcher-generated trading signal, which remains pending because no sampled setup qualified.
 
 ## Provider/lifecycle proof
 
@@ -123,6 +136,7 @@ LIVE_DELIVERY_FILE=/etc/bota/live-delivery.env
 LIVE_DELIVERY_FILE_MODE=600
 LIVE_DELIVERY_FILE_OWNER=bota:bota
 LIVE_DELIVERY_CONTRACT=PASS
+TELEGRAM_REAL_SEND=PASS
 ```
 
 The ProfitLab delivery cursor advanced after activation and was caught up to the source at the sampled checkpoint:
@@ -134,14 +148,14 @@ The ProfitLab delivery cursor advanced after activation and was caught up to the
 Current interpretation:
 
 ```text
-TELEGRAM_DELIVERY_PATH=ARMED
+TELEGRAM_EXTERNAL_DELIVERY=PROVEN
 PROFITLAB_DELIVERY_PATH=ARMED
-REAL_POST_ACTIVATION_TELEGRAM_SIGNAL_PROVEN=NO
+REAL_POST_ACTIVATION_TELEGRAM_TRADING_SIGNAL_PROVEN=NO
 REAL_POST_ACTIVATION_PROFITLAB_SIGNAL_PROVEN=NO
 WHY=NO_QUALIFIED_SIGNAL_OCCURRED_YET
 ```
 
-Do not claim end-to-end delivery is proven until one real qualified signal or one supported non-trading dual-sink smoke test is observed through both sinks.
+Do not claim full dual-sink trading-signal delivery is proven until one real qualified signal is observed through both sinks.
 
 ## R5 shadow interpretation
 
@@ -199,7 +213,8 @@ HETZNER_RUNTIME=PASS
 PROVIDER_LIFECYCLE=PASS
 CREDENTIAL_CONTRACT=PASS
 NATURAL_SCAN_EXECUTION=PASS
-REAL_DUAL_SINK_SIGNAL_DELIVERY=PENDING_EMPIRICAL_PROOF
+TELEGRAM_EXTERNAL_DELIVERY=PASS
+REAL_DUAL_SINK_TRADING_SIGNAL_DELIVERY=PENDING_EMPIRICAL_PROOF
 ```
 
 ## AI execution rule
@@ -234,4 +249,4 @@ Still-valid historical/current evidence:
 
 ## Exactly one next action
 
-Obtain one bounded dual-sink delivery proof without changing strategy. Prefer an existing supported non-trading delivery smoke-test path if one exists; otherwise observe the next natural qualified signal. Do not manufacture or force a production trading signal solely to satisfy acceptance.
+Observe the next natural qualified GREEN signal and prove the same signal reaches Telegram and Supabase/ProfitLab. Do not manufacture or force a production trading signal solely to satisfy acceptance.
