@@ -1,8 +1,8 @@
 # BotA Current Continuity State
 
-Last updated: **2026-09-27 UTC**
+Last updated: **2026-10-06 UTC**
 
-This is the current operational handoff. Historical audits and strategy records remain preserved as dated evidence. Forward recovery scope is governed by `docs/BOTA_EXECUTION_RECOVERY_PRD_2026-09-27.md`.
+This is the current operational handoff. Historical audits and strategy records remain preserved as dated evidence. The latest production activation proof is `audits/BOTA_HETZNER_PRODUCTION_ACTIVATION_2026-10-06.md`.
 
 ## Current authoritative status
 
@@ -13,103 +13,152 @@ PROFITLAB_SIGNAL_DISPLAY_REQUIRED=YES
 PROFITLAB_COMMERCIAL_EXPANSION=NO
 DUAL_DELIVERY_REQUIRED=TELEGRAM+PROFITLAB
 PRIMARY_RUNTIME_TARGET=HETZNER
-CURRENT_HETZNER_RUNTIME_STATE=ACTIVE_SCANNING_BUT_USER_DELIVERY_BLOCKED
+CURRENT_HETZNER_RUNTIME_STATE=ACTIVE_ON_4424518
 ANDROID_ACTIVE_SCANNER=NO
 ANDROID_ROLE=CONTROL_AND_OBSERVATION_ONLY
-MODE=EXECUTION_RECOVERY
-PR134_DEPLOYED=YES
-PR134_MERGED=NO
+MODE=EXECUTION_RECOVERY_ACCEPTANCE
+
+DEPLOYED_RELEASE=4424518e7b42ecf2a070967d626a9ac86bf04d53
+DEPLOYED_TREE=9e76b0b37012a2276cd36301e3e7267b1b6674d8
+DEPLOYMENT_PHASE=COMPLETE
+DEPLOYMENT_HEALTHY=YES
+ROLLBACK_USED=NO
+BOTA_SERVICE=active
+BOTA_SERVICE_ENABLED=enabled
+TARGET_RUNTIME_INSTANCE_ID=71c3cc1e-a1be-4bc6-8a23-3738eb70ba35
+
 THREE_PAIR_M15_SCAN=RUNNING
 MARKET_DATA=UPDATING
-PIPELINE=UPDATING
+PROVIDER_CONTRACT=YAHOO
+SIGNAL_CLOSER=RUNNING
+PROFITLAB_DELIVERY_WORKER=RUNNING_AND_CAUGHT_UP_AT_SAMPLED_CHECKPOINT
+LIVE_DELIVERY_CONTRACT=PASS
+
+TELEGRAM_CREDENTIAL_VALIDATED=YES
+SUPABASE_SERVICE_CREDENTIAL_VALIDATED=YES
+REAL_TELEGRAM_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
+REAL_PROFITLAB_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
+DELIVERY_NOT_OBSERVED_REASON=NO_QUALIFIED_SIGNAL_IN_SAMPLED_POST_ACTIVATION_CYCLES
+
 BOTA_R5_SHADOW=1
 BOTA_REQUIRE_R5_SHADOW=1
-REAL_TELEGRAM_SIGNAL_DELIVERY=BLOCKED_BY_SHADOW_BOUNDARY
-REAL_PROFITLAB_SIGNAL_DELIVERY=BLOCKED_BY_SHADOW_BOUNDARY
-REAL_DAILY_REPORT_DELIVERY=BLOCKED_BY_SHADOW_BOUNDARY
-SUPABASE_SIDE_EFFECTS=SUPPRESSED_BY_SHADOW_BOUNDARY
+PARENT_SIDE_EFFECTS_ENABLED=NO
+APPROVED_CHILD_LIVE_DELIVERY=SCOPED_CREDENTIALS_ONLY
+
 STRATEGY_TUNING=NO
 PAIR_CHANGES=NO
 TIMEFRAME_CHANGES=NO
 FORCED_SIGNAL_GENERATION=NO
-RECOVERY_PRD=docs/BOTA_EXECUTION_RECOVERY_PRD_2026-09-27.md
-NEXT_ACTION=CLAUDE_CODE_SINGLE_WRITER_DUAL_DELIVERY_RECOVERY_THEN_ONE_ASTRA_CODEX_RED_TEAM
 ```
 
-## Latest direct Hetzner proof — 2026-09-23 UTC
+## Latest direct Hetzner proof — 2026-10-06 UTC
 
-Read-only Termux→Hetzner evidence proved:
+Production deployment completed successfully:
 
 ```text
-CURRENT_RELEASE=/opt/bota/releases/d81c0a3da3363089ed200e264ae066fdf15fb5ba
-BOTA_SERVICE=active
-ActiveState=active
-SubState=running
-ExecMainStatus=0
-NRestarts=0
-ORCHESTRATOR_LIFECYCLE=RUNNING
-ORCHESTRATOR_LIVENESS=True
-RUNTIME_INSTANCE_ID=7a0284b0-7406-4a1b-91a8-eba0548e6169
-LAST_LOOP_PROGRESS_UTC=2026-09-23T18:53:18.366554Z
-FILES_UPDATED_SINCE_SEP19=64
-ALERTS_CSV=UPDATING
-PIPELINE_EVENTS=UPDATING
-PROVIDER_DATA=UPDATING
-BOTA_R5_SHADOW=1
-BOTA_REQUIRE_R5_SHADOW=1
+PREVIOUS_RELEASE=d81c0a3da3363089ed200e264ae066fdf15fb5ba
+CURRENT_RELEASE=/opt/bota/releases/4424518e7b42ecf2a070967d626a9ac86bf04d53
+DEPLOYMENT_ID=60de921f-1020-4e55-b6ff-0b03d3548e63
+DEPLOYMENT_PHASE=COMPLETE
+HEALTHY=true
+SERVICE_ACTIVE=active
+SERVICE_ENABLED=enabled
+MAINPID=4104125
 ```
 
-Therefore Hetzner is not dead and the scanner is not generally stopped.
+The release is live on Hetzner and configured to start automatically after reboot.
 
-## Proven delivery blocker
+## Provider/lifecycle proof
 
-`r5_bootstrap/sitecustomize.py` is active when `BOTA_R5_SHADOW=1`. It:
+The provider/lifecycle repair is active with Yahoo as the production candle provider.
 
-- replaces sensitive Telegram/Supabase credentials with the R5 sentinel;
-- suppresses Telegram and Supabase external side effects;
-- returns deterministic synthetic success responses for intercepted paths;
-- forces `HEARTBEAT_DRY_RUN=1`;
-- forces `DAILY_SUMMARY_GATE_DRY_RUN=1`;
-- forces `DAILY_SUMMARY_SEND=0`;
-- forces `RUNTIME_HEALTH_PUSH_DRY_RUN=1`.
+Post-activation evidence showed fresh Yahoo cache/candle/indicator updates for EURUSD, GBPUSD and USDJPY across M15/H1/H4/D1, plus advancing provider-accounting state.
+
+The signal closer ran after activation with:
 
 ```text
-DRY_RUN_ORIGIN=PROVEN_R5_SHADOW_BOOTSTRAP
-DAILY_REPORT_CODE_DEFECT=NOT_PROVEN
-HETZNER_RUNTIME_DEAD=NO
-REAL_USER_DELIVERY_WORKING=NO
+provider=yahoo
+dry_run=False
+ACTIVE_SIGNALS=0
+TELEGRAM_RETRY_CANDIDATES=0
 ```
 
-## Telegram credential state
+No historical pending Telegram closure retry files were present immediately before activation.
 
-A later attempted collect/report cutover stopped before runtime mutation because a recovered historical Telegram token failed Telegram `getMe` authentication.
+## Watcher proof
+
+Natural market-open watcher cycles completed at 08:45, 08:50 and 08:55 UTC on 2026-10-06.
+
+Each sampled cycle evaluated:
+
+- EURUSD M15
+- GBPUSD M15
+- USDJPY M15
+
+Each sampled cycle completed with:
 
 ```text
-CUTOVER_COMPLETED=NO
-R5_SHADOW_REMOVED=NO
-RECOVERED_TELEGRAM_TOKEN=INVALID_OR_STALE
-VALID_CURRENT_TELEGRAM_CREDENTIAL=UNRESOLVED
+run_rc=0
+terminal_outcome=EVALUATED_REJECTED
 ```
 
-## ProfitLab path — verified 2026-09-27
+No sampled candidate qualified under the frozen strategy, so the ledger correctly recorded:
 
-The existing second delivery path does not need a new dashboard build.
+```text
+telegram_result=not_attempted
+supabase_result=not_attempted
+```
 
-Repository/Lovable inspection proved:
+This is not a delivery failure. It means there was no qualified signal to send.
 
-- `tools/profitlab_delivery.py` independently consumes accepted GREEN rows from `logs/alerts.csv` using its own durable cursor and retries publication;
-- `tools/supabase_publish.py` writes ACTIVE signals into the shared Supabase `public.signals` table with deduplication;
-- deployed `vps_orchestrator.py` schedules `profitlab_delivery.py` every minute;
-- `tools/signal_closer.py` updates signal lifecycle/result fields in Supabase;
-- the published Lovable ProfitLab project uses the same Supabase project, supports EURUSD/GBPUSD/USDJPY, subscribes to `signals` INSERT/UPDATE changes, and renders ACTIVE/CLOSED/CANCELLED outcomes.
+## Telegram and ProfitLab delivery state
 
-Historical Package 7 evidence also proves the ProfitLab cursor/reconciliation mechanism operated successfully before the later R5 shadow cutover.
+Credential validation and runtime contract:
 
-The current defect is therefore not “ProfitLab does not exist.” The current defect is that R5 shadow suppresses the real Supabase network path, while Telegram is also suppressed.
+```text
+TELEGRAM_API_TOKEN_VALIDATED=YES
+TELEGRAM_CHAT_ROUTE_VALIDATED=YES
+SUPABASE_SERVICE_KEY_VALIDATED=YES
+LIVE_DELIVERY_FILE=/etc/bota/live-delivery.env
+LIVE_DELIVERY_FILE_MODE=600
+LIVE_DELIVERY_FILE_OWNER=bota:bota
+LIVE_DELIVERY_CONTRACT=PASS
+```
 
-## Dual-delivery recovery decision — 2026-09-27
+The ProfitLab delivery cursor advanced after activation and was caught up to the source at the sampled checkpoint:
 
-A qualified signal must fan out to **both** user-visible sinks:
+```json
+{"offset": 2896918, "schema_version": "1.0", "source_size": 2896918}
+```
+
+Current interpretation:
+
+```text
+TELEGRAM_DELIVERY_PATH=ARMED
+PROFITLAB_DELIVERY_PATH=ARMED
+REAL_POST_ACTIVATION_TELEGRAM_SIGNAL_PROVEN=NO
+REAL_POST_ACTIVATION_PROFITLAB_SIGNAL_PROVEN=NO
+WHY=NO_QUALIFIED_SIGNAL_OCCURRED_YET
+```
+
+Do not claim end-to-end delivery is proven until one real qualified signal or one supported non-trading dual-sink smoke test is observed through both sinks.
+
+## R5 shadow interpretation
+
+The parent orchestrator remains R5-shadowed and reports `side_effects_enabled=false`. This is intentional.
+
+The repaired design keeps the parent fail-closed while only the approved live jobs receive scoped credentials:
+
+- watcher
+- profitlab_delivery
+- closer
+- daily_summary_server_gate
+
+Therefore `r5_shadow=true` at the parent is not evidence that those approved child delivery paths are disabled.
+
+## Dual-delivery recovery contract
+
+A qualified signal must fan out to both user-visible sinks:
 
 ```text
 qualified signal
@@ -117,7 +166,7 @@ qualified signal
    └─→ Supabase public.signals → ProfitLab
 ```
 
-Failure isolation is part of acceptance:
+Failure isolation remains required:
 
 ```text
 TELEGRAM_FAILURE_MUST_NOT_BLOCK_PROFITLAB=YES
@@ -126,39 +175,32 @@ PROFITLAB_RETRY_MUST_NOT_DUPLICATE_TELEGRAM=YES
 BOTH_HEALTHY_EXACTLY_ONCE_PER_SINK=YES
 ```
 
-## Historical natural signal evidence
-
-The September 15 natural-runtime proof remains valid for that inspected window:
-
-```text
-MARKET_OPEN_COMPLETED_CYCLES=212
-EURUSD_M15_DECISIONS=212
-GBPUSD_M15_DECISIONS=212
-USDJPY_M15_DECISIONS=212
-THREE_PAIR_COMPLETE_CYCLES=212
-POST_REOPEN_NON_FILTER_REJECTED=0
-TELEGRAM_RESULTS={not_attempted:636}
-SUPABASE_RESULTS={not_attempted:636}
-```
-
-No genuine qualified signal occurred in that sampled window. Even a zero-signal day must still deliver the real daily Telegram report after recovery.
-
 ## Acceptance gate
 
-BotA is not finished until all are proven:
+BotA is not fully accepted until all are proven:
 
-1. three-pair M15 scanning;
+1. three-pair M15 scan;
 2. fresh/timeframe-correct market data;
-3. auditable decision every scan;
+3. auditable terminal decision every scan;
 4. genuine qualified signal reaches real Telegram;
 5. the same qualified signal becomes visible in ProfitLab;
 6. either sink can fail without blocking the other;
-7. ProfitLab catch-up does not duplicate Telegram;
-8. SL/TP lifecycle/result is visible in ProfitLab and Telegram closure is delivered;
+7. retries/restarts do not duplicate either sink;
+8. closure/result appears in ProfitLab and Telegram closure is delivered;
 9. zero-signal daily report reaches real Telegram;
 10. clean restart recovery and independent deduplication;
-11. no forced production signal required for natural acceptance;
+11. no forced production trading signal required for natural acceptance;
 12. GitHub + Obsidian match deployed runtime.
+
+Current closure position:
+
+```text
+HETZNER_RUNTIME=PASS
+PROVIDER_LIFECYCLE=PASS
+CREDENTIAL_CONTRACT=PASS
+NATURAL_SCAN_EXECUTION=PASS
+REAL_DUAL_SINK_SIGNAL_DELIVERY=PENDING_EMPIRICAL_PROOF
+```
 
 ## AI execution rule
 
@@ -170,11 +212,15 @@ ASTRA_CODEX=ONE_BOUNDED_FINAL_RED_TEAM_REVIEW
 CONCURRENT_IMPLEMENTATION_WRITERS=NO
 ```
 
-Claude Code is selected because this repair spans Python, Bash, R5 network/credential interception, systemd/orchestrator behavior, Telegram, Supabase and crash/failure semantics across two sinks. Cursor must not concurrently rewrite the same candidate.
+Do not start a new broad audit. Use one bounded acceptance check at a time.
 
 ## Canonical records
 
-Current forward contract:
+Current activation proof:
+
+- `audits/BOTA_HETZNER_PRODUCTION_ACTIVATION_2026-10-06.md`
+
+Recovery contract:
 
 - `docs/BOTA_EXECUTION_RECOVERY_PRD_2026-09-27.md`
 
@@ -188,4 +234,4 @@ Still-valid historical/current evidence:
 
 ## Exactly one next action
 
-Create a fresh local recovery workspace from the exact deployed PR #134 head `d81c0a3da3363089ed200e264ae066fdf15fb5ba`, then launch **Claude Code** there as the sole implementation writer for the dual-delivery recovery. Do not use the broken `Cursor-BotA-Audit/BotA` checkout, do not tune strategy, and do not mutate Hetzner until an exact candidate is reviewed and explicitly authorized.
+Obtain one bounded dual-sink delivery proof without changing strategy. Prefer an existing supported non-trading delivery smoke-test path if one exists; otherwise observe the next natural qualified signal. Do not manufacture or force a production trading signal solely to satisfy acceptance.
