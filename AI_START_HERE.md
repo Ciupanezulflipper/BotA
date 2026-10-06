@@ -1,6 +1,6 @@
 # BotA AI Start Here
 
-Last updated: **2026-09-04 UTC**
+Last updated: **2026-10-06 UTC**
 
 Read this before proposing any BotA strategy, deployment, Telegram, ProfitLab, Android/Termux, VPS/Hetzner, replay, historical-data, or runtime action.
 
@@ -15,24 +15,88 @@ HISTORICAL_CORPUS_GATE_RESULT=FAIL_195_LT_400
 LIVE_MONEY_TRADING=NO
 COMMERCIAL_PROFITLAB=NO
 PRIVATE_PROFITLAB_ANALYTICS=YES
+
 PRIMARY_RUNTIME_TARGET=HETZNER
-CURRENT_HETZNER_RUNTIME_STATE=UNPROVEN
+CURRENT_HETZNER_RUNTIME_STATE=ACTIVE
+DEPLOYED_RELEASE=4424518e7b42ecf2a070967d626a9ac86bf04d53
+BOTA_SERVICE=active
+BOTA_SERVICE_ENABLED=enabled
+PROVIDER_CONTRACT=YAHOO
+THREE_PAIR_M15_SCAN=RUNNING
+MARKET_DATA=UPDATING
+SIGNAL_CLOSER=RUNNING
+PROFITLAB_DELIVERY_WORKER=RUNNING
+LIVE_DELIVERY_CONTRACT=PASS
+
+TELEGRAM_CREDENTIAL_VALIDATED=YES
+SUPABASE_SERVICE_CREDENTIAL_VALIDATED=YES
+REAL_TELEGRAM_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
+REAL_PROFITLAB_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
+DELIVERY_NOT_OBSERVED_REASON=NO_QUALIFIED_SIGNAL_IN_SAMPLED_POST_ACTIVATION_CYCLES
+
 ANDROID_ACTIVE_SCANNER=NO
-NEXT_PHASE=STAGE_0_MEASUREMENT_PILOT
-PILOT_STARTED=NO
-STRATEGY_TUNING_DURING_PILOT=NO
-MEASUREMENT_HARDENING_DURING_PILOT=YES
-NEXT_ACTION=READ_ONLY_HETZNER_FORENSIC_INSPECTION
+ANDROID_ROLE=CONTROL_AND_OBSERVATION_ONLY
+STRATEGY_TUNING=NO
+PAIR_CHANGES=NO
+TIMEFRAME_CHANGES=NO
+FORCED_SIGNAL_GENERATION=NO
+
+NEXT_ACTION=ONE_BOUNDED_DUAL_SINK_DELIVERY_PROOF_WITHOUT_STRATEGY_CHANGE
 FURTHER_BROAD_AI_REVIEW=STOP
 ```
 
-Canonical current decision:
+Current production activation evidence:
 
-`audits/BOTA_SHADOW_REOPEN_MEASUREMENT_PILOT_2026-09-04.md`
+`audits/BOTA_HETZNER_PRODUCTION_ACTIVATION_2026-10-06.md`
 
-Historical closure record remains valid historical evidence:
+Current operational handoff:
 
-`audits/FINAL_STRATEGY_CLOSURE_2026-09-03.md`
+`CONTINUITY_CURRENT.md`
+
+Historical strategy/research authority remains preserved in the dated records below.
+
+## Production runtime interpretation
+
+Hetzner is now proven active on exact release:
+
+```text
+4424518e7b42ecf2a070967d626a9ac86bf04d53
+```
+
+The production deployer completed with `healthy=true`, phase `COMPLETE`, and no rollback. The service is active and enabled.
+
+Post-activation watcher evidence shows natural market-open cycles completing for EURUSD, GBPUSD and USDJPY M15. The sampled cycles were all `EVALUATED_REJECTED`, so Telegram and Supabase were correctly `not_attempted`.
+
+Do not misstate this as a delivery failure. It means no qualified signal existed in the sampled post-activation window.
+
+The parent orchestrator remains R5-shadowed/fail-closed. Approved child jobs receive scoped live credentials. Therefore parent `side_effects_enabled=false` does not mean the approved child delivery paths are disabled.
+
+## Delivery proof boundary
+
+Already proven:
+
+```text
+TELEGRAM_API_CREDENTIAL=VALID
+TELEGRAM_CHAT_ROUTE=VALID
+SUPABASE_SERVICE_CREDENTIAL=VALID
+LIVE_DELIVERY_SECRET_CONTRACT=PASS
+PROFITLAB_DELIVERY_CURSOR=ADVANCING_AND_CAUGHT_UP_AT_SAMPLE
+SIGNAL_CLOSER_PROVIDER=YAHOO
+SIGNAL_CLOSER_DRY_RUN=FALSE
+```
+
+Not yet empirically proven after the 2026-10-06 activation:
+
+```text
+ONE_REAL_QUALIFIED_SIGNAL_TO_TELEGRAM
+SAME_SIGNAL_TO_PROFITLAB
+POST_ACTIVATION_REAL_CLOSURE_TO_TELEGRAM
+POST_ACTIVATION_REAL_CLOSURE_UPDATE_TO_PROFITLAB
+```
+
+Reason: no qualified signal occurred in the sampled natural cycles.
+
+Do not force a production trading signal merely to satisfy acceptance. Use an existing supported non-trading delivery smoke-test path if one exists; otherwise wait for and observe the next natural qualified signal.
 
 ## Historical corpus result — preserve exactly
 
@@ -57,11 +121,11 @@ STRATEGY_EDGE_VALIDATED=NO
 STRATEGY_PROFITABILITY_PROVEN_NEGATIVE=NO
 ```
 
-The 2026-09-03 closure stopped the then-active retrospective validation path. The owner has now explicitly authorized a **new prospective shadow-research path**. This does not erase or rewrite the old result.
+The 2026-09-03 closure stopped the then-active retrospective validation path. The owner later authorized a new prospective shadow-research path. This does not erase or rewrite the old result.
 
 ## Statistical correction that must survive handoff
 
-A genuinely new, frozen, single-hypothesis prospective test does **not** automatically inherit the historical multiple-testing Bonferroni penalty. Claude explicitly withdrew that prior application.
+A genuinely new, frozen, single-hypothesis prospective test does not automatically inherit the historical multiple-testing Bonferroni penalty.
 
 Do not treat any of these as the final required sample size:
 
@@ -99,25 +163,11 @@ The repository already contains substantial controls:
 - `tools/pipeline_ledger.py` — append-only event ledger with UUID event IDs, process-shared `flock`, UTC display time, monotonic/boot-aware time and atomic compact state updates;
 - watcher stale-candle handling that fails closed on missing/unparseable/stale candle evidence.
 
-Therefore do not assume a rewrite is needed. Inspect actual Hetzner runtime first, then harden only the missing measurement controls.
+Do not assume a rewrite is needed. Current Hetzner runtime is already proven active; inspect exact evidence first and change only a specifically proven gap.
 
-## Stage 0 contract
+## Strategy boundary
 
-The measurement pilot may improve observation only:
-
-- run/signal/host identity;
-- config fingerprinting;
-- UTC timestamp semantics;
-- expected-scan completeness;
-- provider identity;
-- bid/ask/spread evidence;
-- publication timing;
-- ambiguity handling;
-- lower-timeframe resolver evidence where justified;
-- idempotency/crash reconciliation;
-- automated integrity reports.
-
-It must not change:
+Current production/runtime work does not authorize changes to:
 
 - Policy B;
 - ADX/RSI/score rules;
@@ -126,19 +176,16 @@ It must not change:
 - TP/SL strategy logic;
 - baseline trading rules.
 
-Pilot observations **do not count** toward the later confirmatory sample.
-
 ## Hetzner / VPS boundary
 
-Historical VPS work reached R5 **no-side-effect shadow**, not Production cutover.
-
 ```text
-VPS_R5_ENGINEERING_ARTIFACT=PRESERVE
-CURRENT_HETZNER_RUNTIME_STATE=UNPROVEN
+VPS_ENGINEERING_ARTIFACT=PRESERVE
+CURRENT_HETZNER_RUNTIME_STATE=ACTIVE
 HETZNER_LIVE_MONEY_CUTOVER=NO
+DEPLOYED_RELEASE=4424518e7b42ecf2a070967d626a9ac86bf04d53
 ```
 
-Do not infer current host state from GitHub.
+Do not infer current host state from stale historical GitHub records. Start with `CONTINUITY_CURRENT.md` and the 2026-10-06 production activation audit, then verify live host state when a new action depends on it.
 
 ## ProfitLab
 
@@ -149,8 +196,10 @@ PROFITLAB_SOURCE_OF_TRUTH=NO
 BOTA_EVIDENCE_SOURCE_OF_TRUTH=YES
 ```
 
+ProfitLab delivery is armed and the delivery cursor advanced after activation. A new real post-activation qualified signal has not yet been observed publishing to it.
+
 ## Exactly one current action
 
-Perform a **read-only Hetzner forensic inspection** before any restart or deployment.
+Obtain one bounded dual-sink delivery proof without strategy changes.
 
-No service start/stop/restart, deploy, checkout, config edit, Supabase mutation, Telegram test send, strategy change or live-money action is authorized until that inspection is reconciled with repository evidence.
+Do not start another broad architecture audit, do not retune the strategy, and do not force a production trading signal solely to prove delivery.
