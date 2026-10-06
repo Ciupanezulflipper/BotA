@@ -39,27 +39,6 @@ secretGroup = 1
 
 [allowlist]
 description = "Global allowlist"
-paths = [
-  '''^\.env\.example$''',
-  '''^\.env\.sample$''',
-  '''(?i)^tests?/''',
-  '''(?i)^test_''',
-  '''(?i)_test\.py$''',
-  '''(?i)\.log$''',
-  '''(?i)^logs?/''',
-  '''(?i)^docs?/''',
-  '''(?i)README''',
-  '''(?i)^config\.backup-''',
-  '''(?i)^_snapshots/''',
-  '''(?i)^archive/''',
-  '''(?i)^config/tele\.env$''',
-  '''(?i)^\.env$''',
-  '''(?i)^\.env\.''',
-  '''(?i)^\.env\.runtime$''',
-  '''(?i)^\.env\.profitlab$''',
-  '''(?i)^\.env\.botA\.?''',
-  '''(?i)^\.env\.bak\.''',
-]
 regexes = [
   '''(?i)(?:example|placeholder|changeme|your[_-]?(?:token|key|secret)|<[^>]+>|\$\{[^}]+\})''',
 ]
