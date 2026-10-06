@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 ###############################################################################
 # FILE: tools/data_fetch_candles.sh
-# ROLE: OANDA primary + Yahoo fallback with provider-specific request evidence.
+# ROLE: Yahoo-only production candle fetch under the versioned
+#       PRODUCTION_CANDLE_PROVIDER contract. No OANDA network path exists in
+#       this generation; an unrecognized or missing provider contract value
+#       fails closed before any provider network work is attempted.
 ###############################################################################
 set -euo pipefail
 shopt -s inherit_errexit 2>/dev/null || true
@@ -30,11 +33,14 @@ fi
 
 LEGACY_PAIR_CACHE_TF="${LEGACY_PAIR_CACHE_TF:-H1}"
 UA="${UA:-Mozilla/5.0 (Linux; Android 13; Termux) AppleWebKit/537.36}"
-OANDA_API_TOKEN="${OANDA_API_TOKEN:-}"
-OANDA_API_URL="${OANDA_API_URL:-https://api-fxpractice.oanda.com}"
 
 log() { printf '%s\n' "$*" >&2; }
 die() { log "[FETCH] ERROR: $*"; exit 1; }
+
+PRODUCTION_CANDLE_PROVIDER="${PRODUCTION_CANDLE_PROVIDER:-}"
+if [[ "${PRODUCTION_CANDLE_PROVIDER}" != "yahoo" ]]; then
+  die "unsupported_provider_contract PRODUCTION_CANDLE_PROVIDER='${PRODUCTION_CANDLE_PROVIDER}' (only 'yahoo' is accepted for this production generation)"
+fi
 
 provider_record() {
   local provider="$1" status="$2" note="${3:-}"
@@ -91,23 +97,6 @@ tf_minutes() {
 expected_min="$(tf_minutes "${TF}")"
 [[ "${expected_min}" -le 0 ]] && die "unsupported TF='${TF}'"
 
-oanda_granularity_for_tf() {
-  case "${1:-}" in
-    M1) echo "M1" ;;
-    M5) echo "M5" ;;
-    M15) echo "M15" ;;
-    M30) echo "M30" ;;
-    H1) echo "H1" ;;
-    H2) echo "H2" ;;
-    H4) echo "H4" ;;
-    H6) echo "H6" ;;
-    H8) echo "H8" ;;
-    H12) echo "H12" ;;
-    D1|1D) echo "D" ;;
-    *) echo "" ;;
-  esac
-}
-
 yahoo_symbol_for_pair() {
   case "${1:-}" in
     EURUSD) echo "EURUSD=X" ;;
@@ -155,148 +144,50 @@ cleanup() { rm -f "${TMP_JSON}" "${TMP_CSV}" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 PROVIDER_USED=""
-OANDA_GRAN="$(oanda_granularity_for_tf "${TF}")"
-OANDA_INSTRUMENT="${PAIR:0:3}_${PAIR:3:3}"
 
-if [[ -n "${OANDA_API_TOKEN}" && -n "${OANDA_GRAN}" ]]; then
-  log "[FETCH] trying OANDA: instrument=${OANDA_INSTRUMENT} gran=${OANDA_GRAN}"
-  OANDA_OK="$(
-    OANDA_API_TOKEN="${OANDA_API_TOKEN}" OANDA_API_URL="${OANDA_API_URL}" \
-    OANDA_INSTRUMENT="${OANDA_INSTRUMENT}" OANDA_GRAN="${OANDA_GRAN}" \
-    TMP_JSON="${TMP_JSON}" python3 <<'PY' 2>>"${LOG_DIR}/error.log"
-import datetime
-import json
-import os
-import sys
-import urllib.request
+Y_SYMBOL="$(yahoo_symbol_for_pair "${PAIR}")"
+Y_INTERVAL="$(yahoo_interval_for_tf "${TF}")"
+Y_RANGE="$(yahoo_range_for_tf "${TF}")"
+[[ -z "${Y_INTERVAL}" ]] && die "no interval mapping for TF='${TF}'"
 
-token = os.environ["OANDA_API_TOKEN"]
-base = os.environ["OANDA_API_URL"].rstrip("/")
-inst = os.environ["OANDA_INSTRUMENT"]
-gran = os.environ["OANDA_GRAN"]
-tmp = os.environ["TMP_JSON"]
-url = f"{base}/v3/instruments/{inst}/candles?count=500&granularity={gran}&price=M"
-request = urllib.request.Request(
-    url,
-    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-)
-try:
-    with urllib.request.urlopen(request, timeout=15) as response:
-        raw = json.loads(response.read())
-except Exception as exc:
-    sys.stderr.write(f"[OANDA] {type(exc).__name__}\n")
-    print("0")
-    raise SystemExit(0)
+URL="https://query1.finance.yahoo.com/v8/finance/chart/${Y_SYMBOL}?range=${Y_RANGE}&interval=${Y_INTERVAL}&includePrePost=false&events=div%7Csplit"
+log "[FETCH] Yahoo: ${Y_SYMBOL} ${Y_INTERVAL} ${Y_RANGE}"
 
-candles = raw.get("candles", [])
-if not candles:
-    sys.stderr.write("[OANDA] empty\n")
-    print("0")
-    raise SystemExit(0)
-
-timestamps, opens, highs, lows, closes = [], [], [], [], []
-for candle in candles:
-    if not candle.get("complete", True):
-        continue
-    try:
-        dt = datetime.datetime.strptime(candle["time"][:19] + "Z", "%Y-%m-%dT%H:%M:%SZ")
-        timestamps.append(int(dt.replace(tzinfo=datetime.timezone.utc).timestamp()))
-        mid = candle["mid"]
-        opens.append(float(mid["o"]))
-        highs.append(float(mid["h"]))
-        lows.append(float(mid["l"]))
-        closes.append(float(mid["c"]))
-    except Exception:
-        continue
-
-if not timestamps:
-    sys.stderr.write("[OANDA] no valid candles\n")
-    print("0")
-    raise SystemExit(0)
-
-output = {
-    "chart": {
-        "result": [
-            {
-                "meta": {"dataGranularity": gran, "_provider": "oanda"},
-                "timestamp": timestamps,
-                "indicators": {
-                    "quote": [
-                        {
-                            "open": opens,
-                            "high": highs,
-                            "low": lows,
-                            "close": closes,
-                        }
-                    ]
-                },
-            }
-        ],
-        "error": None,
-    }
-}
-json.dump(output, open(tmp, "w", encoding="utf-8"))
-print("1")
-PY
-  )" || OANDA_OK="0"
-
-  if [[ "${OANDA_OK}" = "1" ]]; then
-    provider_record oanda success "granularity=${OANDA_GRAN}"
-    PROVIDER_USED="oanda"
-    log "[FETCH] OANDA OK"
-  else
-    provider_record oanda failure "granularity=${OANDA_GRAN}"
-    log "[FETCH] OANDA FAILED — falling back to Yahoo"
+if command -v curl >/dev/null 2>&1; then
+  YAHOO_HTTP="$(
+    curl -sSL -A "${UA}" "${URL}" -o "${TMP_JSON}" \
+      -w "%{http_code}" --max-time 15 2>>"${LOG_DIR}/error.log" || echo "000"
+  )"
+  if [[ "${YAHOO_HTTP}" = "429" ]]; then
+    provider_record yahoo blocked "http=429"
+    log "[FETCH] Yahoo 429 rate-limited — skipping fallback"
+    exit 3
+  fi
+  if [[ "${YAHOO_HTTP}" != "200" || ! -s "${TMP_JSON}" ]]; then
+    provider_record yahoo failure "http=${YAHOO_HTTP}"
+    die "curl failed (http=${YAHOO_HTTP})"
   fi
 else
-  log "[FETCH] OANDA skipped (token missing or no gran mapping for ${TF})"
-fi
-
-if [[ "${PROVIDER_USED}" != "oanda" ]]; then
-  Y_SYMBOL="$(yahoo_symbol_for_pair "${PAIR}")"
-  Y_INTERVAL="$(yahoo_interval_for_tf "${TF}")"
-  Y_RANGE="$(yahoo_range_for_tf "${TF}")"
-  [[ -z "${Y_INTERVAL}" ]] && die "no interval mapping for TF='${TF}'"
-
-  URL="https://query1.finance.yahoo.com/v8/finance/chart/${Y_SYMBOL}?range=${Y_RANGE}&interval=${Y_INTERVAL}&includePrePost=false&events=div%7Csplit"
-  log "[FETCH] Yahoo fallback: ${Y_SYMBOL} ${Y_INTERVAL} ${Y_RANGE}"
-
-  if command -v curl >/dev/null 2>&1; then
-    YAHOO_HTTP="$(
-      curl -sSL -A "${UA}" "${URL}" -o "${TMP_JSON}" \
-        -w "%{http_code}" --max-time 15 2>>"${LOG_DIR}/error.log" || echo "000"
-    )"
-    if [[ "${YAHOO_HTTP}" = "429" ]]; then
-      provider_record yahoo blocked "http=429"
-      log "[FETCH] Yahoo 429 rate-limited — skipping fallback"
-      exit 3
-    fi
-    if [[ "${YAHOO_HTTP}" != "200" || ! -s "${TMP_JSON}" ]]; then
-      provider_record yahoo failure "http=${YAHOO_HTTP}"
-      die "curl failed (http=${YAHOO_HTTP})"
-    fi
-  else
-    TMP_WGET_HDR="$(mktemp 2>/dev/null || echo "${CACHE_DIR}/.tmp_whdr_${PAIR}_${TF}_$$.txt")"
-    wget -qO "${TMP_JSON}" --server-response --timeout=15 \
-      --user-agent="${UA}" "${URL}" 2>"${TMP_WGET_HDR}" || true
-    if grep -q "HTTP.*429" "${TMP_WGET_HDR}" 2>/dev/null; then
-      rm -f "${TMP_WGET_HDR}" 2>/dev/null || true
-      provider_record yahoo blocked "http=429"
-      log "[FETCH] Yahoo 429 rate-limited — skipping fallback"
-      exit 3
-    fi
-    if [[ ! -s "${TMP_JSON}" ]]; then
-      rm -f "${TMP_WGET_HDR}" 2>/dev/null || true
-      provider_record yahoo failure "wget_empty_response"
-      die "wget failed"
-    fi
+  TMP_WGET_HDR="$(mktemp 2>/dev/null || echo "${CACHE_DIR}/.tmp_whdr_${PAIR}_${TF}_$$.txt")"
+  wget -qO "${TMP_JSON}" --server-response --timeout=15 \
+    --user-agent="${UA}" "${URL}" 2>"${TMP_WGET_HDR}" || true
+  if grep -q "HTTP.*429" "${TMP_WGET_HDR}" 2>/dev/null; then
     rm -f "${TMP_WGET_HDR}" 2>/dev/null || true
+    provider_record yahoo blocked "http=429"
+    log "[FETCH] Yahoo 429 rate-limited — skipping fallback"
+    exit 3
   fi
-
-  provider_record yahoo success "interval=${Y_INTERVAL};range=${Y_RANGE}"
-  PROVIDER_USED="yahoo"
-  log "[FETCH] Yahoo OK"
+  if [[ ! -s "${TMP_JSON}" ]]; then
+    rm -f "${TMP_WGET_HDR}" 2>/dev/null || true
+    provider_record yahoo failure "wget_empty_response"
+    die "wget failed"
+  fi
+  rm -f "${TMP_WGET_HDR}" 2>/dev/null || true
 fi
+
+provider_record yahoo success "interval=${Y_INTERVAL};range=${Y_RANGE}"
+PROVIDER_USED="yahoo"
+log "[FETCH] Yahoo OK"
 
 PY_OUT="$(python3 - "${TMP_JSON}" "${expected_min}" "${PAIR}" "${TF}" "${TMP_CSV}" "${PROVIDER_USED}" <<'PY' 2>>"${LOG_DIR}/error.log" || true
 import datetime

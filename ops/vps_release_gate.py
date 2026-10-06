@@ -19,15 +19,18 @@ EXPECTED = {
     "TELEGRAM_TIER_GREEN_MIN_INT": "75", "TELEGRAM_COOLDOWN_SECONDS": "1800",
     "CANDLE_MAX_AGE_SECS": "2700",
 }
+REQUIRED_CANDLE_PROVIDER = "yahoo"
 SHELLS = ("tools/run_shadow_manager.sh", "tools/watcher_gated_cycle.sh",
           "tools/run_signal_watcher_with_ledger.sh", "tools/signal_watcher_pro.sh",
           "tools/signal_watcher_core.sh", "tools/telegram_send.sh",
-          "tools/run_runtime_health_push.sh")
+          "tools/run_runtime_health_push.sh", "tools/data_fetch_candles.sh",
+          "tools/indicators_updater.sh")
 PYTHONS = ("tools/vps_orchestrator.py", "tools/runtime_dependency_check.py",
            "tools/telegram_delivery.py", "tools/telegram_send_guard.py",
            "tools/telegram_delivery_boundary.py", "tools/watcher_cycle_contract.py",
            "tools/watcher_pending_delivery_recovery.py", "tools/watcher_cycle_ledger.py",
            "tools/pipeline_ledger.py", "tools/r5_no_side_effect_preflight.py",
+           "tools/signal_closer.py",
            "r5_bootstrap/sitecustomize.py",
            "ops/vps_deploy.py", "ops/vps_state_handoff.py", "ops/vps_release_gate.py")
 LOCAL_SUITES = ("tests.test_runtime_dependency_check", "tests.test_vps_orchestrator",
@@ -52,9 +55,11 @@ def evaluate(root: Path) -> dict[str, object]:
     checks: dict[str, bool] = {}
     policy = env_file(root / "config/production-vps.env")
     checks["strategy_fingerprint_frozen"] = all(policy.get(k) == v for k, v in EXPECTED.items())
+    checks["provider_contract_frozen"] = policy.get("PRODUCTION_CANDLE_PROVIDER") == REQUIRED_CANDLE_PROVIDER
     orchestrator = (root / "tools/vps_orchestrator.py").read_text(encoding="utf-8")
     checks["updater_supporting_timeframes"] = '"TIMEFRAMES": "M15 H1 H4 D1"' in orchestrator
     checks["watcher_execution_m15"] = policy.get("TIMEFRAMES") == "M15"
+    checks["provider_contract_versioned"] = '"PRODUCTION_CANDLE_PROVIDER"' in orchestrator
     checks["python_314_contract"] = 'requires-python = ">=3.14,<3.15"' in (root / "pyproject.toml").read_text()
     checks["exact_dependency_manifest"] = all("==" in x for x in (root / "requirements-runtime.txt").read_text().splitlines() if x and not x.startswith("#"))
     checks["release_venv_contract"] = "release_python_unusable" in orchestrator and 'env["PATH"]' in orchestrator
@@ -89,7 +94,8 @@ def evaluate(root: Path) -> dict[str, object]:
     r2 = all(checks[k] for k in ("python_314_contract", "exact_dependency_manifest", "release_venv_contract", "transactional_deploy_contract", "dependency_evidence_durable"))
     r3 = checks["canonical_telegram_transport_count"] and checks["telegram_mutable_root"]
     r4 = checks["strategy_fingerprint_frozen"] and checks["watcher_persistence_non_vacuous"] and checks["state_handoff_allowlist"]
-    passed = all((r0, r1, r2, r3, r4))
+    provider_contract_ok = checks["provider_contract_frozen"] and checks["provider_contract_versioned"]
+    passed = all((r0, r1, r2, r3, r4, provider_contract_ok))
     return {"schema_version": "1.0", "R0": "PASS" if r0 else "FAIL",
             "R1": "PASS" if r1 else "FAIL", "R2": "PASS" if r2 else "FAIL",
             "R3": "PASS" if r3 else "FAIL", "R4": "PASS" if r4 else "FAIL",
@@ -99,6 +105,7 @@ def evaluate(root: Path) -> dict[str, object]:
             "CANONICAL_TELEGRAM_TRANSPORT_COUNT": 1 if checks["canonical_telegram_transport_count"] else 0,
             "WATCHER_DECISION_PERSISTENCE_NON_VACUOUS": "YES" if checks["watcher_persistence_non_vacuous"] else "NO",
             "STATE_HANDOFF_CONTRACT": "PASS" if checks["state_handoff_allowlist"] else "FAIL",
+            "PROVIDER_CONTRACT_FROZEN": "PASS" if provider_contract_ok else "FAIL",
             "REPOSITORY_RELEASE_GATE": "PASS" if passed else "FAIL",
             "PRODUCTION_READY": "NO", "NEXT_GATE": "R5_VPS_NO_SIDE_EFFECT_SHADOW",
             "checks": checks}

@@ -67,6 +67,9 @@ class ProviderAccountingTests(TemporaryBotARootMixin, unittest.TestCase):
         )
 
     def test_oanda_and_yahoo_never_consume_twelve_data_credits(self) -> None:
+        # OANDA remains a valid historical/accounting provider concept in the
+        # usage ledger even though the live production fetcher is Yahoo-only
+        # under the PRODUCTION_CANDLE_PROVIDER contract.
         for provider in ("oanda", "yahoo"):
             rc, _ = self.call(
                 [
@@ -318,11 +321,18 @@ class SourceSafetyTests(unittest.TestCase):
         self.assertIn("SERVICE_MUTATION_PERFORMED=NO", supervisor)
 
     def test_fetcher_accounts_at_network_boundary(self) -> None:
+        # The live production fetcher is locked to the versioned Yahoo-only
+        # PRODUCTION_CANDLE_PROVIDER contract: Yahoo accounting evidence must
+        # remain, and no OANDA network/fallback path may exist in this
+        # generation's fetcher.
         fetcher = (TOOLS / "data_fetch_candles.sh").read_text()
-        self.assertIn("provider_record oanda success", fetcher)
-        self.assertIn("provider_record oanda failure", fetcher)
         self.assertIn("provider_record yahoo blocked", fetcher)
         self.assertIn("provider_record yahoo success", fetcher)
+        self.assertIn("provider_record yahoo failure", fetcher)
+        self.assertIn("PRODUCTION_CANDLE_PROVIDER", fetcher)
+        self.assertNotIn("provider_record oanda", fetcher)
+        self.assertNotIn("OANDA_API_TOKEN", fetcher)
+        self.assertNotIn("api-fxpractice.oanda.com", fetcher)
 
 
 if __name__ == "__main__":

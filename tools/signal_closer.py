@@ -1,22 +1,34 @@
 #!/usr/bin/env python3
 """
-BotA Signal Closer v2.3
+BotA Signal Closer v2.4
 =======================
 
 Reads ACTIVE signals from Supabase, resolves TP/SL outcomes from the same
-OANDA-backed local candle cache used by BotA's indicator pipeline, and updates
-signal status accordingly.
+local candle cache produced by BotA's indicator pipeline under the versioned
+PRODUCTION_CANDLE_PROVIDER contract, and updates signal status accordingly.
 
 Rules:
 - If price hit TP -> status=CLOSED, result_pips=positive.
 - If price hit SL -> status=CLOSED, result_pips=negative.
 - Candle outcome detection is attempted BEFORE age cancellation.
-- If OANDA-backed candles are available and no TP/SL was hit, then signals older
-  than MAX_AGE_HOURS may be cancelled with result_pips=0.
-- If OANDA-backed candles are unavailable, stale, non-covering, or replaced by a
-  non-OANDA fallback, the signal is left ACTIVE until HARD_MAX_AGE_HOURS.
+- If contracted-provider candles are available and no TP/SL was hit, then
+  signals older than MAX_AGE_HOURS may be cancelled with result_pips=0.
+- If contracted-provider candles are unavailable, stale, non-covering, or
+  recorded under a different provider identity, the signal is left ACTIVE
+  until HARD_MAX_AGE_HOURS.
 - HARD_MAX_AGE_HOURS is an escape hatch to prevent permanent ACTIVE lockout when
   a signal can no longer be resolved from trustworthy candles.
+
+PROVIDER CONTRACT:
+- PRODUCTION_CANDLE_PROVIDER must be set and exactly match a supported value
+  (only "yahoo" for this generation). Absent/unknown values fail closed
+  before any candle read or Supabase write for ACTIVE signals -- but only
+  once an ACTIVE signal actually requires candle evaluation. The durable
+  Telegram closure retry scan does not use candle data and is not gated by
+  this contract.
+- A candle cache is only trusted if chart.result[0].meta._provider equals
+  the configured provider; mismatched or missing provider identity is
+  rejected.
 
 CLOCK SAFETY:
 - Trading lifecycle decisions use trusted HTTPS Date headers, not Android local
@@ -80,6 +92,26 @@ CLOCK_ENDPOINTS = [
     "https://query1.finance.yahoo.com",
 ]
 
+PRODUCTION_CANDLE_PROVIDER_ENV = "PRODUCTION_CANDLE_PROVIDER"
+SUPPORTED_CANDLE_PROVIDERS = ("yahoo",)
+
+# Maps a provider-reported granularity to its canonical BotA timeframe.
+# Missing/unknown granularity intentionally has no entry here so callers fail
+# closed rather than treating an absent value as automatically valid.
+_GRANULARITY_ALIASES = {
+    "15M": "M15",
+    "30M": "M30",
+    "1H": "H1",
+    "4H": "H4",
+    "1D": "D1",
+    "M15": "M15",
+    "M30": "M30",
+    "H1": "H1",
+    "H4": "H4",
+    "D1": "D1",
+    "D": "D1",
+}
+
 
 def log(msg: str) -> None:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -91,6 +123,15 @@ def log(msg: str) -> None:
             f.write(line + "\n")
     except Exception:
         pass
+
+
+def configured_candle_provider() -> str:
+    """Fail-closed read of the versioned production candle-provider contract.
+
+    Returns the lower-cased configured value even if unsupported; callers
+    must compare against SUPPORTED_CANDLE_PROVIDERS and fail closed.
+    """
+    return str(os.environ.get(PRODUCTION_CANDLE_PROVIDER_ENV, "")).strip().lower()
 
 
 def pip_size(pair: str) -> float:
@@ -121,14 +162,14 @@ def cache_tf_name(tf: str) -> str:
     return "D1" if tf == "D" else tf
 
 
-def granularity_matches(actual: str, expected_tf: str) -> bool:
-    actual = str(actual or "").upper()
-    expected_tf = cache_tf_name(expected_tf)
-    if not actual:
-        return True
-    if expected_tf == "D1" and actual == "D":
-        return True
-    return actual == expected_tf
+def normalize_granularity(raw: str) -> str | None:
+    """Map a provider-reported granularity to its canonical BotA timeframe.
+
+    Returns None for missing/unknown values so callers fail closed instead
+    of silently accepting an unrecognized granularity.
+    """
+    key = str(raw or "").strip().upper()
+    return _GRANULARITY_ALIASES.get(key)
 
 
 def compute_server_clock_epoch() -> int:
@@ -202,9 +243,12 @@ def get_active_signals() -> list[dict]:
     return result if isinstance(result, list) else []
 
 
-def load_oanda_cache(pair: str, tf: str, server_epoch: int) -> tuple[list[dict], str]:
+def load_candle_cache(
+    pair: str, tf: str, server_epoch: int, expected_provider: str
+) -> tuple[list[dict], str]:
     """
-    Load local OANDA-backed candle cache.
+    Load the local candle cache produced by the versioned provider-contract
+    fetcher (tools/data_fetch_candles.sh).
 
     Returns:
       (candles, reason)
@@ -212,8 +256,12 @@ def load_oanda_cache(pair: str, tf: str, server_epoch: int) -> tuple[list[dict],
     Candle format:
       {"t": epoch_seconds, "h": high, "l": low}
 
-    The closer intentionally refuses Yahoo/non-OANDA cache files because signal
-    levels are generated from the OANDA-backed pipeline.
+    The closer refuses any cache whose recorded provider identity does not
+    exactly match the configured PRODUCTION_CANDLE_PROVIDER contract, because
+    signal levels are generated from that same contracted provider's
+    pipeline. Granularity must also resolve to a known canonical timeframe;
+    missing or unrecognized granularity is rejected rather than assumed
+    valid.
     """
     tf = cache_tf_name(tf)
     path = CACHE_DIR / f"{pair.upper()}_{tf}.json"
@@ -229,14 +277,21 @@ def load_oanda_cache(pair: str, tf: str, server_epoch: int) -> tuple[list[dict],
 
         block = result[0]
         meta = block.get("meta", {})
-        provider = str(meta.get("_provider") or meta.get("provider") or "").lower()
-        granularity = str(meta.get("dataGranularity") or "").upper()
+        provider = str(meta.get("_provider") or meta.get("provider") or "").strip().lower()
+        granularity = str(meta.get("dataGranularity") or "").strip()
 
-        if provider != "oanda":
-            return [], f"non-OANDA cache provider={provider or 'UNKNOWN'} path={path}"
+        if provider != expected_provider:
+            return [], (
+                f"provider mismatch expected={expected_provider} "
+                f"actual={provider or 'UNKNOWN'} path={path}"
+            )
 
-        if not granularity_matches(granularity, tf):
-            return [], f"cache granularity mismatch expected={tf} actual={granularity} path={path}"
+        canonical_tf = normalize_granularity(granularity)
+        if canonical_tf is None or canonical_tf != tf:
+            return [], (
+                f"cache granularity mismatch expected={tf} "
+                f"actual={granularity or 'UNKNOWN'} path={path}"
+            )
 
         timestamps = block.get("timestamp", [])
         quote = block.get("indicators", {}).get("quote", [{}])[0]
@@ -256,19 +311,19 @@ def load_oanda_cache(pair: str, tf: str, server_epoch: int) -> tuple[list[dict],
         candles.sort(key=lambda c: c["t"])
 
         if not candles:
-            return [], f"no valid OANDA candles in {path}"
+            return [], f"no valid candles in {path}"
 
         newest_age = int(server_epoch - float(candles[-1]["t"]))
 
         if newest_age < -FUTURE_CANDLE_TOLERANCE_SECONDS:
             return [], (
-                f"local OANDA cache future candle age_sec={newest_age} "
+                f"local cache future candle age_sec={newest_age} "
                 f"tolerance={FUTURE_CANDLE_TOLERANCE_SECONDS} path={path}"
             )
 
         if newest_age > MAX_LOCAL_CANDLE_AGE_SECONDS:
             return [], (
-                f"local OANDA cache stale age_sec={newest_age} "
+                f"local cache stale age_sec={newest_age} "
                 f"limit={MAX_LOCAL_CANDLE_AGE_SECONDS} path={path}"
             )
 
@@ -283,15 +338,16 @@ def fetch_candles(
     signal_time: datetime,
     tf: str,
     server_epoch: int,
+    expected_provider: str,
 ) -> tuple[list[dict], str]:
     """
-    Fetch candles from local OANDA-backed cache only.
+    Fetch candles from the local contracted-provider cache only.
 
     The cache must cover the signal start. If the first candle is after the
     signal time, the closer refuses to infer outcome because TP/SL may have been
     hit before the available cache window.
     """
-    candles, reason = load_oanda_cache(pair, tf, server_epoch)
+    candles, reason = load_candle_cache(pair, tf, server_epoch, expected_provider)
     if not candles:
         return [], reason
 
@@ -303,7 +359,7 @@ def fetch_candles(
 
     if first_ts > signal_epoch + tf_sec:
         return [], (
-            f"OANDA cache does not cover signal start for {pair} {cache_tf_name(tf)}: "
+            f"provider cache does not cover signal start for {pair} {cache_tf_name(tf)}: "
             f"signal_epoch={signal_epoch} first_ts={first_ts} last_ts={last_ts}"
         )
 
@@ -497,17 +553,19 @@ def prepare_signal_action(
     now_epoch: int,
     max_age: int,
     hard_max_age: int,
+    provider: str,
 ) -> dict | None:
     """
     Decide whether a signal should be acted on.
 
     Critical ordering:
     1. Parse and age the signal using trusted server UTC.
-    2. Fetch OANDA-backed local candles.
+    2. Fetch contracted-provider local candles.
     3. If candles prove WIN/LOSS, close with real pips.
     4. If candles exist and no TP/SL was hit, then age-cancel if expired.
-    5. If OANDA candles cannot be fetched or do not cover the signal, leave ACTIVE
-       until HARD_MAX_AGE_HOURS, then cancel unresolved to prevent dedup lockout.
+    5. If contracted-provider candles cannot be fetched or do not cover the
+       signal, leave ACTIVE until HARD_MAX_AGE_HOURS, then cancel unresolved
+       to prevent dedup lockout.
     """
     try:
         pair = str(sig["pair"]).upper()
@@ -524,7 +582,7 @@ def prepare_signal_action(
     age_hours = (now_utc - created).total_seconds() / 3600.0
     sig["age_hours"] = age_hours
 
-    candles, candle_reason = fetch_candles(pair, created, tf, now_epoch)
+    candles, candle_reason = fetch_candles(pair, created, tf, now_epoch, provider)
     if not candles:
         if age_hours >= hard_max_age:
             log(
@@ -532,13 +590,13 @@ def prepare_signal_action(
                 f"age={age_hours:.1f}h hard_max={hard_max_age}h "
                 f"reason={candle_reason} -> CANCELLED unresolved"
             )
-            return mark_cancelled(sig, "HARD_AGE_UNRESOLVED_NO_OANDA_CANDLES")
+            return mark_cancelled(sig, "HARD_AGE_UNRESOLVED_NO_PROVIDER_CANDLES")
 
         log(
-            f"WARN: no usable OANDA candles for {pair} {tf} {direction} "
+            f"WARN: no usable candles for {pair} {tf} {direction} "
             f"entry={entry} age={age_hours:.1f}h reason={candle_reason} — leaving ACTIVE"
         )
-        sig["predicted_outcome"] = "SKIP_NO_OANDA_CANDLES"
+        sig["predicted_outcome"] = "SKIP_NO_PROVIDER_CANDLES"
         sig["predicted_pips"] = 0.0
         sig["predicted_reason"] = candle_reason
         return None
@@ -546,7 +604,7 @@ def prepare_signal_action(
     outcome, result_pips = check_outcome(direction, entry, sl, tp, candles, pair)
     sig["predicted_outcome"] = outcome
     sig["predicted_pips"] = result_pips
-    sig["predicted_reason"] = "OANDA_CACHE_RESOLVED"
+    sig["predicted_reason"] = "PROVIDER_CACHE_RESOLVED"
 
     if outcome in ("WIN", "LOSS"):
         return sig
@@ -561,7 +619,7 @@ def prepare_signal_action(
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "BotA Signal Closer v2.3 — dry-run by default.\n"
+            "BotA Signal Closer v2.4 — dry-run by default.\n"
             "Live execution requires: --live --confirm CLOSE_SIGNALS --max-batch N"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -638,9 +696,15 @@ def main() -> None:
         f"CLOCK server_clock_ok epoch={server_epoch} "
         f"utc={closed_at_iso}"
     )
+
+    # The candle-provider contract is only required once an ACTIVE signal is
+    # about to be evaluated against candle data below; it must not gate the
+    # independent, candle-free Telegram closure retry scan further down.
+    provider = configured_candle_provider()
+
     log(
         f"Starting signal closer "
-        f"(max_age={max_age}h, hard_max_age={hard_max_age}h, "
+        f"(provider={provider or '<unset>'}, max_age={max_age}h, hard_max_age={hard_max_age}h, "
         f"dry_run={dry_run}, pair_filter={args.pair or 'ALL'})"
     )
 
@@ -660,12 +724,24 @@ def main() -> None:
 
     log(f"Found {len(signals)} ACTIVE signals to evaluate")
 
+    provider_error: str | None = None
     signals_to_act: list[dict] = []
 
-    for sig in signals:
-        action = prepare_signal_action(sig, now_utc, server_epoch, max_age, hard_max_age)
-        if action is not None:
-            signals_to_act.append(action)
+    if signals:
+        if provider not in SUPPORTED_CANDLE_PROVIDERS:
+            provider_error = provider or "<unset>"
+            log(
+                f"PROVIDER_CONTRACT provider_contract_invalid value={provider_error} "
+                f"active_signals={len(signals)} -> FAIL_CLOSED no candle evaluation, "
+                f"ACTIVE signals left untouched"
+            )
+        else:
+            for sig in signals:
+                action = prepare_signal_action(
+                    sig, now_utc, server_epoch, max_age, hard_max_age, provider
+                )
+                if action is not None:
+                    signals_to_act.append(action)
 
     print_preview(signals_to_act, dry_run)
 
@@ -718,7 +794,7 @@ def main() -> None:
         f"still_open={still_open} dry_run={dry_run}"
     )
 
-    if fetch_error is not None:
+    if fetch_error is not None or provider_error is not None:
         sys.exit(1)
 
 
