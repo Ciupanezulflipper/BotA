@@ -1,6 +1,6 @@
 # BotA Hetzner Production Activation — 2026-10-06
 
-Status: **DEPLOYMENT COMPLETE / RUNTIME ACTIVE / DUAL-SINK DELIVERY ARMED BUT NOT YET OBSERVED ON A QUALIFIED SIGNAL**
+Status: **DEPLOYMENT COMPLETE / RUNTIME ACTIVE / TELEGRAM REAL SEND PROVEN / PROFITLAB REAL SIGNAL DELIVERY AWAITING NATURAL QUALIFIED SIGNAL**
 
 ## Scope
 
@@ -50,6 +50,22 @@ LIVE_DELIVERY_CONTRACT=PASS
 ```
 
 The parent R5 runtime remains shadowed/fail-closed. Approved child jobs receive only their scoped live credentials. This is intentional and must not be misread as the whole deployment being delivery-disabled.
+
+## Real Telegram delivery proof
+
+A bounded non-trading message was sent from the Hetzner production environment using the scoped production Telegram credential path.
+
+Message purpose: delivery verification only; explicitly marked as **NOT a trading signal**.
+
+Observed result:
+
+```text
+TELEGRAM_REAL_SEND=PASS
+```
+
+Therefore the Hetzner → Telegram external delivery path is empirically proven after activation.
+
+This does not prove a genuine trading signal has yet traversed the watcher transaction, because no sampled post-activation setup qualified.
 
 ## Provider/lifecycle state
 
@@ -113,6 +129,8 @@ The durable ProfitLab delivery cursor advanced after activation and was caught u
 
 This proves the worker is progressing and has no backlog at that checkpoint. It does **not** prove a new post-activation qualified signal has been published to Supabase.
 
+The deployed publisher only writes real GREEN signals as ACTIVE rows. No fake production signal is authorized merely to prove ProfitLab delivery.
+
 ## Current answer
 
 ```text
@@ -128,12 +146,13 @@ TELEGRAM_CREDENTIAL_VALIDATED=YES
 SUPABASE_SERVICE_CREDENTIAL_VALIDATED=YES
 DUAL_SINK_CREDENTIAL_CONTRACT=PASS
 
-REAL_TELEGRAM_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
+REAL_TELEGRAM_NON_TRADING_DELIVERY_POST_ACTIVATION=PASS
+REAL_TELEGRAM_TRADING_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
 REAL_PROFITLAB_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
 REASON=NO_QUALIFIED_SIGNAL_OCCURRED_IN_SAMPLED_POST_ACTIVATION_CYCLES
 ```
 
-Therefore BotA is live and scanning on Hetzner. The Telegram and ProfitLab delivery paths are configured, credential-valid and armed, but a real end-to-end signal delivery has not yet been empirically observed after this activation because the strategy has not produced a qualifying signal.
+Therefore BotA is live and scanning on Hetzner. Telegram external delivery is now proven with a real bounded system message. ProfitLab is credential-valid, armed and its worker is progressing, but real post-activation signal publication remains pending empirical proof from the next natural qualifying signal.
 
 ## Safety boundaries unchanged
 
@@ -148,4 +167,4 @@ FORCED_PRODUCTION_SIGNAL=NO
 
 ## Next acceptance proof
 
-Obtain one bounded end-to-end dual-sink delivery proof without changing strategy. Prefer a supported non-trading delivery smoke test if an existing repository path allows it; otherwise observe the next natural qualified signal. Do not manufacture or force a production trading signal solely to satisfy the acceptance check.
+Observe the next natural qualified GREEN signal and prove that the same signal reaches Telegram and Supabase/ProfitLab. Do not manufacture or force a production trading signal solely to satisfy the acceptance check.
