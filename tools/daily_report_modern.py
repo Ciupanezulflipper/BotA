@@ -209,6 +209,13 @@ def _day_label(day: str) -> str:
         return day
 
 
+def _is_weekend(day: str) -> bool:
+    try:
+        return datetime.strptime(day, "%Y-%m-%d").weekday() >= 5
+    except ValueError:
+        return False
+
+
 def _pair_activity_lines(pair_scans: Counter[str], pair_qualified: Counter[str]) -> list[str]:
     return [
         f"{_pair_display(pair)} · {pair_scans[pair]} scans · {pair_qualified[pair]} qualified"
@@ -219,9 +226,12 @@ def _pair_activity_lines(pair_scans: Counter[str], pair_qualified: Counter[str])
 def _session_summary_lines(
     *,
     clean_collection: bool,
+    market_closed_expected: bool,
     qualified: list[dict[str, Any]],
     delivered_count: int,
 ) -> list[str]:
+    if market_closed_expected:
+        return ["Market closed — 0 watcher scans expected; no trading signal evaluation required."]
     if clean_collection and not qualified:
         return ["0 signals — market scanned normally; no setup satisfied BotA policy."]
     if not qualified:
@@ -242,28 +252,45 @@ def _quality_issues(
     watcher_cycles: set[str],
     pair_scans: Counter[str],
     delivery_failures: int,
+    market_closed_expected: bool,
 ) -> list[str]:
     issues: list[str] = []
     if not online:
         issues.append("runtime not proven online")
-    if not watcher_cycles:
-        issues.append("no market-open watcher completion")
-    missing_pairs = [pair for pair in PAIRS if pair_scans[pair] == 0]
-    if missing_pairs:
-        issues.append("missing pair activity: " + ", ".join(missing_pairs))
+    if not market_closed_expected:
+        if not watcher_cycles:
+            issues.append("no market-open watcher completion")
+        missing_pairs = [pair for pair in PAIRS if pair_scans[pair] == 0]
+        if missing_pairs:
+            issues.append("missing pair activity: " + ", ".join(missing_pairs))
     if delivery_failures:
         issues.append(f"Telegram delivery failures: {delivery_failures}")
     return issues
 
 
 def _collection_status(
-    *, online: bool, pair_scans: Counter[str], watcher_cycles: set[str]
-) -> tuple[bool, bool, str, str]:
+    *,
+    day: str,
+    online: bool,
+    pair_scans: Counter[str],
+    watcher_cycles: set[str],
+    delivery_failures: int,
+) -> tuple[bool, bool, bool, str, str]:
     all_pairs_seen = all(pair_scans[pair] > 0 for pair in PAIRS)
+    zero_pair_activity = all(pair_scans[pair] == 0 for pair in PAIRS)
+    market_closed_expected = (
+        online
+        and _is_weekend(day)
+        and not watcher_cycles
+        and zero_pair_activity
+        and delivery_failures == 0
+    )
     clean_collection = online and all_pairs_seen and bool(watcher_cycles)
+    if market_closed_expected:
+        return all_pairs_seen, clean_collection, True, "🟢", "MARKET CLOSED"
     status_icon = "🟢" if clean_collection else "🟠"
     status_text = "NORMAL" if clean_collection else "REVIEW REQUIRED"
-    return all_pairs_seen, clean_collection, status_icon, status_text
+    return all_pairs_seen, clean_collection, False, status_icon, status_text
 
 
 def _render_report_lines(
@@ -281,6 +308,7 @@ def _render_report_lines(
     delivery_failures: int,
     all_pairs_seen: bool,
     clean_collection: bool,
+    market_closed_expected: bool,
     status_icon: str,
     status_text: str,
     issues: list[str],
@@ -308,6 +336,7 @@ def _render_report_lines(
     lines.extend(
         _session_summary_lines(
             clean_collection=clean_collection,
+            market_closed_expected=market_closed_expected,
             qualified=qualified,
             delivered_count=len(delivered_identities),
         )
@@ -316,7 +345,11 @@ def _render_report_lines(
         [
             "",
             "⚙️ DATA QUALITY",
-            f"All 3 pairs observed: {'YES' if all_pairs_seen else 'NO'}",
+            (
+                "All 3 pairs observed: N/A (market closed)"
+                if market_closed_expected
+                else f"All 3 pairs observed: {'YES' if all_pairs_seen else 'NO'}"
+            ),
             f"Runtime issues: {'None observed' if not issues else '; '.join(issues)}",
             f"Runtime instance: {runtime_instance[:8] if runtime_instance != 'unknown' else 'unknown'}",
             "",
@@ -339,16 +372,25 @@ def build_report(
     watcher_cycles = _watcher_cycle_ids(events)
     delivered_identities, delivery_failures = _delivery_stats(events)
     online, lifecycle, release, runtime_instance = _runtime_snapshot(health)
-    all_pairs_seen, clean_collection, status_icon, status_text = _collection_status(
+    (
+        all_pairs_seen,
+        clean_collection,
+        market_closed_expected,
+        status_icon,
+        status_text,
+    ) = _collection_status(
+        day=day,
         online=online,
         pair_scans=pair_scans,
         watcher_cycles=watcher_cycles,
+        delivery_failures=delivery_failures,
     )
     issues = _quality_issues(
         online=online,
         watcher_cycles=watcher_cycles,
         pair_scans=pair_scans,
         delivery_failures=delivery_failures,
+        market_closed_expected=market_closed_expected,
     )
     lines = _render_report_lines(
         day=day,
@@ -364,6 +406,7 @@ def build_report(
         delivery_failures=delivery_failures,
         all_pairs_seen=all_pairs_seen,
         clean_collection=clean_collection,
+        market_closed_expected=market_closed_expected,
         status_icon=status_icon,
         status_text=status_text,
         issues=issues,
