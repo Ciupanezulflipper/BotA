@@ -78,6 +78,40 @@ class DailyReportModernTests(unittest.TestCase):
         )
         self.assertIn("REVIEW REQUIRED", rendered)
 
+    def test_weekend_zero_scan_day_is_market_closed_not_review_required(self):
+        rendered = report.build_report(
+            day="2026-10-10",
+            alerts=[],
+            events=[],
+            health={
+                "lifecycle": "RUNNING",
+                "process_liveness": True,
+                "release_git_sha": "4424518e7b42ecf2a070967d626a9ac86bf04d53",
+                "runtime_instance_id": "71c3cc1e-a1be-4bc6-8a23-3738eb70ba35",
+            },
+        )
+        self.assertIn("Market-open watcher cycles: 0", rendered)
+        self.assertIn(
+            "Market closed — 0 watcher scans expected; no trading signal evaluation required.",
+            rendered,
+        )
+        self.assertIn("All 3 pairs observed: N/A (market closed)", rendered)
+        self.assertIn("Runtime issues: None observed", rendered)
+        self.assertIn("BOTA • STATUS: MARKET CLOSED", rendered)
+        self.assertNotIn("REVIEW REQUIRED", rendered)
+
+    def test_weekday_zero_scan_day_still_requires_review(self):
+        rendered = report.build_report(
+            day="2026-10-12",
+            alerts=[],
+            events=[],
+            health={"lifecycle": "RUNNING", "process_liveness": True},
+        )
+        self.assertIn("BOTA • STATUS: REVIEW REQUIRED", rendered)
+        self.assertIn("no market-open watcher completion", rendered)
+        self.assertIn("missing pair activity: EURUSD, GBPUSD, USDJPY", rendered)
+        self.assertNotIn("BOTA • STATUS: MARKET CLOSED", rendered)
+
     def test_qualified_setup_is_deduplicated_across_repeated_cycles(self):
         signal = {
             "pair": "GBPUSD",
