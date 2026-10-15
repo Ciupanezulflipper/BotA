@@ -84,6 +84,35 @@ The highest-scoring case was one repeated GBPUSD SELL state at 72.1 with ADX 46.
 
 This is an observation record only. Current action remains continued collection and analysis.
 
+## Oct 15 early-session H1 investigation
+
+Fresh post-fix production evidence from 07:00–07:15 UTC showed:
+- USDJPY BUY scored 65.5 at 07:00, 07:05 and 07:10;
+- USDJPY BUY strengthened to 66.6 at 07:15;
+- ADX remained inside the current Policy-B boundary at 24.1 then 22.4;
+- market phase was `Open`;
+- entry / SL / TP were populated;
+- the decisive rejection was `H1_trend_opposite`.
+
+The USDJPY H1 files were fresh at about 07:13 UTC and the indicator cache reported:
+- `tf_ok=true`;
+- `tf_actual_min=60`;
+- `weak=false`;
+- EMA9 below EMA21, consistent with bearish H1 context while M15 was BUY.
+
+However, the H1 candle file also contained an extra live row at `2026-10-15 07:13:14` with identical open/high/low/close values, while `final_runner.py` computes indicators over all returned rows and selects `df.iloc[-1]`.
+
+Therefore:
+
+```text
+H1_DATA_FRESH=YES
+H1_OPPOSITE_CLASSIFICATION_PLAUSIBLE=YES
+H1_FORMING_CANDLE_INFLUENCE=POSSIBLE_NOT_YET_PROVEN
+CLOSED_BAR_INTEGRITY_DEFECT=NOT_YET_CONFIRMED
+```
+
+The next action is one read-only code-path inspection to determine whether the production H1 veto consumes the forming H1 row or only the last closed H1 candle. No strategy change is authorized.
+
 ## ProfitLab note
 
 ProfitLab is a consumer, not trading-logic authority.
