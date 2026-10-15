@@ -144,6 +144,39 @@ NATURAL_GREEN_SIGNAL=NOT_YET_OBSERVED
 
 Zero qualified setups is valid behavior by itself and is not evidence of a runtime failure.
 
+## Oct 14 rejection decomposition — 2026-10-15 read-only audit
+
+Read-only analysis of the Oct 14 post-fix Hetzner alert ledger found:
+
+```text
+TRADEABLE_BUY_SELL_ROWS=75
+UNIQUE_MARKET_STATES=41
+
+ROWS_SCORE_LT_60=51
+ROWS_SCORE_60_TO_64_9=21
+ROWS_SCORE_65_TO_69_9=0
+ROWS_SCORE_70_TO_74_9=3
+ROWS_SCORE_GE_75=0
+
+ROWS_REJECTED_SCORE_LT_65=72
+ROWS_H1_NEUTRAL_VETO=3
+ROWS_ENTRY_INVALID=0
+ROWS_RR_NONPOSITIVE=0
+ROWS_ADX_GE_30=27
+
+EURUSD_MAX_SCORE=59.2
+GBPUSD_MAX_SCORE=72.1
+USDJPY_MAX_SCORE=63.3
+```
+
+The three rows above 70 represented one repeated GBPUSD SELL market state observed at 17:30, 17:35 and 17:40 UTC. That state had score 72.1, ADX 46.3, `phase=Open`, and `H1_trend_neutral / vetoed_by_H1`.
+
+Interpretation:
+- the zero-signal day was not caused by the repaired market-phase defect;
+- the vast majority of tradeable rows failed the frozen score threshold;
+- the strongest setup also conflicted with H1 and the existing Policy-B ADX boundary;
+- this is evidence for continued observation, not authorization to change thresholds.
+
 ## ProfitLab / Supabase boundary
 
 BotA evidence remains source of truth for trading logic.
