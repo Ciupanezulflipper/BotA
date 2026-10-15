@@ -60,9 +60,7 @@ Current operational handoff:
 
 `CONTINUITY_CURRENT.md`
 
-Latest post-fix evidence:
-
-`audits/BOTA_POSTFIX_RUNTIME_AND_FULL_SESSION_PROOF_2026-10-15.md`
+Latest post-fix evidence is recorded directly in this file and in `CONTINUITY_CURRENT.md`.
 
 Historical activation baseline:
 
