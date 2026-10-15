@@ -161,6 +161,26 @@ The prior Termux shebang caused direct invocation of `market_open.sh` from scori
 
 Current release `98b93ce...` fixes both scoring invocations by calling `bash market_open.sh`.
 
+## Oct 14 post-fix rejection audit
+
+The latest read-only ledger decomposition found 75 tradeable BUY/SELL rows across 41 unique market states.
+
+```text
+SCORE_LT_65_REJECTIONS=72
+H1_NEUTRAL_VETO_ROWS=3
+ENTRY_INVALID_ROWS=0
+RR_NONPOSITIVE_ROWS=0
+ADX_GE_30_ROWS=27
+
+EURUSD_MAX_SCORE=59.2
+GBPUSD_MAX_SCORE=72.1
+USDJPY_MAX_SCORE=63.3
+```
+
+The only rows above 70 were three repeated observations of one GBPUSD SELL state at score 72.1, ADX 46.3, `phase=Open`, with H1 neutral veto.
+
+Do not reinterpret this as a reason to loosen the strategy. Current evidence supports continued clean post-fix observation.
+
 ## Strategy boundary
 
 Current production/runtime work does not authorize changes to:
