@@ -206,6 +206,37 @@ CLOSED_BAR_INTEGRITY_DEFECT=NOT_YET_CONFIRMED
 
 The next action is one read-only code-path inspection to determine whether the production H1 veto consumes the forming H1 row or only the last closed H1 candle. No strategy change is authorized.
 
+## Oct 15 closed-bar integrity finding — CONFIRMED
+
+The production H1 confirmation path is now proven end-to-end:
+
+```text
+Yahoo raw H1 payload
+  -> tools/data_fetch_candles.sh
+  -> cache/USDJPY_H1.json
+  -> tools/build_indicators.py
+  -> cache/indicators_USDJPY_H1.json
+  -> tools/scoring_engine.sh USDJPY H1
+  -> tools/m15_h1_fusion_legacy.sh
+  -> H1_trend_opposite veto
+```
+
+Observed production evidence at 07:13 UTC contained an extra USDJPY H1 row timestamped `2026-10-15 07:13:14` with identical OHLC values while the 07:00-08:00 H1 candle was still forming.
+
+`build_indicators.py` does not discard forming bars. It normalizes all provider rows, then computes EMA/RSI/MACD/ADX from the complete list and stores the last derived values. `scoring_engine.sh` reads that indicator bundle for the requested timeframe, and the M15/H1 fusion uses the H1 scorer output directly.
+
+Therefore:
+
+```text
+H1_FORMING_CANDLE_INFLUENCE=CONFIRMED
+H1_CLOSED_BAR_INTEGRITY_DEFECT=CONFIRMED
+USDJPY_0700_0715_H1_VETO_POTENTIALLY_CONTAMINATED=YES
+STRATEGY_TUNING_AUTHORIZED=NO
+PRODUCTION_FIX_AUTHORIZED=NO
+```
+
+Important scope warning: the same shared indicator builder serves M15, H1, H4 and D1. Before changing code, verify whether forming-row contamination is present on each production timeframe so the repair boundary is correct and not H1-specific by assumption.
+
 ## ProfitLab / Supabase boundary
 
 BotA evidence remains source of truth for trading logic.
