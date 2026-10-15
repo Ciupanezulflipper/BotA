@@ -39,8 +39,7 @@ FURTHER_BROAD_AI_REVIEW=STOP
 Canonical current record:
 `CONTINUITY_CURRENT.md`
 
-Latest post-fix proof:
-`audits/BOTA_POSTFIX_RUNTIME_AND_FULL_SESSION_PROOF_2026-10-15.md`
+Latest post-fix proof is recorded in `CONTINUITY_CURRENT.md`.
 
 Historical activation baseline:
 `audits/BOTA_HETZNER_PRODUCTION_ACTIVATION_2026-10-06.md`
