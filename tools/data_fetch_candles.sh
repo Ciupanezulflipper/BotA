@@ -128,7 +128,8 @@ yahoo_range_for_tf() {
   case "${1:-}" in
     M1|M2|M5) echo "1d" ;;
     M15|M30) echo "5d" ;;
-    H1|H2|H4) echo "5d" ;;
+    H1|H2) echo "5d" ;;
+    H4) echo "1mo" ;;
     D1|1D) echo "6mo" ;;
     *) echo "2d" ;;
   esac
