@@ -64,6 +64,26 @@ Still pending:
 
 Do not force a signal to close these gates.
 
+## Latest Oct 14 audit
+
+Read-only alert-ledger summary:
+
+```text
+TRADEABLE_ROWS=75
+UNIQUE_STATES=41
+ROWS_BELOW_SCORE_65=72
+H1_NEUTRAL_ROWS=3
+ENTRY_INVALID_ROWS=0
+RR_NONPOSITIVE_ROWS=0
+MAX_EURUSD=59.2
+MAX_GBPUSD=72.1
+MAX_USDJPY=63.3
+```
+
+The highest-scoring case was one repeated GBPUSD SELL state at 72.1 with ADX 46.3, open market phase, and neutral H1 context.
+
+This is an observation record only. Current action remains continued collection and analysis.
+
 ## ProfitLab note
 
 ProfitLab is a consumer, not trading-logic authority.
