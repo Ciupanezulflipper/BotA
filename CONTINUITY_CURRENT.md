@@ -7,8 +7,7 @@ This is the current operational handoff. Historical audits and strategy records 
 Latest production activation baseline:
 - `audits/BOTA_HETZNER_PRODUCTION_ACTIVATION_2026-10-06.md`
 
-Latest post-activation correction / full-session proof:
-- `audits/BOTA_POSTFIX_RUNTIME_AND_FULL_SESSION_PROOF_2026-10-15.md`
+Latest post-activation correction and full-session proof are recorded directly in this handoff.
 
 ## Current authoritative status
 
