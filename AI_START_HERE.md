@@ -279,6 +279,36 @@ STRATEGY_TUNING=NO
 PRODUCTION_WRITE=NO
 ```
 
+## Oct 15 H4 production health — defect confirmed
+
+Read-only production indicator health inspection showed the same H4 failure on all three active pairs:
+
+```text
+EURUSD_H4 error=insufficient_data weak=true ema9=0 ema21=0 adx=0
+GBPUSD_H4 error=insufficient_data weak=true ema9=0 ema21=0 adx=0
+USDJPY_H4 error=insufficient_data weak=true ema9=0 ema21=0 adx=0
+```
+
+The production fetcher currently requests Yahoo H4 with a `5d` range while `build_indicators.py` requires at least 60 normalized candles. The observed H4 datasets contain only about 28 rows, so the H4 indicator bundle cannot become healthy.
+
+Operational effect:
+- H4 trend context is unavailable across EURUSD, GBPUSD and USDJPY;
+- the M15/H1 fusion sees zeroed H4 EMA context as HOLD rather than a usable H4 trend;
+- any H4 confirmation/opposition logic is therefore weakened or inactive until the data horizon is repaired.
+
+Combined repair scope is now proven:
+
+```text
+DEFECT_1=FORMING_UNCLOSED_CANDLES_ENTER_SHARED_INDICATOR_PATH
+DEFECT_2=H4_FETCH_HORIZON_TOO_SHORT_FOR_60_BAR_MINIMUM
+AFFECTED_PAIRS=EURUSD,GBPUSD,USDJPY
+AFFECTED_TF=M15,H1,H4,D1 for defect 1; H4 for defect 2
+MATERIAL_DECISION_IMPACT=CONFIRMED
+STRATEGY_TUNING=NO
+PRODUCTION_WRITE=NO
+NEXT_ACTION=ISOLATED_LOCAL_REPAIR_CANDIDATE
+```
+
 ## Strategy boundary
 
 Current production/runtime work does not authorize changes to:
