@@ -1,6 +1,6 @@
 # BotA AI Start Here
 
-Last updated: **2026-10-06 UTC**
+Last updated: **2026-10-15 UTC**
 
 Read this before proposing any BotA strategy, deployment, Telegram, ProfitLab, Android/Termux, VPS/Hetzner, replay, historical-data, or runtime action.
 
@@ -18,21 +18,31 @@ PRIVATE_PROFITLAB_ANALYTICS=YES
 
 PRIMARY_RUNTIME_TARGET=HETZNER
 CURRENT_HETZNER_RUNTIME_STATE=ACTIVE
-DEPLOYED_RELEASE=4424518e7b42ecf2a070967d626a9ac86bf04d53
+DEPLOYED_RELEASE=98b93ce5e0c57330b9b2630340ddc448776da1e3
+DEPLOYED_TREE=d09337fbe4536975477867a4f11c49fcdf3cc152
+TARGET_RUNTIME_INSTANCE_ID=459efa86-4678-4f61-bbff-06f62af3326d
 BOTA_SERVICE=active
 BOTA_SERVICE_ENABLED=enabled
 PROVIDER_CONTRACT=YAHOO
 THREE_PAIR_M15_SCAN=RUNNING
-MARKET_DATA=UPDATING
 SIGNAL_CLOSER=RUNNING
-PROFITLAB_DELIVERY_WORKER=RUNNING
+PROFITLAB_DELIVERY_PATH=ARMED
 LIVE_DELIVERY_CONTRACT=PASS
+
+WEEKEND_REPORT_CLASSIFIER_FIX=PASS
+MARKET_PHASE_HETZNER_FIX=PASS
+POST_FIX_FULL_MARKET_OPEN_SESSION=PASS
+OCT14_MARKET_OPEN_WATCHER_CYCLES=156
+OCT14_EACH_PAIR_SCANS=156
+OCT14_QUALIFIED_SIGNALS=0
+OCT14_RUNTIME_STATUS=NORMAL
 
 TELEGRAM_CREDENTIAL_VALIDATED=YES
 SUPABASE_SERVICE_CREDENTIAL_VALIDATED=YES
-REAL_TELEGRAM_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
+REAL_TELEGRAM_NON_TRADING_DELIVERY_POST_ACTIVATION=PASS
+REAL_TELEGRAM_TRADING_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
 REAL_PROFITLAB_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
-DELIVERY_NOT_OBSERVED_REASON=NO_QUALIFIED_SIGNAL_IN_SAMPLED_POST_ACTIVATION_CYCLES
+DELIVERY_NOT_OBSERVED_REASON=NO_NATURAL_QUALIFIED_SIGNAL_YET
 
 ANDROID_ACTIVE_SCANNER=NO
 ANDROID_ROLE=CONTROL_AND_OBSERVATION_ONLY
@@ -41,35 +51,43 @@ PAIR_CHANGES=NO
 TIMEFRAME_CHANGES=NO
 FORCED_SIGNAL_GENERATION=NO
 
-NEXT_ACTION=ONE_BOUNDED_DUAL_SINK_DELIVERY_PROOF_WITHOUT_STRATEGY_CHANGE
+CURRENT_PHASE=OBSERVE_STORE_COLLECT_ANALYZE
+NEXT_ACTION=OBSERVE_NEXT_NATURAL_GREEN_AND_PROVE_DUAL_SINK_LIFECYCLE
 FURTHER_BROAD_AI_REVIEW=STOP
 ```
-
-Current production activation evidence:
-
-`audits/BOTA_HETZNER_PRODUCTION_ACTIVATION_2026-10-06.md`
 
 Current operational handoff:
 
 `CONTINUITY_CURRENT.md`
 
-Historical strategy/research authority remains preserved in the dated records below.
+Latest post-fix evidence:
+
+`audits/BOTA_POSTFIX_RUNTIME_AND_FULL_SESSION_PROOF_2026-10-15.md`
+
+Historical activation baseline:
+
+`audits/BOTA_HETZNER_PRODUCTION_ACTIVATION_2026-10-06.md`
 
 ## Production runtime interpretation
 
-Hetzner is now proven active on exact release:
+The Oct 6 activation baseline release was `4424518e7b42ecf2a070967d626a9ac86bf04d53`.
+
+Current production is newer:
 
 ```text
-4424518e7b42ecf2a070967d626a9ac86bf04d53
+DEPLOYED_RELEASE=98b93ce5e0c57330b9b2630340ddc448776da1e3
+RUNTIME_INSTANCE=459efa86-4678-4f61-bbff-06f62af3326d
 ```
 
-The production deployer completed with `healthy=true`, phase `COMPLETE`, and no rollback. The service is active and enabled.
+Post-activation bounded corrections:
+- weekend daily-report classifier;
+- Hetzner market-phase invocation through `bash`.
 
-Post-activation watcher evidence shows natural market-open cycles completing for EURUSD, GBPUSD and USDJPY M15. The sampled cycles were all `EVALUATED_REJECTED`, so Telegram and Supabase were correctly `not_attempted`.
+No strategy thresholds or scope were changed.
 
-Do not misstate this as a delivery failure. It means no qualified signal existed in the sampled post-activation window.
+A full Oct 14 market-open session completed with 156 watcher cycles and 156 scans for each of EURUSD, GBPUSD and USDJPY, with zero qualified setups and final `BOTA • STATUS: NORMAL`.
 
-The parent orchestrator remains R5-shadowed/fail-closed. Approved child jobs receive scoped live credentials. Therefore parent `side_effects_enabled=false` does not mean the approved child delivery paths are disabled.
+Do not misstate zero qualified setups as a delivery or runtime failure.
 
 ## Delivery proof boundary
 
@@ -80,23 +98,23 @@ TELEGRAM_API_CREDENTIAL=VALID
 TELEGRAM_CHAT_ROUTE=VALID
 SUPABASE_SERVICE_CREDENTIAL=VALID
 LIVE_DELIVERY_SECRET_CONTRACT=PASS
-PROFITLAB_DELIVERY_CURSOR=ADVANCING_AND_CAUGHT_UP_AT_SAMPLE
-SIGNAL_CLOSER_PROVIDER=YAHOO
-SIGNAL_CLOSER_DRY_RUN=FALSE
+TELEGRAM_NON_TRADING_EXTERNAL_DELIVERY=PASS
+PROFITLAB_DELIVERY_PATH=ARMED
 ```
 
-Not yet empirically proven after the 2026-10-06 activation:
+Not yet empirically proven after activation:
 
 ```text
 ONE_REAL_QUALIFIED_SIGNAL_TO_TELEGRAM
 SAME_SIGNAL_TO_PROFITLAB
 POST_ACTIVATION_REAL_CLOSURE_TO_TELEGRAM
 POST_ACTIVATION_REAL_CLOSURE_UPDATE_TO_PROFITLAB
+LIVE_DUPLICATE_FREE_RETRY_RESTART_LIFECYCLE
 ```
 
-Reason: no qualified signal occurred in the sampled natural cycles.
+Reason: no natural qualified GREEN has occurred yet.
 
-Do not force a production trading signal merely to satisfy acceptance. Use an existing supported non-trading delivery smoke-test path if one exists; otherwise wait for and observe the next natural qualified signal.
+Do not force a production trading signal merely to satisfy acceptance.
 
 ## Historical corpus result — preserve exactly
 
@@ -121,54 +139,33 @@ STRATEGY_EDGE_VALIDATED=NO
 STRATEGY_PROFITABILITY_PROVEN_NEGATIVE=NO
 ```
 
-The 2026-09-03 closure stopped the then-active retrospective validation path. The owner later authorized a new prospective shadow-research path. This does not erase or rewrite the old result.
+## Current production diagnostics that must survive handoff
 
-## Statistical correction that must survive handoff
+### macro6
+`NEWS_ON=0` makes `macro6=3` neutral/informational. It is not an active production blocker.
 
-A genuinely new, frozen, single-hypothesis prospective test does not automatically inherit the historical multiple-testing Bonferroni penalty.
+### H1 override drift
+Historical documentation referenced H1 override 75 while current effective default is 85 because the runtime config omits the override keys.
 
-Do not treat any of these as the final required sample size:
+Read-only post-Oct6 counterfactual:
+- rows in 75–84.99 neutral-H1 override band: 0;
+- proven suppressed signals from 85 vs 75: 0.
 
-```text
-N=400
-N=500
-N=682
-N=1446
-```
+Do not change this threshold based on current evidence.
 
-The confirmatory sample size and sequential stopping boundaries must be derived after the measurement pilot establishes the empirical Net-R distribution, execution-cost distribution, ambiguity rate and dependence structure.
+### ADX tension
+Scoring can award +10 when ADX >= 30, while final Policy B requires ADX < 30.
 
-Primary future scientific endpoint is expected to be **Net R after realistic execution costs**, not raw win rate. Exact hypothesis is not frozen yet.
+Historical evidence supported keeping the ADX < 30 guard. Do not remove or retune it merely because strong market movement is visible on higher-timeframe charts.
 
-`60%` win rate is a future business/product aspiration only, not the primary scientific edge gate.
+### market phase
+The prior Termux shebang caused direct invocation of `market_open.sh` from scoring to fail on Hetzner, creating `phase=Unknown` and an illegitimate -5 penalty.
 
-## Execution/evidence corrections
-
-Do not assume:
-
-- decision/model price equals subscriber-executable price;
-- spread is always 1 pip;
-- every win is exactly +2R and loss exactly -1R;
-- EURUSD and GBPUSD signals are independent;
-- M15 OHLC can order TP and SL when both touch in the same candle;
-- Telegram API success proves a human saw the message.
-
-Repository evidence confirms that same-candle TP-first logic exists and has been documented as potentially optimistic.
-
-## Existing measurement infrastructure — do not rewrite blindly
-
-The repository already contains substantial controls:
-
-- `tools/watcher_cycle_ledger.py` — bounded current-cycle reconciliation and terminal decision evidence;
-- `tools/pipeline_ledger.py` — append-only event ledger with UUID event IDs, process-shared `flock`, UTC display time, monotonic/boot-aware time and atomic compact state updates;
-- watcher stale-candle handling that fails closed on missing/unparseable/stale candle evidence.
-
-Do not assume a rewrite is needed. Current Hetzner runtime is already proven active; inspect exact evidence first and change only a specifically proven gap.
+Current release `98b93ce...` fixes both scoring invocations by calling `bash market_open.sh`.
 
 ## Strategy boundary
 
 Current production/runtime work does not authorize changes to:
-
 - Policy B;
 - ADX/RSI/score rules;
 - pair/timeframe scope;
@@ -176,16 +173,7 @@ Current production/runtime work does not authorize changes to:
 - TP/SL strategy logic;
 - baseline trading rules.
 
-## Hetzner / VPS boundary
-
-```text
-VPS_ENGINEERING_ARTIFACT=PRESERVE
-CURRENT_HETZNER_RUNTIME_STATE=ACTIVE
-HETZNER_LIVE_MONEY_CUTOVER=NO
-DEPLOYED_RELEASE=4424518e7b42ecf2a070967d626a9ac86bf04d53
-```
-
-Do not infer current host state from stale historical GitHub records. Start with `CONTINUITY_CURRENT.md` and the 2026-10-06 production activation audit, then verify live host state when a new action depends on it.
+The correct next evidence is clean post-fix observation, not tuning.
 
 ## ProfitLab
 
@@ -196,10 +184,21 @@ PROFITLAB_SOURCE_OF_TRUTH=NO
 BOTA_EVIDENCE_SOURCE_OF_TRUTH=YES
 ```
 
-ProfitLab delivery is armed and the delivery cursor advanced after activation. A new real post-activation qualified signal has not yet been observed publishing to it.
+As of 2026-10-15, no new post-Oct14 natural BotA signal exists in `public.signals`.
+
+The `public.bot_runtime_health` row is stale legacy Termux observability and must not be used as current Hetzner runtime truth.
+
+## Operating mode
+
+```text
+OBSERVE=YES
+STORE=YES
+COLLECT=YES
+ANALYZE=YES
+STRATEGY_CHANGE=NO
+RUNTIME_CHANGE=NO_UNLESS_NEW_DEFECT_PROVEN
+```
 
 ## Exactly one current action
 
-Obtain one bounded dual-sink delivery proof without strategy changes.
-
-Do not start another broad architecture audit, do not retune the strategy, and do not force a production trading signal solely to prove delivery.
+Observe the next natural qualified GREEN and prove its complete dual-sink lifecycle. Until then, continue passive evidence collection and analysis.
