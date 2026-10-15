@@ -237,6 +237,44 @@ PRODUCTION_FIX_AUTHORIZED=NO
 
 Important scope warning: the same shared indicator builder serves M15, H1, H4 and D1. Before changing code, verify whether forming-row contamination is present on each production timeframe so the repair boundary is correct and not H1-specific by assumption.
 
+## Oct 15 forming-bar counterfactual — material impact confirmed
+
+A read-only comparison rebuilt production indicators twice from the same candle CSVs: once with all provider rows, and once with only candles whose full timeframe had completed by the current UTC time.
+
+Results:
+
+```text
+FORMING_BAR_CONTAMINATION_SCOPE=EURUSD,GBPUSD,USDJPY / M15,H1,H4,D1
+MATERIAL_DECISION_IMPACT=CONFIRMED
+
+USDJPY_M15_CURRENT_BIAS=SELL
+USDJPY_M15_CLOSED_ONLY_BIAS=HOLD
+
+USDJPY_H1_CURRENT_BIAS=SELL
+USDJPY_H1_CLOSED_ONLY_BIAS=SELL
+
+PRIOR_0700_0715_H1_VETO_FLIP=NOT_PROVEN
+```
+
+The current USDJPY M15 example proves the shared forming-row defect can change a live directional classification, not merely indicator decimals.
+
+At the sampled time:
+- M15 datasets had one incomplete/live row removed;
+- H1 and H4 datasets had two rows removed, showing both a current timeframe bar and an additional live snapshot row could enter calculations;
+- D1 had one incomplete/current row removed.
+
+The H1 bias happened to remain SELL in this snapshot, so this evidence does not prove that the earlier 07:00–07:15 USDJPY H1 veto would have flipped under closed-bar-only semantics.
+
+A second blind spot also surfaced: H4 rebuilt with only 28 total / 26 closed rows, below `build_indicators.py` minimum of 60 bars, producing zeroed indicator values in this read-only calculation. Direct production H4 cache status must be verified before repair design.
+
+```text
+CLOSED_BAR_REPAIR_REQUIRED=YES
+REPAIR_SCOPE=SHARED_INDICATOR_PATH_NOT_H1_ONLY
+H4_DATA_SUFFICIENCY_STATUS=VERIFY_NEXT
+STRATEGY_TUNING=NO
+PRODUCTION_WRITE=NO
+```
+
 ## ProfitLab / Supabase boundary
 
 BotA evidence remains source of truth for trading logic.
