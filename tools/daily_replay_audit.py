@@ -20,6 +20,12 @@ try:
 except Exception:
     ZoneInfo = None  # type: ignore
 
+if __package__:
+    from tools import bota_common as common
+else:  # direct execution or file-based module loading
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools import bota_common as common
+
 ROOT = Path.home() / "BotA"
 LOG_DIR = ROOT / "logs"
 REPLAY_DIR = LOG_DIR / "replay_audit"
@@ -30,34 +36,10 @@ DEFAULT_SUMMARY_TEXT = LOG_DIR / "daily_replay_audit_latest.txt"
 SIMULATOR = ROOT / "tools" / "shadow_outcome_simulator.py"
 
 
-def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def parse_ts(value: str) -> Optional[datetime]:
-    s = str(value or "").strip()
-    if not s:
-        return None
-    try:
-        s = s.replace("Z", "+00:00")
-        dt = datetime.fromisoformat(s)
-        if dt.tzinfo is None:
-            return None
-        return dt.astimezone(timezone.utc)
-    except Exception:
-        return None
-
-
-def safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        return float(str(value).strip())
-    except Exception:
-        return default
-
-
-def truthy(value: Any) -> bool:
-    s = str(value or "").strip().lower()
-    return s in {"1", "true", "yes", "y", "on"}
+now_utc = common.utc_now
+parse_ts = common.parse_utc_or_none
+safe_float = common.safe_float
+truthy = common.truthy
 
 
 def parse_sl_tp_from_reasons(reasons: str) -> Tuple[Optional[float], Optional[float]]:

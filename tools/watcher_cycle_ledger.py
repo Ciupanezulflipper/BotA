@@ -20,18 +20,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
+if __package__:
+    from tools import bota_common as common
+else:  # direct execution or file-based module loading
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools import bota_common as common
+
 DEFAULT_EXPECTED = (("EURUSD", "M15"), ("GBPUSD", "M15"), ("USDJPY", "M15"))
 MAX_NEW_BYTES = 262_144
-LEGACY_ALERT_FIELDS_13 = (
-    "timestamp", "pair", "tf", "direction", "score", "confidence", "entry", "sl", "tp",
-    "provider", "rejected", "filter_str", "reasons",
-)
-CURRENT_ALERT_FIELDS_25 = (
-    "ts", "pair", "tf", "direction", "score", "confidence", "entry", "sl", "tp", "provider",
-    "filter_rejected", "filter_reasons", "reasons", "ema_comp", "rsi_comp", "macd_comp",
-    "adx_comp", "adx_raw", "rsi_raw", "macd_hist_raw", "macro6", "h1_trend", "tier", "session",
-    "adx_regime",
-)
+LEGACY_ALERT_FIELDS_13 = common.LEGACY_ALERT_FIELDS
+CURRENT_ALERT_FIELDS_25 = common.CURRENT_ALERT_FIELDS
 CANONICAL_ALERT_FIELDS_25 = CURRENT_ALERT_FIELDS_25
 VALID_SUPABASE_STATUSES = {
     "published", "skipped_active_exists", "skipped_non_green", "failed_missing_service_key",
@@ -131,8 +129,7 @@ def parse_new_rows(path: Path, offset: int) -> list[dict[str, str]]:
     return rows
 
 
-def truthy(value: Any) -> bool:
-    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+truthy = common.truthy
 
 
 def normalized_rejected(row: dict[str, str]) -> bool:

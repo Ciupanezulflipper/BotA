@@ -10,6 +10,12 @@ import os, sys, json, csv, time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+if __package__:
+    from tools import bota_common as common
+else:  # direct execution or file-based module loading
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools import bota_common as common
+
 ROOT      = Path(os.environ.get("BOTA_ROOT", Path.home() / "BotA"))
 LOGS      = ROOT / "logs"
 CACHE     = ROOT / "cache"
@@ -107,8 +113,7 @@ def check_hit(direction, current, entry, sl, tp) -> str:
         if current >= sl: return "SL"
     return ""
 
-def pip_size(pair: str) -> float:
-    return 0.01 if pair.upper().endswith("JPY") else 0.0001
+pip_size = common.fx_pip_size
 
 def pips(a: float, b: float, pair: str) -> float:
     return round(abs(a - b) / pip_size(pair), 1)

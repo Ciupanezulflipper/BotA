@@ -19,6 +19,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
+if __package__:
+    from tools import bota_common as common
+else:  # direct execution or file-based module loading
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools import bota_common as common
+
 # ---------------------------------------------------------------------------
 # PATHS
 # ---------------------------------------------------------------------------
@@ -117,19 +123,14 @@ class Candle:
 # HELPERS
 # ---------------------------------------------------------------------------
 
-def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+now_utc = common.utc_now
 
 def to_iso(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat()
 
-def parse_ts(value: str) -> datetime:
-    return datetime.fromisoformat(
-        str(value).replace("Z", "+00:00")
-    ).astimezone(timezone.utc)
+parse_ts = common.parse_utc_assume_utc
 
-def pip_size(pair: str) -> float:
-    return 0.01 if pair.upper().endswith("JPY") else 0.0001
+pip_size = common.fx_pip_size
 
 def pips_between(a: float, b: float, pair: str) -> float:
     return round(abs(a - b) / pip_size(pair), 1)
