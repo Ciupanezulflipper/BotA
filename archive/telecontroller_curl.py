@@ -25,6 +25,11 @@ def read_env():
 CFG = read_env()
 TOKEN = os.environ.get("TELEGRAM_TOKEN") or CFG.get("TELEGRAM_TOKEN")
 API_BASE = f"https://api.telegram.org/bot{TOKEN}"
+ALLOWED_CHAT_IDS = {
+    c.strip()
+    for c in (os.environ.get("TELEGRAM_CHAT_ID") or CFG.get("TELEGRAM_CHAT_ID") or "").split(",")
+    if c.strip()
+}
 
 def curl_request(path, data=None, timeout=30):
     """Use curl instead of urllib (bypasses Python SSL issues)"""
@@ -91,6 +96,9 @@ def market_phase():
     except:
         return "Unknown"
 
+def authorized(chat_id):
+    return str(chat_id) in ALLOWED_CHAT_IDS
+
 def handle(chat_id, text):
     if not text:
         return
@@ -128,6 +136,9 @@ def main():
     if not TOKEN:
         print("[telecontroller] ERROR: TELEGRAM_TOKEN missing", flush=True)
         return
+    if not ALLOWED_CHAT_IDS:
+        print("[telecontroller] ERROR: TELEGRAM_CHAT_ID missing; refusing to serve any chat", flush=True)
+        return
     
     offset_file = os.path.join(CACHE, "tele.offset")
     offset = read_int(offset_file) or 0
@@ -152,6 +163,10 @@ def main():
                 text = msg.get("text")
                 
                 if chat_id and text:
+                    if not authorized(chat_id):
+                        print(f"[handle] denied chat_id={chat_id}", flush=True)
+                        write_int(offset_file, offset)
+                        continue
                     print(f"[handle] chat_id={chat_id} cmd={text}", flush=True)
                     handle(chat_id, text)
                 

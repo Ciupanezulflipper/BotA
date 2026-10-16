@@ -3,8 +3,10 @@
 # Fixes: HTTP Error 409 (can't use getUpdates while webhook is active)
 # Env: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, optional ANALYZE_PAIRS
 
-import os, sys, json, time, html, subprocess, textwrap
+import os, re, sys, json, time, html, subprocess, textwrap
 import urllib.request, urllib.parse, urllib.error
+
+PAIR_RE = re.compile(r"^[A-Z]{6,7}$")
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 CHAT_ID   = os.getenv("TELEGRAM_CHAT_ID", "").strip()
@@ -16,6 +18,12 @@ OFFSET_FILE = os.path.join(STATE_DIR, "tele_update_offset.txt")
 PAUSE_FILE  = os.path.join(STATE_DIR, "paused.flag")
 PAIRS_FILE  = os.path.join(STATE_DIR, "analyze_pairs.txt")  # if present, overrides ANALYZE_PAIRS env
 DEFAULT_PAIRS = os.getenv("ANALYZE_PAIRS", "EURUSD,GBPUSD")
+
+BOTA_TOOLS     = os.path.join(os.environ.get("HOME", ""), "BotA", "tools")
+ANALYZE_NOW_SH = os.path.join(BOTA_TOOLS, "analyze_now.sh")
+METRICS_VERIFY = os.path.join(BOTA_TOOLS, "metrics_verify.sh")
+PHASE10_VERIFY = os.path.join(BOTA_TOOLS, "phase10_verify.sh")
+DAILY_REPORT   = os.path.join(BOTA_TOOLS, "daily_report.py")
 
 def _http_json(url, data=None, timeout=30):
     req = urllib.request.Request(url, headers={"Content-Type":"application/json"})
@@ -62,12 +70,22 @@ def get_updates(offset=None, timeout=25):
     with urllib.request.urlopen(url, timeout=timeout+5) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
-def run_cmd(cmd, env=None, max_len=3500):
+def valid_pairs(candidates):
+    """Keep only well-formed symbols so no caller text reaches a command line."""
+    cleaned = [c.strip().upper() for c in candidates if c and c.strip()]
+    return [c for c in cleaned if PAIR_RE.match(c)]
+
+def analyze_argv(pairs):
+    return [ANALYZE_NOW_SH], dict(os.environ, ANALYZE_PAIRS=",".join(pairs))
+
+def run_cmd(argv, env=None, max_len=3500, max_lines=None):
     try:
-        proc = subprocess.run(cmd, shell=True, check=False,
+        proc = subprocess.run(argv, shell=False, check=False,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               env=env, timeout=120)
         out = proc.stdout.decode("utf-8", "ignore")
+        if max_lines:
+            out = "\n".join(out.splitlines()[:max_lines])
         return out if len(out) <= max_len else out[:max_len] + "\n…(truncated)…"
     except Exception as e:
         return f"[tele_control] Exception running command: {e}"
@@ -154,26 +172,32 @@ def handle_command(text, chat_id, entities=None):
         set_paused(False); send_message(chat_id, "🔔 Alerts <b>RESUMED</b>.", {"inline_keyboard": menu_keyboard()["inline_keyboard"]}); return
     if cmd == "/pairs":
         if args:
-            set_pairs_to_state(args); send_message(chat_id, f"✅ Pairs set to: <code>{' '.join(args)}</code>", {"inline_keyboard": menu_keyboard()["inline_keyboard"]})
+            pairs = valid_pairs(args)
+            if not pairs:
+                send_message(chat_id, "❌ Invalid pairs. Usage: <code>/pairs EURUSD GBPUSD</code>"); return
+            set_pairs_to_state(pairs); send_message(chat_id, f"✅ Pairs set to: <code>{' '.join(pairs)}</code>", {"inline_keyboard": menu_keyboard()["inline_keyboard"]})
         else:
             cur = get_pairs_from_state()
             send_message(chat_id, f"ℹ️ Current pairs: <code>{cur}</code>\nUsage: <code>/pairs EURUSD GBPUSD XAUUSD</code>")
         return
     if cmd == "/analyze":
-        pairs = " ".join(args) if args else get_pairs_from_state()
-        out = run_cmd(f"ANALYZE_PAIRS='{pairs.replace(' ',',')}' \"$HOME/BotA/tools/analyze_now.sh\"")
+        pairs = valid_pairs(args) if args else valid_pairs(get_pairs_from_state().split())
+        if not pairs:
+            send_message(chat_id, "❌ Invalid pairs. Usage: <code>/analyze EURUSD GBPUSD</code>"); return
+        argv, env = analyze_argv(pairs)
+        out = run_cmd(argv, env=env)
         send_message(chat_id, out); return
     if cmd == "/status":
-        out = run_cmd("\"$HOME/BotA/tools/metrics_verify.sh\" | sed -n '1,120p'")
+        out = run_cmd([METRICS_VERIFY], max_lines=120)
         send_message(chat_id, f"<b>Status</b>\n<code>{html.escape(out)}</code>"); return
     if cmd == "/audit":
-        out = run_cmd("\"$HOME/BotA/tools/metrics_verify.sh\"")
+        out = run_cmd([METRICS_VERIFY])
         send_message(chat_id, f"<b>Audit</b>\n<code>{html.escape(out)}</code>"); return
     if cmd == "/health":
-        out = run_cmd("\"$HOME/BotA/tools/phase10_verify.sh\" | sed -n '1,80p'")
+        out = run_cmd([PHASE10_VERIFY], max_lines=80)
         send_message(chat_id, f"<b>Health</b>\n<code>{html.escape(out)}</code>"); return
     if cmd == "/daily":
-        out = run_cmd("DRY=0 python3 \"$HOME/BotA/tools/daily_report.py\" | sed -n '1,80p'")
+        out = run_cmd(["python3", DAILY_REPORT], env=dict(os.environ, DRY="0"), max_lines=80)
         send_message(chat_id, out); return
     send_message(chat_id, render_menu_text(), {"inline_keyboard": menu_keyboard()["inline_keyboard"]})
 
@@ -183,27 +207,32 @@ def handle_callback(cb, chat_id):
         try: answer_callback_query(cb_id, "Working…")
         except: pass
     if data == "ANALYZE_NOW":
-        pairs = get_pairs_from_state()
-        out = run_cmd(f"ANALYZE_PAIRS='{pairs.replace(' ',',')}' \"$HOME/BotA/tools/analyze_now.sh\"")
+        pairs = valid_pairs(get_pairs_from_state().split())
+        if not pairs:
+            send_message(chat_id, "❌ No valid pairs configured.", {"inline_keyboard": menu_keyboard()["inline_keyboard"]}); return
+        argv, env = analyze_argv(pairs)
+        out = run_cmd(argv, env=env)
         send_message(chat_id, out, {"inline_keyboard": menu_keyboard()["inline_keyboard"]}); return
     if data == "STATUS":
-        out = run_cmd("\"$HOME/BotA/tools/metrics_verify.sh\" | sed -n '1,120p'")
+        out = run_cmd([METRICS_VERIFY], max_lines=120)
         send_message(chat_id, f"<b>Status</b>\n<code>{html.escape(out)}</code>", {"inline_keyboard": menu_keyboard()["inline_keyboard"]}); return
     if data == "AUDIT":
-        out = run_cmd("\"$HOME/BotA/tools/metrics_verify.sh\"")
+        out = run_cmd([METRICS_VERIFY])
         send_message(chat_id, f"<b>Audit</b>\n<code>{html.escape(out)}</code>", {"inline_keyboard": menu_keyboard()["inline_keyboard"]}); return
     if data == "HEALTH":
-        out = run_cmd("\"$HOME/BotA/tools/phase10_verify.sh\" | sed -n '1,80p'")
+        out = run_cmd([PHASE10_VERIFY], max_lines=80)
         send_message(chat_id, f"<b>Health</b>\n<code>{html.escape(out)}</code>", {"inline_keyboard": menu_keyboard()["inline_keyboard"]}); return
     if data == "PAUSE":
         set_paused(True);  send_message(chat_id, "🔕 Alerts <b>PAUSED</b>.", {"inline_keyboard": menu_keyboard()["inline_keyboard"]}); return
     if data == "RESUME":
         set_paused(False); send_message(chat_id, "🔔 Alerts <b>RESUMED</b>.", {"inline_keyboard": menu_keyboard()["inline_keyboard"]}); return
     if data == "DAILY":
-        out = run_cmd("DRY=0 python3 \"$HOME/BotA/tools/daily_report.py\" | sed -n '1,80p'")
+        out = run_cmd(["python3", DAILY_REPORT], env=dict(os.environ, DRY="0"), max_lines=80)
         send_message(chat_id, out, {"inline_keyboard": menu_keyboard()["inline_keyboard"]}); return
     if data.startswith("SETPAIRS_"):
-        pairs = data.replace("SETPAIRS_", "").split("_")
+        pairs = valid_pairs(data.replace("SETPAIRS_", "").split("_"))
+        if not pairs:
+            send_message(chat_id, "❌ Invalid pairs.", {"inline_keyboard": menu_keyboard()["inline_keyboard"]}); return
         set_pairs_to_state(pairs)
         send_message(chat_id, f"✅ Pairs set to: <code>{' '.join(pairs)}</code>", {"inline_keyboard": menu_keyboard()["inline_keyboard"]}); return
     send_message(chat_id, "ℹ️ Unknown action.", {"inline_keyboard": menu_keyboard()["inline_keyboard"]})

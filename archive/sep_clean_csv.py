@@ -16,7 +16,7 @@ with open(src) as f:
         except Exception:
             tmin = ts
         key = f"{tmin}|{pair}|{side}|{entry}|{tp}|{sl}"
-        h = hashlib.sha1(key.encode()).hexdigest()[:12]
+        h = hashlib.sha1(key.encode(), usedforsecurity=False).hexdigest()[:12]
         if h in seen: 
             continue
         seen.add(h)

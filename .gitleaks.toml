@@ -37,28 +37,19 @@ secretGroup = 1
   description = "sb_secret placeholders"
   regexes     = ['''(?i)(?:your[_-]?|example|placeholder|changeme|xxx)''']
 
+# Only sample/placeholder files are exempt. Real runtime env files
+# (.env, .env.botA, config/tele.env, snapshots, backups) are scanned:
+# they are exactly where leaked credentials show up.
 [allowlist]
 description = "Global allowlist"
 paths = [
   '''^\.env\.example$''',
   '''^\.env\.sample$''',
+  '''(?i)\.example$''',
+  '''(?i)\.sample$''',
   '''(?i)^tests?/''',
   '''(?i)^test_''',
   '''(?i)_test\.py$''',
-  '''(?i)\.log$''',
-  '''(?i)^logs?/''',
-  '''(?i)^docs?/''',
-  '''(?i)README''',
-  '''(?i)^config\.backup-''',
-  '''(?i)^_snapshots/''',
-  '''(?i)^archive/''',
-  '''(?i)^config/tele\.env$''',
-  '''(?i)^\.env$''',
-  '''(?i)^\.env\.''',
-  '''(?i)^\.env\.runtime$''',
-  '''(?i)^\.env\.profitlab$''',
-  '''(?i)^\.env\.botA\.?''',
-  '''(?i)^\.env\.bak\.''',
 ]
 regexes = [
   '''(?i)(?:example|placeholder|changeme|your[_-]?(?:token|key|secret)|<[^>]+>|\$\{[^}]+\})''',

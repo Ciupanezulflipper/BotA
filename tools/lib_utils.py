@@ -151,7 +151,7 @@ def digest_checksum(payload: str) -> str:
 
 def hash_signal(symbol: str, side: str, score: Any, sent_ok: bool = True, extra: str = "") -> str:
     raw = f"{symbol}|{side}|{score}|{int(sent_ok)}|{extra}"
-    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:8]
+    return hashlib.md5(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:8]
 
 # ========= Locking / single-instance =========
 @contextlib.contextmanager

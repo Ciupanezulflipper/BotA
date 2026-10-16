@@ -144,7 +144,7 @@ def build_digest_text(target_date: dt.date, summary: Dict) -> str:
     return "\n".join(lines)
 
 def checksum(text: str) -> str:
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()
+    return hashlib.sha1(text.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 def read_lock() -> Dict:
     try:
