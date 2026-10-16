@@ -5,6 +5,23 @@ on:
   pull_request:
 
 jobs:
+  python-tests:
+    name: Python test discovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: python -m pip install --quiet pytest
+
+      - name: Run all Python tests by discovery
+        run: python -m pytest -v tests
+
   gitleaks:
     name: Gitleaks
     runs-on: ubuntu-latest
@@ -29,8 +46,7 @@ jobs:
             --report-format json \
             --report-path gitleaks-report.json \
             --redact \
-            --exit-code 1 || LEAK=1
-          echo "LEAK=${LEAK:-0}" >> "$GITHUB_ENV"
+            --exit-code 1
 
       - name: Upload gitleaks report
         if: always()
@@ -39,10 +55,6 @@ jobs:
           name: gitleaks-report
           path: gitleaks-report.json
           if-no-files-found: ignore
-
-      - name: Fail if leaks found
-        if: env.LEAK == '1'
-        run: exit 1
 
   shellcheck:
     name: ShellCheck
@@ -53,9 +65,10 @@ jobs:
 
       - name: Run ShellCheck
         run: |
+          set -o pipefail
           find . -name '*.sh' -not -path './.git/*' \
             -exec shellcheck --severity=warning {} + \
-            | tee shellcheck-report.txt || true
+            2>&1 | tee shellcheck-report.txt
 
       - name: Upload ShellCheck report
         if: always()
@@ -82,8 +95,7 @@ jobs:
             --severity-level medium \
             --confidence-level medium \
             -f json \
-            -o bandit-report.json \
-            || true
+            -o bandit-report.json
 
       - name: Upload Bandit report
         if: always()
