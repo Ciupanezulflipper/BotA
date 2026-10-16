@@ -1,0 +1,61 @@
+name: Core module unit tests
+
+on:
+  pull_request:
+    paths:
+      - "tools/api_circuit_breaker.py"
+      - "tools/atr_calculator.py"
+      - "tools/data_quality.py"
+      - "tools/indicators.py"
+      - "tools/provider_limits.py"
+      - "tools/risk_engine.py"
+      - "tools/risk_manager.py"
+      - "tests/test_api_circuit_breaker.py"
+      - "tests/test_atr_calculator.py"
+      - "tests/test_data_quality_validation.py"
+      - "tests/test_indicators_math.py"
+      - "tests/test_provider_limits_backoff.py"
+      - "tests/test_risk_engine_sizing.py"
+      - "tests/test_risk_manager_env_policy.py"
+      - ".github/workflows/core-module-unit-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile modules under test
+        run: |
+          python -m py_compile \
+            tools/api_circuit_breaker.py \
+            tools/atr_calculator.py \
+            tools/data_quality.py \
+            tools/indicators.py \
+            tools/provider_limits.py \
+            tools/risk_engine.py \
+            tools/risk_manager.py
+
+      - name: Install pandas for data-quality coverage
+        run: python -m pip install --disable-pip-version-check "pandas==2.2.3"
+
+      - name: Run focused unit tests
+        run: |
+          python -m unittest \
+            tests/test_api_circuit_breaker.py \
+            tests/test_atr_calculator.py \
+            tests/test_data_quality_validation.py \
+            tests/test_indicators_math.py \
+            tests/test_provider_limits_backoff.py \
+            tests/test_risk_engine_sizing.py \
+            tests/test_risk_manager_env_policy.py \
+            -v

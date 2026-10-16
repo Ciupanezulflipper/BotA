@@ -5,7 +5,7 @@ Stores JSON in $REPO/state/provider_limits.json
 """
 
 from __future__ import annotations
-import json, time, os
+import copy, json, time, os
 from pathlib import Path
 from typing import Dict
 
@@ -25,7 +25,7 @@ def _load() -> Dict[str, Dict[str, float]]:
             return json.loads(DB.read_text())
         except Exception:
             pass
-    return DEFAULTS.copy()
+    return copy.deepcopy(DEFAULTS)
 
 def _save(d: Dict[str, Dict[str, float]]) -> None:
     tmp = DB.with_suffix(".tmp")
@@ -41,7 +41,7 @@ def ready(provider: str) -> bool:
 def stamp(provider: str, *, cooldown: float | None = None) -> None:
     d = _load()
     now = time.time()
-    entry = d.get(provider, {"last": 0.0, "cooldown": 1.0})
+    entry = dict(d.get(provider, {"last": 0.0, "cooldown": 1.0}))
     entry["last"] = now
     if cooldown is not None:
         entry["cooldown"] = float(cooldown)
