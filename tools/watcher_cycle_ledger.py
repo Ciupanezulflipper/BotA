@@ -34,7 +34,7 @@ CURRENT_ALERT_FIELDS_25 = (
 )
 CANONICAL_ALERT_FIELDS_25 = CURRENT_ALERT_FIELDS_25
 VALID_SUPABASE_STATUSES = {
-    "published", "skipped_active_exists", "skipped_non_green", "failed_missing_service_key",
+    "published", "skipped_exact_duplicate", "skipped_non_green", "failed_missing_service_key",
     "failed_dedup_check", "failed_publish",
 }
 VALID_TELEGRAM_STATUSES = {

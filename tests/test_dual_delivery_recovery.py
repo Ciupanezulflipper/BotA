@@ -194,8 +194,8 @@ class ProfitLabIndependentOfTelegramTests(unittest.TestCase):
 class SupabaseDedupIndependentTests(unittest.TestCase):
     """Requirement 6: Supabase-side dedup is correct on its own, without Telegram."""
 
-    def test_active_signal_exists_short_circuits_insert(self) -> None:
-        with mock.patch.object(supabase_publish, "active_signal_exists", return_value=True), \
+    def test_exact_signal_exists_short_circuits_insert(self) -> None:
+        with mock.patch.object(supabase_publish, "exact_signal_exists", return_value=True), \
              mock.patch.object(supabase_publish, "insert_signal") as insert, \
              mock.patch.dict(os.environ, {"SUPABASE_SERVICE_KEY": "k"}, clear=False):
             ok, status = supabase_publish.publish_with_status(
@@ -203,10 +203,10 @@ class SupabaseDedupIndependentTests(unittest.TestCase):
             )
         insert.assert_not_called()
         self.assertTrue(ok)
-        self.assertEqual(status, "skipped_active_exists")
+        self.assertEqual(status, "skipped_exact_duplicate")
 
     def test_dedup_check_failure_fails_closed_without_inserting(self) -> None:
-        with mock.patch.object(supabase_publish, "active_signal_exists", return_value=None), \
+        with mock.patch.object(supabase_publish, "exact_signal_exists", return_value=None), \
              mock.patch.object(supabase_publish, "insert_signal") as insert, \
              mock.patch.dict(os.environ, {"SUPABASE_SERVICE_KEY": "k"}, clear=False):
             ok, status = supabase_publish.publish_with_status(
