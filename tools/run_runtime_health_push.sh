@@ -48,10 +48,17 @@ if [ "${BOTA_R5_SHADOW:-0}" = "1" ]; then
   exit 0
 fi
 
-if [ ! -f "$SECRET_FILE" ]; then
-  echo "RESULT=FAIL_MISSING_SECRET_FILE" >> "$LOG" 2>&1
-  echo "=== BotA runtime health push end ===" >> "$LOG" 2>&1
-  exit 0
+# Production Hetzner injects the dedicated ingest secret into this process.
+# Termux/backward-compatible installs may still load it from the legacy file.
+if [ -z "${BOTA_HEALTH_INGEST_SECRET:-}" ]; then
+  if [ ! -f "$SECRET_FILE" ]; then
+    echo "RESULT=FAIL_MISSING_SECRET_FILE" >> "$LOG" 2>&1
+    echo "=== BotA runtime health push end ===" >> "$LOG" 2>&1
+    exit 0
+  fi
+  set -a
+  . "$SECRET_FILE"
+  set +a
 fi
 
 # Avoid overlapping pushes if network stalls.
@@ -65,10 +72,6 @@ if [ -f "$LOCK" ]; then
 fi
 
 date -u '+%Y-%m-%dT%H:%M:%SZ' > "$LOCK"
-
-set -a
-. "$SECRET_FILE"
-set +a
 
 if [ -z "${BOTA_HEALTH_INGEST_SECRET:-}" ]; then
   rm -f "$LOCK"

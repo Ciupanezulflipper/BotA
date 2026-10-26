@@ -76,6 +76,12 @@ DAILY_SUMMARY_LIVE_DELIVERY_ENV = {
 R5_LIVE_DELIVERY_JOBS = frozenset({
     "watcher", "profitlab_delivery", "closer", "daily_summary_server_gate",
 })
+# Runtime-health publication is operational observability, not trading/live-signal
+# delivery. It gets its own narrow R5 escape hatch and only the dedicated ingest
+# secret; keeping this separate prevents accidental expansion of the approved
+# live-delivery job set.
+R5_HEALTH_DELIVERY_JOBS = frozenset({"runtime_health_push"})
+R5_HEALTH_DELIVERY_ENV = dict(R5_LIVE_DELIVERY_ENV)
 # r5_bootstrap/sitecustomize.py replaces every one of these keys in the
 # *parent* orchestrator process with R5_SENTINEL_VALUE the moment R5 shadow
 # activates (it runs ahead of Orchestrator via PYTHONPATH). That poisoning
@@ -96,7 +102,10 @@ R5_SENSITIVE_ENV_ALIASES = (
 R5_SENTINEL_VALUE = "R5_SHADOW_NO_NETWORK"
 LIVE_DELIVERY_SECRET_PATH_ENV = "BOTA_LIVE_DELIVERY_SECRET_PATH"
 DEFAULT_LIVE_DELIVERY_SECRET_PATH = Path("/etc/bota/live-delivery.env")
-LIVE_DELIVERY_ALLOWED_KEYS = ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "SUPABASE_SERVICE_KEY")
+LIVE_DELIVERY_ALLOWED_KEYS = (
+    "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "SUPABASE_SERVICE_KEY",
+    "BOTA_HEALTH_INGEST_SECRET",
+)
 # Minimum keys each approved job needs, per the dual-delivery contract:
 # watcher fans out Telegram + Supabase/ProfitLab; profitlab_delivery only
 # republishes to Supabase; closer performs the SL/TP lifecycle PATCH plus its
@@ -107,7 +116,15 @@ R5_LIVE_DELIVERY_JOB_SECRET_KEYS = {
     "closer": ("SUPABASE_SERVICE_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
     "daily_summary_server_gate": ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
 }
+R5_HEALTH_DELIVERY_JOB_SECRET_KEYS = {
+    "runtime_health_push": ("BOTA_HEALTH_INGEST_SECRET",),
+}
+R5_JOB_SECRET_KEYS = {
+    **R5_LIVE_DELIVERY_JOB_SECRET_KEYS,
+    **R5_HEALTH_DELIVERY_JOB_SECRET_KEYS,
+}
 assert set(R5_LIVE_DELIVERY_JOB_SECRET_KEYS) == R5_LIVE_DELIVERY_JOBS
+assert set(R5_HEALTH_DELIVERY_JOB_SECRET_KEYS) == R5_HEALTH_DELIVERY_JOBS
 LIVE_DELIVERY_ENV_LINE = re.compile(r"^([A-Z][A-Z0-9_]*)=(.*)$")
 POLICY_KEYS = (
     "PAIRS", "TIMEFRAMES", "POLICY_B_ENABLED", "POLICY_B_SCORE_MIN",
@@ -221,7 +238,7 @@ def load_live_delivery_secrets(path: Path | None = None) -> dict[str, str]:
 
 def _live_delivery_env_for_job(job: "Job") -> dict[str, str]:
     """Return only the credential keys this approved job is allowed to see."""
-    keys = R5_LIVE_DELIVERY_JOB_SECRET_KEYS.get(job.name)
+    keys = R5_JOB_SECRET_KEYS.get(job.name)
     if not keys:
         return {}
     secrets = load_live_delivery_secrets()
@@ -441,6 +458,8 @@ class Job:
                 allowed = overrides == DAILY_SUMMARY_LIVE_DELIVERY_ENV
             elif self.name in R5_LIVE_DELIVERY_JOBS:
                 allowed = overrides == R5_LIVE_DELIVERY_ENV
+            elif self.name in R5_HEALTH_DELIVERY_JOBS:
+                allowed = overrides == R5_HEALTH_DELIVERY_ENV
             else:
                 allowed = False
             if not allowed:
@@ -479,7 +498,8 @@ def production_jobs(code_root: Path = ROOT) -> tuple[Job, ...]:
         Job("profitlab_delivery", ((python, str(tool / "profitlab_delivery.py")),), EVERY_MINUTE, 45,
             env_overrides=tuple(R5_LIVE_DELIVERY_ENV.items())),
         Job("runtime_health_push", ((bash, str(tool / "run_runtime_health_push.sh")),), EVERY_5_MINUTES,
-            CONSERVATIVE_DEADLINE_SECONDS),
+            CONSERVATIVE_DEADLINE_SECONDS,
+            env_overrides=tuple(R5_HEALTH_DELIVERY_ENV.items())),
         Job("market_pulse", ((python, str(tool / "market_pulse_v2.py"), "--scheduled-send"),), EVERY_30_MINUTES, 25),
         Job("alerts_to_trades", ((python, str(tool / "alerts_to_trades.py")),), DAILY_0506,
             CONSERVATIVE_DEADLINE_SECONDS),
@@ -638,7 +658,7 @@ class Orchestrator:
             raise ContractError("release_python_unusable")
         if job is not None:
             env.update(job.env_overrides)
-            if job.name in R5_LIVE_DELIVERY_JOB_SECRET_KEYS:
+            if job.name in R5_JOB_SECRET_KEYS:
                 for alias in R5_SENSITIVE_ENV_ALIASES:
                     env.pop(alias, None)
                 env.update(_live_delivery_env_for_job(job))

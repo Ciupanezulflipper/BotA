@@ -168,5 +168,82 @@ class R5NoSideEffectShadowTests(unittest.TestCase):
         self.assertLess(text.index(marker), text.index(source_secret))
 
 
+    def _run_health_wrapper_fixture(self, injected_secret=None, file_secret=None, shadow="0"):
+        with tempfile.TemporaryDirectory() as temporary:
+            code_root = Path(temporary) / "code"
+            mutable = Path(temporary) / "mutable"
+            (code_root / "tools").mkdir(parents=True)
+            (code_root / "config").mkdir(parents=True)
+            (mutable / "state").mkdir(parents=True)
+            (mutable / "logs").mkdir(parents=True)
+            sender = code_root / "tools" / "push_runtime_health_supabase.py"
+            sender.write_text(
+                "import os,sys\n"
+                "print('SECRET_PRESENT=' + ('YES' if os.environ.get('BOTA_HEALTH_INGEST_SECRET') else 'NO'))\n"
+                "print('SEND_MODE=' + ('YES' if '--send' in sys.argv else 'NO'))\n",
+                encoding="utf-8",
+            )
+            if file_secret is not None:
+                secret_file = code_root / "config" / "bota_health_ingest.env"
+                secret_file.write_text(
+                    f"BOTA_HEALTH_INGEST_SECRET={file_secret}\n",
+                    encoding="utf-8",
+                )
+                secret_file.chmod(0o600)
+
+            env = dict(os.environ)
+            env.update({
+                "BOTA_CODE_ROOT": str(code_root),
+                "BOTA_ROOT": str(code_root),
+                "BOTA_MUTABLE_ROOT": str(mutable),
+                "BOTA_R5_SHADOW": shadow,
+            })
+            if injected_secret is None:
+                env.pop("BOTA_HEALTH_INGEST_SECRET", None)
+            else:
+                env["BOTA_HEALTH_INGEST_SECRET"] = injected_secret
+
+            completed = subprocess.run(
+                ["bash", str(HEALTH_WRAPPER)],
+                env=env,
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                timeout=10,
+            )
+            log = (mutable / "logs" / "cron.runtime_health_push.log").read_text(encoding="utf-8")
+            return completed, log
+
+    def test_runtime_health_wrapper_accepts_injected_secret_without_file(self):
+        secret = "injected-health-secret-do-not-print"
+        completed, log = self._run_health_wrapper_fixture(injected_secret=secret)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("SECRET_FILE_PRESENT=NO", log)
+        self.assertIn("SECRET_PRESENT=YES", log)
+        self.assertIn("SEND_MODE=YES", log)
+        self.assertIn("RESULT=PASS rc=0", log)
+        self.assertNotIn(secret, log + completed.stdout + completed.stderr)
+
+    def test_runtime_health_wrapper_retains_legacy_secret_file_fallback(self):
+        secret = "legacy-health-secret-do-not-print"
+        completed, log = self._run_health_wrapper_fixture(file_secret=secret)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("SECRET_FILE_PRESENT=YES", log)
+        self.assertIn("SECRET_PRESENT=YES", log)
+        self.assertIn("SEND_MODE=YES", log)
+        self.assertIn("RESULT=PASS rc=0", log)
+        self.assertNotIn(secret, log + completed.stdout + completed.stderr)
+
+    def test_runtime_health_wrapper_r5_shadow_remains_local_only_even_with_injected_secret(self):
+        secret = "shadow-health-secret-do-not-print"
+        completed, log = self._run_health_wrapper_fixture(injected_secret=secret, shadow="1")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("SECRET_PRESENT=YES", log)
+        self.assertIn("SEND_MODE=NO", log)
+        self.assertIn("RESULT=R5_SHADOW_LOCAL_ONLY rc=0", log)
+        self.assertNotIn("RESULT=PASS rc=0", log)
+        self.assertNotIn(secret, log + completed.stdout + completed.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

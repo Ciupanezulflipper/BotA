@@ -496,5 +496,64 @@ class OrchestratorTests(unittest.TestCase):
         self.assertIn('SENT_FILE="${STATE_DIR}/daily_summary_sent_${server_date}.ok"', gate)
 
 
+    def test_runtime_health_push_has_separate_r5_policy_and_only_ingest_secret(self):
+        jobs = {job.name: job for job in vps.production_jobs()}
+        self.assertEqual(
+            vps.R5_LIVE_DELIVERY_JOBS,
+            frozenset({"watcher", "profitlab_delivery", "closer", "daily_summary_server_gate"}),
+        )
+        self.assertEqual(vps.R5_HEALTH_DELIVERY_JOBS, frozenset({"runtime_health_push"}))
+        self.assertEqual(
+            dict(jobs["runtime_health_push"].env_overrides),
+            vps.R5_HEALTH_DELIVERY_ENV,
+        )
+        self.assertEqual(
+            vps.R5_HEALTH_DELIVERY_JOB_SECRET_KEYS,
+            {"runtime_health_push": ("BOTA_HEALTH_INGEST_SECRET",)},
+        )
+        self.assertEqual(
+            vps.R5_LIVE_DELIVERY_JOB_SECRET_KEYS,
+            {
+                "watcher": ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "SUPABASE_SERVICE_KEY"),
+                "profitlab_delivery": ("SUPABASE_SERVICE_KEY",),
+                "closer": ("SUPABASE_SERVICE_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
+                "daily_summary_server_gate": ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
+            },
+        )
+
+        secret_path = write_live_delivery_secrets(
+            self.mutable / "live-delivery.env",
+            BOTA_HEALTH_INGEST_SECRET="health-only-secret",
+        )
+        hostile = {
+            vps.LIVE_DELIVERY_SECRET_PATH_ENV: str(secret_path),
+            "BOTA_R5_SHADOW": "1",
+            "BOTA_REQUIRE_R5_SHADOW": "1",
+            "BOTA_HEALTH_INGEST_SECRET": vps.R5_SENTINEL_VALUE,
+            "TELEGRAM_BOT_TOKEN": vps.R5_SENTINEL_VALUE,
+            "TELEGRAM_CHAT_ID": vps.R5_SENTINEL_VALUE,
+            "SUPABASE_SERVICE_KEY": vps.R5_SENTINEL_VALUE,
+        }
+        with mock.patch.dict(os.environ, hostile, clear=False):
+            env = self.orch().child_env(jobs["runtime_health_push"])
+
+        self.assertEqual(env["BOTA_R5_SHADOW"], "0")
+        self.assertEqual(env["BOTA_REQUIRE_R5_SHADOW"], "0")
+        self.assertEqual(env["BOTA_HEALTH_INGEST_SECRET"], "health-only-secret")
+        self.assertNotIn("TELEGRAM_BOT_TOKEN", env)
+        self.assertNotIn("TELEGRAM_CHAT_ID", env)
+        self.assertNotIn("SUPABASE_SERVICE_KEY", env)
+
+    def test_health_override_cannot_be_reused_by_unapproved_job(self):
+        with self.assertRaises(vps.ContractError):
+            vps.Job(
+                "shadow",
+                (("true",),),
+                vps.EVERY_MINUTE,
+                1,
+                env_overrides=tuple(vps.R5_HEALTH_DELIVERY_ENV.items()),
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
