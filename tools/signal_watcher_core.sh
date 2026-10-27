@@ -38,7 +38,7 @@ MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
 ROOT="${CODE_ROOT}"
 TOOLS="${CODE_ROOT}/tools"
 
-if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" == 1 ]]; then
+if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" = 1 ]]; then
   printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nTOOLS=%s\nCACHE=%s\nLOGS=%s\nSTATE=%s\nPAUSE=%s\n' \
     "${CODE_ROOT}" "${MUTABLE_ROOT}" "${TOOLS}" \
     "${MUTABLE_ROOT}/cache" "${MUTABLE_ROOT}/logs" \

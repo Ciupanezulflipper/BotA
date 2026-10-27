@@ -12,7 +12,6 @@ set -euo pipefail
 
 CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
 MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
-ROOT="${CODE_ROOT}"
 DEPLOY_MARKER="${MUTABLE_ROOT}/state/runtime_deploy_in_progress.json"
 # Generation barrier must precede every filesystem/runtime/network side effect.
 # -e is false for a dangling symlink, so -L is required as well. Never follow
@@ -40,7 +39,7 @@ fi
 export BOTA_WATCHER_STATE="${DELIVERY_STATE}"
 export STATE="${DELIVERY_STATE}"
 
-if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" == 1 ]]; then
+if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" = 1 ]]; then
   printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nTOOLS=%s\nLOGS=%s\nSTATE=%s\nLOCK=%s\n' \
     "${CODE_ROOT}" "${MUTABLE_ROOT}" "${TOOLS}" "${LOGS}" \
     "${EVIDENCE_STATE}" "${DELIVERY_STATE}/watcher.lock"

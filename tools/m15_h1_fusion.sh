@@ -45,7 +45,7 @@ link_exact() {
   local dest="${VIEW}/${name}"
 
   if [[ -L "${dest}" ]]; then
-    if [[ "$(readlink "${dest}")" == "${target}" ]]; then
+    if [[ "$(readlink "${dest}")" = "${target}" ]]; then
       return 0
     fi
     rm -f "${dest}"
