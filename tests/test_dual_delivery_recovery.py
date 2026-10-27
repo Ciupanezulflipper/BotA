@@ -630,8 +630,10 @@ class SignalCloserRetryWiringTests(unittest.TestCase):
 
 
 class R5JobScopingTests(unittest.TestCase):
-    """Requirement 9: only the four approved delivery jobs may bypass R5 shadow;
-    every other job's environment is untouched (still bounded/suppressed)."""
+    """Requirement 9: only the four approved live-signal-delivery jobs may bypass
+    R5 shadow for trading delivery; runtime_health_push carries its own, separate
+    narrow exception (observability only, ingest-secret only); every other job's
+    environment is untouched (still bounded/suppressed)."""
 
     APPROVED = frozenset({"watcher", "profitlab_delivery", "closer", "daily_summary_server_gate"})
 
@@ -642,16 +644,26 @@ class R5JobScopingTests(unittest.TestCase):
                 self.assertEqual(dict(job.env_overrides), vps.DAILY_SUMMARY_LIVE_DELIVERY_ENV, name)
             elif name in self.APPROVED:
                 self.assertEqual(dict(job.env_overrides), vps.R5_LIVE_DELIVERY_ENV, name)
+            elif name == "runtime_health_push":
+                self.assertEqual(dict(job.env_overrides), vps.R5_HEALTH_DELIVERY_ENV, name)
             elif name == "updater":
                 self.assertEqual(dict(job.env_overrides), vps.UPDATER_ENV, name)
             else:
                 self.assertEqual(job.env_overrides, (), name)
 
     def test_unrelated_jobs_reject_the_r5_bypass_override(self) -> None:
-        for name in ("heartbeat", "market_pulse", "runtime_health_push", "shadow"):
+        for name in ("heartbeat", "market_pulse", "shadow"):
             with self.assertRaises(vps.ContractError):
                 vps.Job(name, (("true",),), vps.EVERY_MINUTE, 1,
                         env_overrides=tuple(vps.R5_LIVE_DELIVERY_ENV.items()))
+
+    def test_runtime_health_push_rejects_the_live_delivery_jobs_identity(self) -> None:
+        """runtime_health_push is not a member of the four-job live-delivery
+        contract: it must not be addable to that approved set, even though its
+        own narrow override happens to carry the same BOTA_R5_SHADOW/
+        BOTA_REQUIRE_R5_SHADOW values."""
+        self.assertNotIn("runtime_health_push", vps.R5_LIVE_DELIVERY_JOBS)
+        self.assertNotIn("runtime_health_push", vps.R5_LIVE_DELIVERY_JOB_SECRET_KEYS)
 
     def test_approved_job_still_rejects_an_unrelated_override(self) -> None:
         with self.assertRaises(vps.ContractError):
@@ -741,11 +753,18 @@ class LiveDeliveryPartialSecretScopeTests(unittest.TestCase):
         jobs = self._jobs()
         with mock.patch.dict(os.environ, {"BOTA_R5_SHADOW": "1", "BOTA_REQUIRE_R5_SHADOW": "1",
                                           vps.LIVE_DELIVERY_SECRET_PATH_ENV: str(self.secrets_path)}):
-            for name in ("heartbeat", "market_pulse", "runtime_health_push", "shadow"):
+            for name in ("heartbeat", "market_pulse", "shadow"):
                 env = orch.child_env(jobs[name])
                 self.assertEqual(env["BOTA_R5_SHADOW"], "1")
                 self.assertNotIn("SUPABASE_SERVICE_KEY", env)
                 self.assertNotIn("TELEGRAM_BOT_TOKEN", env)
+
+            # runtime_health_push has its own narrow exception and needs only
+            # BOTA_HEALTH_INGEST_SECRET; a Supabase-only file must not unblock
+            # it, and it must not be conflated with the four trading jobs.
+            with self.assertRaises(vps.ContractError) as ctx:
+                orch.child_env(jobs["runtime_health_push"])
+            self.assertEqual(str(ctx.exception), "live_delivery_secret_missing_required_key")
 
     def test_symlinked_secret_file_is_rejected_fail_closed(self) -> None:
         real = Path(self.tmp.name) / "real-secrets.env"
