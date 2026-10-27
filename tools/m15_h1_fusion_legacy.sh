@@ -218,7 +218,7 @@ fi
 
 _log_debug "M15 base: pair=${PAIR} dir=${m15_dir} score=${m15_score} rejected=${m15_filter_rejected}"
 
-if [[ "${m15_filter_rejected}" == "true" ]] || [[ "${m15_dir}" != "BUY" && "${m15_dir}" != "SELL" ]]; then
+if [[ "${m15_filter_rejected}" = "true" ]] || [[ "${m15_dir}" != "BUY" && "${m15_dir}" != "SELL" ]]; then
   _log_debug "M15 rejected or non-tradeable; skipping H1 fusion."
   emit_with_production_policy "${m15_json}"
   exit 0
@@ -252,10 +252,10 @@ except Exception: print('HOLD')
 " 2>/dev/null || echo "HOLD")"
 fi
 h4_opposing="false"
-if [[ "${m15_dir}" == "BUY" && "${h4_dir_cached}" == "SELL" ]]; then h4_opposing="true"; fi
-if [[ "${m15_dir}" == "SELL" && "${h4_dir_cached}" == "BUY" ]]; then h4_opposing="true"; fi
+if [[ "${m15_dir}" = "BUY" && "${h4_dir_cached}" = "SELL" ]]; then h4_opposing="true"; fi
+if [[ "${m15_dir}" = "SELL" && "${h4_dir_cached}" = "BUY" ]]; then h4_opposing="true"; fi
 
-if [[ "${h4_opposing}" == "true" ]]; then
+if [[ "${h4_opposing}" = "true" ]]; then
   _m15_score_b="$(printf '%s\n' "${m15_score:-0}" | awk '{printf("%d", $1)}')"
   if (( _m15_score_b >= 90 )); then
     _h4_ema21="$(python3 -c "
@@ -274,7 +274,7 @@ elif '${m15_dir}'=='BUY' and (price-ema21)>=10*pip: print('true')
 elif '${m15_dir}'=='SELL' and (ema21-price)>=10*pip: print('true')
 else: print('false')
 " 2>/dev/null || echo "false")"
-    if [[ "${_price_break}" == "true" ]]; then
+    if [[ "${_price_break}" = "true" ]]; then
       h4_opposing="false"
       _log_debug "OPTION_B: H4 veto overridden score=${_m15_score_b}>=90 price broke H4 EMA21 by 10+ pips"
     else
@@ -285,7 +285,7 @@ fi
 
 _log_debug "H4 pre-check: pair=${PAIR} h4_dir=${h4_dir_cached} m15_dir=${m15_dir} h4_opposing=${h4_opposing}"
 
-if [[ "${h1_filter_rejected}" == "true" ]]; then
+if [[ "${h1_filter_rejected}" = "true" ]]; then
   _log_debug "H1 rejected by quality filter; neutral for fusion."
   m15_score_int="$(printf '%s\n' "${m15_score:-0}" | awk '{printf("%d", $1)}')"
   h1_override_score="${H1_VETO_OVERRIDE_SCORE:-85}"
@@ -293,7 +293,7 @@ if [[ "${h1_filter_rejected}" == "true" ]]; then
     trend_tag="H1_trend_neutral_overridden"
     veto="false"
     _log_debug "H1 neutral veto OVERRIDDEN by high score: ${m15_score_int}>=${h1_override_score} (H4 aligned)"
-  elif (( m15_score_int >= h1_override_score )) && [[ "${h4_opposing}" == "true" ]]; then
+  elif (( m15_score_int >= h1_override_score )) && [[ "${h4_opposing}" = "true" ]]; then
     trend_tag="H1_trend_neutral"
     veto="true"
     _log_debug "H1 neutral override BLOCKED by H4 opposition: h4=${h4_dir_cached} m15=${m15_dir}"
@@ -301,11 +301,11 @@ if [[ "${h1_filter_rejected}" == "true" ]]; then
     veto="true"
   fi
 else
-  if [[ "${h1_dir}" == "BUY" || "${h1_dir}" == "SELL" ]]; then
+  if [[ "${h1_dir}" = "BUY" || "${h1_dir}" = "SELL" ]]; then
     h1_score_int="$(printf '%s\n' "${h1_score}" | awk '{printf("%d", $1)}')"
     h1_min_int="$(printf '%s\n' "${H1_TREND_MIN_SCORE}" | awk '{printf("%d", $1)}')"
     if (( h1_score_int >= h1_min_int )); then
-      if [[ "${h1_dir}" == "${m15_dir}" ]]; then
+      if [[ "${h1_dir}" = "${m15_dir}" ]]; then
         trend_tag="H1_trend_confirmed"
         veto="false"
       else
@@ -333,7 +333,7 @@ else
       trend_tag="H1_trend_neutral_overridden"
       veto="false"
       _log_debug "H1 neutral veto OVERRIDDEN by high score: ${m15_score_int}>=${h1_override_score} (H4 aligned)"
-    elif (( m15_score_int >= h1_override_score )) && [[ "${h4_opposing}" == "true" ]]; then
+    elif (( m15_score_int >= h1_override_score )) && [[ "${h4_opposing}" = "true" ]]; then
       trend_tag="H1_trend_neutral"
       veto="true"
       _log_debug "H1 neutral override BLOCKED by H4 opposition: h4=${h4_dir_cached} m15=${m15_dir}"
@@ -346,7 +346,7 @@ fi
 
 _log_debug "Fusion decision: pair=${PAIR} M15_dir=${m15_dir} H1_dir=${h1_dir} trend=${trend_tag} veto=${veto}"
 
-if [[ "${veto}" == "true" ]]; then
+if [[ "${veto}" = "true" ]]; then
   fused_json="$(printf '%s\n' "${m15_json}" | jq \
     --arg tag "${trend_tag}" \
     '
@@ -369,9 +369,9 @@ h4_vote="$(printf '%s\n' "${mtf_snap}" | grep '^H4:' | grep -oP 'vote=[+-]?[0-9]
 d1_vote="$(printf '%s\n' "${mtf_snap}" | grep '^D1:' | grep -oP 'vote=[+-]?[0-9]+' | cut -d= -f2 || echo 0)"
 h4_vote="${h4_vote:-0}"; d1_vote="${d1_vote:-0}"
 mtf_veto="false"
-if [[ "${m15_dir}" == "BUY" ]] && (( h4_vote < 0 && d1_vote < 0 )); then mtf_veto="true"; fi
-if [[ "${m15_dir}" == "SELL" ]] && (( h4_vote > 0 && d1_vote > 0 )); then mtf_veto="true"; fi
-if [[ "${mtf_veto}" == "true" ]]; then
+if [[ "${m15_dir}" = "BUY" ]] && (( h4_vote < 0 && d1_vote < 0 )); then mtf_veto="true"; fi
+if [[ "${m15_dir}" = "SELL" ]] && (( h4_vote > 0 && d1_vote > 0 )); then mtf_veto="true"; fi
+if [[ "${mtf_veto}" = "true" ]]; then
   _log_debug "MTF veto: ${PAIR} M15=${m15_dir} H4=${h4_vote} D1=${d1_vote}"
   fused_json="$(printf '%s\n' "${m15_json}" | jq '
     .filter_rejected = true

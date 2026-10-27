@@ -17,7 +17,6 @@ shopt -s inherit_errexit 2>/dev/null || true
 
 CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
 MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
-ROOT="${CODE_ROOT}"
 TOOLS="${CODE_ROOT}/tools"
 CACHE="${MUTABLE_ROOT}/cache"
 LOGS="${MUTABLE_ROOT}/logs"
