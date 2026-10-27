@@ -81,7 +81,16 @@ R5_LIVE_DELIVERY_JOBS = frozenset({
 # secret; keeping this separate prevents accidental expansion of the approved
 # live-delivery job set.
 R5_HEALTH_DELIVERY_JOBS = frozenset({"runtime_health_push"})
-R5_HEALTH_DELIVERY_ENV = dict(R5_LIVE_DELIVERY_ENV)
+# r5_bootstrap/sitecustomize.py also forces RUNTIME_HEALTH_PUSH_DRY_RUN=1 in the
+# parent (see its FORCED_ENV). Turning R5 back off for runtime_health_push's
+# process tree does not touch that key, so without an explicit override the
+# approved health child would still inherit the forced dry-run value and only
+# ever log RESULT=DRY_RUN instead of actually publishing. This override is
+# exact-match validated in Job.__post_init__ and applies to no other job.
+R5_HEALTH_DELIVERY_ENV = {
+    **R5_LIVE_DELIVERY_ENV,
+    "RUNTIME_HEALTH_PUSH_DRY_RUN": "0",
+}
 # r5_bootstrap/sitecustomize.py replaces every one of these keys in the
 # *parent* orchestrator process with R5_SENTINEL_VALUE the moment R5 shadow
 # activates (it runs ahead of Orchestrator via PYTHONPATH). That poisoning

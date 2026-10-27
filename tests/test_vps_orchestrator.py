@@ -508,6 +508,18 @@ class OrchestratorTests(unittest.TestCase):
             vps.R5_HEALTH_DELIVERY_ENV,
         )
         self.assertEqual(
+            dict(jobs["runtime_health_push"].env_overrides),
+            {
+                "BOTA_R5_SHADOW": "0",
+                "BOTA_REQUIRE_R5_SHADOW": "0",
+                "RUNTIME_HEALTH_PUSH_DRY_RUN": "0",
+            },
+        )
+        for name, job in jobs.items():
+            if name == "runtime_health_push":
+                continue
+            self.assertNotIn("RUNTIME_HEALTH_PUSH_DRY_RUN", dict(job.env_overrides), name)
+        self.assertEqual(
             vps.R5_HEALTH_DELIVERY_JOB_SECRET_KEYS,
             {"runtime_health_push": ("BOTA_HEALTH_INGEST_SECRET",)},
         )
@@ -529,6 +541,11 @@ class OrchestratorTests(unittest.TestCase):
             vps.LIVE_DELIVERY_SECRET_PATH_ENV: str(secret_path),
             "BOTA_R5_SHADOW": "1",
             "BOTA_REQUIRE_R5_SHADOW": "1",
+            # r5_bootstrap/sitecustomize.py's FORCED_ENV poisons this in the
+            # parent orchestrator process; the dedicated health override must
+            # explicitly clear it or the published child silently stays in
+            # dry-run mode (RESULT=DRY_RUN) even once R5 shadow is lifted.
+            "RUNTIME_HEALTH_PUSH_DRY_RUN": "1",
             "BOTA_HEALTH_INGEST_SECRET": vps.R5_SENTINEL_VALUE,
             "TELEGRAM_BOT_TOKEN": vps.R5_SENTINEL_VALUE,
             "TELEGRAM_CHAT_ID": vps.R5_SENTINEL_VALUE,
@@ -536,13 +553,19 @@ class OrchestratorTests(unittest.TestCase):
         }
         with mock.patch.dict(os.environ, hostile, clear=False):
             env = self.orch().child_env(jobs["runtime_health_push"])
+            other_env = self.orch().child_env(jobs["shadow"])
 
         self.assertEqual(env["BOTA_R5_SHADOW"], "0")
         self.assertEqual(env["BOTA_REQUIRE_R5_SHADOW"], "0")
+        self.assertEqual(env["RUNTIME_HEALTH_PUSH_DRY_RUN"], "0")
         self.assertEqual(env["BOTA_HEALTH_INGEST_SECRET"], "health-only-secret")
         self.assertNotIn("TELEGRAM_BOT_TOKEN", env)
         self.assertNotIn("TELEGRAM_CHAT_ID", env)
         self.assertNotIn("SUPABASE_SERVICE_KEY", env)
+
+        # No other live-delivery job is granted the health dry-run override;
+        # it stays poisoned at "1" for them, exactly as sitecustomize forces it.
+        self.assertEqual(other_env["RUNTIME_HEALTH_PUSH_DRY_RUN"], "1")
 
     def test_health_override_cannot_be_reused_by_unapproved_job(self):
         with self.assertRaises(vps.ContractError):
