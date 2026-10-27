@@ -344,12 +344,17 @@ class OrchestratorTests(unittest.TestCase):
         self.assertEqual(shell.returncode, 0, shell.stderr)
 
     def test_orchestrator_main_fails_closed_for_unproven_r5_bootstrap(self):
-        with mock.patch.dict(os.environ, {"BOTA_R5_SHADOW": "1",
-                                          "BOTA_R5_BOOTSTRAP_ACTIVE": "1"}, clear=False):
-            with mock.patch.object(vps.sys, "modules", dict(vps.sys.modules)):
-                vps.sys.modules.pop("sitecustomize", None)
-                with mock.patch("sys.stderr"):
-                    self.assertEqual(vps.main([]), 78)
+        with (
+            mock.patch.dict(
+                os.environ,
+                {"BOTA_R5_SHADOW": "1", "BOTA_R5_BOOTSTRAP_ACTIVE": "1"},
+                clear=False,
+            ),
+            mock.patch.object(vps.sys, "modules", dict(vps.sys.modules)),
+            mock.patch("sys.stderr"),
+        ):
+            vps.sys.modules.pop("sitecustomize", None)
+            self.assertEqual(vps.main([]), 78)
 
     def test_orchestrator_main_fails_closed_when_r5_required_but_inactive(self):
         for shadow in (None, "0"):
