@@ -128,7 +128,8 @@ def main() -> int:
     root = args.root.resolve(); result = evaluate(root)
     if not args.skip_tests:
         completed = subprocess.run([sys.executable, "-m", "unittest", "-q", *LOCAL_SUITES], cwd=root,
-                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   text=True, check=False)
         result["LOCAL_ACCEPTANCE_TESTS"] = "PASS" if completed.returncode == 0 else "FAIL"
         if completed.returncode != 0:
             result["REPOSITORY_RELEASE_GATE"] = "FAIL"
