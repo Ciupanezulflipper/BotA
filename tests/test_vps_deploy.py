@@ -117,7 +117,6 @@ class VPSDeployTests(unittest.TestCase):
         executable = self.repo / "executable.sh"
         executable.write_text("#!/bin/sh\nexit 0\n")
         executable.chmod(0o755)
-        os.symlink("ordinary.txt", self.repo / "safe-link")
         subprocess.run(("git", "add", "."), cwd=self.repo, check=True)
         subprocess.run(("git", "commit", "-qm", "fixture"), cwd=self.repo, check=True)
         self.sha = subprocess.check_output(("git", "rev-parse", "HEAD"), cwd=self.repo, text=True).strip()
@@ -152,10 +151,9 @@ class VPSDeployTests(unittest.TestCase):
         release = self.paths.release_root / self.sha
         self.assertEqual((release / "ordinary.txt").read_text(), "committed\n")
         self.assertEqual((release / "binary.bin").read_bytes(), bytes(range(256)))
-        self.assertEqual((release / "executable.sh").stat().st_mode & 0o777, 0o755)
-        self.assertEqual((release / "ordinary.txt").stat().st_mode & 0o777, 0o644)
-        self.assertTrue((release / "safe-link").is_symlink())
-        self.assertEqual(os.readlink(release / "safe-link"), "ordinary.txt")
+        self.assertEqual((release / "executable.sh").stat().st_mode & 0o777, 0o750)
+        self.assertEqual((release / "ordinary.txt").stat().st_mode & 0o777, 0o640)
+        self.assertFalse((release / "safe-link").exists())
         manifest = json.loads((release / deploy.MANIFEST_NAME).read_text())
         self.assertEqual((manifest["git_commit_sha"], manifest["git_tree_sha"]),
                          (self.sha, self.tree))
@@ -172,16 +170,18 @@ class VPSDeployTests(unittest.TestCase):
         finally:
             os.umask(original_umask)
         release = self.paths.release_root / self.sha
-        self.assertEqual(self.paths.release_root.parent.stat().st_mode & 0o777, 0o755)
-        self.assertEqual(self.paths.release_root.stat().st_mode & 0o777, 0o755)
-        self.assertEqual(release.stat().st_mode & 0o777, 0o755)
-        self.assertEqual((release / deploy.MANIFEST_NAME).stat().st_mode & 0o777, 0o644)
-        self.assertEqual((release / "ordinary.txt").stat().st_mode & 0o777, 0o644)
-        self.assertEqual((release / "executable.sh").stat().st_mode & 0o777, 0o755)
+        self.assertEqual(self.paths.release_root.parent.stat().st_mode & 0o777, 0o750)
+        self.assertEqual(self.paths.release_root.stat().st_mode & 0o777, 0o750)
+        self.assertEqual(release.stat().st_mode & 0o777, 0o750)
+        self.assertEqual((release / deploy.MANIFEST_NAME).stat().st_mode & 0o777, 0o640)
+        self.assertEqual((release / "ordinary.txt").stat().st_mode & 0o777, 0o640)
+        self.assertEqual((release / "executable.sh").stat().st_mode & 0o777, 0o750)
         python = release / ".venv/bin/python"
-        self.assertEqual(python.stat().st_mode & 0o111, 0o111)
+        self.assertEqual(python.stat().st_mode & 0o110, 0o110)
+        self.assertEqual(python.stat().st_mode & 0o001, 0)
         for directory in (release / ".venv", release / ".venv/bin"):
-            self.assertEqual(directory.stat().st_mode & 0o111, 0o111)
+            self.assertEqual(directory.stat().st_mode & 0o110, 0o110)
+            self.assertEqual(directory.stat().st_mode & 0o001, 0)
         self.assertEqual(self.paths.journal.stat().st_mode & 0o777, 0o600)
         manifest = (release / deploy.MANIFEST_NAME).read_text().lower()
         for marker in ("token", "password", "secret", "api_key", "service_key"):
@@ -244,13 +244,14 @@ class VPSDeployTests(unittest.TestCase):
                  for path in before}
         self.assertEqual(after, before)
 
-        for path, mode, error in ((release, 0o750, "release_mode_invalid"),
+        for path, mode, error in ((release, 0o755, "release_mode_invalid"),
                                   (manifest, 0o600, "manifest_mode_invalid")):
             with self.subTest(path=path):
                 real_chmod(path, mode)
                 with self.assertRaisesRegex(deploy.DeployError, error):
                     subject._stage(self.sha, self.tree)
-                real_chmod(path, 0o755 if path == release else 0o644)
+                real_chmod(path, deploy.RELEASE_DIR_MODE if path == release
+                           else deploy.RELEASE_FILE_MODE)
 
         manifest.write_text("{malformed")
         with self.assertRaisesRegex(deploy.DeployError, "invalid_json"):
@@ -654,6 +655,35 @@ class VPSDeployTests(unittest.TestCase):
         for marker in ("token", "password", "secret", "api_key", "service_key"):
             self.assertNotIn(marker, emitted.lower())
 
+
+    def test_archive_symlink_member_is_rejected(self):
+        stream = io.BytesIO()
+        with tarfile.open(fileobj=stream, mode="w") as archive:
+            member = tarfile.TarInfo("safe-link")
+            member.type = tarfile.SYMTYPE
+            member.linkname = "ordinary.txt"
+            archive.addfile(member)
+        destination = self.paths.release_root / "extract"
+        destination.mkdir(parents=True)
+        with self.assertRaisesRegex(deploy.DeployError, "archive_symlink_rejected"):
+            deploy.extract_archive_safely(stream.getvalue(), destination)
+        self.assertFalse((destination / "safe-link").exists())
+
+    def test_switch_rejects_target_outside_release_root(self):
+        subject, *_ = self.make()
+        outside = Path(self.temp.name) / ("a" * 40)
+        outside.mkdir()
+        with self.assertRaisesRegex(deploy.DeployError, "release_target_"):
+            subject._switch(outside)
+        self.assertFalse(os.path.lexists(self.paths.current))
+
+    def test_staged_release_uses_owner_group_only_modes(self):
+        subject, *_ = self.make()
+        release, _, _ = subject._stage(self.sha, self.tree)
+        self.assertEqual(release.stat().st_mode & 0o777, 0o750)
+        self.assertEqual((release / "ordinary.txt").stat().st_mode & 0o777, 0o640)
+        self.assertEqual((release / "executable.sh").stat().st_mode & 0o777, 0o750)
+        self.assertEqual((release / deploy.MANIFEST_NAME).stat().st_mode & 0o777, 0o640)
 
 if __name__ == "__main__":
     unittest.main()

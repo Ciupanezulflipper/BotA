@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import grp
 import io
 import json
 import os
@@ -19,7 +20,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Callable, Mapping, Sequence
+from typing import Callable, Mapping, Sequence, TextIO
 
 SERVICE_USER = "bota"
 SERVICE_GROUP = "bota"
@@ -27,12 +28,17 @@ RELEASE_ROOT = Path("/opt/bota/releases")
 CURRENT_RELEASE = Path("/opt/bota/current")
 MUTABLE_ROOT = Path("/var/lib/bota")
 SECRET_ROOT = Path("/etc/bota")
-DEPLOY_LOCK = Path("/run/lock/bota-deploy.lock")
+DEPLOY_LOCK = Path("/run/lock/bota/deploy.lock")
 SYSTEMD_SERVICE = "bota.service"
 JOURNAL_RELATIVE = Path("state/vps_deploy_journal.json")
 MANIFEST_NAME = ".bota-release.json"
 SHA_RE = re.compile(r"[0-9a-f]{40}")
 TERMINAL_PHASES = {"COMPLETE", "ROLLED_BACK", "RECOVERED_ROLLED_BACK"}
+RELEASE_DIR_MODE = 0o2750
+RELEASE_FILE_MODE = 0o640
+RELEASE_EXEC_MODE = 0o750
+PRIVATE_DIR_MODE = 0o700
+PRIVATE_FILE_MODE = 0o600
 
 
 class DeployError(RuntimeError):
@@ -45,6 +51,86 @@ class DeployLocked(DeployError):
 
 class CommandError(DeployError):
     pass
+
+
+def _service_gid() -> int | None:
+    if os.geteuid() != 0:
+        return None
+    try:
+        return grp.getgrnam(SERVICE_GROUP).gr_gid
+    except KeyError as exc:
+        raise DeployError("service_group_missing") from exc
+
+
+def _set_service_group(path: Path) -> None:
+    gid = _service_gid()
+    if gid is not None:
+        os.chown(path, -1, gid)
+
+
+def _secure_directory(path: Path, *, setgid: bool = True) -> None:
+    mode = RELEASE_DIR_MODE if setgid else (RELEASE_DIR_MODE & 0o777)
+    path.mkdir(parents=True, exist_ok=True, mode=mode)
+    _set_service_group(path)
+    os.chmod(path, mode)
+
+
+def _secure_regular_file(path: Path, *, executable: bool) -> None:
+    _set_service_group(path)
+    os.chmod(path, RELEASE_EXEC_MODE if executable else RELEASE_FILE_MODE)
+
+
+def _harden_release_tree(root: Path) -> None:
+    for current, directories, files in os.walk(root, followlinks=False):
+        directory = Path(current)
+        if directory.is_symlink():
+            raise DeployError("release_tree_directory_symlink")
+        _secure_directory(directory)
+        for name in directories:
+            child = directory / name
+            if child.is_symlink():
+                continue
+            _secure_directory(child)
+        for name in files:
+            child = directory / name
+            if child.is_symlink():
+                continue
+            mode = stat.S_IMODE(child.stat().st_mode)
+            _secure_regular_file(child, executable=bool(mode & 0o111))
+
+
+def _is_within(root: Path, candidate: Path) -> bool:
+    return candidate == root or root in candidate.parents
+
+
+def _contained_existing_path(root: Path, candidate: Path, *, reason: str) -> Path:
+    try:
+        root_real = root.resolve(strict=True)
+        if candidate.is_symlink():
+            raise DeployError(reason)
+        resolved = candidate.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise DeployError(reason) from exc
+    if not _is_within(root_real, resolved):
+        raise DeployError(reason)
+    return resolved
+
+
+def _contained_output_path(root: Path, relative: PurePosixPath) -> Path:
+    try:
+        root_real = root.resolve(strict=True)
+    except OSError as exc:
+        raise DeployError("archive_destination_invalid") from exc
+    candidate = root.joinpath(*relative.parts)
+    cursor = root
+    for part in relative.parts[:-1]:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise DeployError(f"archive_parent_symlink:{relative.as_posix()}")
+    parent_real = candidate.parent.resolve(strict=False)
+    if not _is_within(root_real, parent_real):
+        raise DeployError(f"unsafe_archive_path:{relative.as_posix()}")
+    return candidate
 
 
 def utc_now() -> str:
@@ -101,7 +187,8 @@ def durable_json(path: Path, value: object,
 
 
 class Runner:
-    def run(self, argv: Sequence[str], *, cwd: Path | None = None,
+    @staticmethod
+    def run(argv: Sequence[str], *, cwd: Path | None = None,
             env: Mapping[str, str] | None = None) -> bytes:
         result = subprocess.run(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -114,11 +201,13 @@ class Runner:
 class DeployLock:
     def __init__(self, path: Path):
         self.path = path
-        self.stream = None
+        self.stream: TextIO | None = None
 
     def __enter__(self) -> "DeployLock":
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=PRIVATE_DIR_MODE)
+        os.chmod(self.path.parent, PRIVATE_DIR_MODE)
         self.stream = self.path.open("a+")
+        os.chmod(self.path, PRIVATE_FILE_MODE)
         try:
             fcntl.flock(self.stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
@@ -162,50 +251,44 @@ def _safe_member(member: tarfile.TarInfo) -> PurePosixPath:
     if member.islnk():
         raise DeployError(f"archive_hardlink_rejected:{member.name}")
     if member.issym():
-        target = PurePosixPath(member.linkname)
-        if target.is_absolute():
-            raise DeployError(f"unsafe_symlink_target:{member.name}")
-        combined: list[str] = list(path.parent.parts)
-        for part in target.parts:
-            if part in ("", "."):
-                continue
-            if part == "..":
-                if not combined:
-                    raise DeployError(f"unsafe_symlink_target:{member.name}")
-                combined.pop()
-            else:
-                combined.append(part)
-    elif not (member.isdir() or member.isfile()):
+        raise DeployError(f"archive_symlink_rejected:{member.name}")
+    if not (member.isdir() or member.isfile()):
         raise DeployError(f"unsupported_archive_member:{member.name}")
     return path
 
 
 def extract_archive_safely(archive: bytes, destination: Path) -> None:
+    _secure_directory(destination)
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:*") as bundle:
-        members = bundle.getmembers()
-        checked = [(member, _safe_member(member)) for member in members]
+        checked = [(member, _safe_member(member)) for member in bundle.getmembers()]
         for member, relative in checked:
-            output = destination.joinpath(*relative.parts)
+            output = _contained_output_path(destination, relative)
             if member.isdir():
-                output.mkdir(parents=True, exist_ok=True)
-                os.chmod(output, 0o755)
-            elif member.isfile():
-                output.parent.mkdir(parents=True, exist_ok=True)
-                source = bundle.extractfile(member)
-                if source is None:
-                    raise DeployError(f"archive_file_unreadable:{member.name}")
-                with output.open("wb") as stream:
+                _secure_directory(output)
+                continue
+            _secure_directory(output.parent)
+            output = _contained_output_path(destination, relative)
+            source = bundle.extractfile(member)
+            if source is None:
+                raise DeployError(f"archive_file_unreadable:{member.name}")
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+            fd = os.open(output, flags, RELEASE_EXEC_MODE if member.mode & 0o111 else RELEASE_FILE_MODE)
+            try:
+                with os.fdopen(fd, "wb") as stream:
                     shutil.copyfileobj(source, stream)
-                os.chmod(output, 0o755 if member.mode & 0o111 else 0o644)
-            else:
-                output.parent.mkdir(parents=True, exist_ok=True)
-                os.symlink(member.linkname, output)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+            except BaseException:
+                output.unlink(missing_ok=True)
+                raise
+            _secure_regular_file(output, executable=bool(member.mode & 0o111))
 
 
-def read_json(path: Path) -> dict[str, object]:
+def read_json(path: Path, trusted_root: Path) -> dict[str, object]:
+    safe_path = _contained_existing_path(trusted_root, path, reason=f"json_path_invalid:{path.name}")
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError) as exc:
+        value = json.loads(safe_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
         raise DeployError(f"invalid_json:{path.name}") from exc
     if not isinstance(value, dict):
         raise DeployError(f"invalid_json_object:{path.name}")
@@ -213,7 +296,7 @@ def read_json(path: Path) -> dict[str, object]:
 
 
 def validate_manifest(path: Path, commit: str, tree: str) -> dict[str, object]:
-    value = read_json(path / MANIFEST_NAME)
+    value = read_json(path / MANIFEST_NAME, path)
     if (value.get("schema_version") != "1.0" or value.get("git_commit_sha") != commit
             or value.get("git_tree_sha") != tree
             or not re.fullmatch(r"[0-9a-f]{64}", str(value.get("effective_config_fingerprint", "")))):
@@ -224,11 +307,11 @@ def validate_manifest(path: Path, commit: str, tree: str) -> dict[str, object]:
 def validate_finalized_release(path: Path, commit: str, tree: str) -> dict[str, object]:
     if not path.is_dir() or path.is_symlink():
         raise DeployError("finalized_release_not_directory")
-    if stat.S_IMODE(path.stat().st_mode) != 0o755:
+    if stat.S_IMODE(path.stat().st_mode) != RELEASE_DIR_MODE:
         raise DeployError("finalized_release_mode_invalid")
     manifest_path = path / MANIFEST_NAME
     if (not manifest_path.is_file() or manifest_path.is_symlink()
-            or stat.S_IMODE(manifest_path.stat().st_mode) != 0o644):
+            or stat.S_IMODE(manifest_path.stat().st_mode) != RELEASE_FILE_MODE):
         raise DeployError("finalized_release_manifest_mode_invalid")
     return validate_manifest(path, commit, tree)
 
@@ -326,6 +409,22 @@ class Deployer:
         self.journal.update(changes, phase=phase, updated_at_utc=utc_now())
         durable_json(self.paths.journal, self.journal, self.directory_fsync)
 
+    def _validated_release_target(self, target: Path) -> Path:
+        try:
+            root = self.paths.release_root.resolve(strict=True)
+            if target.is_symlink():
+                raise DeployError("release_target_symlink")
+            resolved = target.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise DeployError("release_target_missing") from exc
+        if resolved.parent != root or not SHA_RE.fullmatch(resolved.name) or not resolved.is_dir():
+            raise DeployError("release_target_outside_root")
+        manifest = read_json(resolved / MANIFEST_NAME, resolved)
+        if (manifest.get("git_commit_sha") != resolved.name
+                or not SHA_RE.fullmatch(str(manifest.get("git_tree_sha", "")))):
+            raise DeployError("release_target_manifest_invalid")
+        return resolved
+
     def _current_target(self) -> Path | None:
         current = self.paths.current
         if not os.path.lexists(current):
@@ -333,20 +432,22 @@ class Deployer:
         if not current.is_symlink():
             raise DeployError("current_is_not_symlink")
         raw = Path(os.readlink(current))
-        return raw if raw.is_absolute() else (current.parent / raw).resolve()
+        candidate = raw if raw.is_absolute() else current.parent / raw
+        return self._validated_release_target(candidate)
 
     def _switch(self, target: Path | None) -> None:
         current = self.paths.current
         current.parent.mkdir(parents=True, exist_ok=True)
         if os.path.lexists(current) and not current.is_symlink():
             raise DeployError("current_is_not_symlink")
+        validated = self._validated_release_target(target) if target is not None else None
         temporary = current.parent / f".{current.name}.{uuid.uuid4().hex}.tmp"
         try:
-            if target is None:
+            if validated is None:
                 if os.path.lexists(current):
                     current.unlink()
             else:
-                os.symlink(str(target), temporary)
+                os.symlink(str(validated), temporary)
                 os.replace(temporary, current)
             self.directory_fsync(current.parent)
         finally:
@@ -368,10 +469,8 @@ class Deployer:
 
     def _stage(self, commit: str, tree: str) -> tuple[Path, dict[str, object], bool]:
         final = self.paths.release_root / commit
-        self.paths.release_root.parent.mkdir(parents=True, exist_ok=True)
-        os.chmod(self.paths.release_root.parent, 0o755)
-        self.paths.release_root.mkdir(parents=True, exist_ok=True)
-        os.chmod(self.paths.release_root, 0o755)
+        _secure_directory(self.paths.release_root.parent)
+        _secure_directory(self.paths.release_root)
         if final.exists():
             manifest = validate_finalized_release(final, commit, tree)
             try:
@@ -381,12 +480,12 @@ class Deployer:
             if manifest["effective_config_fingerprint"] != actual_fingerprint:
                 raise DeployError("finalized_release_fingerprint_mismatch")
             return final, manifest, True
-        previous_umask = os.umask(0o022)
+        previous_umask = os.umask(0o027)
         staging: Path | None = None
         try:
             staging = Path(tempfile.mkdtemp(
                 prefix=f".staging-{commit}-", dir=self.paths.release_root))
-            os.chmod(staging, 0o755)
+            _secure_directory(staging)
             archive = self.runner.run(("git", "archive", "--format=tar", commit), cwd=self.repo)
             extract_archive_safely(archive, staging)
             self.fault("after_staging")
@@ -399,7 +498,8 @@ class Deployer:
             manifest = {"schema_version": "1.0", "git_commit_sha": commit,
                         "git_tree_sha": tree, "created_at_utc": utc_now(),
                         "effective_config_fingerprint": fingerprint}
-            durable_json(staging / MANIFEST_NAME, manifest, self.directory_fsync, mode=0o644)
+            durable_json(staging / MANIFEST_NAME, manifest, self.directory_fsync, mode=RELEASE_FILE_MODE)
+            _secure_regular_file(staging / MANIFEST_NAME, executable=False)
             env = dict(os.environ, BOTA_CODE_ROOT=str(staging), BOTA_ROOT=str(staging),
                        BOTA_MUTABLE_ROOT=str(self.paths.mutable_root))
             output = self.runner.run((str(candidate_python), str(staging / "tools/vps_orchestrator.py"),
@@ -407,8 +507,8 @@ class Deployer:
             result = json.loads(output.decode("utf-8"))
             if not isinstance(result, dict) or result.get("healthy") is not True:
                 raise DeployError("candidate_preflight_failed")
+            _harden_release_tree(staging)
             fsync_tree(staging)
-            os.chmod(staging, 0o755)
             os.replace(staging, final)
             self.directory_fsync(self.paths.release_root)
             return final, manifest, False
@@ -422,7 +522,7 @@ class Deployer:
     def _read_health_optional(self) -> dict[str, object] | None:
         path = self.paths.mutable_root / "state/vps_orchestrator_health.json"
         try:
-            return read_json(path)
+            return read_json(path, self.paths.mutable_root)
         except DeployError:
             return None
 
@@ -468,7 +568,7 @@ class Deployer:
     def _recover_incomplete(self) -> None:
         if not self.paths.journal.exists():
             return
-        old = read_json(self.paths.journal)
+        old = read_json(self.paths.journal, self.paths.mutable_root)
         if old.get("phase") in TERMINAL_PHASES:
             return
         target = self.paths.release_root / str(old.get("target_sha", ""))
@@ -483,7 +583,7 @@ class Deployer:
         self._switch(previous)
         if previous is not None and old.get("previous_expected_running") is True:
             manifest = validate_manifest(previous, previous.name,
-                                         str(read_json(previous / MANIFEST_NAME)["git_tree_sha"]))
+                                         str(read_json(previous / MANIFEST_NAME, previous)["git_tree_sha"]))
             before_restart = self._read_health_optional() or {}
             prior_instance = before_restart.get("runtime_instance_id")
             self.systemd.start()
@@ -505,7 +605,7 @@ class Deployer:
                 rollback_fault = f"{type(injected).__name__}:{injected}"
             self._switch(previous)
             if previous is not None and self.journal.get("previous_expected_running") is True:
-                prior_manifest = read_json(previous / MANIFEST_NAME)
+                prior_manifest = read_json(previous / MANIFEST_NAME, previous)
                 before_restart = self._read_health_optional() or {}
                 self.systemd.start()
                 self._prove_activation(previous.name,

@@ -241,7 +241,7 @@ class HetznerBotModeDerivationTests(unittest.TestCase):
         self.assertIn("missing_job_progress:profitlab_delivery", reasons)
 
     def test_d_non_dict_health_yields_unknown(self) -> None:
-        mode, reasons = MOD.derive_hetzner_bot_mode(None)  # type: ignore[arg-type]
+        mode, _reasons = MOD.derive_hetzner_bot_mode(None)  # type: ignore[arg-type]
         self.assertEqual(mode, "UNKNOWN")
 
     def test_g1_stale_shadow_alone_does_not_prevent_healthy(self) -> None:

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import csv
 import importlib.util
-import io
 import json
 import os
 import stat
@@ -879,6 +878,7 @@ class R5ParentCredentialPoisonRecoveryTests(unittest.TestCase):
             "output": str(self.output_path),
         }, encoding="utf-8")
         completed = subprocess.run([sys.executable, str(script)], env=env, cwd=REPO,
+                                       check=False,
                                    stdin=subprocess.DEVNULL, text=True, capture_output=True, timeout=20)
         self.assertEqual(completed.returncode, 0, completed.stderr)
         return json.loads(self.output_path.read_text(encoding="utf-8"))
@@ -1009,6 +1009,7 @@ class R5ParentCredentialPoisonRecoveryTests(unittest.TestCase):
         env["BOTA_LIVE_DELIVERY_SECRET_PATH"] = str(self.secrets_path)
         completed = subprocess.run([sys.executable, str(TOOLS / "r5_no_side_effect_preflight.py")],
                                    env=env, cwd=REPO, stdin=subprocess.DEVNULL,
+                                       check=False,
                                    text=True, capture_output=True, timeout=20)
         self.assertEqual(completed.returncode, 0, completed.stderr)
         result = json.loads(completed.stdout.strip().splitlines()[-1])

@@ -35,6 +35,39 @@ SKIP_LINE_RE = re.compile(
 )
 
 
+def _is_within(root: Path, candidate: Path) -> bool:
+    return candidate == root or root in candidate.parents
+
+
+def trusted_evidence_file(path: Path) -> Path:
+    raw_root = os.environ.get("BOTA_MUTABLE_ROOT", "").strip()
+    if not raw_root:
+        raise ValueError("mutable_root_required")
+    try:
+        root = Path(raw_root).expanduser().resolve(strict=True)
+    except OSError as exc:
+        raise ValueError("mutable_root_unavailable") from exc
+    candidate = path.expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    try:
+        relative = candidate.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("evidence_path_outside_mutable_root") from exc
+    cursor = root
+    for part in relative.parts:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise ValueError("evidence_path_symlink")
+    try:
+        resolved = candidate.resolve(strict=True)
+    except OSError as exc:
+        raise ValueError("evidence_path_missing") from exc
+    if not _is_within(root, resolved) or not candidate.is_file():
+        raise ValueError("evidence_path_invalid")
+    return candidate
+
+
 def expected_scope() -> tuple[tuple[str, str], ...]:
     explicit = os.environ.get("BOTA_REQUIRED_DECISIONS", "").strip()
     if explicit:
@@ -252,28 +285,32 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
+        alerts_path = trusted_evidence_file(args.alerts_path)
+        log_path = trusted_evidence_file(args.log_path)
+        telegram_path = trusted_evidence_file(args.telegram_result_path)
+        supabase_path = trusted_evidence_file(args.supabase_result_path)
         # This is the exact current-cycle log. Missing decision rows are permitted
         # only when this same log contains a recognized scope-specific terminal
         # skip emitted by the watcher before decision persistence.
         try:
-            log_text = bounded_segment(args.log_path, args.log_offset).decode("utf-8", "strict")
+            log_text = bounded_segment(log_path, args.log_offset).decode("utf-8", "strict")
         except UnicodeDecodeError as exc:
             raise ValueError("cycle_log_utf8_invalid") from exc
         skipped = terminal_skip_scopes(log_text)
-        rows = parse_rows(args.alerts_path, args.alerts_offset, skipped)
-        telegram = read_jsonl(args.telegram_result_path)
-        supabase = read_jsonl(args.supabase_result_path)
+        rows = parse_rows(alerts_path, args.alerts_offset, skipped)
+        telegram = read_jsonl(telegram_path)
+        supabase = read_jsonl(supabase_path)
         sent_scopes = validate_telegram(rows, telegram)
         validate_supabase(rows, supabase, args.cycle_id, sent_scopes)
         # Persistence is not proven until both the journal and directory entry
         # have reached the filesystem.  This occurs only after strict scope,
         # row, skip, and delivery validation above.
-        file_fd = os.open(args.alerts_path, os.O_RDONLY)
+        file_fd = os.open(alerts_path, os.O_RDONLY)
         try:
             os.fsync(file_fd)
         finally:
             os.close(file_fd)
-        dir_fd = os.open(args.alerts_path.parent, os.O_RDONLY)
+        dir_fd = os.open(alerts_path.parent, os.O_RDONLY)
         try:
             os.fsync(dir_fd)
         finally:

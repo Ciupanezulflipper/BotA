@@ -56,6 +56,7 @@ class WatcherCycleContractTests(unittest.TestCase):
     def base_env(self, root: Path):
         return mock.patch.dict(os.environ, {
             "BOTA_ROOT": str(root),
+            "BOTA_MUTABLE_ROOT": str(root),
             "PAIRS": "EURUSD GBPUSD USDJPY",
             "TIMEFRAMES": "M15",
         }, clear=False)
@@ -229,6 +230,36 @@ class WatcherCycleContractTests(unittest.TestCase):
             with self.base_env(root), mock.patch("sys.argv", argv), mock.patch.object(contract.os, "fsync", side_effect=OSError("disk")):
                 self.assertEqual(contract.main(), 4)
 
+
+    def test_main_rejects_evidence_outside_mutable_root(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            outside = root / "outside"
+            outside.mkdir()
+            evidence_root, alerts, offset, log, tg, sb = self.make_cycle(
+                str(outside), [row("EURUSD"), row("GBPUSD"), row("USDJPY")]
+            )
+            mutable = root / "mutable"
+            mutable.mkdir()
+            argv = [
+                "watcher_cycle_contract.py",
+                "--cycle-id", "c",
+                "--alerts-path", str(alerts),
+                "--alerts-offset", str(offset),
+                "--log-path", str(log),
+                "--telegram-result-path", str(tg),
+                "--supabase-result-path", str(sb),
+            ]
+            with (
+                mock.patch("sys.argv", argv),
+                mock.patch.dict(os.environ, {
+                    "BOTA_ROOT": str(evidence_root),
+                    "BOTA_MUTABLE_ROOT": str(mutable),
+                    "PAIRS": "EURUSD GBPUSD USDJPY",
+                    "TIMEFRAMES": "M15",
+                }, clear=False),
+            ):
+                self.assertEqual(contract.main(), 4)
 
 if __name__ == "__main__":
     unittest.main()

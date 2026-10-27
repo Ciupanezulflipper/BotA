@@ -50,8 +50,8 @@ fi
 
 # Production Hetzner injects the dedicated ingest secret into this process.
 # Termux/backward-compatible installs may still load it from the legacy file.
-if [ -z "${BOTA_HEALTH_INGEST_SECRET:-}" ]; then
-  if [ ! -f "$SECRET_FILE" ]; then
+if [[ -z "${BOTA_HEALTH_INGEST_SECRET:-}" ]]; then
+  if [[ ! -f "$SECRET_FILE" ]]; then
     echo "RESULT=FAIL_MISSING_SECRET_FILE" >> "$LOG" 2>&1
     echo "=== BotA runtime health push end ===" >> "$LOG" 2>&1
     exit 0
@@ -62,7 +62,7 @@ if [ -z "${BOTA_HEALTH_INGEST_SECRET:-}" ]; then
 fi
 
 # Avoid overlapping pushes if network stalls.
-if [ -f "$LOCK" ]; then
+if [[ -f "$LOCK" ]]; then
   lock_age=$(( $(date +%s) - $(stat -c %Y "$LOCK" 2>/dev/null || echo 0) ))
   if [ "$lock_age" -lt 240 ]; then
     echo "RESULT=SKIP_LOCK_ACTIVE lock_age=${lock_age}s" >> "$LOG" 2>&1
@@ -73,7 +73,7 @@ fi
 
 date -u '+%Y-%m-%dT%H:%M:%SZ' > "$LOCK"
 
-if [ -z "${BOTA_HEALTH_INGEST_SECRET:-}" ]; then
+if [[ -z "${BOTA_HEALTH_INGEST_SECRET:-}" ]]; then
   rm -f "$LOCK"
   echo "RESULT=FAIL_SECRET_ENV_EMPTY" >> "$LOG" 2>&1
   echo "=== BotA runtime health push end ===" >> "$LOG" 2>&1

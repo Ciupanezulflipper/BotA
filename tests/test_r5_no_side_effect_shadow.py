@@ -44,6 +44,7 @@ class R5NoSideEffectShadowTests(unittest.TestCase):
                 f"assert pathlib.Path(sys.modules['sitecustomize'].__file__).resolve()==pathlib.Path({str(BOOTSTRAP)!r}).resolve()"
             )
             completed = subprocess.run([sys.executable, "-c", code], env=env, cwd=ROOT,
+                                           check=False,
                                        text=True, capture_output=True, timeout=10)
             self.assertEqual(completed.returncode, 0, completed.stderr)
 
@@ -63,6 +64,7 @@ class R5NoSideEffectShadowTests(unittest.TestCase):
                 "print('R5_TRANSPORT_TEST=PASS')"
             )
             completed = subprocess.run([sys.executable, "-c", code], env=env, cwd=ROOT,
+                                           check=False,
                                        text=True, capture_output=True, timeout=10)
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertIn("R5_TRANSPORT_TEST=PASS", completed.stdout)
@@ -85,6 +87,7 @@ class R5NoSideEffectShadowTests(unittest.TestCase):
                 "print(os.environ['SUPABASE_SERVICE_KEY'])"
             )
             completed = subprocess.run([sys.executable, "-c", code], env=env, cwd=ROOT,
+                                           check=False,
                                        text=True, capture_output=True, timeout=10)
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertNotIn(secret, completed.stdout + completed.stderr)
@@ -98,6 +101,7 @@ class R5NoSideEffectShadowTests(unittest.TestCase):
             mutable = Path(temporary)
             env = _base_env(mutable)
             completed = subprocess.run([sys.executable, str(PREFLIGHT)], env=env, cwd=ROOT,
+                                           check=False,
                                        text=True, capture_output=True, timeout=10)
             self.assertEqual(completed.returncode, 0, completed.stderr)
             result = json.loads(completed.stdout.strip().splitlines()[-1])
@@ -117,6 +121,7 @@ class R5NoSideEffectShadowTests(unittest.TestCase):
                     env["BOTA_R5_SHADOW"] = shadow
                 env["BOTA_REQUIRE_R5_SHADOW"] = "1"
                 completed = subprocess.run([sys.executable, str(PREFLIGHT)], env=env, cwd=ROOT,
+                                               check=False,
                                            text=True, capture_output=True, timeout=10)
                 self.assertEqual(completed.returncode, 2)
                 result = json.loads(completed.stdout.strip())
@@ -137,6 +142,7 @@ class R5NoSideEffectShadowTests(unittest.TestCase):
                     env = _base_env(temporary_path)
                     env["PYTHONPATH"] = str(bootstrap_path)
                     completed = subprocess.run([sys.executable, str(PREFLIGHT)], env=env, cwd=ROOT,
+                                                   check=False,
                                                text=True, capture_output=True, timeout=10)
                     self.assertEqual(completed.returncode, 2)
                     result = json.loads(completed.stdout.strip())
@@ -155,13 +161,14 @@ class R5NoSideEffectShadowTests(unittest.TestCase):
                 "assert os.environ.get('TELEGRAM_BOT_TOKEN')=='unchanged-non-r5-value'"
             )
             completed = subprocess.run([sys.executable, "-c", code], env=env, cwd=ROOT,
+                                           check=False,
                                        text=True, capture_output=True, timeout=10)
             self.assertEqual(completed.returncode, 0, completed.stderr)
 
     def test_runtime_health_r5_branch_precedes_secret_file_loading(self):
         text = HEALTH_WRAPPER.read_text(encoding="utf-8")
         marker = 'RESULT=R5_SHADOW_LOCAL_ONLY rc=$rc'
-        secret_guard = 'if [ ! -f "$SECRET_FILE" ]; then'
+        secret_guard = 'if [[ ! -f "$SECRET_FILE" ]]; then'
         source_secret = '. "$SECRET_FILE"'
         self.assertIn(marker, text)
         self.assertLess(text.index(marker), text.index(secret_guard))
@@ -210,6 +217,7 @@ class R5NoSideEffectShadowTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 timeout=10,
+                check=False,
             )
             log = (mutable / "logs" / "cron.runtime_health_push.log").read_text(encoding="utf-8")
             return completed, log

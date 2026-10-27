@@ -50,3 +50,34 @@ class HandoffTests(unittest.TestCase):
                 root=Path(td); src=self.source(root); (src/"state/pause").write_text(value)
                 with self.assertRaisesRegex(handoff.HandoffError,"pause_state_"):
                     handoff.build(src,root/"bundle")
+
+    def test_build_rejects_source_parent_symlink_escape(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            outside=root/"outside"
+            (outside/"state/telegram_delivery").mkdir(parents=True)
+            (outside/"logs/state").mkdir(parents=True)
+            (outside/"logs/alerts.csv").write_bytes(b"header\n")
+            (outside/"state/profitlab_delivery_cursor.json").write_text('{"offset":0}')
+            src=root/"phone"
+            src.mkdir()
+            (src/"logs").symlink_to(outside/"logs", target_is_directory=True)
+            (src/"state").symlink_to(outside/"state", target_is_directory=True)
+            with self.assertRaisesRegex(handoff.HandoffError, "path_escape|unsafe_source"):
+                handoff.build(src, root/"bundle")
+
+    def test_apply_rejects_destination_parent_symlink_escape(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            src=self.source(root)
+            bundle=root/"bundle"
+            handoff.build(src,bundle)
+            dest=root/"vps"
+            dest.mkdir()
+            outside=root/"outside-destination"
+            outside.mkdir()
+            (dest/"state").symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(handoff.HandoffError, "path_escape|unsafe_target"):
+                handoff.apply(bundle,dest)
+            self.assertFalse((outside/"pause").exists())
+            self.assertFalse((outside/"profitlab_delivery_cursor.json").exists())

@@ -29,6 +29,40 @@ class DependencyContractError(RuntimeError):
     """Raised when the runtime dependency manifest itself is invalid."""
 
 
+def _is_within(root: Path, candidate: Path) -> bool:
+    return candidate == root or root in candidate.parents
+
+
+def _safe_evidence_path(path: Path) -> Path:
+    raw_root = os.environ.get("BOTA_MUTABLE_ROOT", "").strip()
+    if not raw_root:
+        raise DependencyContractError("mutable_root_required_for_evidence")
+    root = Path(raw_root).expanduser()
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(root, 0o700)
+    root_real = root.resolve(strict=True)
+    candidate = path.expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    try:
+        relative = candidate.relative_to(root)
+    except ValueError as exc:
+        raise DependencyContractError("evidence_path_outside_mutable_root") from exc
+    cursor = root
+    for part in relative.parts[:-1]:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise DependencyContractError("evidence_path_symlink_escape")
+        cursor.mkdir(exist_ok=True, mode=0o700)
+        os.chmod(cursor, 0o700)
+    if candidate.is_symlink():
+        raise DependencyContractError("evidence_path_symlink_escape")
+    parent_real = candidate.parent.resolve(strict=True)
+    if not _is_within(root_real, parent_real):
+        raise DependencyContractError("evidence_path_outside_mutable_root")
+    return candidate
+
+
 def normalized_distribution(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
@@ -134,8 +168,8 @@ def collect(manifest: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
 
 
 def write_evidence(path: Path, result: dict[str, Any]) -> None:
-    """Owner-only atomic evidence: fsync temp file, replace, fsync parent."""
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    """Owner-only atomic evidence under the explicit mutable-root trust boundary."""
+    path = _safe_evidence_path(path)
     fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     tmp = Path(name)
     try:
@@ -169,9 +203,9 @@ def main() -> int:
     if args.evidence is not None:
         try:
             write_evidence(args.evidence, result)
-        except OSError as exc:
+        except (OSError, DependencyContractError) as exc:
             result["healthy"] = False
-            result["failure_reasons"].append(f"evidence_write_failed:{type(exc).__name__}")
+            result["failure_reasons"].append(f"evidence_write_failed:{type(exc).__name__}:{exc}")
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result["healthy"] else 3
 

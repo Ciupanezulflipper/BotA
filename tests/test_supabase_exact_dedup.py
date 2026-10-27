@@ -18,10 +18,8 @@ the watcher-cycle evidence contract in ``tools/watcher_cycle_ledger.py`` /
 from __future__ import annotations
 
 import importlib.util
-import json
 import os
 import sys
-import tempfile
 import unittest
 from contextlib import nullcontext
 from pathlib import Path
@@ -68,7 +66,7 @@ class FakeHTTPSConnection:
         return self.responses.pop(0)
 
     def close(self) -> None:
-        pass
+        return None
 
 
 def query_signal(connection_responses, *, pair, direction, entry, sl, tp, tf="M15", score="80", tier="GREEN"):

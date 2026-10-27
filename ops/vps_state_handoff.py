@@ -11,17 +11,20 @@ import shutil
 import tempfile
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 SCHEMA = "1.0"
 MANIFEST = "handoff-manifest.json"
 HASH_RE = re.compile(r"logs/state/last_hash_[A-Z]{6}_M15\.txt$")
 TG_RE = re.compile(r"state/telegram_delivery/[0-9a-f]{64}\.json$")
+ALERTS_RELATIVE = "logs/alerts.csv"
+CURSOR_RELATIVE = "state/profitlab_delivery_cursor.json"
+PAUSE_RELATIVE = "state/pause"
 FIXED = {
-    "logs/alerts.csv": "decision_journal",
-    "state/profitlab_delivery_cursor.json": "profitlab_cursor",
-    "state/pause": "circuit_breaker",
+    ALERTS_RELATIVE: "decision_journal",
+    CURSOR_RELATIVE: "profitlab_cursor",
+    PAUSE_RELATIVE: "circuit_breaker",
 }
 VALID_TG = {"intent", "sent", "unknown_outcome", "definite_failure"}
 PAUSE_LINE_RE = re.compile(r"export (PAUSE_(?:EURUSD|GBPUSD|USDJPY))=1")
@@ -29,6 +32,61 @@ PAUSE_LINE_RE = re.compile(r"export (PAUSE_(?:EURUSD|GBPUSD|USDJPY))=1")
 
 class HandoffError(RuntimeError):
     pass
+
+
+def _relative_path(relative: str) -> PurePosixPath:
+    path = PurePosixPath(relative)
+    if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
+        raise HandoffError("path_escape")
+    return path
+
+
+def _within(root: Path, candidate: Path) -> bool:
+    return candidate == root or root in candidate.parents
+
+
+def _existing_under(root: Path, relative: str) -> Path:
+    rel = _relative_path(relative)
+    try:
+        root_real = root.resolve(strict=True)
+    except OSError as exc:
+        raise HandoffError("root_unavailable") from exc
+    cursor = root
+    for part in rel.parts:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise HandoffError(f"path_escape:{relative}")
+    candidate = root.joinpath(*rel.parts)
+    try:
+        resolved = candidate.resolve(strict=True)
+    except OSError as exc:
+        raise HandoffError(f"unsafe_source:{relative}") from exc
+    if not _within(root_real, resolved):
+        raise HandoffError(f"path_escape:{relative}")
+    return candidate
+
+
+def _target_under(root: Path, relative: str) -> Path:
+    rel = _relative_path(relative)
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        root_real = root.resolve(strict=True)
+    except OSError as exc:
+        raise HandoffError("destination_unavailable") from exc
+    cursor = root
+    for part in rel.parts[:-1]:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise HandoffError(f"unsafe_target:{relative}")
+        cursor.mkdir(exist_ok=True, mode=0o700)
+        if not _within(root_real, cursor.resolve(strict=True)):
+            raise HandoffError(f"unsafe_target:{relative}")
+    target = root.joinpath(*rel.parts)
+    if target.is_symlink():
+        raise HandoffError(f"unsafe_target:{relative}")
+    if not _within(root_real, target.parent.resolve(strict=True)):
+        raise HandoffError(f"unsafe_target:{relative}")
+    return target
 
 
 def _classification(relative: str) -> str | None:
@@ -44,7 +102,7 @@ def _classification(relative: str) -> str | None:
 def _json(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError) as exc:
+    except (OSError, ValueError) as exc:
         raise HandoffError(f"malformed_json:{path.name}") from exc
     if not isinstance(value, dict):
         raise HandoffError(f"malformed_json:{path.name}")
@@ -54,7 +112,7 @@ def _json(path: Path) -> dict[str, Any]:
 def _validate_source(relative: str, path: Path, alerts_size: int | None) -> None:
     if not path.is_file() or path.is_symlink():
         raise HandoffError(f"unsafe_source:{relative}")
-    if relative == "state/profitlab_delivery_cursor.json":
+    if relative == CURSOR_RELATIVE:
         value = _json(path)
         try:
             offset = int(value["offset"])
@@ -67,10 +125,10 @@ def _validate_source(relative: str, path: Path, alerts_size: int | None) -> None
         if value.get("status") not in VALID_TG:
             raise HandoffError(f"telegram_state_invalid:{path.name}")
     elif HASH_RE.fullmatch(relative):
-        value = path.read_text(encoding="ascii").strip()
-        if not re.fullmatch(r"[0-9a-f]{32,64}", value):
+        hash_text = path.read_text(encoding="ascii").strip()
+        if not re.fullmatch(r"[0-9a-f]{32,64}", hash_text):
             raise HandoffError(f"watcher_hash_invalid:{path.name}")
-    elif relative == "state/pause":
+    elif relative == PAUSE_RELATIVE:
         if path.stat().st_size > 65536:
             raise HandoffError("pause_state_too_large")
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -102,10 +160,13 @@ def _files(root: Path) -> list[tuple[str, Path, str]]:
 def build(source: Path, bundle: Path) -> dict[str, Any]:
     if bundle.exists():
         raise HandoffError("bundle_exists")
-    alerts = source / "logs/alerts.csv"
-    cursor = source / "state/profitlab_delivery_cursor.json"
+    alerts = source / ALERTS_RELATIVE
+    cursor = source / CURSOR_RELATIVE
     if alerts.exists() != cursor.exists():
         raise HandoffError("profitlab_continuity_pair_incomplete")
+    if alerts.exists():
+        alerts = _existing_under(source, ALERTS_RELATIVE)
+        cursor = _existing_under(source, CURSOR_RELATIVE)
     alerts_size = alerts.stat().st_size if alerts.is_file() else None
     selected = _files(source)
     if not selected:
@@ -114,9 +175,9 @@ def build(source: Path, bundle: Path) -> dict[str, Any]:
     records = []
     try:
         for relative, path, classification in selected:
+            path = _existing_under(source, relative)
             _validate_source(relative, path, alerts_size)
-            target = staging / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
+            target = _target_under(staging, relative)
             data = path.read_bytes()
             target.write_bytes(data)
             os.chmod(target, 0o600)
@@ -145,18 +206,21 @@ def validate(bundle: Path) -> dict[str, Any]:
         relative = record.get("path") if isinstance(record, dict) else None
         if not isinstance(relative, str) or _classification(relative) != record.get("classification"):
             raise HandoffError("manifest_path_not_allowed")
-        path = bundle / relative
+        path = _existing_under(bundle, relative)
         data = path.read_bytes()
         if len(data) != record.get("size") or hashlib.sha256(data).hexdigest() != record.get("sha256"):
             raise HandoffError(f"manifest_digest_mismatch:{relative}")
-        if relative == "logs/alerts.csv":
+        if relative == ALERTS_RELATIVE:
             alerts_size = len(data)
         listed.add(relative)
+    for candidate in bundle.rglob("*"):
+        if candidate.is_symlink():
+            raise HandoffError("bundle_symlink_rejected")
     actual = {p.relative_to(bundle).as_posix() for p in bundle.rglob("*") if p.is_file()} - {MANIFEST}
     if actual != listed:
         raise HandoffError("bundle_contains_unlisted_files")
     for relative in sorted(listed):
-        _validate_source(relative, bundle / relative, alerts_size)
+        _validate_source(relative, _existing_under(bundle, relative), alerts_size)
     return manifest
 
 
@@ -165,12 +229,14 @@ def apply(bundle: Path, destination: Path) -> dict[str, Any]:
     destination.mkdir(parents=True, exist_ok=True)
     for record in manifest["files"]:
         relative = record["path"]
-        target = destination / relative
-        target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if not isinstance(relative, str):
+            raise HandoffError("manifest_path_not_allowed")
+        source = _existing_under(bundle, relative)
+        target = _target_under(destination, relative)
         fd, name = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
         try:
             with os.fdopen(fd, "wb") as handle:
-                handle.write((bundle / relative).read_bytes())
+                handle.write(source.read_bytes())
                 handle.flush(); os.fsync(handle.fileno())
             os.chmod(name, 0o600)
             os.replace(name, target)

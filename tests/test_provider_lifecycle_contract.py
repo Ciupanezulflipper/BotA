@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -65,6 +64,7 @@ class FetcherContractIsYahooOnlyTests(unittest.TestCase):
             result = subprocess.run(
                 ["bash", str(FETCHER), "EURUSD", "M15"],
                 env=env, text=True, capture_output=True, timeout=10,
+                check=False,
             )
         self.assertEqual(result.returncode, 1)
         self.assertIn("unsupported_provider_contract", result.stderr)
@@ -76,6 +76,7 @@ class FetcherContractIsYahooOnlyTests(unittest.TestCase):
             result = subprocess.run(
                 ["bash", str(FETCHER), "EURUSD", "M15"],
                 env=env, text=True, capture_output=True, timeout=10,
+                check=False,
             )
         self.assertEqual(result.returncode, 1)
         self.assertIn("unsupported_provider_contract", result.stderr)
@@ -87,6 +88,7 @@ class FetcherContractIsYahooOnlyTests(unittest.TestCase):
             result = subprocess.run(
                 ["bash", str(FETCHER)],
                 env=env, text=True, capture_output=True, timeout=10,
+                check=False,
             )
         self.assertEqual(result.returncode, 1)
         self.assertIn("Usage:", result.stderr)

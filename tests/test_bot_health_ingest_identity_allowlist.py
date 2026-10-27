@@ -106,7 +106,8 @@ console.log(JSON.stringify(results));
         script_path.write_text(harness, encoding="utf-8")
 
         completed = subprocess.run(
-            ["node", str(script_path)], capture_output=True, text=True, timeout=10
+            ["node", str(script_path)], capture_output=True, text=True, timeout=10,
+            check=False,
         )
         if completed.returncode != 0:
             raise AssertionError(f"harness failed: {completed.stderr}")

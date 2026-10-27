@@ -6,6 +6,7 @@ import argparse
 import json
 import py_compile
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -20,6 +21,7 @@ EXPECTED = {
     "CANDLE_MAX_AGE_SECS": "2700",
 }
 REQUIRED_CANDLE_PROVIDER = "yahoo"
+BASH_EXECUTABLE = shutil.which("bash")
 SHELLS = ("tools/run_shadow_manager.sh", "tools/watcher_gated_cycle.sh",
           "tools/run_signal_watcher_with_ledger.sh", "tools/signal_watcher_pro.sh",
           "tools/signal_watcher_core.sh", "tools/telegram_send.sh",
@@ -88,7 +90,17 @@ def evaluate(root: Path) -> dict[str, object]:
         checks["python_compile"] = True
     except py_compile.PyCompileError:
         checks["python_compile"] = False
-    checks["shell_syntax"] = all(subprocess.run(["bash", "-n", str(root / p)], capture_output=True).returncode == 0 for p in SHELLS)
+    checks["shell_syntax"] = (
+        BASH_EXECUTABLE is not None
+        and all(
+            subprocess.run(
+                [BASH_EXECUTABLE, "-n", str(root / p)],
+                capture_output=True,
+                check=False,
+            ).returncode == 0
+            for p in SHELLS
+        )
+    )
     r0 = checks["strategy_fingerprint_frozen"] and checks["updater_supporting_timeframes"] and checks["watcher_execution_m15"]
     r1 = all(checks[k] for k in ("python_compile", "shell_syntax", "no_migration_secrets", "no_termux_vps_shebang", "one_systemd_authority"))
     r2 = all(checks[k] for k in ("python_314_contract", "exact_dependency_manifest", "release_venv_contract", "transactional_deploy_contract", "dependency_evidence_durable"))
