@@ -42,7 +42,7 @@ PAIR="${1:-EURUSD}"
 H1_TREND_MIN_SCORE="${H1_TREND_MIN_SCORE:-40}"
 
 _log_debug() {
-  [[ "${FUSION_DEBUG:-0}" == "1" ]] || return 0
+  [[ "${FUSION_DEBUG:-0}" = "1" ]] || return 0
   printf '[M15+H1] %s\n' "$*" >> "${DEBUG_LOG}" 2>/dev/null || true
 }
 
@@ -184,7 +184,7 @@ m15_adx="$(jq_field "${m15_json}" '.adx // 0')"
 
 news_adj="0"
 news_tag="news_neutral"
-if [[ "${m15_dir}" == "BUY" || "${m15_dir}" == "SELL" ]]; then
+if [[ "${m15_dir}" = "BUY" || "${m15_dir}" = "SELL" ]]; then
   news_adj="$(python3 -c "
 m6 = int('${MACRO6}' or 3)
 d = '${m15_dir}'

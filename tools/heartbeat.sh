@@ -9,12 +9,11 @@ set -euo pipefail
 
 CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
 MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
-ROOT="${CODE_ROOT}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-CONTROLLER="${ROOT}/tools/heartbeat_boottime.py"
+CONTROLLER="${CODE_ROOT}/tools/heartbeat_boottime.py"
 LOG_PATH="${MUTABLE_ROOT}/logs/cron.heartbeat.log"
 
-if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" == 1 ]]; then
+if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" = 1 ]]; then
   printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nCONTROLLER=%s\nLOGS=%s\nSTATE=%s\nLOCK=%s\n' \
     "${CODE_ROOT}" "${MUTABLE_ROOT}" "${CONTROLLER}" \
     "${MUTABLE_ROOT}/logs" "${MUTABLE_ROOT}/state" \

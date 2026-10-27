@@ -22,7 +22,7 @@ TOOLS="${CODE_ROOT}/tools"
 CACHE="${MUTABLE_ROOT}/cache"
 LOGS="${MUTABLE_ROOT}/logs"
 
-if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" == 1 ]]; then
+if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" = 1 ]]; then
   printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nTOOLS=%s\nCACHE=%s\nDATA=%s\nLOGS=%s\nLOCK=%s\n' \
     "${CODE_ROOT}" "${MUTABLE_ROOT}" "${TOOLS}" "${CACHE}" \
     "${MUTABLE_ROOT}/data" "${LOGS}" "${MUTABLE_ROOT}/state/indicators_updater.lock"

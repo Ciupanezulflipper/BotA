@@ -18,7 +18,7 @@ TOOLS_DIR="${CODE_ROOT}/tools"
 LOG_DIR="${MUTABLE_ROOT}/logs"
 PROVIDER_USAGE="${TOOLS_DIR}/provider_usage.py"
 
-if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" == 1 ]]; then
+if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" = 1 ]]; then
   printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nTOOLS=%s\nCACHE=%s\nDATA=%s\nLOGS=%s\n' \
     "${CODE_ROOT}" "${MUTABLE_ROOT}" "${TOOLS_DIR}" "${CACHE_DIR}" "${DATA_DIR}" "${LOG_DIR}"
   exit 0
