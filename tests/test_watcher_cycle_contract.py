@@ -220,6 +220,15 @@ class WatcherCycleContractTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "segment_too_large"):
                 contract.bounded_segment(path, 0)
 
+    def test_fsync_failure_blocks_contract_pass(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, alerts, offset, log, tg, sb = self.make_cycle(td, [row("EURUSD"), row("GBPUSD"), row("USDJPY")])
+            argv = ["watcher_cycle_contract.py", "--cycle-id", "c", "--alerts-path", str(alerts),
+                    "--alerts-offset", str(offset), "--log-path", str(log), "--telegram-result-path", str(tg),
+                    "--supabase-result-path", str(sb)]
+            with self.base_env(root), mock.patch("sys.argv", argv), mock.patch.object(contract.os, "fsync", side_effect=OSError("disk")):
+                self.assertEqual(contract.main(), 4)
+
 
 if __name__ == "__main__":
     unittest.main()

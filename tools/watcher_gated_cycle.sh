@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 # shellcheck shell=bash
 # FILE: tools/watcher_gated_cycle.sh
 # DESC: One gated watcher cycle that emits EXACTLY ONE terminal outcome to the
@@ -37,7 +37,8 @@
 # only observes and records what the watcher pipeline reported.
 #
 # Environment:
-#   BOTA_ROOT                 : BotA root override (default ${HOME}/BotA)
+#   BOTA_CODE_ROOT            : immutable code root (BOTA_ROOT compatibility fallback)
+#   BOTA_MUTABLE_ROOT         : runtime logs/state root (code root fallback)
 #   BOTA_CYCLE_ID             : optional externally supplied cycle identity.
 #                                When absent, this script creates one and exports
 #                                it to all child watcher/reconciler processes.
@@ -53,10 +54,12 @@
 
 set -uo pipefail
 
-ROOT="${BOTA_ROOT:-${HOME}/BotA}"
-TOOLS="${ROOT}/tools"
-LOGS="${ROOT}/logs"
-STATE="${ROOT}/state"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+ROOT="${CODE_ROOT}"
+TOOLS="${CODE_ROOT}/tools"
+LOGS="${MUTABLE_ROOT}/logs"
+STATE="${MUTABLE_ROOT}/state"
 mkdir -p "${LOGS}" "${STATE}"
 
 COMPONENT="watcher"
@@ -142,8 +145,8 @@ log_before_size() {
 
 record_started
 
-reason_file="$(mktemp -t market_reason.XXXXXX)"
-epoch_file="$(mktemp -t market_epoch.XXXXXX)"
+reason_file="$(mktemp "${STATE}/market_reason.XXXXXX")"
+epoch_file="$(mktemp "${STATE}/market_epoch.XXXXXX")"
 trap 'rm -f "${reason_file}" "${epoch_file}"' EXIT
 
 gate_rc=0
@@ -231,7 +234,7 @@ alerts_before="$(alerts_before_size)"
 log_before="$(log_before_size)"
 
 inner_rc=0
-inner_stderr="$(mktemp -t watcher_gated.XXXXXX)"
+inner_stderr="$(mktemp "${STATE}/watcher_gated.XXXXXX")"
 
 trap 'rm -f "${reason_file}" "${epoch_file}" "${inner_stderr}"' EXIT
 
@@ -248,12 +251,12 @@ alerts_grew=0
 log_grew=0
 [[ "${log_after}" -gt "${log_before}" ]] && log_grew=1
 
-aggregate="$(BOTA_ROOT="${ROOT}" CYCLE_ID="${CYCLE_ID}" python3 - <<'PY' 2>/dev/null
+aggregate="$(BOTA_MUTABLE_ROOT="${MUTABLE_ROOT}" CYCLE_ID="${CYCLE_ID}" python3 - <<'PY' 2>/dev/null
 import json
 import os
 import pathlib
 
-root = os.environ.get("BOTA_ROOT", "").strip() or str(
+root = os.environ.get("BOTA_MUTABLE_ROOT", "").strip() or str(
     pathlib.Path.home() / "BotA"
 )
 cycle_id = os.environ.get("CYCLE_ID", "")

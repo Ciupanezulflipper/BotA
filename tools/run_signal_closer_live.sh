@@ -3,12 +3,14 @@
 # BotA signal closer live wrapper.
 #
 # Purpose:
-# - Load only the Supabase env values required by tools/signal_closer.py.
+# - Load only the Supabase/Telegram env values required by tools/signal_closer.py.
 # - Run signal_closer.py in explicit LIVE mode.
 # - Keep signal_closer.py safe defaults unchanged.
 #
 # Safety:
-# - No Telegram sends.
+# - Telegram closure notifications are attempted independently of the Supabase
+#   lifecycle update (see tools/telegram_closure_delivery.py); a failure in
+#   either sink never blocks or reverses the other.
 # - No strategy changes.
 # - Live DB writes only happen when ACTIVE Supabase signals need closing.
 # - Max batch is capped by SIGNAL_CLOSER_MAX_BATCH, default 5.
@@ -16,10 +18,18 @@
 
 set -u
 
-ROOT="/data/data/com.termux/files/home/BotA"
-cd "$ROOT" || exit 1
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+ROOT="${CODE_ROOT}"
+if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" == 1 ]]; then
+  printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nTOOLS=%s\nCACHE=%s\nLOGS=%s\n' \
+    "${CODE_ROOT}" "${MUTABLE_ROOT}" "${CODE_ROOT}/tools" \
+    "${MUTABLE_ROOT}/cache" "${MUTABLE_ROOT}/logs"
+  exit 0
+fi
+cd "$CODE_ROOT" || exit 1
 
-mkdir -p "$ROOT/logs"
+mkdir -p "$MUTABLE_ROOT/logs"
 
 eval "$(
 python3 - <<'PY'
@@ -32,6 +42,9 @@ allowed = {
     "SUPABASE_URL",
     "SIGNAL_MAX_AGE_HOURS",
     "SIGNAL_CLOSER_MAX_BATCH",
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_TOKEN",
+    "TELEGRAM_CHAT_ID",
 }
 
 for filename in ("config/strategy.env", ".env", ".env.runtime"):

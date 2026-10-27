@@ -24,7 +24,7 @@ VALID_TELEGRAM = {
     "sent_local_reconcile_failed",
 }
 VALID_SUPABASE = {
-    "published", "skipped_active_exists", "skipped_non_green",
+    "published", "skipped_exact_duplicate", "skipped_non_green",
     "failed_missing_service_key", "failed_dedup_check", "failed_publish",
 }
 BAD_TELEGRAM = {"definite_failure", "unknown_outcome", "sent_local_reconcile_failed"}
@@ -227,7 +227,7 @@ def validate_supabase(
             status = str(record.get("status") or "")
             if status in BAD_SUPABASE:
                 raise ValueError(f"supabase_delivery_unhealthy:{status}")
-            if row["tier"] == "GREEN" and status not in {"published", "skipped_active_exists"}:
+            if row["tier"] == "GREEN" and status not in {"published", "skipped_exact_duplicate"}:
                 raise ValueError("supabase_green_status_invalid")
             if row["tier"] != "GREEN":
                 raise ValueError("supabase_record_for_non_green")
@@ -265,6 +265,19 @@ def main() -> int:
         supabase = read_jsonl(args.supabase_result_path)
         sent_scopes = validate_telegram(rows, telegram)
         validate_supabase(rows, supabase, args.cycle_id, sent_scopes)
+        # Persistence is not proven until both the journal and directory entry
+        # have reached the filesystem.  This occurs only after strict scope,
+        # row, skip, and delivery validation above.
+        file_fd = os.open(args.alerts_path, os.O_RDONLY)
+        try:
+            os.fsync(file_fd)
+        finally:
+            os.close(file_fd)
+        dir_fd = os.open(args.alerts_path.parent, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
     except (OSError, ValueError) as exc:
         print(f"[WATCHER_CONTRACT] FAIL {exc}", file=sys.stderr)
         return 4

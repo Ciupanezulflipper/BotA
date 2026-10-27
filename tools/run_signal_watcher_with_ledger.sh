@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 # Run one watcher scan and reconcile only evidence produced by that scan.
 #
 # If BOTA_CYCLE_ID is supplied by a parent orchestrator, this runner MUST reuse
@@ -10,8 +10,10 @@
 
 set -euo pipefail
 
-ROOT="${BOTA_ROOT:-${HOME}/BotA}"
-DEPLOY_MARKER="${ROOT}/state/runtime_deploy_in_progress.json"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+ROOT="${CODE_ROOT}"
+DEPLOY_MARKER="${MUTABLE_ROOT}/state/runtime_deploy_in_progress.json"
 # Generation barrier must precede every filesystem/runtime/network side effect.
 # -e is false for a dangling symlink, so -L is required as well. Never follow
 # or read the marker: its mere presence means the runtime generation is
@@ -22,14 +24,14 @@ if [[ -e "${DEPLOY_MARKER}" || -L "${DEPLOY_MARKER}" ]]; then
   exit 78
 fi
 
-TOOLS="${ROOT}/tools"
-LOGS="${ROOT}/logs"
-EVIDENCE_STATE="${ROOT}/state"
+TOOLS="${CODE_ROOT}/tools"
+LOGS="${MUTABLE_ROOT}/logs"
+EVIDENCE_STATE="${MUTABLE_ROOT}/state"
 WATCHER_STATE_RAW="${BOTA_WATCHER_STATE:-logs/state}"
 if [[ "${WATCHER_STATE_RAW}" = /* ]]; then
   DELIVERY_STATE="${WATCHER_STATE_RAW}"
 else
-  DELIVERY_STATE="${ROOT}/${WATCHER_STATE_RAW}"
+  DELIVERY_STATE="${MUTABLE_ROOT}/${WATCHER_STATE_RAW}"
 fi
 # One explicit watcher-state contract. Do not inherit an ambient generic STATE
 # value from cron/runit/interactive shells. The signal watcher receives this
@@ -38,13 +40,19 @@ fi
 export BOTA_WATCHER_STATE="${DELIVERY_STATE}"
 export STATE="${DELIVERY_STATE}"
 
+if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" == 1 ]]; then
+  printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nTOOLS=%s\nLOGS=%s\nSTATE=%s\nLOCK=%s\n' \
+    "${CODE_ROOT}" "${MUTABLE_ROOT}" "${TOOLS}" "${LOGS}" \
+    "${EVIDENCE_STATE}" "${DELIVERY_STATE}/watcher.lock"
+  exit 0
+fi
+
 mkdir -p "${LOGS}" "${EVIDENCE_STATE}" "${DELIVERY_STATE}"
 
 # telegram_send.sh is the only authorized watcher Telegram transport. Presence
-# is required here; the canonical boundary owns the conditional owner-only
-# executable-mode repair and fails closed if that cannot be established. This
-# ordering prevents a fresh GitHub checkout's 100644 mode from bypassing the
-# canonical sender or producing a false pre-boundary failure.
+# is required here. The watcher invokes it through the already-required bash,
+# so Git mode and host shebang lookup cannot create a bypass. Missing source
+# fails closed before a cycle or network boundary.
 if [[ ! -f "${TOOLS}/telegram_send.sh" ]]; then
   printf '[WATCHER_EVIDENCE] canonical telegram sender missing: %s\n' \
     "${TOOLS}/telegram_send.sh" >&2
@@ -103,20 +111,6 @@ fi
 watcher_rc=0
 bash "${TOOLS}/signal_watcher_pro.sh" --once 2>"${cycle_log}" || watcher_rc=$?
 
-# The watcher historically swallowed alerts.csv append failures. Enforce a
-# cycle-level persistence postcondition before health can be green. Capture the
-# verifier output first; never read and append the same cycle log concurrently.
-persistence_rc=0
-persistence_output="$({
-  python3 "${TOOLS}/watcher_persistence_gate.py" \
-    --alerts-path "${alerts}" \
-    --alerts-offset "${alerts_offset}" \
-    --log-path "${cycle_log}"
-} 2>&1)" || persistence_rc=$?
-if [[ -n "${persistence_output}" ]]; then
-  printf '%s\n' "${persistence_output}" >>"${cycle_log}"
-fi
-
 # Independent strict contract in front of the legacy reconciler. This prevents
 # truncated/rotated evidence, duplicate current-cycle decisions, malformed
 # structured results, unhealthy Telegram outcomes, or missing/failed GREEN
@@ -156,8 +150,6 @@ cat "${cycle_log}" >&2 || true
 final_rc=0
 if (( watcher_rc != 0 )); then
   final_rc="${watcher_rc}"
-elif (( persistence_rc != 0 )); then
-  final_rc="${persistence_rc}"
 elif (( contract_rc != 0 )); then
   final_rc="${contract_rc}"
 elif (( reconcile_rc != 0 )); then
@@ -170,7 +162,7 @@ if (( final_rc != 0 )); then
   if (( owns_cycle == 1 )); then
     python3 "${TOOLS}/pipeline_ledger.py" component \
       --component watcher --status failed --cycle-id "${cycle_id}" \
-      --details "watcher_exit_code=${watcher_rc};persistence_exit_code=${persistence_rc};contract_exit_code=${contract_rc};reconcile_exit_code=${reconcile_rc}" \
+      --details "watcher_exit_code=${watcher_rc};contract_exit_code=${contract_rc};reconcile_exit_code=${reconcile_rc}" \
       --server-epoch "${BOTA_SERVER_EPOCH:-${server_epoch}}" \
       >/dev/null 2>>"${LOGS}/error.log" || true
   fi

@@ -39,9 +39,12 @@ TERMINAL_OUTCOMES = frozenset(
 
 
 def root_dir() -> Path:
-    """Resolve BotA root, allowing temporary roots in tests."""
-    configured = os.environ.get("BOTA_ROOT", "").strip()
-    return Path(configured).expanduser() if configured else Path(__file__).resolve().parent.parent
+    """Resolve BotA mutable root, preserving the legacy code-root default."""
+    configured = os.environ.get("BOTA_MUTABLE_ROOT", "").strip()
+    if configured:
+        return Path(configured).expanduser()
+    code_root = os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT")
+    return Path(code_root).expanduser() if code_root else Path(__file__).resolve().parent.parent
 
 
 def boot_id() -> str:

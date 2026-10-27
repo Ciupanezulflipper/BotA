@@ -1,17 +1,26 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 # BotA Phase 5 runtime health push wrapper.
 # Cron-safe wrapper around tools/push_runtime_health_supabase.py.
 # Does not print secrets. Does not use privileged Supabase database keys.
 
 set +e
 
-ROOT="/data/data/com.termux/files/home/BotA"
-SCRIPT="$ROOT/tools/push_runtime_health_supabase.py"
-SECRET_FILE="$ROOT/config/bota_health_ingest.env"
-LOG="$ROOT/logs/cron.runtime_health_push.log"
-LOCK="$ROOT/state/runtime_health_push.lock"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+ROOT="${CODE_ROOT}"
+SCRIPT="$CODE_ROOT/tools/push_runtime_health_supabase.py"
+SECRET_FILE="$CODE_ROOT/config/bota_health_ingest.env"
+LOG="$MUTABLE_ROOT/logs/cron.runtime_health_push.log"
+LOCK="$MUTABLE_ROOT/state/runtime_health_push.lock"
 
-mkdir -p "$ROOT/logs" "$ROOT/state"
+if [ "${BOTA_PATH_CONTRACT_CHECK:-0}" = "1" ]; then
+  printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nSCRIPT=%s\nCONFIG=%s\nLOGS=%s\nSTATE=%s\nLOCK=%s\n' \
+    "$CODE_ROOT" "$MUTABLE_ROOT" "$SCRIPT" "$SECRET_FILE" \
+    "$MUTABLE_ROOT/logs" "$MUTABLE_ROOT/state" "$LOCK"
+  exit 0
+fi
+
+mkdir -p "$MUTABLE_ROOT/logs" "$MUTABLE_ROOT/state"
 
 ts_utc="$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"
 
@@ -29,10 +38,27 @@ if [ ! -f "$SCRIPT" ]; then
   exit 0
 fi
 
-if [ ! -f "$SECRET_FILE" ]; then
-  echo "RESULT=FAIL_MISSING_SECRET_FILE" >> "$LOG" 2>&1
+# R5 is an observation-only VPS experiment. Build the normal payload locally,
+# but do not read any ingest secret and never cross the Supabase write boundary.
+if [ "${BOTA_R5_SHADOW:-0}" = "1" ]; then
+  python3 "$SCRIPT" >> "$LOG" 2>&1
+  rc=$?
+  echo "RESULT=R5_SHADOW_LOCAL_ONLY rc=$rc" >> "$LOG" 2>&1
   echo "=== BotA runtime health push end ===" >> "$LOG" 2>&1
   exit 0
+fi
+
+# Production Hetzner injects the dedicated ingest secret into this process.
+# Termux/backward-compatible installs may still load it from the legacy file.
+if [ -z "${BOTA_HEALTH_INGEST_SECRET:-}" ]; then
+  if [ ! -f "$SECRET_FILE" ]; then
+    echo "RESULT=FAIL_MISSING_SECRET_FILE" >> "$LOG" 2>&1
+    echo "=== BotA runtime health push end ===" >> "$LOG" 2>&1
+    exit 0
+  fi
+  set -a
+  . "$SECRET_FILE"
+  set +a
 fi
 
 # Avoid overlapping pushes if network stalls.
@@ -46,10 +72,6 @@ if [ -f "$LOCK" ]; then
 fi
 
 date -u '+%Y-%m-%dT%H:%M:%SZ' > "$LOCK"
-
-set -a
-. "$SECRET_FILE"
-set +a
 
 if [ -z "${BOTA_HEALTH_INGEST_SECRET:-}" ]; then
   rm -f "$LOCK"

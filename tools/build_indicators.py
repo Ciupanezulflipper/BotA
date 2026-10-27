@@ -281,6 +281,29 @@ def normalize_candles(candles: List[Dict[str, float]]) -> List[Dict[str, float]]
     return out
 
 
+def filter_closed_candles(
+    candles: List[Dict[str, float]], tf: str, now_epoch: Optional[float] = None
+) -> List[Dict[str, float]]:
+    """
+    Remove every candle whose full timeframe duration has not yet elapsed.
+    A candle is closed when candle_start + timeframe_duration <= now.
+    Applies uniformly to all timeframes (M15/H1/H4/D1) with no pair/TF special-casing.
+    """
+    duration_sec = tf_minutes(tf) * 60
+    if duration_sec <= 0:
+        return list(candles)
+
+    now = float(now_epoch) if now_epoch is not None else time.time()
+    out: List[Dict[str, float]] = []
+    for c in candles:
+        t = c.get("time")
+        if t is None:
+            continue
+        if float(t) + duration_sec <= now:
+            out.append(c)
+    return out
+
+
 def validate_tf(candles: List[Dict[str, float]], tf: str, window: int = 200) -> Tuple[bool, float]:
     expected = tf_minutes(tf)
     if expected <= 0:
@@ -462,13 +485,21 @@ def bollinger_bands_last(closes: List[float], p: int = 20, std_mult: float = 2.0
     return upper, sma, lower, squeeze
 
 
-def build_bundle(pair: str, tf: str, candles_in: List[Dict[str, float]]) -> Dict[str, Any]:
+def build_bundle(
+    pair: str,
+    tf: str,
+    candles_in: List[Dict[str, float]],
+    now_epoch: Optional[float] = None,
+) -> Dict[str, Any]:
+    now_ref = float(now_epoch) if now_epoch is not None else time.time()
+
     candles_n = normalize_candles(candles_in)
+    candles_n = filter_closed_candles(candles_n, tf, now_ref)
 
     ok, actual_min = validate_tf(candles_n, tf, window=200)
 
     price = float(candles_n[-1]["close"]) if candles_n else 0.0
-    age_min = ((time.time() - float(candles_n[-1]["time"])) / 60.0) if candles_n else 0.0
+    age_min = ((now_ref - float(candles_n[-1]["time"])) / 60.0) if candles_n else 0.0
 
     bundle: Dict[str, Any] = {
         "pair": pair,
@@ -531,9 +562,12 @@ def build_bundle(pair: str, tf: str, candles_in: List[Dict[str, float]]) -> Dict
     bundle["atr_pips"] = float(bundle["atr"] / pip) if pip > 0 else 0.0
 
     # OHLC for current and previous candle (needed for pullback detection)
-    if len(candles_in) >= 2:
-        c  = candles_in[-1]
-        cp = candles_in[-2]
+    # Sourced from the closed-candle-filtered, normalized set — never from
+    # the original unfiltered input — so a forming/live row can never leak
+    # into the reported price or OHLC fields.
+    if len(candles_n) >= 2:
+        c  = candles_n[-1]
+        cp = candles_n[-2]
         bundle["open"]       = float(c.get("o", c.get("open", 0)))
         bundle["high"]       = float(c.get("h", c.get("high", 0)))
         bundle["low"]        = float(c.get("l", c.get("low", 0)))
