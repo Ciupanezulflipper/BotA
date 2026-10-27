@@ -175,7 +175,8 @@ class R5NoSideEffectShadowTests(unittest.TestCase):
         self.assertLess(text.index(marker), text.index(source_secret))
 
 
-    def _run_health_wrapper_fixture(self, injected_secret=None, file_secret=None, shadow="0"):
+    @staticmethod
+    def _run_health_wrapper_fixture(injected_secret=None, file_secret=None, shadow="0"):
         with tempfile.TemporaryDirectory() as temporary:
             code_root = Path(temporary) / "code"
             mutable = Path(temporary) / "mutable"

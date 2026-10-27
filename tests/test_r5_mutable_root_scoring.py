@@ -11,7 +11,8 @@ WRAPPER = REPO / "tools" / "m15_h1_fusion.sh"
 
 
 class R5MutableRootScoringTests(unittest.TestCase):
-    def _fixture(self, root: Path) -> tuple[Path, Path]:
+    @staticmethod
+    def _fixture(root: Path) -> tuple[Path, Path]:
         code = root / "code"
         mutable = root / "mutable"
         tools = code / "tools"

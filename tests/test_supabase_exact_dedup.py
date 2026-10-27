@@ -66,6 +66,7 @@ class FakeHTTPSConnection:
         return self.responses.pop(0)
 
     def close(self) -> None:
+        _ = self.responses
         return None
 
 
@@ -184,7 +185,8 @@ class WatcherCycleEvidenceDistinguishesOutcomesTests(unittest.TestCase):
     """F: watcher cycle evidence must distinguish published / deduplicated
     exact retry / failed publish as three separate, legible outcomes."""
 
-    def _decision(self, status: str) -> dict:
+    @staticmethod
+    def _decision(status: str) -> dict:
         with mock.patch.object(
             ledger.subprocess, "run",
             return_value=ledger.subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),

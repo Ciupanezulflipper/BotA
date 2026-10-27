@@ -623,9 +623,9 @@ class SignalCloserRetryWiringTests(unittest.TestCase):
              mock.patch.object(telegram_closure_delivery, "retry_pending_closures",
                                 return_value={"candidates": 1, "sent": 1, "skipped": 0}) as retry, \
              mock.patch.object(sys, "argv",
-                                ["signal_closer.py", "--live", "--confirm", "CLOSE_SIGNALS", "--max-batch", "5"]):
-            with self.assertRaises(SystemExit) as ctx:
-                signal_closer.main()
+                                ["signal_closer.py", "--live", "--confirm", "CLOSE_SIGNALS", "--max-batch", "5"]), \
+             self.assertRaises(SystemExit) as ctx:
+            signal_closer.main()
         self.assertEqual(ctx.exception.code, 1)
         retry.assert_called_once()
 
@@ -711,7 +711,8 @@ class LiveDeliveryPartialSecretScopeTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def _jobs(self) -> dict[str, "vps.Job"]:
+    @staticmethod
+    def _jobs() -> dict[str, "vps.Job"]:
         return {job.name: job for job in vps.production_jobs()}
 
     def test_supabase_only_file_unblocks_profitlab_delivery_only(self) -> None:

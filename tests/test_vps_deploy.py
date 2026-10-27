@@ -203,10 +203,8 @@ class VPSDeployTests(unittest.TestCase):
                 deploy.extract_archive_safely(stream.getvalue(), self.paths.release_root)
 
     def test_exclusive_nonblocking_lock(self):
-        with deploy.DeployLock(self.paths.deploy_lock):
-            with self.assertRaises(deploy.DeployLocked):
-                with deploy.DeployLock(self.paths.deploy_lock):
-                    pass
+        with deploy.DeployLock(self.paths.deploy_lock),              self.assertRaises(deploy.DeployLocked),              deploy.DeployLock(self.paths.deploy_lock):
+            pass
 
     def test_valid_release_reuse_and_inconsistent_release_rejected(self):
         subject, runner, _systemd, _ = self.make()
@@ -496,8 +494,13 @@ class VPSDeployTests(unittest.TestCase):
         subject.activation_timeout = 0.15
         pid_a, pid_b = 4100, 4200
         calls = []
-        sequence = iter((pid_a, pid_b, pid_b, pid_b))
-        systemd.prove_active = lambda: (calls.append(True), next(sequence))[1]
+        sequence = [pid_a, pid_b, pid_b, pid_b]
+        def prove_active():
+            calls.append(True)
+            if not sequence:
+                raise AssertionError("unexpected extra prove_active call")
+            return sequence.pop(0)
+        systemd.prove_active = prove_active
         reads = []
         def health():
             pid = pid_a if not reads else pid_b
@@ -514,10 +517,9 @@ class VPSDeployTests(unittest.TestCase):
 
     def test_activation_persistent_main_pid_churn_times_out(self):
         subject, _runner, systemd, _ = self.make()
-        counter = iter(range(5000, 6000))
-        current = [0]
+        current = [4999]
         def prove():
-            current[0] = next(counter)
+            current[0] += 1
             return current[0]
         systemd.prove_active = prove
         subject._read_health_optional = lambda: {

@@ -46,11 +46,6 @@ _log_debug() {
   printf '[M15+H1] %s\n' "$*" >> "${DEBUG_LOG}" 2>/dev/null || true
 }
 
-_log_warn() {
-  printf '[M15+H1][WARN] %s\n' "$*" >&2
-  printf '[M15+H1][WARN] %s\n' "$*" >> "${DEBUG_LOG}" 2>/dev/null || true
-}
-
 _log_error() {
   printf '[M15+H1][ERROR] %s\n' "$*" >&2
   printf '[M15+H1][ERROR] %s\n' "$*" >> "${DEBUG_LOG}" 2>/dev/null || true

@@ -65,7 +65,8 @@ class OrchestratorTests(unittest.TestCase):
     def orch(self, jobs=(), grace=0.1):
         return vps.Orchestrator(ROOT, self.mutable, jobs, term_grace=grace)
 
-    def job(self, name, code, deadline=2.0):
+    @staticmethod
+    def job(name, code, deadline=2.0):
         return vps.Job(name, ((sys.executable, "-c", code),), vps.EVERY_MINUTE, deadline)
 
     def launch_wait(self, orch, job):
@@ -91,7 +92,7 @@ class OrchestratorTests(unittest.TestCase):
         holder = subprocess.Popen([sys.executable, "-c", holder_code], cwd=ROOT,
                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                   stderr=subprocess.PIPE)
-        wait_until(lambda: (self.mutable / "state" / vps.HEALTH_FILENAME).exists())
+        wait_until((self.mutable / "state" / vps.HEALTH_FILENAME).exists)
         env = dict(os.environ, BOTA_CODE_ROOT=str(ROOT), BOTA_MUTABLE_ROOT=str(self.mutable))
         rejected = subprocess.run([sys.executable, str(ROOT / "tools" / "vps_orchestrator.py")],
                                   cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
