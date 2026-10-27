@@ -107,6 +107,63 @@ def _target_under(root: Path, relative: str) -> Path:
     return target
 
 
+def _write_target_bytes(root: Path, relative: str, data: bytes) -> Path:
+    rel = _safe_relative(relative)
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+    directory_flags = os.O_RDONLY
+    directory_flags |= getattr(os, "O_DIRECTORY", 0)
+    directory_flags |= getattr(os, "O_NOFOLLOW", 0)
+    file_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    file_flags |= getattr(os, "O_NOFOLLOW", 0)
+
+    opened_fds: list[int] = []
+    try:
+        try:
+            current_fd = os.open(root, directory_flags)
+        except OSError as exc:
+            raise HandoffError("destination_unavailable") from exc
+        opened_fds.append(current_fd)
+
+        for part in rel.parts[:-1]:
+            try:
+                os.mkdir(part, 0o700, dir_fd=current_fd)
+            except FileExistsError:
+                pass
+            except OSError as exc:
+                raise HandoffError(f"unsafe_target:{relative}") from exc
+
+            try:
+                next_fd = os.open(part, directory_flags, dir_fd=current_fd)
+            except OSError as exc:
+                raise HandoffError(f"unsafe_target:{relative}") from exc
+            opened_fds.append(next_fd)
+            current_fd = next_fd
+
+        try:
+            file_fd = os.open(rel.name, file_flags, 0o600, dir_fd=current_fd)
+        except OSError as exc:
+            raise HandoffError(f"unsafe_target:{relative}") from exc
+
+        try:
+            with os.fdopen(file_fd, "wb", closefd=True) as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except OSError as exc:
+            raise HandoffError(f"unsafe_target:{relative}") from exc
+
+        target = root.joinpath(*rel.parts)
+        os.chmod(target, 0o600, follow_symlinks=False)
+        return target
+    finally:
+        for fd in reversed(opened_fds):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+
 def _classification(relative: str) -> str | None:
     if relative in FIXED:
         return FIXED[relative]
@@ -196,10 +253,8 @@ def build(source: Path, bundle: Path) -> dict[str, Any]:
         for relative, path, classification in selected:
             path = _existing_under(source, relative)
             _validate_source(relative, path, alerts_size)
-            target = _target_under(staging, relative)
             data = path.read_bytes()
-            target.write_bytes(data)
-            os.chmod(target, 0o600)
+            _write_target_bytes(staging, relative, data)
             records.append({"path": relative, "size": len(data),
                             "sha256": hashlib.sha256(data).hexdigest(),
                             "mode": "0600", "classification": classification})

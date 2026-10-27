@@ -103,3 +103,34 @@ class HandoffTests(unittest.TestCase):
                 handoff.apply(bundle,dest)
             self.assertFalse((outside/"pause").exists())
             self.assertFalse((outside/"profitlab_delivery_cursor.json").exists())
+
+    def test_write_target_bytes_rejects_leaf_symlink(self):
+        with tempfile.TemporaryDirectory() as td:
+            staging = Path(td) / "staging"
+            target_dir = staging / "state"
+            target_dir.mkdir(parents=True)
+            outside = Path(td) / "outside"
+            outside.write_bytes(b"unchanged")
+            (target_dir / "pause").symlink_to(outside)
+            with self.assertRaisesRegex(handoff.HandoffError, "unsafe_target"):
+                handoff._write_target_bytes(staging, "state/pause", b"new")
+            self.assertEqual(outside.read_bytes(), b"unchanged")
+
+    def test_write_target_bytes_rejects_parent_symlink(self):
+        with tempfile.TemporaryDirectory() as td:
+            staging = Path(td) / "staging"
+            staging.mkdir()
+            outside = Path(td) / "outside"
+            outside.mkdir()
+            (staging / "state").symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(handoff.HandoffError, "unsafe_target"):
+                handoff._write_target_bytes(staging, "state/pause", b"new")
+            self.assertFalse((outside / "pause").exists())
+
+    def test_write_target_bytes_writes_exact_bytes_mode_0600(self):
+        with tempfile.TemporaryDirectory() as td:
+            staging = Path(td) / "staging"
+            payload = b"exact-payload\n"
+            target = handoff._write_target_bytes(staging, "state/pause", payload)
+            self.assertEqual(target.read_bytes(), payload)
+            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
