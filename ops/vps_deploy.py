@@ -537,6 +537,35 @@ class Deployer:
         except DeployError:
             return None
 
+    def _validate_activation_runtime(self, health: dict[str, object], main_pid: int,
+                                     previous_instance: str | None) -> None:
+        health_pid = health.get("orchestrator_pid")
+        if (not isinstance(health_pid, int) or isinstance(health_pid, bool)
+                or health_pid <= 0 or health_pid != main_pid):
+            raise DeployError("health_orchestrator_pid_mismatch")
+        instance = health.get("runtime_instance_id")
+        if health.get("lifecycle") != "RUNNING" or health.get("process_liveness") is not True:
+            raise DeployError("health_not_running")
+        if not isinstance(instance, str) or not instance or instance == previous_instance:
+            raise DeployError("runtime_instance_not_new")
+
+    @staticmethod
+    def _validate_activation_release(health: dict[str, object], sha: str,
+                                     fingerprint: str) -> None:
+        if health.get("release_git_sha") != sha:
+            raise DeployError("health_release_mismatch")
+        if health.get("effective_config_fingerprint") != fingerprint:
+            raise DeployError("health_fingerprint_mismatch")
+
+    def _validate_activation_progress(self, health: dict[str, object]) -> None:
+        progress = health.get("last_loop_progress_utc")
+        if not isinstance(progress, str):
+            raise DeployError("loop_progress_missing")
+        moment = datetime.fromisoformat(progress.replace("Z", "+00:00"))
+        age = (datetime.now(timezone.utc) - moment).total_seconds()
+        if age < -5 or age > self.progress_max_age:
+            raise DeployError("loop_progress_stale")
+
     def _prove_activation(self, sha: str, fingerprint: str,
                           previous_instance: str | None) -> dict[str, object]:
         deadline = time.monotonic() + self.activation_timeout
@@ -547,28 +576,10 @@ class Deployer:
                 health = self._read_health_optional()
                 if health is None:
                     raise DeployError("health_missing")
-                health_pid = health.get("orchestrator_pid")
-                if (not isinstance(health_pid, int) or isinstance(health_pid, bool)
-                        or health_pid <= 0 or health_pid != main_pid):
-                    raise DeployError("health_orchestrator_pid_mismatch")
-                instance = health.get("runtime_instance_id")
-                if health.get("lifecycle") != "RUNNING" or health.get("process_liveness") is not True:
-                    raise DeployError("health_not_running")
-                if not isinstance(instance, str) or not instance or instance == previous_instance:
-                    raise DeployError("runtime_instance_not_new")
-                if health.get("release_git_sha") != sha:
-                    raise DeployError("health_release_mismatch")
-                if health.get("effective_config_fingerprint") != fingerprint:
-                    raise DeployError("health_fingerprint_mismatch")
-                progress = health.get("last_loop_progress_utc")
-                if not isinstance(progress, str):
-                    raise DeployError("loop_progress_missing")
-                moment = datetime.fromisoformat(progress.replace("Z", "+00:00"))
-                age = (datetime.now(timezone.utc) - moment).total_seconds()
-                if age < -5 or age > self.progress_max_age:
-                    raise DeployError("loop_progress_stale")
-                main_pid_after = self.systemd.prove_active()
-                if main_pid_after != main_pid:
+                self._validate_activation_runtime(health, main_pid, previous_instance)
+                self._validate_activation_release(health, sha, fingerprint)
+                self._validate_activation_progress(health)
+                if self.systemd.prove_active() != main_pid:
                     raise DeployError("service_main_pid_changed")
                 return health
             except (DeployError, ValueError) as exc:

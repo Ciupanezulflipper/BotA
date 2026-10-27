@@ -53,54 +53,114 @@ def env_file(path: Path) -> dict[str, str]:
     return out
 
 
-def evaluate(root: Path) -> dict[str, object]:
-    checks: dict[str, bool] = {}
-    policy = env_file(root / "config/production-vps.env")
-    checks["strategy_fingerprint_frozen"] = all(policy.get(k) == v for k, v in EXPECTED.items())
-    checks["provider_contract_frozen"] = policy.get("PRODUCTION_CANDLE_PROVIDER") == REQUIRED_CANDLE_PROVIDER
-    orchestrator = (root / "tools/vps_orchestrator.py").read_text(encoding="utf-8")
-    checks["updater_supporting_timeframes"] = '"TIMEFRAMES": "M15 H1 H4 D1"' in orchestrator
-    checks["watcher_execution_m15"] = policy.get("TIMEFRAMES") == "M15"
-    checks["provider_contract_versioned"] = '"PRODUCTION_CANDLE_PROVIDER"' in orchestrator
-    checks["python_314_contract"] = 'requires-python = ">=3.14,<3.15"' in (root / "pyproject.toml").read_text()
-    checks["exact_dependency_manifest"] = all("==" in x for x in (root / "requirements-runtime.txt").read_text().splitlines() if x and not x.startswith("#"))
-    checks["release_venv_contract"] = "release_python_unusable" in orchestrator and 'env["PATH"]' in orchestrator
+def _strategy_contract_checks(policy: dict[str, str], orchestrator: str) -> dict[str, bool]:
+    return {
+        "strategy_fingerprint_frozen": all(policy.get(k) == v for k, v in EXPECTED.items()),
+        "provider_contract_frozen": policy.get("PRODUCTION_CANDLE_PROVIDER") == REQUIRED_CANDLE_PROVIDER,
+        "updater_supporting_timeframes": '"TIMEFRAMES": "M15 H1 H4 D1"' in orchestrator,
+        "watcher_execution_m15": policy.get("TIMEFRAMES") == "M15",
+        "provider_contract_versioned": '"PRODUCTION_CANDLE_PROVIDER"' in orchestrator,
+    }
+
+
+def _runtime_contract_checks(root: Path, orchestrator: str) -> dict[str, bool]:
     deploy = (root / "ops/vps_deploy.py").read_text(encoding="utf-8")
-    checks["transactional_deploy_contract"] = all(x in deploy for x in ("os.replace", "fsync", "_rollback", '("git", "archive"'))
     unit = (root / "ops/systemd/bota.service").read_text(encoding="utf-8")
-    checks["one_systemd_authority"] = (
-        "ExecStart=/usr/bin/env BOTA_CODE_ROOT=/opt/bota/current" in unit
-        and "/opt/bota/current/.venv/bin/python /opt/bota/current/tools/vps_orchestrator.py" in unit
-        and "KillMode=control-group" in unit
-    )
+    return {
+        "python_314_contract": 'requires-python = ">=3.14,<3.15"' in (root / "pyproject.toml").read_text(),
+        "exact_dependency_manifest": all(
+            "==" in line
+            for line in (root / "requirements-runtime.txt").read_text().splitlines()
+            if line and not line.startswith("#")
+        ),
+        "release_venv_contract": "release_python_unusable" in orchestrator and 'env["PATH"]' in orchestrator,
+        "transactional_deploy_contract": all(
+            token in deploy for token in ("os.replace", "fsync", "_rollback", '("git", "archive"')
+        ),
+        "one_systemd_authority": (
+            "ExecStart=/usr/bin/env BOTA_CODE_ROOT=/opt/bota/current" in unit
+            and "/opt/bota/current/.venv/bin/python /opt/bota/current/tools/vps_orchestrator.py" in unit
+            and "KillMode=control-group" in unit
+        ),
+    }
+
+
+def _delivery_contract_checks(root: Path) -> dict[str, bool]:
     runner = (root / "tools/run_signal_watcher_with_ledger.sh").read_text()
     core = (root / "tools/signal_watcher_core.sh").read_text()
     delivery = (root / "tools/telegram_delivery.py").read_text()
-    checks["canonical_telegram_transport_count"] = all(x not in core for x in ("urllib.request.urlopen", "api.telegram.org", "sendPhoto")) and delivery.count("urllib.request.urlopen") == 1
-    checks["telegram_mutable_root"] = "BOTA_MUTABLE_ROOT" in delivery and 'bash "${TOOLS}/telegram_send.sh"' in core
-    checks["watcher_persistence_non_vacuous"] = "watcher_persistence_gate.py" not in runner and "watcher_cycle_contract.py" in runner and "os.fsync" in (root / "tools/watcher_cycle_contract.py").read_text()
-    checks["dependency_evidence_durable"] = "write_evidence" in (root / "tools/runtime_dependency_check.py").read_text() and "shadow-latest.json" in (root / "tools/run_shadow_manager.sh").read_text()
+    return {
+        "canonical_telegram_transport_count": (
+            all(token not in core for token in ("urllib.request.urlopen", "api.telegram.org", "sendPhoto"))
+            and delivery.count("urllib.request.urlopen") == 1
+        ),
+        "telegram_mutable_root": "BOTA_MUTABLE_ROOT" in delivery and 'bash "${TOOLS}/telegram_send.sh"' in core,
+        "watcher_persistence_non_vacuous": (
+            "watcher_persistence_gate.py" not in runner
+            and "watcher_cycle_contract.py" in runner
+            and "os.fsync" in (root / "tools/watcher_cycle_contract.py").read_text()
+        ),
+        "dependency_evidence_durable": (
+            "write_evidence" in (root / "tools/runtime_dependency_check.py").read_text()
+            and "shadow-latest.json" in (root / "tools/run_shadow_manager.sh").read_text()
+        ),
+    }
+
+
+def _migration_contract_checks(root: Path) -> dict[str, bool]:
     handoff = (root / "ops/vps_state_handoff.py").read_text()
-    checks["state_handoff_allowlist"] = "PAUSE_LINE_RE.fullmatch" in handoff and "PAUSE_(?:EURUSD|GBPUSD|USDJPY)" in handoff
-    checks["no_termux_vps_shebang"] = all(not (root / p).read_text().startswith("#!/data/data/com.termux") for p in SHELLS)
-    migration_text = "\n".join((root / p).read_text(errors="replace") for p in (*SHELLS, *PYTHONS))
-    checks["no_migration_secrets"] = not re.search(r"\b\d{8,12}:[A-Za-z0-9_-]{30,}\b|\beyJ[A-Za-z0-9_-]{40,}\.", migration_text)
+    migration_text = "\n".join(
+        (root / path).read_text(errors="replace") for path in (*SHELLS, *PYTHONS)
+    )
+    return {
+        "state_handoff_allowlist": (
+            "PAUSE_LINE_RE.fullmatch" in handoff
+            and "PAUSE_(?:EURUSD|GBPUSD|USDJPY)" in handoff
+        ),
+        "no_termux_vps_shebang": all(
+            not (root / path).read_text().startswith("#!/data/data/com.termux") for path in SHELLS
+        ),
+        "no_migration_secrets": not re.search(
+            r"\b\d{8,12}:[A-Za-z0-9_-]{30,}\b|\beyJ[A-Za-z0-9_-]{40,}\.",
+            migration_text,
+        ),
+    }
+
+
+def _python_compile_passes(root: Path) -> bool:
     try:
-        for relative in PYTHONS: py_compile.compile(str(root / relative), doraise=True)
-        checks["python_compile"] = True
+        for relative in PYTHONS:
+            py_compile.compile(str(root / relative), doraise=True)
     except py_compile.PyCompileError:
-        checks["python_compile"] = False
-    checks["shell_syntax"] = (
+        return False
+    return True
+
+
+def _shell_syntax_passes(root: Path) -> bool:
+    return (
         BASH_EXECUTABLE is not None
         and all(
             subprocess.run(
-                [BASH_EXECUTABLE, "-n", str(root / p)],
+                [BASH_EXECUTABLE, "-n", str(root / path)],
                 capture_output=True,
                 check=False,
             ).returncode == 0
-            for p in SHELLS
+            for path in SHELLS
         )
     )
+
+
+def evaluate(root: Path) -> dict[str, object]:
+    policy = env_file(root / "config/production-vps.env")
+    orchestrator = (root / "tools/vps_orchestrator.py").read_text(encoding="utf-8")
+    checks: dict[str, bool] = {}
+    checks.update(_strategy_contract_checks(policy, orchestrator))
+    checks.update(_runtime_contract_checks(root, orchestrator))
+    checks.update(_delivery_contract_checks(root))
+    checks.update(_migration_contract_checks(root))
+    checks["python_compile"] = _python_compile_passes(root)
+    checks["shell_syntax"] = _shell_syntax_passes(root)
+
     r0 = checks["strategy_fingerprint_frozen"] and checks["updater_supporting_timeframes"] and checks["watcher_execution_m15"]
     r1 = all(checks[k] for k in ("python_compile", "shell_syntax", "no_migration_secrets", "no_termux_vps_shebang", "one_systemd_authority"))
     r2 = all(checks[k] for k in ("python_314_contract", "exact_dependency_manifest", "release_venv_contract", "transactional_deploy_contract", "dependency_evidence_durable"))
@@ -121,7 +181,6 @@ def evaluate(root: Path) -> dict[str, object]:
             "REPOSITORY_RELEASE_GATE": "PASS" if passed else "FAIL",
             "PRODUCTION_READY": "NO", "NEXT_GATE": "R5_VPS_NO_SIDE_EFFECT_SHADOW",
             "checks": checks}
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1]); parser.add_argument("--skip-tests", action="store_true"); args = parser.parse_args()

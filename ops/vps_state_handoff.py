@@ -184,38 +184,51 @@ def _json(path: Path) -> dict[str, Any]:
     return value
 
 
+def _validate_profitlab_cursor(path: Path, alerts_size: int | None) -> None:
+    value = _json(path)
+    try:
+        offset = int(value["offset"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HandoffError("profitlab_cursor_invalid") from exc
+    if alerts_size is None or offset < 0 or offset > alerts_size:
+        raise HandoffError("profitlab_cursor_out_of_range")
+
+
+def _validate_telegram_state(path: Path) -> None:
+    if _json(path).get("status") not in VALID_TG:
+        raise HandoffError(f"telegram_state_invalid:{path.name}")
+
+
+def _validate_watcher_hash(path: Path) -> None:
+    hash_text = path.read_text(encoding="ascii").strip()
+    if not re.fullmatch(r"[0-9a-f]{32,64}", hash_text):
+        raise HandoffError(f"watcher_hash_invalid:{path.name}")
+
+
+def _validate_pause_state(path: Path) -> None:
+    if path.stat().st_size > 65536:
+        raise HandoffError("pause_state_too_large")
+    keys: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        matched = PAUSE_LINE_RE.fullmatch(line)
+        if not matched:
+            raise HandoffError("pause_state_invalid")
+        if matched.group(1) in keys:
+            raise HandoffError("pause_state_duplicate")
+        keys.add(matched.group(1))
+
+
 def _validate_source(relative: str, path: Path, alerts_size: int | None) -> None:
     if not path.is_file() or path.is_symlink():
         raise HandoffError(f"unsafe_source:{relative}")
     if relative == CURSOR_RELATIVE:
-        value = _json(path)
-        try:
-            offset = int(value["offset"])
-        except (KeyError, TypeError, ValueError) as exc:
-            raise HandoffError("profitlab_cursor_invalid") from exc
-        if alerts_size is None or offset < 0 or offset > alerts_size:
-            raise HandoffError("profitlab_cursor_out_of_range")
+        _validate_profitlab_cursor(path, alerts_size)
     elif TG_RE.fullmatch(relative):
-        value = _json(path)
-        if value.get("status") not in VALID_TG:
-            raise HandoffError(f"telegram_state_invalid:{path.name}")
+        _validate_telegram_state(path)
     elif HASH_RE.fullmatch(relative):
-        hash_text = path.read_text(encoding="ascii").strip()
-        if not re.fullmatch(r"[0-9a-f]{32,64}", hash_text):
-            raise HandoffError(f"watcher_hash_invalid:{path.name}")
+        _validate_watcher_hash(path)
     elif relative == PAUSE_RELATIVE:
-        if path.stat().st_size > 65536:
-            raise HandoffError("pause_state_too_large")
-        lines = path.read_text(encoding="utf-8").splitlines()
-        keys: set[str] = set()
-        for line in lines:
-            matched = PAUSE_LINE_RE.fullmatch(line)
-            if not matched:
-                raise HandoffError("pause_state_invalid")
-            if matched.group(1) in keys:
-                raise HandoffError("pause_state_duplicate")
-            keys.add(matched.group(1))
-
+        _validate_pause_state(path)
 
 def _files(root: Path) -> list[tuple[str, Path, str]]:
     selected: list[tuple[str, Path, str]] = []
