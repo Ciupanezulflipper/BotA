@@ -201,9 +201,9 @@ _market_epoch_file=""
 if [[ -x "${TOOLS}/market_open.sh" ]]; then
   _market_epoch_file="$(mktemp 2>/dev/null || true)"
   if [[ -n "$_market_epoch_file" ]]; then
-    _raw="$(BOTA_SERVER_EPOCH_FILE="$_market_epoch_file" "${TOOLS}/market_open.sh" 2>/dev/null || true)"
+    _raw="$(BOTA_SERVER_EPOCH_FILE="$_market_epoch_file" bash "${TOOLS}/market_open.sh" 2>/dev/null || true)"
   else
-    _raw="$("${TOOLS}/market_open.sh" 2>/dev/null || true)"
+    _raw="$(bash "${TOOLS}/market_open.sh" 2>/dev/null || true)"
   fi
   _raw="$(printf %s "${_raw}" | head -n1 | tr -d '[:space:]')"
   if [[ "${_raw}" == "Open" || "${_raw}" == "Closed" ]]; then

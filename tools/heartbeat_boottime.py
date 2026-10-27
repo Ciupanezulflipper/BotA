@@ -93,7 +93,12 @@ def main() -> int:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA"))),
+        default=Path(
+            os.environ.get("BOTA_MUTABLE_ROOT")
+            or os.environ.get("BOTA_CODE_ROOT")
+            or os.environ.get("BOTA_ROOT")
+            or Path.home() / "BotA"
+        ),
     )
     args = parser.parse_args()
     return run(args.root.expanduser())

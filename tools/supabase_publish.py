@@ -31,7 +31,9 @@ def service_key() -> str:
 
 
 def root_path() -> Path:
-    return Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA"))).expanduser().resolve()
+    configured = os.environ.get("BOTA_MUTABLE_ROOT")
+    fallback = os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT")
+    return Path(configured or fallback or Path.home() / "BotA").expanduser().resolve()
 
 
 @contextmanager
@@ -62,9 +64,22 @@ def auth_headers(key: str) -> dict[str, str]:
     return {"apikey": key, "Authorization": f"Bearer {key}"}
 
 
-def active_signal_exists(pair: str, key: str) -> bool | None:
-    """Return active-state truth, or None if the dedup query failed."""
-    path = "/rest/v1/signals" f"?status=eq.ACTIVE&pair=eq.{pair.upper()}&select=id"
+def exact_signal_exists(
+    pair: str, direction: str, tf: str, entry: str, sl: str, tp: str, key: str
+) -> bool | None:
+    """Return True if an ACTIVE signal with this exact identity already exists.
+
+    Identity is pair + direction + timeframe + entry/sl/tp, matching the BotA
+    delivery contract (BOTH_HEALTHY_EXACTLY_ONCE_PER_SINK): a distinct GREEN
+    signal for the same pair must reach Supabase even while another ACTIVE
+    signal for that pair is still open. Returns None if the dedup query failed.
+    """
+    path = (
+        "/rest/v1/signals"
+        f"?status=eq.ACTIVE&pair=eq.{pair.upper()}&direction=eq.{direction.upper()}"
+        f"&timeframe=eq.{tf.upper()}&entry_price=eq.{float(entry)}"
+        f"&stop_loss=eq.{float(sl)}&take_profit=eq.{float(tp)}&select=id"
+    )
     connection = http.client.HTTPSConnection(SUPABASE_HOST, timeout=10)
     try:
         connection.request("GET", path, headers=auth_headers(key))
@@ -82,7 +97,8 @@ def active_signal_exists(pair: str, key: str) -> bool | None:
 
     if rows:
         print(
-            f"[supabase_publish] SKIP {pair.upper()} — {len(rows)} ACTIVE signal(s) already open",
+            f"[supabase_publish] SKIP {pair.upper()} {direction.upper()} entry={entry} "
+            "— exact ACTIVE duplicate already open",
             file=sys.stderr,
         )
         return True
@@ -127,11 +143,11 @@ def publish_with_status(pair, direction, entry, sl, tp, score, tf, tier) -> tupl
         return False, "failed_missing_service_key"
 
     with publication_lock():
-        active = active_signal_exists(pair, key)
-        if active is None:
+        duplicate = exact_signal_exists(pair, direction, tf, entry, sl, tp, key)
+        if duplicate is None:
             return False, "failed_dedup_check"
-        if active:
-            return True, "skipped_active_exists"
+        if duplicate:
+            return True, "skipped_exact_duplicate"
 
         payload = {
             "pair": pair.upper(),

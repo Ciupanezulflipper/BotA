@@ -9,13 +9,13 @@ import os
 import sys
 from pathlib import Path
 
-from telegram_delivery import decision_matches, parse_message, row_dict
+from telegram_delivery import decision_matches, mutable_root, parse_message, row_dict
 
 MAX_SEGMENT_BYTES = 262_144
 
 
 def current_segment() -> str:
-    root = Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA"))).expanduser().resolve()
+    root = mutable_root()
     alerts = root / "logs" / "alerts.csv"
     raw_offset = os.environ.get("BOTA_ALERTS_OFFSET", "").strip()
     if not raw_offset.isdigit():

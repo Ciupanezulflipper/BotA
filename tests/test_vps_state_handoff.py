@@ -1,0 +1,136 @@
+from __future__ import annotations
+import json, tempfile, unittest
+from pathlib import Path
+from ops import vps_state_handoff as handoff
+
+class HandoffTests(unittest.TestCase):
+    def source(self, root: Path) -> Path:
+        src=root/"phone"; (src/"logs/state").mkdir(parents=True); (src/"state/telegram_delivery").mkdir(parents=True)
+        alerts=b"header\npending-row\n"; (src/"logs/alerts.csv").write_bytes(alerts)
+        (src/"state/profitlab_delivery_cursor.json").write_text(json.dumps({"schema_version":"1.0","offset":7,"source_size":len(alerts)}))
+        (src/"state/telegram_delivery"/("a"*64+".json")).write_text(json.dumps({"status":"unknown_outcome"}))
+        (src/"logs/state/last_hash_EURUSD_M15.txt").write_text("b"*32+"\n")
+        (src/"state/pause").write_text("export PAUSE_EURUSD=1\nexport PAUSE_USDJPY=1\n")
+        (src/".env.runtime").write_text("TELEGRAM_BOT_TOKEN=secret")
+        (src/"logs/state/last_sent_EURUSD_M15.txt").write_text("old-boot:123")
+        return src
+    def test_allowlist_validate_apply_preserves_pending_and_unknown(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); src=self.source(root); bundle=root/"bundle"; dest=root/"vps"
+            manifest=handoff.build(src,bundle); handoff.validate(bundle); handoff.apply(bundle,dest)
+            paths={x["path"] for x in manifest["files"]}
+            self.assertIn("state/telegram_delivery/"+"a"*64+".json",paths)
+            self.assertNotIn(".env.runtime",paths); self.assertFalse((dest/"logs/state/last_sent_EURUSD_M15.txt").exists())
+            self.assertEqual(json.loads((dest/"state/profitlab_delivery_cursor.json").read_text())["offset"],7)
+            self.assertEqual(json.loads((dest/"state/telegram_delivery"/("a"*64+".json")).read_text())["status"],"unknown_outcome")
+            pause=(dest/"state/pause").read_text().splitlines()
+            self.assertIn("export PAUSE_EURUSD=1",pause)
+            self.assertTrue(any(line == "export PAUSE_EURUSD=1" for line in pause))
+    def test_out_of_range_cursor_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); src=self.source(root); (src/"state/profitlab_delivery_cursor.json").write_text('{"offset":999}')
+            with self.assertRaisesRegex(handoff.HandoffError,"out_of_range"): handoff.build(src,root/"bundle")
+    def test_malformed_telegram_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); src=self.source(root); next((src/"state/telegram_delivery").glob("*.json")).write_text('{bad')
+            with self.assertRaisesRegex(handoff.HandoffError,"malformed_json"): handoff.build(src,root/"bundle")
+    def test_profitlab_pair_must_be_complete(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); src=self.source(root); (src/"state/profitlab_delivery_cursor.json").unlink()
+            with self.assertRaisesRegex(handoff.HandoffError,"pair_incomplete"): handoff.build(src,root/"bundle")
+
+    def test_invalid_pause_representations_are_rejected(self):
+        invalid = [
+            '{"paused":true}', "PAUSE_EURUSD=1\n", "export PAUSE_AUDUSD=1\n",
+            "export PAUSE_EURUSD=0\n", "export PAUSE_EURUSD=1\nexport PAUSE_EURUSD=1\n",
+            "export PAUSE_EURUSD=1\necho unsafe\n",
+        ]
+        for index, value in enumerate(invalid):
+            with self.subTest(index=index), tempfile.TemporaryDirectory() as td:
+                root=Path(td); src=self.source(root); (src/"state/pause").write_text(value)
+                with self.assertRaisesRegex(handoff.HandoffError,"pause_state_"):
+                    handoff.build(src,root/"bundle")
+
+    def test_cli_path_requires_absolute_normalized_path(self):
+        with self.assertRaisesRegex(handoff.HandoffError, "cli_path_must_be_absolute"):
+            handoff._normalized_cli_path(Path("relative/path"))
+        with self.assertRaisesRegex(handoff.HandoffError, "cli_path_not_normalized"):
+            handoff._normalized_cli_path(Path("/var/lib/bota/../escape"))
+        self.assertEqual(
+            handoff._normalized_cli_path(Path("/var/lib/bota/state")),
+            Path("/var/lib/bota/state"),
+        )
+
+    def test_safe_relative_reconstructs_only_allowlisted_paths(self):
+        dynamic = "state/telegram_delivery/" + "a" * 64 + ".json"
+        self.assertEqual(handoff._safe_relative(dynamic).as_posix(), dynamic)
+        self.assertEqual(
+            handoff._safe_relative("logs/state/last_hash_EURUSD_M15.txt").as_posix(),
+            "logs/state/last_hash_EURUSD_M15.txt",
+        )
+        for bad in ("../escape", "/absolute", "state/telegram_delivery/../escape.json"):
+            with self.subTest(bad=bad), self.assertRaisesRegex(
+                    handoff.HandoffError, "path_escape"):
+                handoff._safe_relative(bad)
+
+    def test_build_rejects_source_parent_symlink_escape(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            outside=root/"outside"
+            (outside/"state/telegram_delivery").mkdir(parents=True)
+            (outside/"logs/state").mkdir(parents=True)
+            (outside/"logs/alerts.csv").write_bytes(b"header\n")
+            (outside/"state/profitlab_delivery_cursor.json").write_text('{"offset":0}')
+            src=root/"phone"
+            src.mkdir()
+            (src/"logs").symlink_to(outside/"logs", target_is_directory=True)
+            (src/"state").symlink_to(outside/"state", target_is_directory=True)
+            with self.assertRaisesRegex(handoff.HandoffError, "path_escape|unsafe_source"):
+                handoff.build(src, root/"bundle")
+
+    def test_apply_rejects_destination_parent_symlink_escape(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            src=self.source(root)
+            bundle=root/"bundle"
+            handoff.build(src,bundle)
+            dest=root/"vps"
+            dest.mkdir()
+            outside=root/"outside-destination"
+            outside.mkdir()
+            (dest/"state").symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(handoff.HandoffError, "path_escape|unsafe_target"):
+                handoff.apply(bundle,dest)
+            self.assertFalse((outside/"pause").exists())
+            self.assertFalse((outside/"profitlab_delivery_cursor.json").exists())
+
+    def test_write_target_bytes_rejects_leaf_symlink(self):
+        with tempfile.TemporaryDirectory() as td:
+            staging = Path(td) / "staging"
+            target_dir = staging / "state"
+            target_dir.mkdir(parents=True)
+            outside = Path(td) / "outside"
+            outside.write_bytes(b"unchanged")
+            (target_dir / "pause").symlink_to(outside)
+            with self.assertRaisesRegex(handoff.HandoffError, "unsafe_target"):
+                handoff._write_target_bytes(staging, "state/pause", b"new")
+            self.assertEqual(outside.read_bytes(), b"unchanged")
+
+    def test_write_target_bytes_rejects_parent_symlink(self):
+        with tempfile.TemporaryDirectory() as td:
+            staging = Path(td) / "staging"
+            staging.mkdir()
+            outside = Path(td) / "outside"
+            outside.mkdir()
+            (staging / "state").symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(handoff.HandoffError, "unsafe_target"):
+                handoff._write_target_bytes(staging, "state/pause", b"new")
+            self.assertFalse((outside / "pause").exists())
+
+    def test_write_target_bytes_writes_exact_bytes_mode_0600(self):
+        with tempfile.TemporaryDirectory() as td:
+            staging = Path(td) / "staging"
+            payload = b"exact-payload\n"
+            target = handoff._write_target_bytes(staging, "state/pause", payload)
+            self.assertEqual(target.read_bytes(), payload)
+            self.assertEqual(target.stat().st_mode & 0o777, 0o600)

@@ -52,8 +52,16 @@ RECONCILED_SENT_RC = 76
 UNKNOWN_OUTCOME_RC = 75
 
 
-def root_path() -> Path:
-    return Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA"))).expanduser().resolve()
+def code_root() -> Path:
+    return Path(os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT") or Path.home() / "BotA").expanduser().resolve()
+
+
+def mutable_root() -> Path:
+    return Path(os.environ.get("BOTA_MUTABLE_ROOT") or os.environ.get("BOTA_ROOT") or code_root()).expanduser().resolve()
+
+
+def root_path() -> Path:  # compatibility alias for mutable runtime state
+    return mutable_root()
 
 
 def truthy(value: Any) -> bool:

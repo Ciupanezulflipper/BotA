@@ -5,11 +5,12 @@
 
 set -euo pipefail
 
-ROOT="${BOTA_ROOT:-${HOME}/BotA}"
-TMPDIR="${ROOT}/tmp"
-LOGDIR="${ROOT}/logs"
-MARKET_GATE="${BOTA_MARKET_GATE:-${ROOT}/tools/market_open.sh}"
-FORMATTER="${BOTA_STATUS_FORMATTER:-${ROOT}/tools/format_status.py}"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+TMPDIR="${MUTABLE_ROOT}/tmp"
+LOGDIR="${MUTABLE_ROOT}/logs"
+MARKET_GATE="${BOTA_MARKET_GATE:-${CODE_ROOT}/tools/market_open.sh}"
+FORMATTER="${BOTA_STATUS_FORMATTER:-${CODE_ROOT}/tools/format_status.py}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 LATEST="${LOGDIR}/technical_context.latest.txt"
 

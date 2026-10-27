@@ -7,9 +7,12 @@ report a missing third-party dependency instead of failing for the same reason.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import importlib
 import json
 import re
+import os
+import tempfile
 import sys
 from importlib import metadata
 from pathlib import Path
@@ -24,6 +27,40 @@ IMPORT_NAMES = {
 
 class DependencyContractError(RuntimeError):
     """Raised when the runtime dependency manifest itself is invalid."""
+
+
+def _is_within(root: Path, candidate: Path) -> bool:
+    return candidate == root or root in candidate.parents
+
+
+def _safe_evidence_path(path: Path) -> Path:
+    raw_root = os.environ.get("BOTA_MUTABLE_ROOT", "").strip()
+    if not raw_root:
+        raise DependencyContractError("mutable_root_required_for_evidence")
+    root = Path(raw_root).expanduser()
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(root, 0o700)
+    root_real = root.resolve(strict=True)
+    candidate = path.expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    try:
+        relative = candidate.relative_to(root)
+    except ValueError as exc:
+        raise DependencyContractError("evidence_path_outside_mutable_root") from exc
+    cursor = root
+    for part in relative.parts[:-1]:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise DependencyContractError("evidence_path_symlink_escape")
+        cursor.mkdir(exist_ok=True, mode=0o700)
+        os.chmod(cursor, 0o700)
+    if candidate.is_symlink():
+        raise DependencyContractError("evidence_path_symlink_escape")
+    parent_real = candidate.parent.resolve(strict=True)
+    if not _is_within(root_real, parent_real):
+        raise DependencyContractError("evidence_path_outside_mutable_root")
+    return candidate
 
 
 def normalized_distribution(name: str) -> str:
@@ -108,6 +145,7 @@ def collect(manifest: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
             "manifest": str(manifest),
             "dependencies": {},
             "failure_reasons": [str(exc)],
+            "observed_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
 
     dependencies: dict[str, Any] = {}
@@ -125,18 +163,49 @@ def collect(manifest: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
         "manifest": str(manifest),
         "dependencies": dependencies,
         "failure_reasons": failures,
+        "observed_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
+
+
+def write_evidence(path: Path, result: dict[str, Any]) -> None:
+    """Owner-only atomic evidence under the explicit mutable-root trust boundary."""
+    path = _safe_evidence_path(path)
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    tmp = Path(name)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(result, handle, sort_keys=True, separators=(",", ":"))
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+        os.chmod(path, 0o600)
+        parent_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--evidence", type=Path)
     return parser.parse_args()
 
 
 def main() -> int:
     args = arguments()
     result = collect(args.manifest)
+    if args.evidence is not None:
+        try:
+            write_evidence(args.evidence, result)
+        except (OSError, DependencyContractError) as exc:
+            result["healthy"] = False
+            result["failure_reasons"].append(f"evidence_write_failed:{type(exc).__name__}:{exc}")
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result["healthy"] else 3
 

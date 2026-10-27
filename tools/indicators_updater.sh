@@ -1,20 +1,32 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 ###############################################################################
 # FILE: tools/indicators_updater.sh
 # PURPOSE:
 #   Fetch raw candles, build indicators, and emit useful-progress evidence.
 #   Actual provider requests are accounted at the network boundary by
-#   data_fetch_candles.sh. Strategy, pairs, timeframes, and indicators are
-#   unchanged.
+#   data_fetch_candles.sh, which is locked to the versioned
+#   PRODUCTION_CANDLE_PROVIDER contract. Strategy, pairs, timeframes, and
+#   indicators are unchanged. D1 trend derivation is owned exclusively by the
+#   orchestrator's second updater stage (sync_d1_trend_cache.py), which reads
+#   the local D1 indicator bundles this script already builds — there is no
+#   direct provider network call for D1 trend in this script.
 ###############################################################################
 
 set -euo pipefail
 shopt -s inherit_errexit 2>/dev/null || true
 
-ROOT="${HOME}/BotA"
-TOOLS="${ROOT}/tools"
-CACHE="${ROOT}/cache"
-LOGS="${ROOT}/logs"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+TOOLS="${CODE_ROOT}/tools"
+CACHE="${MUTABLE_ROOT}/cache"
+LOGS="${MUTABLE_ROOT}/logs"
+
+if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" = 1 ]]; then
+  printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nTOOLS=%s\nCACHE=%s\nDATA=%s\nLOGS=%s\nLOCK=%s\n' \
+    "${CODE_ROOT}" "${MUTABLE_ROOT}" "${TOOLS}" "${CACHE}" \
+    "${MUTABLE_ROOT}/data" "${LOGS}" "${MUTABLE_ROOT}/state/indicators_updater.lock"
+  exit 0
+fi
 
 PAIRS="${PAIRS:-"EURUSD GBPUSD XAUUSD USDJPY EURJPY"}"
 TIMEFRAMES="${TIMEFRAMES:-"M15 H1 H4 D1"}"
@@ -24,7 +36,7 @@ FETCH_BACKOFF_BASE="${FETCH_BACKOFF_BASE:-10}"
 FETCH_BACKOFF_MAX="${FETCH_BACKOFF_MAX:-180}"
 FETCH_MIN_GAP_SECS="${FETCH_MIN_GAP_SECS:-3}"
 
-mkdir -p "${LOGS}" "${ROOT}/state"
+mkdir -p "${LOGS}" "${MUTABLE_ROOT}/state" "${CACHE}"
 
 log() { printf '%s\n' "$*" >&2; }
 
@@ -140,92 +152,13 @@ fetch_with_retry() {
   return "${rc:-1}"
 }
 
-refresh_d1_trend_cache() {
-  source "${ROOT}/.env" 2>/dev/null || true
-  source "${ROOT}/config/strategy.env" 2>/dev/null || true
-  export OANDA_API_TOKEN OANDA_API_URL ROOT TOOLS
-
-  python3 <<'PYEOF'
-import json
-import os
-import subprocess
-import sys
-import urllib.request
-from datetime import datetime, timezone
-from pathlib import Path
-
-root = Path(os.environ["ROOT"])
-tools = Path(os.environ["TOOLS"])
-token = os.environ.get("OANDA_API_TOKEN", "")
-base = os.environ.get("OANDA_API_URL", "https://api-fxpractice.oanda.com").rstrip("/")
-pairs = [("EURUSD", "EUR_USD"), ("GBPUSD", "GBP_USD")]
-
-def record(pair: str, status: str, note: str = "") -> None:
-    subprocess.run(
-        [
-            sys.executable,
-            str(tools / "provider_usage.py"),
-            "record",
-            "--provider", "oanda",
-            "--caller", "indicators_updater_d1",
-            "--pair", pair,
-            "--timeframe", "D1",
-            "--status", status,
-            "--credits", "0",
-            "--note", note[:500],
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
-
-for pair, instrument in pairs:
-    request = urllib.request.Request(
-        f"{base}/v3/instruments/{instrument}/candles?count=50&granularity=D&price=M",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            data = json.loads(response.read())
-        record(pair, "success")
-        candles = [candle for candle in data["candles"] if candle.get("complete", True)]
-        closes = [float(candle["mid"]["c"]) for candle in candles]
-
-        def ema(values, period):
-            factor = 2.0 / (period + 1)
-            result = sum(values[:period]) / period
-            for value in values[period:]:
-                result = value * factor + result * (1 - factor)
-            return result
-
-        ema9 = ema(closes, 9)
-        ema21 = ema(closes, 21)
-        trend = "BUY" if ema9 > ema21 else "SELL"
-        bundle = {
-            "pair": pair,
-            "ema9": ema9,
-            "ema21": ema21,
-            "trend": trend,
-            "weak": False,
-            "error": "",
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        (root / "cache" / f"d1_trend_{pair}.json").write_text(
-            json.dumps(bundle), encoding="utf-8"
-        )
-        print(f"[D1] {pair}: {trend} EMA9={ema9:.5f} EMA21={ema21:.5f}")
-    except Exception as exc:
-        record(pair, "failure", type(exc).__name__)
-        print(f"[D1] {pair} error: {type(exc).__name__}", flush=True)
-PYEOF
-}
-
 ledger_component started "pairs=${PAIRS};timeframes=${TIMEFRAMES}"
 
 log "------------------------------------------------------------"
 log "[UPDATER] start provider-boundary accounting + progress ledger"
 log "[UPDATER] PAIRS=${PAIRS}"
 log "[UPDATER] TIMEFRAMES=${TIMEFRAMES}"
+log "[UPDATER] PRODUCTION_CANDLE_PROVIDER=${PRODUCTION_CANDLE_PROVIDER:-<unset>}"
 log "------------------------------------------------------------"
 
 need_file "${TOOLS}/build_indicators.py" || exit 1
@@ -303,8 +236,6 @@ if (( build_fail_count > 0 )); then
     exit 1
   fi
 fi
-
-refresh_d1_trend_cache
 
 ledger_component completed "fetch_success=${fetch_success_count};fetch_fail=${fetch_fail_count};build_fail=${build_fail_count}"
 ledger_finalized=1

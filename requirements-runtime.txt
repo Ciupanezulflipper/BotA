@@ -1,3 +1,6 @@
 # BotA production Python runtime dependencies.
 # Keep direct runtime dependencies exactly pinned; pip resolves their transitive dependencies.
 requests==2.34.2
+matplotlib==3.11.1
+numpy==2.5.1
+pandas==3.0.5

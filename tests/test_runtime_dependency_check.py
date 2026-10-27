@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import tempfile
+import json
+import os
 import unittest
 from importlib import metadata
 from pathlib import Path
@@ -13,7 +15,15 @@ class ManifestTests(unittest.TestCase):
     def test_repository_manifest_exactly_pins_requests(self) -> None:
         root = Path(__file__).resolve().parents[1]
         pins = dependency_check.parse_manifest(root / "requirements-runtime.txt")
-        self.assertEqual(pins, [("requests", "2.34.2")])
+        self.assertEqual(
+            pins,
+            [
+                ("requests", "2.34.2"),
+                ("matplotlib", "3.11.1"),
+                ("numpy", "2.5.1"),
+                ("pandas", "3.0.5"),
+            ],
+        )
 
     def test_manifest_rejects_unpinned_requirement(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -116,6 +126,79 @@ class DependencyTests(unittest.TestCase):
             any(reason.startswith("import_failed:requests:ImportError") for reason in result["failure_reasons"])
         )
 
+    def test_pass_evidence_is_owner_only_and_machine_readable(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "state/runtime_dependency/shadow-latest.json"
+            result = {"schema_version":"1.0", "healthy":True,
+                      "python_executable":"/opt/bota/current/.venv/bin/python3",
+                      "python_version":"3.14.0", "manifest":"requirements-runtime.txt",
+                      "dependencies":{}, "failure_reasons":[], "observed_at_utc":"2026-08-23T00:00:00Z"}
+            with mock.patch.dict(os.environ, {"BOTA_MUTABLE_ROOT": str(Path(temp))}, clear=False):
+                dependency_check.write_evidence(path, result)
+            self.assertEqual(json.loads(path.read_text()), result)
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+            self.assertEqual(result["python_executable"], "/opt/bota/current/.venv/bin/python3")
+
+
+    def test_main_rejects_evidence_outside_mutable_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            mutable = root / "mutable"
+            outside = root / "outside.json"
+            argv = [
+                "runtime_dependency_check.py",
+                "--manifest",
+                str(Path(__file__).resolve().parents[1] / "requirements-runtime.txt"),
+                "--evidence",
+                str(outside),
+            ]
+            result = {
+                "schema_version": "1.0",
+                "healthy": True,
+                "python_executable": "python",
+                "python_version": "3.14.0",
+                "manifest": "requirements-runtime.txt",
+                "dependencies": {},
+                "failure_reasons": [],
+                "observed_at_utc": "2026-10-27T00:00:00Z",
+            }
+            with (
+                mock.patch("sys.argv", argv),
+                mock.patch.dict(os.environ, {"BOTA_MUTABLE_ROOT": str(mutable)}, clear=False),
+                mock.patch.object(dependency_check, "collect", return_value=result),
+            ):
+                self.assertNotEqual(dependency_check.main(), 0)
+            self.assertFalse(outside.exists())
+
+    def test_main_rejects_evidence_without_mutable_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            evidence = Path(temp) / "evidence.json"
+            argv = [
+                "runtime_dependency_check.py",
+                "--manifest",
+                str(Path(__file__).resolve().parents[1] / "requirements-runtime.txt"),
+                "--evidence",
+                str(evidence),
+            ]
+            result = {
+                "schema_version": "1.0",
+                "healthy": True,
+                "python_executable": "python",
+                "python_version": "3.14.0",
+                "manifest": "requirements-runtime.txt",
+                "dependencies": {},
+                "failure_reasons": [],
+                "observed_at_utc": "2026-10-27T00:00:00Z",
+            }
+            env = dict(os.environ)
+            env.pop("BOTA_MUTABLE_ROOT", None)
+            with (
+                mock.patch("sys.argv", argv),
+                mock.patch.dict(os.environ, env, clear=True),
+                mock.patch.object(dependency_check, "collect", return_value=result),
+            ):
+                self.assertNotEqual(dependency_check.main(), 0)
+            self.assertFalse(evidence.exists())
 
 class ShadowRuntimeContractTests(unittest.TestCase):
     @classmethod

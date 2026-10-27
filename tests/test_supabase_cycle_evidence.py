@@ -57,22 +57,22 @@ class PublisherStatusTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(status, "failed_missing_service_key")
 
-    def test_existing_active_signal_is_not_mislabeled_published(self):
+    def test_existing_exact_duplicate_signal_is_not_mislabeled_published(self):
         with (
             mock.patch.object(publisher, "publication_lock", return_value=nullcontext()),
-            mock.patch.object(publisher, "active_signal_exists", return_value=True),
+            mock.patch.object(publisher, "exact_signal_exists", return_value=True),
             mock.patch.dict(os.environ, {"SUPABASE_SERVICE_KEY": "test-key"}, clear=False),
         ):
             ok, status = publisher.publish_with_status(
                 "GBPUSD", "BUY", "1.1", "1.0", "1.2", "80", "M15", "GREEN"
             )
         self.assertTrue(ok)
-        self.assertEqual(status, "skipped_active_exists")
+        self.assertEqual(status, "skipped_exact_duplicate")
 
     def test_successful_insert_is_published(self):
         with (
             mock.patch.object(publisher, "publication_lock", return_value=nullcontext()),
-            mock.patch.object(publisher, "active_signal_exists", return_value=False),
+            mock.patch.object(publisher, "exact_signal_exists", return_value=False),
             mock.patch.object(publisher, "insert_signal", return_value=True),
             mock.patch.dict(os.environ, {"SUPABASE_SERVICE_KEY": "test-key"}, clear=False),
         ):
@@ -184,16 +184,16 @@ class ReconcilerSupabaseTests(unittest.TestCase):
         self.assertEqual(payload["results"][0]["telegram"], "sent")
         self.assertEqual(payload["results"][0]["supabase"], "published")
 
-    def test_active_existing_result_is_distinct_from_published(self):
+    def test_exact_duplicate_result_is_distinct_from_published(self):
         root = self._root()
         result = json.dumps({
             "pair": "GBPUSD", "timeframe": "M15", "direction": "BUY",
-            "entry": "1.35379", "tier": "GREEN", "status": "skipped_active_exists",
+            "entry": "1.35379", "tier": "GREEN", "status": "skipped_exact_duplicate",
         })
         offset, log_path, supabase = self._write_cycle(root, [result])
         rc, payload = self._run(root, offset, log_path, supabase)
         self.assertEqual(rc, 0)
-        self.assertEqual(payload["results"][0]["supabase"], "skipped_active_exists")
+        self.assertEqual(payload["results"][0]["supabase"], "skipped_exact_duplicate")
 
     def test_failed_publish_is_recorded_failed_without_erasing_telegram(self):
         root = self._root()
