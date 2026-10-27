@@ -656,6 +656,21 @@ class VPSDeployTests(unittest.TestCase):
             self.assertNotIn(marker, emitted.lower())
 
 
+    def test_default_deploy_lock_is_inside_mutable_state_root(self):
+        self.assertEqual(deploy.DEPLOY_LOCK, deploy.MUTABLE_ROOT / "state/vps_deploy.lock")
+        self.assertNotIn("/run/lock", str(deploy.DEPLOY_LOCK))
+        self.assertNotIn("/tmp", str(deploy.DEPLOY_LOCK))
+
+    def test_release_target_validation_uses_sha_and_generic_failure(self):
+        subject, *_ = self.make()
+        subject._stage(self.sha, self.tree)
+        valid = self.paths.release_root / self.sha
+        self.assertEqual(subject._validated_release_sha(self.sha), valid)
+        for bad in ("../" + self.sha, "x" * 40, self.sha + "0"):
+            with self.subTest(bad=bad), self.assertRaisesRegex(
+                    deploy.DeployError, "^release_target_invalid$"):
+                subject._validated_release_sha(bad)
+
     def test_archive_symlink_member_is_rejected(self):
         stream = io.BytesIO()
         with tarfile.open(fileobj=stream, mode="w") as archive:

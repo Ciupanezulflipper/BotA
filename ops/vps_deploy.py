@@ -28,7 +28,7 @@ RELEASE_ROOT = Path("/opt/bota/releases")
 CURRENT_RELEASE = Path("/opt/bota/current")
 MUTABLE_ROOT = Path("/var/lib/bota")
 SECRET_ROOT = Path("/etc/bota")
-DEPLOY_LOCK = Path("/run/lock/bota/deploy.lock")
+DEPLOY_LOCK = MUTABLE_ROOT / "state/vps_deploy.lock"
 SYSTEMD_SERVICE = "bota.service"
 JOURNAL_RELATIVE = Path("state/vps_deploy_journal.json")
 MANIFEST_NAME = ".bota-release.json"
@@ -101,19 +101,6 @@ def _harden_release_tree(root: Path) -> None:
 
 def _is_within(root: Path, candidate: Path) -> bool:
     return candidate == root or root in candidate.parents
-
-
-def _contained_existing_path(root: Path, candidate: Path, *, reason: str) -> Path:
-    try:
-        root_real = root.resolve(strict=True)
-        if candidate.is_symlink():
-            raise DeployError(reason)
-        resolved = candidate.resolve(strict=True)
-    except (OSError, RuntimeError) as exc:
-        raise DeployError(reason) from exc
-    if not _is_within(root_real, resolved):
-        raise DeployError(reason)
-    return resolved
 
 
 def _contained_output_path(root: Path, relative: PurePosixPath) -> Path:
@@ -284,10 +271,9 @@ def extract_archive_safely(archive: bytes, destination: Path) -> None:
             _secure_regular_file(output, executable=bool(member.mode & 0o111))
 
 
-def read_json(path: Path, trusted_root: Path) -> dict[str, object]:
-    safe_path = _contained_existing_path(trusted_root, path, reason=f"json_path_invalid:{path.name}")
+def read_json(path: Path) -> dict[str, object]:
     try:
-        value = json.loads(safe_path.read_text(encoding="utf-8"))
+        value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise DeployError(f"invalid_json:{path.name}") from exc
     if not isinstance(value, dict):
@@ -295,8 +281,15 @@ def read_json(path: Path, trusted_root: Path) -> dict[str, object]:
     return value
 
 
+def _validated_sha(value: object, *, reason: str = "release_target_invalid") -> str:
+    if not isinstance(value, str) or not SHA_RE.fullmatch(value):
+        raise DeployError(reason)
+    return value
+
+
 def validate_manifest(path: Path, commit: str, tree: str) -> dict[str, object]:
-    value = read_json(path / MANIFEST_NAME, path)
+    _validated_sha(commit, reason="finalized_release_commit_invalid")
+    value = read_json(path / MANIFEST_NAME)
     if (value.get("schema_version") != "1.0" or value.get("git_commit_sha") != commit
             or value.get("git_tree_sha") != tree
             or not re.fullmatch(r"[0-9a-f]{64}", str(value.get("effective_config_fingerprint", "")))):
@@ -409,21 +402,35 @@ class Deployer:
         self.journal.update(changes, phase=phase, updated_at_utc=utc_now())
         durable_json(self.paths.journal, self.journal, self.directory_fsync)
 
-    def _validated_release_target(self, target: Path) -> Path:
+    def _release_path_for_sha(self, value: object) -> Path:
+        sha = _validated_sha(value)
+        return self.paths.release_root / sha
+
+    def _sha_from_release_path(self, target: Path) -> str:
+        root = Path(os.path.abspath(os.fspath(self.paths.release_root)))
+        candidate = Path(os.path.abspath(os.fspath(target)))
+        if candidate.parent != root:
+            raise DeployError("release_target_invalid")
+        return _validated_sha(candidate.name)
+
+    def _validated_release_sha(self, value: object) -> Path:
+        sha = _validated_sha(value)
+        candidate = self.paths.release_root / sha
         try:
-            root = self.paths.release_root.resolve(strict=True)
-            if target.is_symlink():
-                raise DeployError("release_target_symlink")
-            resolved = target.resolve(strict=True)
-        except (OSError, RuntimeError) as exc:
-            raise DeployError("release_target_missing") from exc
-        if resolved.parent != root or not SHA_RE.fullmatch(resolved.name) or not resolved.is_dir():
-            raise DeployError("release_target_outside_root")
-        manifest = read_json(resolved / MANIFEST_NAME, resolved)
-        if (manifest.get("git_commit_sha") != resolved.name
+            mode = candidate.lstat().st_mode
+            manifest_path = candidate / MANIFEST_NAME
+            manifest_mode = manifest_path.lstat().st_mode
+            manifest = read_json(manifest_path)
+        except (OSError, DeployError) as exc:
+            raise DeployError("release_target_invalid") from exc
+        if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+            raise DeployError("release_target_invalid")
+        if stat.S_ISLNK(manifest_mode) or not stat.S_ISREG(manifest_mode):
+            raise DeployError("release_target_invalid")
+        if (manifest.get("git_commit_sha") != sha
                 or not SHA_RE.fullmatch(str(manifest.get("git_tree_sha", "")))):
-            raise DeployError("release_target_manifest_invalid")
-        return resolved
+            raise DeployError("release_target_invalid")
+        return candidate
 
     def _current_target(self) -> Path | None:
         current = self.paths.current
@@ -433,14 +440,18 @@ class Deployer:
             raise DeployError("current_is_not_symlink")
         raw = Path(os.readlink(current))
         candidate = raw if raw.is_absolute() else current.parent / raw
-        return self._validated_release_target(candidate)
+        sha = self._sha_from_release_path(candidate)
+        return self._validated_release_sha(sha)
 
     def _switch(self, target: Path | None) -> None:
         current = self.paths.current
         current.parent.mkdir(parents=True, exist_ok=True)
         if os.path.lexists(current) and not current.is_symlink():
             raise DeployError("current_is_not_symlink")
-        validated = self._validated_release_target(target) if target is not None else None
+        validated = None
+        if target is not None:
+            sha = self._sha_from_release_path(target)
+            validated = self._validated_release_sha(sha)
         temporary = current.parent / f".{current.name}.{uuid.uuid4().hex}.tmp"
         try:
             if validated is None:
@@ -522,7 +533,7 @@ class Deployer:
     def _read_health_optional(self) -> dict[str, object] | None:
         path = self.paths.mutable_root / "state/vps_orchestrator_health.json"
         try:
-            return read_json(path, self.paths.mutable_root)
+            return read_json(path)
         except DeployError:
             return None
 
@@ -568,12 +579,15 @@ class Deployer:
     def _recover_incomplete(self) -> None:
         if not self.paths.journal.exists():
             return
-        old = read_json(self.paths.journal, self.paths.mutable_root)
+        old = read_json(self.paths.journal)
         if old.get("phase") in TERMINAL_PHASES:
             return
-        target = self.paths.release_root / str(old.get("target_sha", ""))
+        target = self._release_path_for_sha(old.get("target_sha"))
         previous_raw = old.get("previous_release")
-        previous = Path(previous_raw) if isinstance(previous_raw, str) and previous_raw else None
+        previous = None
+        if isinstance(previous_raw, str) and previous_raw:
+            previous_sha = self._sha_from_release_path(Path(previous_raw))
+            previous = self._release_path_for_sha(previous_sha)
         actual = self._current_target()
         if actual not in {target, previous}:
             raise DeployError("incomplete_deployment_ambiguous_current")
@@ -583,7 +597,7 @@ class Deployer:
         self._switch(previous)
         if previous is not None and old.get("previous_expected_running") is True:
             manifest = validate_manifest(previous, previous.name,
-                                         str(read_json(previous / MANIFEST_NAME, previous)["git_tree_sha"]))
+                                         str(read_json(previous / MANIFEST_NAME)["git_tree_sha"]))
             before_restart = self._read_health_optional() or {}
             prior_instance = before_restart.get("runtime_instance_id")
             self.systemd.start()
@@ -594,7 +608,10 @@ class Deployer:
 
     def _rollback(self, failure: BaseException) -> None:
         previous_raw = self.journal.get("previous_release")
-        previous = Path(previous_raw) if isinstance(previous_raw, str) and previous_raw else None
+        previous = None
+        if isinstance(previous_raw, str) and previous_raw:
+            previous_sha = self._sha_from_release_path(Path(previous_raw))
+            previous = self._release_path_for_sha(previous_sha)
         try:
             self.systemd.stop()
             self.systemd.prove_stopped()
@@ -605,7 +622,7 @@ class Deployer:
                 rollback_fault = f"{type(injected).__name__}:{injected}"
             self._switch(previous)
             if previous is not None and self.journal.get("previous_expected_running") is True:
-                prior_manifest = read_json(previous / MANIFEST_NAME, previous)
+                prior_manifest = read_json(previous / MANIFEST_NAME)
                 before_restart = self._read_health_optional() or {}
                 self.systemd.start()
                 self._prove_activation(previous.name,

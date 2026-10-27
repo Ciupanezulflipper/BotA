@@ -34,11 +34,29 @@ class HandoffError(RuntimeError):
     pass
 
 
-def _relative_path(relative: str) -> PurePosixPath:
-    path = PurePosixPath(relative)
-    if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
-        raise HandoffError("path_escape")
-    return path
+def _safe_relative(relative: str) -> PurePosixPath:
+    if relative == ALERTS_RELATIVE:
+        return PurePosixPath("logs", "alerts.csv")
+    if relative == CURSOR_RELATIVE:
+        return PurePosixPath("state", "profitlab_delivery_cursor.json")
+    if relative == PAUSE_RELATIVE:
+        return PurePosixPath("state", "pause")
+    telegram = re.fullmatch(r"state/telegram_delivery/([0-9a-f]{64}\.json)", relative)
+    if telegram:
+        return PurePosixPath("state", "telegram_delivery", telegram.group(1))
+    watcher = re.fullmatch(r"logs/state/(last_hash_[A-Z]{6}_M15\.txt)", relative)
+    if watcher:
+        return PurePosixPath("logs", "state", watcher.group(1))
+    raise HandoffError("path_escape")
+
+
+def _normalized_cli_path(path: Path) -> Path:
+    if not path.is_absolute():
+        raise HandoffError("cli_path_must_be_absolute")
+    normalized = Path(os.path.normpath(os.fspath(path)))
+    if normalized != path or ".." in path.parts:
+        raise HandoffError("cli_path_not_normalized")
+    return normalized
 
 
 def _within(root: Path, candidate: Path) -> bool:
@@ -46,7 +64,7 @@ def _within(root: Path, candidate: Path) -> bool:
 
 
 def _existing_under(root: Path, relative: str) -> Path:
-    rel = _relative_path(relative)
+    rel = _safe_relative(relative)
     try:
         root_real = root.resolve(strict=True)
     except OSError as exc:
@@ -67,7 +85,7 @@ def _existing_under(root: Path, relative: str) -> Path:
 
 
 def _target_under(root: Path, relative: str) -> Path:
-    rel = _relative_path(relative)
+    rel = _safe_relative(relative)
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     try:
         root_real = root.resolve(strict=True)
@@ -153,7 +171,8 @@ def _files(root: Path) -> list[tuple[str, Path, str]]:
         relative = path.relative_to(root).as_posix()
         classification = _classification(relative)
         if classification:
-            selected.append((relative, path, classification))
+            safe_relative = _safe_relative(relative).as_posix()
+            selected.append((safe_relative, path, classification))
     return sorted(selected)
 
 
@@ -206,6 +225,7 @@ def validate(bundle: Path) -> dict[str, Any]:
         relative = record.get("path") if isinstance(record, dict) else None
         if not isinstance(relative, str) or _classification(relative) != record.get("classification"):
             raise HandoffError("manifest_path_not_allowed")
+        relative = _safe_relative(relative).as_posix()
         path = _existing_under(bundle, relative)
         data = path.read_bytes()
         if len(data) != record.get("size") or hashlib.sha256(data).hexdigest() != record.get("sha256"):
@@ -231,6 +251,7 @@ def apply(bundle: Path, destination: Path) -> dict[str, Any]:
         relative = record["path"]
         if not isinstance(relative, str):
             raise HandoffError("manifest_path_not_allowed")
+        relative = _safe_relative(relative).as_posix()
         source = _existing_under(bundle, relative)
         target = _target_under(destination, relative)
         fd, name = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
@@ -257,8 +278,10 @@ def main() -> int:
         if name != "validate": p.add_argument("destination", type=Path)
     args = parser.parse_args()
     try:
-        result = (build(args.source, args.destination) if args.command == "build" else
-                  apply(args.source, args.destination) if args.command == "apply" else validate(args.source))
+        source = _normalized_cli_path(args.source)
+        destination = _normalized_cli_path(args.destination) if args.command != "validate" else None
+        result = (build(source, destination) if args.command == "build" else
+                  apply(source, destination) if args.command == "apply" else validate(source))
     except (HandoffError, OSError) as exc:
         print(json.dumps({"STATE_HANDOFF_CONTRACT": "FAIL", "reason": str(exc)}, sort_keys=True))
         return 1

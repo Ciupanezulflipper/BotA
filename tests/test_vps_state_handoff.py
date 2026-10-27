@@ -51,6 +51,28 @@ class HandoffTests(unittest.TestCase):
                 with self.assertRaisesRegex(handoff.HandoffError,"pause_state_"):
                     handoff.build(src,root/"bundle")
 
+    def test_cli_path_requires_absolute_normalized_path(self):
+        with self.assertRaisesRegex(handoff.HandoffError, "cli_path_must_be_absolute"):
+            handoff._normalized_cli_path(Path("relative/path"))
+        with self.assertRaisesRegex(handoff.HandoffError, "cli_path_not_normalized"):
+            handoff._normalized_cli_path(Path("/var/lib/bota/../escape"))
+        self.assertEqual(
+            handoff._normalized_cli_path(Path("/var/lib/bota/state")),
+            Path("/var/lib/bota/state"),
+        )
+
+    def test_safe_relative_reconstructs_only_allowlisted_paths(self):
+        dynamic = "state/telegram_delivery/" + "a" * 64 + ".json"
+        self.assertEqual(handoff._safe_relative(dynamic).as_posix(), dynamic)
+        self.assertEqual(
+            handoff._safe_relative("logs/state/last_hash_EURUSD_M15.txt").as_posix(),
+            "logs/state/last_hash_EURUSD_M15.txt",
+        )
+        for bad in ("../escape", "/absolute", "state/telegram_delivery/../escape.json"):
+            with self.subTest(bad=bad), self.assertRaisesRegex(
+                    handoff.HandoffError, "path_escape"):
+                handoff._safe_relative(bad)
+
     def test_build_rejects_source_parent_symlink_escape(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td)
