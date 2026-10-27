@@ -334,9 +334,16 @@ def main() -> int:
     args = parser.parse_args()
     try:
         source = _normalized_cli_path(args.source)
-        destination = _normalized_cli_path(args.destination) if args.command != "validate" else None
-        result = (build(source, destination) if args.command == "build" else
-                  apply(source, destination) if args.command == "apply" else validate(source))
+        if args.command == "validate":
+            result = validate(source)
+        else:
+            destination = _normalized_cli_path(args.destination)
+            if args.command == "build":
+                result = build(source, destination)
+            elif args.command == "apply":
+                result = apply(source, destination)
+            else:
+                raise HandoffError("unsupported_command")
     except (HandoffError, OSError) as exc:
         print(json.dumps({"STATE_HANDOFF_CONTRACT": "FAIL", "reason": str(exc)}, sort_keys=True))
         return 1

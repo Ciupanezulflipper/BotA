@@ -585,7 +585,8 @@ class SignalCloserRetryWiringTests(unittest.TestCase):
     LIVE run, even when zero ACTIVE signals exist -- a lost Telegram closure
     otherwise has no future trigger once its signal leaves ACTIVE."""
 
-    def test_live_run_invokes_retry_scan_even_with_zero_active_signals(self) -> None:
+    @staticmethod
+    def test_live_run_invokes_retry_scan_even_with_zero_active_signals() -> None:
         with mock.patch.object(signal_closer, "SUPABASE_KEY", "k"), \
              mock.patch.object(signal_closer, "compute_server_clock_epoch", return_value=2000000000), \
              mock.patch.object(signal_closer, "get_active_signals", return_value=[]), \
@@ -597,7 +598,8 @@ class SignalCloserRetryWiringTests(unittest.TestCase):
             signal_closer.main()
         retry.assert_called_once()
 
-    def test_dry_run_does_not_invoke_retry_scan(self) -> None:
+    @staticmethod
+    def test_dry_run_does_not_invoke_retry_scan() -> None:
         with mock.patch.object(signal_closer, "SUPABASE_KEY", "k"), \
              mock.patch.object(signal_closer, "compute_server_clock_epoch", return_value=2000000000), \
              mock.patch.object(signal_closer, "get_active_signals", return_value=[]), \
