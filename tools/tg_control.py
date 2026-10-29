@@ -13,6 +13,7 @@ import os, sys, time, json, signal, subprocess, traceback
 from datetime import datetime, timezone, timedelta
 
 import requests
+from telegram.ext import Updater, CommandHandler
 
 # --- Paths & constants ---
 HOME = "/data/data/com.termux/files/home"
