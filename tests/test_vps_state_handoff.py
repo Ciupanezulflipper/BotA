@@ -4,7 +4,8 @@ from pathlib import Path
 from ops import vps_state_handoff as handoff
 
 class HandoffTests(unittest.TestCase):
-    def source(self, root: Path) -> Path:
+    @staticmethod
+    def source(root: Path) -> Path:
         src=root/"phone"; (src/"logs/state").mkdir(parents=True); (src/"state/telegram_delivery").mkdir(parents=True)
         alerts=b"header\npending-row\n"; (src/"logs/alerts.csv").write_bytes(alerts)
         (src/"state/profitlab_delivery_cursor.json").write_text(json.dumps({"schema_version":"1.0","offset":7,"source_size":len(alerts)}))
@@ -32,7 +33,9 @@ class HandoffTests(unittest.TestCase):
             with self.assertRaisesRegex(handoff.HandoffError,"out_of_range"): handoff.build(src,root/"bundle")
     def test_malformed_telegram_rejected(self):
         with tempfile.TemporaryDirectory() as td:
-            root=Path(td); src=self.source(root); next((src/"state/telegram_delivery").glob("*.json")).write_text('{bad')
+            root=Path(td); src=self.source(root)
+            telegram_state=src/"state/telegram_delivery"/("a"*64+".json")
+            telegram_state.write_text('{bad')
             with self.assertRaisesRegex(handoff.HandoffError,"malformed_json"): handoff.build(src,root/"bundle")
     def test_profitlab_pair_must_be_complete(self):
         with tempfile.TemporaryDirectory() as td:

@@ -537,7 +537,8 @@ class Deployer:
         except DeployError:
             return None
 
-    def _validate_activation_runtime(self, health: dict[str, object], main_pid: int,
+    @staticmethod
+    def _validate_activation_runtime(health: dict[str, object], main_pid: int,
                                      previous_instance: str | None) -> None:
         health_pid = health.get("orchestrator_pid")
         if (not isinstance(health_pid, int) or isinstance(health_pid, bool)

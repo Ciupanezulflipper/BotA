@@ -362,13 +362,15 @@ class OrchestratorTests(unittest.TestCase):
                 environment = {"BOTA_REQUIRE_R5_SHADOW": "1"}
                 if shadow is not None:
                     environment["BOTA_R5_SHADOW"] = shadow
-                with mock.patch.dict(os.environ, environment, clear=True):
-                    with mock.patch("sys.stderr"):
-                        self.assertEqual(vps.main([]), 78)
+                with (
+                    mock.patch.dict(os.environ, environment, clear=True),
+                    mock.patch("sys.stderr"),
+                ):
+                    self.assertEqual(vps.main([]), 78)
 
     def test_orchestrator_r5_guard_is_inert_without_r5_flags(self):
         with mock.patch.dict(os.environ, {}, clear=True):
-            vps.require_r5_bootstrap(ROOT)
+            self.assertIsNone(vps.require_r5_bootstrap(ROOT))
 
     def test_updater_environment_is_exact_and_cannot_leak(self):
         jobs = {job.name: job for job in vps.production_jobs()}

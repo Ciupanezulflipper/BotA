@@ -5,7 +5,14 @@ Public API: fetch_future_bars(), simulate_trade(), pip_size_for()
 """
 import os, sys, csv
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TypedDict
+
+class Bar(TypedDict):
+    time: datetime
+    open: float
+    high: float
+    low: float
+    close: float
 
 def pip_size_for(pair: str) -> float:
     return 0.01 if str(pair).upper().endswith("JPY") else 0.0001
@@ -26,7 +33,7 @@ def _sf(v, d=0.0) -> float:
     except Exception:
         return d
 
-def fetch_future_bars(pair: str, tf: str, after_time: datetime, bars: int) -> Optional[List[Dict]]:
+def fetch_future_bars(pair: str, tf: str, after_time: datetime, bars: int) -> Optional[List[Bar]]:
     try:
         from BotA.tools.providers import get_ohlc
     except ImportError:
@@ -38,7 +45,7 @@ def fetch_future_bars(pair: str, tf: str, after_time: datetime, bars: int) -> Op
     if not rows:
         return None
 
-    result = []
+    result: List[Bar] = []
     for r in rows:
         t = _parse_ts(str(r.get("time", "")))
         if t is None: continue
