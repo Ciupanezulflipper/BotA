@@ -123,9 +123,6 @@ def _result(outcome, hit, R, t, px, mins) -> Dict:
     return {"outcome": outcome, "hit_level": hit, "R_multiple": float(R),
             "exit_time": t, "exit_price": float(px), "duration_minutes": int(mins)}
 
-def pip_size_for(pair: str) -> float:
-    return 0.01 if str(pair).upper().endswith("JPY") else 0.0001
-
 def main():
     import argparse
     ap = argparse.ArgumentParser()

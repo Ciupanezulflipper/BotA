@@ -7,7 +7,6 @@ import csv
 import io
 import os
 import sys
-from pathlib import Path
 
 from telegram_delivery import decision_matches, mutable_root, parse_message, row_dict
 

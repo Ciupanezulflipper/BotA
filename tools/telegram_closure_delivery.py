@@ -157,7 +157,7 @@ def _send_request(message: str, token: str, chat_id: str) -> tuple[str, dict[str
     data = urllib.parse.urlencode({"chat_id": chat_id, "text": message}).encode("utf-8")
     request = urllib.request.Request(url, data=data, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=15) as response:
+        with urllib.request.urlopen(request, timeout=15) as response:  # nosec B310
             body = response.read()
     except urllib.error.HTTPError as exc:
         try:

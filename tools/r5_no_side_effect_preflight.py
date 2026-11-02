@@ -95,7 +95,7 @@ def _probes(ledger: Path) -> dict[str, bool]:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=1) as response:
+        with urllib.request.urlopen(request, timeout=1) as response:  # nosec B310
             payload = json.loads(response.read().decode("utf-8"))
             checks["urllib_telegram_synthetic"] = (
                 response.getcode() == 200 and payload.get("ok") is True

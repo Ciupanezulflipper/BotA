@@ -132,8 +132,10 @@ R5_JOB_SECRET_KEYS = {
     **R5_LIVE_DELIVERY_JOB_SECRET_KEYS,
     **R5_HEALTH_DELIVERY_JOB_SECRET_KEYS,
 }
-assert set(R5_LIVE_DELIVERY_JOB_SECRET_KEYS) == R5_LIVE_DELIVERY_JOBS
-assert set(R5_HEALTH_DELIVERY_JOB_SECRET_KEYS) == R5_HEALTH_DELIVERY_JOBS
+if set(R5_LIVE_DELIVERY_JOB_SECRET_KEYS) != R5_LIVE_DELIVERY_JOBS:
+    raise RuntimeError("r5_live_delivery_secret_contract_mismatch")
+if set(R5_HEALTH_DELIVERY_JOB_SECRET_KEYS) != R5_HEALTH_DELIVERY_JOBS:
+    raise RuntimeError("r5_health_delivery_secret_contract_mismatch")
 LIVE_DELIVERY_ENV_LINE = re.compile(r"^([A-Z][A-Z0-9_]*)=(.*)$")
 POLICY_KEYS = (
     "PAIRS", "TIMEFRAMES", "POLICY_B_ENABLED", "POLICY_B_SCORE_MIN",
