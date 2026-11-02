@@ -3,7 +3,7 @@
 auditor.py — Backtest BotA signals. Stdlib-only rewrite (no pandas).
 Public API: fetch_future_bars(), simulate_trade(), pip_size_for()
 """
-import os, sys, csv
+import sys, csv
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, TypedDict

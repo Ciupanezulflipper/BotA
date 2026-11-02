@@ -341,8 +341,7 @@ def release_preflight(code_root: Path) -> dict[str, object]:
                   "dependency_versions_match": versions_ok,
                   "policy_keys": sorted(policy)}
         healthy = bool(runtime["healthy"] and commands["healthy"] and versions_ok)
-    except (ContractError, ImportError, OSError, ValueError,
-            importlib.metadata.PackageNotFoundError) as exc:
+    except (ContractError, ImportError, OSError, ValueError) as exc:
         healthy = False
         checks["failure"] = f"{type(exc).__name__}:{exc}"
     return {"schema_version": "1.0", "healthy": healthy, "checks": checks,

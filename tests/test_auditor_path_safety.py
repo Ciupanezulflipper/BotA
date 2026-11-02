@@ -15,7 +15,8 @@ HEADER = "timestamp,action,pair,tf,entry_price,stop_loss,tp1,tp2,tp3\n"
 
 
 class AuditorPathSafetyTests(unittest.TestCase):
-    def run_auditor(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+    @staticmethod
+    def run_auditor(*arguments: str) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary) / "home"
             bota = home / "BotA"
