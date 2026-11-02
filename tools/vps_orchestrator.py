@@ -369,8 +369,21 @@ def effective_config_document(
     }
 
 
-def effective_config_evidence(**kwargs: object) -> dict[str, object]:
-    document = effective_config_document(**kwargs)
+def effective_config_evidence(
+    *,
+    ambient: Mapping[str, str] | None = None,
+    policy_path: Path = POLICY_PATH,
+    dependency_path: Path = DEPENDENCY_PATH,
+    pyproject_path: Path = PYPROJECT_PATH,
+    commands: Sequence[str] = REQUIRED_COMMANDS,
+) -> dict[str, object]:
+    document = effective_config_document(
+        ambient=ambient,
+        policy_path=policy_path,
+        dependency_path=dependency_path,
+        pyproject_path=pyproject_path,
+        commands=commands,
+    )
     canonical = json.dumps(document, sort_keys=True, separators=(",", ":"))
     return {
         "schema_version": "1.0",
