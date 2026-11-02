@@ -4,10 +4,13 @@ alerts_to_trades.py — Wire alerts.csv into auditor.py's simulate_trade engine.
 Stdlib-only rewrite (no pandas) for Termux compatibility.
 """
 import re, os, sys, csv, argparse
+from pathlib import Path
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.expanduser("~"))
-sys.path.insert(0, os.path.expanduser("~/BotA"))
+CODE_ROOT = Path(os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT") or Path.home() / "BotA").expanduser()
+MUTABLE_ROOT = Path(os.environ.get("BOTA_MUTABLE_ROOT", str(CODE_ROOT))).expanduser()
+sys.path.insert(0, str(CODE_ROOT.parent))
+sys.path.insert(0, str(CODE_ROOT))
 from tools.auditor import fetch_future_bars, simulate_trade, pip_size_for
 
 
@@ -41,8 +44,12 @@ def main():
     ap.add_argument("--since", default="", help="Only process signals after this UTC datetime e.g. 2026-02-24T00:00:00")
     args = ap.parse_args()
 
-    alerts_path = os.path.expanduser(f"~/BotA/{args.alerts}")
-    out_path = os.path.expanduser(f"~/BotA/{args.out}")
+    alerts_path = Path(args.alerts).expanduser()
+    out_path = Path(args.out).expanduser()
+    if not alerts_path.is_absolute():
+        alerts_path = MUTABLE_ROOT / alerts_path
+    if not out_path.is_absolute():
+        out_path = MUTABLE_ROOT / out_path
 
     since_dt = None
     if args.since:

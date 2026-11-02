@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 # Canonical BotA watcher Telegram sender.
 # - Prove exactly one matching current-cycle decision before network access.
 # - Delegate Telegram network/state semantics through telegram_delivery_boundary.py.

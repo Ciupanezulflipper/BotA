@@ -1,10 +1,9 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # FILE: tools/daily_summary_server_gate.sh
-# ROLE: Server-UTC gate for BotA daily proof-of-work summary.
+# ROLE: Server-UTC gate for BotA daily professional Telegram report.
 #
-# Termux cron uses device/local time. On ship mode, Android time can drift.
-# This wrapper checks server UTC first, then sends daily_summary.sh only during
-# the target server-UTC hour, once per server date.
+# This wrapper checks trusted server UTC first, then sends one daily report only
+# during the target server-UTC hour, once per server date.
 #
 # Daily-summary-only fallback:
 # - If live server clock is unavailable, use logs/clock_drift_last_good.json.
@@ -15,15 +14,17 @@
 # Safety:
 # - No strategy changes
 # - No threshold changes
-# - No H1 logic changes
+# - No pair/timeframe changes
+# - No H1/H4/D1 logic changes
 # - No signal generation changes
 # - No market_open.sh changes
 
 set -euo pipefail
 
-ROOT="${BOTA_ROOT:-${HOME}/BotA}"
-LOGDIR="${ROOT}/logs"
-STATE_DIR="${ROOT}/state"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+LOGDIR="${MUTABLE_ROOT}/logs"
+STATE_DIR="${MUTABLE_ROOT}/state"
 TARGET_HOUR_UTC="${DAILY_SUMMARY_TARGET_HOUR_UTC:-20}"
 FALLBACK_MAX_AGE_SECONDS="${DAILY_SUMMARY_LAST_GOOD_MAX_AGE_SECONDS:-28800}"
 LAST_GOOD_FILE="${LOGDIR}/clock_drift_last_good.json"
@@ -40,7 +41,7 @@ if [[ "${DAILY_SUMMARY_CLOCK_FORCE_FAIL:-0}" = "1" ]]; then
   CLOCK_JSON='{"server_clock_ok": false, "server_utc": "NA", "drift_seconds": null, "status": "FORCED_CLOCK_FAIL_FOR_TEST"}'
 else
   CLOCK_JSON="$(
-    python3 "${ROOT}/tools/clock_drift_check.py" --json --write-state 2>/dev/null || true
+    python3 "${CODE_ROOT}/tools/clock_drift_check.py" --json --write-state 2>/dev/null || true
   )"
 fi
 
@@ -190,7 +191,11 @@ echo "GATE_SEND_START server_date=${server_date} server_utc=${server_iso} drift=
 log "GATE_SEND_START server_date=${server_date} server_utc=${server_iso} drift=${drift} detail=${detail}"
 
 SEND_OUTPUT="$(
-  SUMMARY_DATE="${server_date}" DAILY_SUMMARY_SEND="${DAILY_SUMMARY_SEND:-1}" bash "${ROOT}/tools/daily_summary.sh" 2>&1 || true
+  BOTA_CODE_ROOT="${CODE_ROOT}" \
+  BOTA_MUTABLE_ROOT="${MUTABLE_ROOT}" \
+  SUMMARY_DATE="${server_date}" \
+  DAILY_SUMMARY_SEND="${DAILY_SUMMARY_SEND:-1}" \
+  python3 "${CODE_ROOT}/tools/daily_report_modern.py" --send --date "${server_date}" 2>&1 || true
 )"
 
 echo "$SEND_OUTPUT"

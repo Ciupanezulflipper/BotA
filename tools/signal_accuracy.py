@@ -37,6 +37,7 @@ import csv
 import json
 import os
 import sys
+from pathlib import Path
 from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -296,8 +297,10 @@ def run_self_test() -> int:
 
 
 def main(argv=None) -> int:
+    code_root = Path(os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT") or Path.home() / "BotA").expanduser()
+    mutable_root = Path(os.environ.get("BOTA_MUTABLE_ROOT", str(code_root))).expanduser()
     p = argparse.ArgumentParser(description="Parse BotA alerts.csv and summarize provider/rejection stats.")
-    p.add_argument("--alerts", default="logs/alerts.csv")
+    p.add_argument("--alerts", default=str(mutable_root / "logs" / "alerts.csv"))
     p.add_argument("--strict", action="store_true")
     p.add_argument("--emit", choices=["summary", "json", "csv"], default="summary")
     p.add_argument("--out", default="")

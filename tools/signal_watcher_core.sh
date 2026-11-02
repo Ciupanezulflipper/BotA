@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 ###############################################################################
 # FILE: tools/signal_watcher_pro.sh
 # VERSION: v2.0.2 — 2026-02-21 candle-timestamp staleness (weekend-safe)
@@ -33,8 +33,18 @@ set -euo pipefail
 set +x
 shopt -s inherit_errexit 2>/dev/null || true
 
-ROOT="${BOTA_ROOT:-$HOME/BotA}"
-TOOLS="${ROOT}/tools"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-$HOME/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+ROOT="${CODE_ROOT}"
+TOOLS="${CODE_ROOT}/tools"
+
+if [[ "${BOTA_PATH_CONTRACT_CHECK:-0}" = 1 ]]; then
+  printf 'CODE_ROOT=%s\nMUTABLE_ROOT=%s\nTOOLS=%s\nCACHE=%s\nLOGS=%s\nSTATE=%s\nPAUSE=%s\n' \
+    "${CODE_ROOT}" "${MUTABLE_ROOT}" "${TOOLS}" \
+    "${MUTABLE_ROOT}/cache" "${MUTABLE_ROOT}/logs" \
+    "${MUTABLE_ROOT}/logs/state" "${MUTABLE_ROOT}/state/pause"
+  exit 0
+fi
 
 ts_iso() { date +"%Y-%m-%dT%H:%M:%S%z"; }
 
@@ -47,13 +57,13 @@ log() {
 abs_under_root() {
   local p="${1:-}"
   if [[ -z "${p}" ]]; then
-    echo "${ROOT}"
+    echo "${MUTABLE_ROOT}"
     return 0
   fi
   if [[ "${p}" == /* ]]; then
     echo "${p}"
   else
-    echo "${ROOT}/${p}"
+    echo "${MUTABLE_ROOT}/${p}"
   fi
 }
 
@@ -791,8 +801,8 @@ send_telegram_message() {
     return 1
   fi
 
-  if [[ -x "${TOOLS}/telegram_send.sh" ]]; then
-    if "${TOOLS}/telegram_send.sh" "${msg}" 2>>"${ERRLOG}"; then
+  if [[ -f "${TOOLS}/telegram_send.sh" ]]; then
+    if bash "${TOOLS}/telegram_send.sh" "${msg}" 2>>"${ERRLOG}"; then
       log "TELEGRAM" "SENT: via tools/telegram_send.sh"
       network_fail_reset
       return 0
@@ -802,42 +812,9 @@ send_telegram_message() {
       return 1
     fi
   fi
-
-  # Python urllib send (token never printed; errors are sanitized to type only)
-  if TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN}" TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID}" MSG="${msg}" \
-    python3 -c '
-import os, sys, urllib.parse, urllib.request
-
-token = os.environ.get("TELEGRAM_BOT_TOKEN","")
-chat_id = os.environ.get("TELEGRAM_CHAT_ID","")
-msg = os.environ.get("MSG","")
-
-if not token or not chat_id:
-  sys.stderr.write("[TELEGRAM] missing token/chat_id\n")
-  sys.exit(1)
-
-url = f"https://api.telegram.org/bot{token}/sendMessage"
-msg = msg.replace("\\n", "\n")
-data = urllib.parse.urlencode({"chat_id": chat_id, "text": msg}).encode("utf-8")
-req = urllib.request.Request(url, data=data, method="POST")
-
-try:
-  with urllib.request.urlopen(req, timeout=15) as r:
-    r.read()
-  sys.exit(0)
-except Exception as e:
-  # SECURITY: do NOT print str(e) (may include URL). Print type only.
-  sys.stderr.write(f"[TELEGRAM] send failed: {type(e).__name__}\n")
-  sys.exit(1)
-' 2>>"${ERRLOG}"; then
-    log "TELEGRAM" "SENT: via python urllib"
-    network_fail_reset
-    return 0
-  else
-    log "TELEGRAM" "FAILED: python urllib error"
-    network_fail_increment
-    return 1
-  fi
+  log "TELEGRAM" "FAILED: canonical telegram sender missing"
+  network_fail_increment
+  return 1
 }
 
 format_telegram_signal_message() {
@@ -875,7 +852,7 @@ process_pair_tf() {
   fi
 
   # I-10 FIX: Pause guard — skip pair if daily -3R circuit breaker triggered
-  local pause_file="${HOME}/BotA/state/pause"
+  local pause_file="${MUTABLE_ROOT}/state/pause"
   if [[ -f "${pause_file}" ]]; then
     local pause_key="PAUSE_${pair}"
     if grep -q "export ${pause_key}=1" "${pause_file}" 2>/dev/null; then
@@ -902,8 +879,12 @@ print(note)
   fi
 
   # Calendar guard — DISABLED (RapidAPI free tier too limited, re-enable with paid plan)
-  if [[ -f "${TOOLS}/calendar_guard.py" && -n "${RAPIDAPI_CALENDAR_KEY:-}" ]] || [[ -f "${TOOLS}/calendar_guard.py" ]]; then
-    if ! RAPIDAPI_CALENDAR_KEY="${RAPIDAPI_CALENDAR_KEY}"          python3 "${TOOLS}/calendar_guard.py" --pair "${pair}" 2>/dev/null; then
+  # Calendar guard is optional.
+  # Run it only when both the guard exists and an explicit API key is configured.
+  # With set -u enabled, the key may legitimately be unset.
+  if [[ -f "${TOOLS}/calendar_guard.py" && -n "${RAPIDAPI_CALENDAR_KEY:-}" ]]; then
+    if ! RAPIDAPI_CALENDAR_KEY="${RAPIDAPI_CALENDAR_KEY:-}" \
+      python3 "${TOOLS}/calendar_guard.py" --pair "${pair}" 2>/dev/null; then
       log "CALENDAR_BLOCK" "${pair} ${tf} blocked by news event"
       return 0
     fi
@@ -1049,29 +1030,6 @@ except Exception:
     "${score}" "${conf}" "${entry}" "${sl}" "${tp}")"
 
   if send_telegram_message "${msg}"; then
-    # Send chart PNG for GREEN signals only
-    if [[ "${tier}" = "GREEN" ]] && [[ -f "${TOOLS}/chart_generator.py" ]]; then
-      local chart_path
-      chart_path="${ROOT}/logs/tmp/chart_${pair_o}_${tf_o}_$$.png"
-      python3 "${TOOLS}/chart_generator.py" \
-        --pair "${pair_o}" --tf "${tf_o}" \
-        --direction "${direction}" \
-        --entry "${entry}" --sl "${sl}" --tp "${tp}" \
-        --score "${score_int}" --confidence "${score_int}" \
-        --out "${chart_path}" >/dev/null 2>>"${ERRLOG}" || true
-      if [[ -f "${chart_path}" ]]; then
-        curl -s --max-time 15 \
-          "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
-          -F "chat_id=${TELEGRAM_CHAT_ID}" \
-          -F "photo=@${chart_path}" \
-          -F "caption=${pair_o} ${tf_o} ${direction} score=${score_int}" \
-          >>"${ERRLOG}" 2>&1 || true
-        rm -f "${chart_path}" 2>/dev/null || true
-        log "CHART" "${pair_o} ${tf_o} chart sent"
-      else
-        log "CHART" "${pair_o} ${tf_o} chart generation failed"
-      fi
-    fi
     # Cooldown is meaningful only after a real successful send.
     if ! is_true "${DRY_RUN_MODE:-false}" && ! is_false "${TELEGRAM_ENABLED:-1}"; then
       telegram_cooldown_mark "${pair_o}" "${tf_o}"

@@ -383,7 +383,10 @@ def run_cycle(root: Path) -> int:
     health_path = root / "state" / "runtime_health.json"
     state_path = root / "state" / "heartbeat_delivery.json"
     lock_path = root / "state" / "heartbeat_delivery.lock"
-    tele_path = root / "config" / "tele.env"
+    code_root = Path(
+        os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT") or root
+    ).expanduser()
+    tele_path = code_root / "config" / "tele.env"
 
     state_path.parent.mkdir(parents=True, exist_ok=True)
     summary = build_summary(health_path)
@@ -451,7 +454,12 @@ def main() -> int:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA"))),
+        default=Path(
+            os.environ.get("BOTA_MUTABLE_ROOT")
+            or os.environ.get("BOTA_CODE_ROOT")
+            or os.environ.get("BOTA_ROOT")
+            or Path.home() / "BotA"
+        ),
     )
     args = parser.parse_args()
     return run_cycle(args.root.expanduser())

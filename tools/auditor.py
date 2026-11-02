@@ -3,9 +3,29 @@
 auditor.py — Backtest BotA signals. Stdlib-only rewrite (no pandas).
 Public API: fetch_future_bars(), simulate_trade(), pip_size_for()
 """
-import os, sys, csv
+import sys, csv
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, TypedDict
+
+class Bar(TypedDict):
+    time: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+
+
+def _resolve_cli_path(base: Path, value: str) -> Path:
+    raw = Path(value)
+    if raw.is_absolute():
+        raise ValueError("path must stay within ~/BotA")
+    root = base.expanduser().resolve()
+    candidate = (root / raw).resolve()
+    if candidate == root or root not in candidate.parents:
+        raise ValueError("path must stay within ~/BotA")
+    return candidate
+
 
 def pip_size_for(pair: str) -> float:
     return 0.01 if str(pair).upper().endswith("JPY") else 0.0001
@@ -26,7 +46,7 @@ def _sf(v, d=0.0) -> float:
     except Exception:
         return d
 
-def fetch_future_bars(pair: str, tf: str, after_time: datetime, bars: int) -> Optional[List[Dict]]:
+def fetch_future_bars(pair: str, tf: str, after_time: datetime, bars: int) -> Optional[List[Bar]]:
     try:
         from BotA.tools.providers import get_ohlc
     except ImportError:
@@ -38,7 +58,7 @@ def fetch_future_bars(pair: str, tf: str, after_time: datetime, bars: int) -> Op
     if not rows:
         return None
 
-    result = []
+    result: List[Bar] = []
     for r in rows:
         t = _parse_ts(str(r.get("time", "")))
         if t is None: continue
@@ -116,9 +136,6 @@ def _result(outcome, hit, R, t, px, mins) -> Dict:
     return {"outcome": outcome, "hit_level": hit, "R_multiple": float(R),
             "exit_time": t, "exit_price": float(px), "duration_minutes": int(mins)}
 
-def pip_size_for(pair: str) -> float:
-    return 0.01 if str(pair).upper().endswith("JPY") else 0.0001
-
 def main():
     import argparse
     ap = argparse.ArgumentParser()
@@ -129,8 +146,12 @@ def main():
     ap.add_argument("--tf",      default="M15")
     args = ap.parse_args()
 
-    signals_path = os.path.expanduser(f"~/BotA/{args.signals}")
-    out_path     = os.path.expanduser(f"~/BotA/{args.out}")
+    base_dir = Path.home() / "BotA"
+    try:
+        signals_path = _resolve_cli_path(base_dir, args.signals)
+        out_path = _resolve_cli_path(base_dir, args.out)
+    except ValueError as exc:
+        ap.error(str(exc))
 
     rows = []
     with open(signals_path, newline="", encoding="utf-8", errors="replace") as f:

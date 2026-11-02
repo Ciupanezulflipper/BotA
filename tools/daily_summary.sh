@@ -14,13 +14,14 @@
 
 set -euo pipefail
 
-ROOT="${BOTA_ROOT:-${HOME}/BotA}"
-LOGDIR="${ROOT}/logs"
-CFGDIR="${ROOT}/config"
+CODE_ROOT="${BOTA_CODE_ROOT:-${BOTA_ROOT:-${HOME}/BotA}}"
+MUTABLE_ROOT="${BOTA_MUTABLE_ROOT:-${CODE_ROOT}}"
+LOGDIR="${MUTABLE_ROOT}/logs"
+CFGDIR="${CODE_ROOT}/config"
 mkdir -p "${LOGDIR}"
 
-DOTENV="${ROOT}/.env"
-RUNTIME_ENV="${ROOT}/.env.runtime"
+DOTENV="${CODE_ROOT}/.env"
+RUNTIME_ENV="${CODE_ROOT}/.env.runtime"
 SIGENV="${CFGDIR}/signal.env"
 TELEENV="${CFGDIR}/tele.env"
 
@@ -102,7 +103,7 @@ tg_send_plain() {
 }
 
 SUMMARY="$(
-BOTA_ROOT="$ROOT" python3 - <<'PY'
+BOTA_CODE_ROOT="$CODE_ROOT" BOTA_MUTABLE_ROOT="$MUTABLE_ROOT" python3 - <<'PY'
 from __future__ import annotations
 
 import csv
@@ -113,9 +114,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA"))).expanduser().resolve()
-LOGDIR = ROOT / "logs"
-STATE = ROOT / "state"
+CODE_ROOT = Path(os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT") or Path.home() / "BotA").expanduser().resolve()
+MUTABLE_ROOT = Path(os.environ.get("BOTA_MUTABLE_ROOT", str(CODE_ROOT))).expanduser().resolve()
+LOGDIR = MUTABLE_ROOT / "logs"
+STATE = MUTABLE_ROOT / "state"
 TODAY = os.environ.get("SUMMARY_DATE") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
 NOW_UTC = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
@@ -123,7 +125,7 @@ ALERTS = LOGDIR / "alerts.csv"
 CLOCK_STATE = LOGDIR / "clock_drift_status.json"
 RUNTIME_HEALTH = STATE / "runtime_health.json"
 PROVIDER_USAGE = STATE / "provider_usage.json"
-VERIFY_CANONICAL = ROOT / "tools" / "verify_canonical_crontab.sh"
+VERIFY_CANONICAL = CODE_ROOT / "tools" / "verify_canonical_crontab.sh"
 
 
 def safe_int(value: Any, default: int = 0) -> int:
@@ -203,7 +205,7 @@ def fmt_age(value: int | None) -> str:
 def compact_reasons(reasons: list[str], limit: int = 280) -> str:
     unique: list[str] = []
     for reason in reasons:
-        cleaned = " ".join(str(reason).replace(str(ROOT), "<ROOT>").split())
+        cleaned = " ".join(str(reason).replace(str(CODE_ROOT), "<ROOT>").replace(str(MUTABLE_ROOT), "<MUTABLE_ROOT>").split())
         if cleaned and cleaned not in unique:
             unique.append(cleaned)
     if not unique:
@@ -321,7 +323,7 @@ def canonical_truth() -> dict[str, str]:
     try:
         result = subprocess.run(
             ["bash", str(VERIFY_CANONICAL)],
-            cwd=str(ROOT),
+            cwd=str(CODE_ROOT),
             env=environment,
             text=True,
             capture_output=True,

@@ -17,9 +17,9 @@ class WrapperHardeningV2Tests(unittest.TestCase):
 
     def test_wrapper_enforces_persistence_contract_and_retains_failed_evidence(self):
         text = (HERE / "tools" / "run_signal_watcher_with_ledger.sh").read_text(encoding="utf-8")
-        self.assertIn("watcher_persistence_gate.py", text)
+        self.assertNotIn("watcher_persistence_gate.py", text)
         self.assertIn("watcher_cycle_contract.py", text)
-        self.assertIn("persistence_exit_code=", text)
+        self.assertNotIn("persistence_exit_code=", text)
         self.assertIn("contract_exit_code=", text)
         self.assertIn('export BOTA_ALERTS_OFFSET="${alerts_offset}"', text)
         self.assertIn('export BOTA_TELEGRAM_RESULT_LOG="${telegram_result_log}"', text)
@@ -40,7 +40,7 @@ class WrapperHardeningV2Tests(unittest.TestCase):
         self.assertLess(barrier, watcher)
         self.assertIn('[[ -e "${DEPLOY_MARKER}" || -L "${DEPLOY_MARKER}" ]]', text)
 
-    def test_canonical_boundary_repairs_only_sender_mode_and_fails_closed(self):
+    def test_canonical_boundary_accepts_sender_via_bash_without_mode_repair(self):
         outer = (HERE / "tools" / "run_signal_watcher_with_ledger.sh").read_text(encoding="utf-8")
         boundary = (HERE / "tools" / "signal_watcher_pro.sh").read_text(encoding="utf-8")
 
@@ -49,18 +49,9 @@ class WrapperHardeningV2Tests(unittest.TestCase):
         self.assertIn('[[ ! -f "${TOOLS}/telegram_send.sh" ]]', outer)
         self.assertNotIn('[[ ! -x "${TOOLS}/telegram_send.sh" ]]', outer)
 
-        # Only the canonical sender gets conditional owner-only mode repair.
-        self.assertIn('if [[ ! -x "${SENDER}" ]]; then', boundary)
-        self.assertIn('chmod 700 "${SENDER}"', boundary)
-        self.assertIn('canonical_sender_chmod_failed=', boundary)
-        self.assertIn('canonical_sender_not_executable=', boundary)
-        executable_lines = [
-            line.strip()
-            for line in boundary.splitlines()
-            if line.strip() and not line.lstrip().startswith("#")
-        ]
-        chmod_commands = [line for line in executable_lines if line.startswith("if ! chmod ")]
-        self.assertEqual(chmod_commands, ['if ! chmod 700 "${SENDER}"; then'])
+        self.assertIn('if [[ ! -f "${SENDER}" ]]; then', boundary)
+        self.assertNotIn('chmod ', boundary)
+        self.assertIn('exec bash "${CORE}" "$@"', boundary)
         self.assertTrue((HERE / "tools" / "telegram_send.sh").is_file())
         self.assertTrue((HERE / "tools" / "telegram_delivery.py").is_file())
 

@@ -48,7 +48,14 @@ ALERT_FIELDS = [
 
 
 def root_path() -> Path:
-    return Path(os.environ.get("BOTA_ROOT", str(Path.home() / "BotA"))).expanduser().resolve()
+    configured = os.environ.get("BOTA_MUTABLE_ROOT")
+    fallback = os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT")
+    return Path(configured or fallback or Path.home() / "BotA").expanduser().resolve()
+
+
+def code_root_path() -> Path:
+    configured = os.environ.get("BOTA_CODE_ROOT") or os.environ.get("BOTA_ROOT")
+    return Path(configured or Path.home() / "BotA").expanduser().resolve()
 
 
 def paths() -> tuple[Path, Path, Path, Path]:
@@ -71,7 +78,7 @@ def paths() -> tuple[Path, Path, Path, Path]:
     publisher = Path(
         os.environ.get(
             "PROFITLAB_PUBLISHER",
-            str(root / "tools" / "supabase_publish.py"),
+            str(code_root_path() / "tools" / "supabase_publish.py"),
         )
     )
     return alerts, state, lock, publisher

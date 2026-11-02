@@ -2,8 +2,38 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 type HealthPayload = Record<string, unknown>;
 
-const BOT_ID = "bota-termux-primary";
 const MAX_TEXT = 240;
+
+// TEST_EXTRACT_START: identity-allowlist
+// Portable, dependency-free identity resolution. Deliberately written with
+// no Deno-specific syntax so it can also be executed directly under Node
+// for focused tests (see tests/test_bot_health_ingest_identity_allowlist.py)
+// without needing a Deno runtime in CI/dev sandboxes.
+//
+// Exactly two bot identities are ever accepted. source is always derived
+// from this map server-side; a caller-supplied payload.source is accepted
+// only when it agrees with the derived value, and rejected otherwise. This
+// prevents arbitrary bot_id/source spoofing.
+const BOT_IDENTITIES = {
+  "bota-termux-primary": "termux",
+  "bota-hetzner-primary": "hetzner",
+};
+
+function resolveBotIdentity(payload) {
+  const botId = payload && payload.bot_id;
+  if (typeof botId !== "string" || !Object.prototype.hasOwnProperty.call(BOT_IDENTITIES, botId)) {
+    return { ok: false, error: "invalid_bot_id" };
+  }
+
+  const resolvedSource = BOT_IDENTITIES[botId];
+  const suppliedSource = payload.source;
+  if (suppliedSource !== undefined && suppliedSource !== resolvedSource) {
+    return { ok: false, error: "bot_id_source_mismatch" };
+  }
+
+  return { ok: true, bot_id: botId, source: resolvedSource };
+}
+// TEST_EXTRACT_END: identity-allowlist
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -93,15 +123,15 @@ function parseBotMode(value: unknown): "HEALTHY" | "DEGRADED" | "UNKNOWN" {
   return "UNKNOWN";
 }
 
-function buildRow(payload: HealthPayload): Record<string, unknown> {
+function buildRow(payload: HealthPayload, botId: string, source: string): Record<string, unknown> {
   const details = {
     payload_version: sanitizeText(payload.payload_version) ?? "v1",
     client_observed_at_utc: parseTimestamp(payload.observed_at_utc),
   };
 
   return {
-    bot_id: BOT_ID,
-    source: "termux",
+    bot_id: botId,
+    source,
     observed_at_utc: new Date().toISOString(),
 
     bot_mode: parseBotMode(payload.bot_mode),
@@ -152,8 +182,9 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ ok: false, error: "invalid_json" }, 400);
   }
 
-  if (payload.bot_id !== BOT_ID) {
-    return jsonResponse({ ok: false, error: "invalid_bot_id" }, 400);
+  const identity = resolveBotIdentity(payload);
+  if (!identity.ok) {
+    return jsonResponse({ ok: false, error: identity.error }, 400);
   }
 
   const supabaseUrl = getEnv("SUPABASE_URL");
@@ -167,7 +198,7 @@ Deno.serve(async (req: Request) => {
     auth: { persistSession: false },
   });
 
-  const row = buildRow(payload);
+  const row = buildRow(payload, identity.bot_id, identity.source);
 
   const { error } = await supabase
     .from("bot_runtime_health")
@@ -179,7 +210,7 @@ Deno.serve(async (req: Request) => {
 
   return jsonResponse({
     ok: true,
-    bot_id: BOT_ID,
+    bot_id: row.bot_id,
     observed_at_utc: row.observed_at_utc,
   });
 });

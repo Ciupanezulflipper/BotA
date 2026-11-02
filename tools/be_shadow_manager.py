@@ -23,8 +23,13 @@ import requests
 # PATHS
 # ---------------------------------------------------------------------------
 
-BASE_DIR = Path.home() / "BotA"
-LOG_DIR = BASE_DIR / "logs"
+BASE_DIR = Path(
+    os.environ.get("BOTA_CODE_ROOT")
+    or os.environ.get("BOTA_ROOT")
+    or Path.home() / "BotA"
+).expanduser()
+MUTABLE_DIR = Path(os.environ.get("BOTA_MUTABLE_ROOT", str(BASE_DIR))).expanduser()
+LOG_DIR = MUTABLE_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_PATH = LOG_DIR / "shadow_manager.log"
 HEARTBEAT_PATH = LOG_DIR / "shadow_manager_heartbeat.txt"
