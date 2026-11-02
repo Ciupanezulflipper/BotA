@@ -5,6 +5,7 @@ Public API: fetch_future_bars(), simulate_trade(), pip_size_for()
 """
 import os, sys, csv
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from typing import Dict, List, Optional, TypedDict
 
 class Bar(TypedDict):
@@ -13,6 +14,18 @@ class Bar(TypedDict):
     high: float
     low: float
     close: float
+
+
+def _resolve_cli_path(base: Path, value: str) -> Path:
+    raw = Path(value)
+    if raw.is_absolute():
+        raise ValueError("path must stay within ~/BotA")
+    root = base.expanduser().resolve()
+    candidate = (root / raw).resolve()
+    if candidate == root or root not in candidate.parents:
+        raise ValueError("path must stay within ~/BotA")
+    return candidate
+
 
 def pip_size_for(pair: str) -> float:
     return 0.01 if str(pair).upper().endswith("JPY") else 0.0001
@@ -133,8 +146,12 @@ def main():
     ap.add_argument("--tf",      default="M15")
     args = ap.parse_args()
 
-    signals_path = os.path.expanduser(f"~/BotA/{args.signals}")
-    out_path     = os.path.expanduser(f"~/BotA/{args.out}")
+    base_dir = Path.home() / "BotA"
+    try:
+        signals_path = _resolve_cli_path(base_dir, args.signals)
+        out_path = _resolve_cli_path(base_dir, args.out)
+    except ValueError as exc:
+        ap.error(str(exc))
 
     rows = []
     with open(signals_path, newline="", encoding="utf-8", errors="replace") as f:
