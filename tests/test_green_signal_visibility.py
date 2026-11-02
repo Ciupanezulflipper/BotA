@@ -21,7 +21,8 @@ def process_pair_tf_source() -> str:
 
 
 class GreenSignalCooldownVisibilityTests(unittest.TestCase):
-    def run_case(self, score: str) -> tuple[subprocess.CompletedProcess[str], bool, bool]:
+    @staticmethod
+    def run_case(score: str) -> tuple[subprocess.CompletedProcess[str], bool, bool]:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             tools = root / "tools"
