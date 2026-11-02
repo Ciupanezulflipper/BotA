@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import fcntl
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Mapping, Sequence, TextIO
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / "config" / "production-vps.env"
@@ -398,7 +398,7 @@ def load_release_manifest(code_root: Path, *, allow_staging: bool = False) -> di
     path = root / RELEASE_MANIFEST_FILENAME
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError) as exc:
+    except (OSError, ValueError) as exc:
         raise ContractError("release_manifest_unreadable") from exc
     if not isinstance(value, dict) or value.get("schema_version") != RELEASE_MANIFEST_SCHEMA:
         raise ContractError("release_manifest_schema")
@@ -614,7 +614,7 @@ class Orchestrator:
             self.release = {
                 "git_commit_sha": SOURCE_GENERATION,
                 "git_tree_sha": "0" * 40,
-                "effective_config_fingerprint": effective_config_evidence()["fingerprint_sha256"],
+                "effective_config_fingerprint": str(effective_config_evidence()["fingerprint_sha256"]),
             }
         self.policy = load_frozen_policy(self.code_root / "config" / "production-vps.env")
         canonical_policy = json.dumps(self.policy, sort_keys=True, separators=(",", ":"))
@@ -625,7 +625,7 @@ class Orchestrator:
         self.active_jobs: set[str] = set()
         self.threads: set[threading.Thread] = set()
         self.latest: dict[str, dict[str, object]] = {}
-        self.lock_file = None
+        self.lock_file: TextIO | None = None
         self.health_path = self.state_dir / HEALTH_FILENAME
         self.previous_health: dict[str, object] | None = None
         try:
