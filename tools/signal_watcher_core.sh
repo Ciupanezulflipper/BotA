@@ -1007,7 +1007,7 @@ except Exception:
     return 0
   fi
 
-  if ! telegram_cooldown_check "${pair_o}" "${tf_o}"; then
+  if [[ "${tier}" != "GREEN" ]] && ! telegram_cooldown_check "${pair_o}" "${tf_o}"; then
     log "TELEGRAM" "cooldown active: ${pair_o} ${tf_o}"
     return 0
   fi
