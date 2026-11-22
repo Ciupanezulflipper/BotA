@@ -1,350 +1,103 @@
 # BotA AI Start Here
 
-Last updated: **2026-10-15 UTC**
+Last updated: **2026-11-22 UTC**
 
-Read this before proposing any BotA strategy, deployment, Telegram, ProfitLab, Android/Termux, VPS/Hetzner, replay, historical-data, or runtime action.
+Read this before proposing BotA strategy, deployment, Telegram, ProfitLab, Android/Termux, VPS/Hetzner, replay, historical-data or runtime work.
 
 ## Current authoritative truth
 
 ```text
 PROJECT=BotA
 BOTA_EDGE_STATUS=UNVALIDATED
-BOTA_SHADOW_RESEARCH=REOPENED_BY_OWNER
-HISTORICAL_RETROSPECTIVE_VALIDATION_PROJECT=CLOSED
-HISTORICAL_CORPUS_GATE_RESULT=FAIL_195_LT_400
 LIVE_MONEY_TRADING=NO
-COMMERCIAL_PROFITLAB=NO
-PRIVATE_PROFITLAB_ANALYTICS=YES
-
-PRIMARY_RUNTIME_TARGET=HETZNER
+PRIMARY_RUNTIME=HETZNER
 CURRENT_HETZNER_RUNTIME_STATE=ACTIVE
-DEPLOYED_RELEASE=98b93ce5e0c57330b9b2630340ddc448776da1e3
-DEPLOYED_TREE=d09337fbe4536975477867a4f11c49fcdf3cc152
-TARGET_RUNTIME_INSTANCE_ID=459efa86-4678-4f61-bbff-06f62af3326d
-BOTA_SERVICE=active
-BOTA_SERVICE_ENABLED=enabled
-PROVIDER_CONTRACT=YAHOO
-THREE_PAIR_M15_SCAN=RUNNING
-SIGNAL_CLOSER=RUNNING
-PROFITLAB_DELIVERY_PATH=ARMED
-LIVE_DELIVERY_CONTRACT=PASS
-
-WEEKEND_REPORT_CLASSIFIER_FIX=PASS
-MARKET_PHASE_HETZNER_FIX=PASS
-POST_FIX_FULL_MARKET_OPEN_SESSION=PASS
-OCT14_MARKET_OPEN_WATCHER_CYCLES=156
-OCT14_EACH_PAIR_SCANS=156
-OCT14_QUALIFIED_SIGNALS=0
-OCT14_RUNTIME_STATUS=NORMAL
-
-TELEGRAM_CREDENTIAL_VALIDATED=YES
-SUPABASE_SERVICE_CREDENTIAL_VALIDATED=YES
-REAL_TELEGRAM_NON_TRADING_DELIVERY_POST_ACTIVATION=PASS
-REAL_TELEGRAM_TRADING_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
-REAL_PROFITLAB_SIGNAL_POST_ACTIVATION=NOT_YET_OBSERVED
-DELIVERY_NOT_OBSERVED_REASON=NO_NATURAL_QUALIFIED_SIGNAL_YET
-
+DEPLOYED_RELEASE=83fa71e651483c95096ce635b525cacbf91cbc5d
+PROVIDER=YAHOO
+PAIRS=EURUSD,GBPUSD,USDJPY
+TIMEFRAME=M15
 ANDROID_ACTIVE_SCANNER=NO
-ANDROID_ROLE=CONTROL_AND_OBSERVATION_ONLY
+
+PR135=MERGED
+PR136=MERGED
+DISTINCT_GREEN_TELEGRAM_VISIBILITY_FIX=LIVE
+
+NATURAL_GREEN_TO_TELEGRAM=PROVEN
+NATURAL_GREEN_TO_SUPABASE=PROVEN
+NATURAL_CLOSURE_WIN_LOSS=PROVEN
+NATURAL_24H_CANCEL=PROVEN
+
+POST_83FA_GREEN_LIFECYCLES=3
+POST_83FA_CLOSED=2
+POST_83FA_WINS=1
+POST_83FA_LOSSES=1
+POST_83FA_CANCELLED=1
+POST_83FA_NET_CLOSED_PIPS=-1.7
+
+REPORTING_ACCOUNTING_CONSISTENCY=OPEN
+SCAN_DELAY_CLASSIFICATION=OPEN
+API_USAGE_COUNTER_ACCURACY=OPEN
+
 STRATEGY_TUNING=NO
 PAIR_CHANGES=NO
 TIMEFRAME_CHANGES=NO
 FORCED_SIGNAL_GENERATION=NO
+PRODUCTION_CHANGE_AUTHORIZED=NO
 
 CURRENT_PHASE=OBSERVE_STORE_COLLECT_ANALYZE
-NEXT_ACTION=OBSERVE_NEXT_NATURAL_GREEN_AND_PROVE_DUAL_SINK_LIFECYCLE
+NEXT_ACTION=READ_ONLY_REPORTING_AND_HEALTH_ACCOUNTING_RECONCILIATION
 FURTHER_BROAD_AI_REVIEW=STOP
 ```
 
-Current operational handoff:
+Canonical current record: `CONTINUITY_CURRENT.md`.
 
-`CONTINUITY_CURRENT.md`
+Historical production activation baseline: `audits/BOTA_HETZNER_PRODUCTION_ACTIVATION_2026-10-06.md`.
 
-Latest post-fix evidence is recorded directly in this file and in `CONTINUITY_CURRENT.md`.
+## What changed since the October handoff
 
-Historical activation baseline:
+PR #135 reconciled the production lineage into `main` on 2 Nov 2026.
 
-`audits/BOTA_HETZNER_PRODUCTION_ACTIVATION_2026-10-06.md`
+PR #136 then fixed the 30 Oct lifecycle inconsistency: distinct GREEN signals bypass the broad pair/timeframe Telegram cooldown; YELLOW/watchlist cooldown and exact identity dedup remain unchanged. Its merge commit `83fa71e65148...` is the currently deployed production release.
 
-## Production runtime interpretation
+The previous instruction to wait for the first natural GREEN is obsolete. Natural post-release GREEN lifecycle evidence now exists.
 
-The Oct 6 activation baseline release was `4424518e7b42ecf2a070967d626a9ac86bf04d53`.
-
-Current production is newer:
+## Verified post-release lifecycles
 
 ```text
-DEPLOYED_RELEASE=98b93ce5e0c57330b9b2630340ddc448776da1e3
-RUNTIME_INSTANCE=459efa86-4678-4f61-bbff-06f62af3326d
+2026-11-04 USDJPY BUY  158.42101 -> LOSS      -22.5 pips
+2026-11-11 EURUSD SELL 1.11410   -> WIN       +20.8 pips
+2026-11-12 GBPUSD SELL 1.32456   -> CANCELLED  0.0 pips after ~24h
 ```
 
-Post-activation bounded corrections:
-- weekend daily-report classifier;
-- Hetzner market-phase invocation through `bash`.
+Three lifecycles are insufficient to judge strategy edge. Do not tune thresholds from this sample.
 
-No strategy thresholds or scope were changed.
+## Current reporting blocker
 
-A full Oct 14 market-open session completed with 156 watcher cycles and 156 scans for each of EURUSD, GBPUSD and USDJPY, with zero qualified setups and final `BOTA • STATUS: NORMAL`.
+Do not assume all daily summary counters are internally consistent.
 
-Do not misstate zero qualified setups as a delivery or runtime failure.
+- 11 Nov Daily Market Report says `0 qualified / 0 Telegram`, but production proves a real GREEN EURUSD SELL and +20.8 pip WIN.
+- 12 Nov Daily Market Report says `2 qualified / 2 Telegram`, while Proof-of-Work says `0 filter-accepted / 0 eligible`; production proves one GREEN trade plus one YELLOW watchlist.
+- Proof-of-Work reported API use above the nominal daily limit, and later multi-hour `SCAN DELAYED` warnings self-restored while full daily 156-cycle counts were still reported.
 
-## Delivery proof boundary
+Root cause is not yet proven. Treat this as a reporting/health-accounting audit, not a strategy defect.
 
-Already proven:
+## Current runtime health
 
-```text
-TELEGRAM_API_CREDENTIAL=VALID
-TELEGRAM_CHAT_ROUTE=VALID
-SUPABASE_SERVICE_CREDENTIAL=VALID
-LIVE_DELIVERY_SECRET_CONTRACT=PASS
-TELEGRAM_NON_TRADING_EXTERNAL_DELIVERY=PASS
-PROFITLAB_DELIVERY_PATH=ARMED
-```
+On 22 Nov 2026 Supabase reported `bota-hetzner-primary` as `HEALTHY` with no current failure reason. The date is Sunday / market closed.
 
-Not yet empirically proven after activation:
+## Historical corpus boundary
+
+Preserve the prior frozen historical research result:
 
 ```text
-ONE_REAL_QUALIFIED_SIGNAL_TO_TELEGRAM
-SAME_SIGNAL_TO_PROFITLAB
-POST_ACTIVATION_REAL_CLOSURE_TO_TELEGRAM
-POST_ACTIVATION_REAL_CLOSURE_UPDATE_TO_PROFITLAB
-LIVE_DUPLICATE_FREE_RETRY_RESTART_LIFECYCLE
-```
-
-Reason: no natural qualified GREEN has occurred yet.
-
-Do not force a production trading signal merely to satisfy acceptance.
-
-## Historical corpus result — preserve exactly
-
-```text
-DATASET_ID=oanda-warmup-20240101-20260801-20260807-r3
-REPLAY_SOURCE_COMMIT=6b437179cc58021aa358b1d0b04c121d9304c660
-EVALUATION_START_UTC=2025-12-03T22:00:00Z
-EVALUATION_END_UTC_EXCLUSIVE=2026-08-01T00:00:00Z
-DECISION_ROWS=32641
-POLICY_A_ACCEPTED=478
 POLICY_B_ACCEPTED=195
-POLICY_C_ACCEPTED=164
 PRE_REGISTERED_KILL_THRESHOLD=400
-CORPUS_GATE=FAIL
-```
-
-Interpretation:
-
-```text
-EXISTING_HISTORICAL_CORPUS_SUFFICIENT_FOR_PRIOR_GATE=NO
+HISTORICAL_CORPUS_GATE=FAIL
 STRATEGY_EDGE_VALIDATED=NO
-STRATEGY_PROFITABILITY_PROVEN_NEGATIVE=NO
 ```
 
-## Current production diagnostics that must survive handoff
-
-### macro6
-`NEWS_ON=0` makes `macro6=3` neutral/informational. It is not an active production blocker.
-
-### H1 override drift
-Historical documentation referenced H1 override 75 while current effective default is 85 because the runtime config omits the override keys.
-
-Read-only post-Oct6 counterfactual:
-- rows in 75–84.99 neutral-H1 override band: 0;
-- proven suppressed signals from 85 vs 75: 0.
-
-Do not change this threshold based on current evidence.
-
-### ADX tension
-Scoring can award +10 when ADX >= 30, while final Policy B requires ADX < 30.
-
-Historical evidence supported keeping the ADX < 30 guard. Do not remove or retune it merely because strong market movement is visible on higher-timeframe charts.
-
-### market phase
-The prior Termux shebang caused direct invocation of `market_open.sh` from scoring to fail on Hetzner, creating `phase=Unknown` and an illegitimate -5 penalty.
-
-Current release `98b93ce...` fixes both scoring invocations by calling `bash market_open.sh`.
-
-## Oct 14 post-fix rejection audit
-
-The latest read-only ledger decomposition found 75 tradeable BUY/SELL rows across 41 unique market states.
-
-```text
-SCORE_LT_65_REJECTIONS=72
-H1_NEUTRAL_VETO_ROWS=3
-ENTRY_INVALID_ROWS=0
-RR_NONPOSITIVE_ROWS=0
-ADX_GE_30_ROWS=27
-
-EURUSD_MAX_SCORE=59.2
-GBPUSD_MAX_SCORE=72.1
-USDJPY_MAX_SCORE=63.3
-```
-
-The only rows above 70 were three repeated observations of one GBPUSD SELL state at score 72.1, ADX 46.3, `phase=Open`, with H1 neutral veto.
-
-Do not reinterpret this as a reason to loosen the strategy. Current evidence supports continued clean post-fix observation.
-
-## Oct 15 early-session H1 investigation
-
-Fresh post-fix production evidence from 07:00–07:15 UTC showed:
-- USDJPY BUY scored 65.5 at 07:00, 07:05 and 07:10;
-- USDJPY BUY strengthened to 66.6 at 07:15;
-- ADX remained inside the current Policy-B boundary at 24.1 then 22.4;
-- market phase was `Open`;
-- entry / SL / TP were populated;
-- the decisive rejection was `H1_trend_opposite`.
-
-The USDJPY H1 files were fresh at about 07:13 UTC and the indicator cache reported:
-- `tf_ok=true`;
-- `tf_actual_min=60`;
-- `weak=false`;
-- EMA9 below EMA21, consistent with bearish H1 context while M15 was BUY.
-
-However, the H1 candle file also contained an extra live row at `2026-10-15 07:13:14` with identical open/high/low/close values, while `final_runner.py` computes indicators over all returned rows and selects `df.iloc[-1]`.
-
-Therefore:
-
-```text
-H1_DATA_FRESH=YES
-H1_OPPOSITE_CLASSIFICATION_PLAUSIBLE=YES
-H1_FORMING_CANDLE_INFLUENCE=POSSIBLE_NOT_YET_PROVEN
-CLOSED_BAR_INTEGRITY_DEFECT=NOT_YET_CONFIRMED
-```
-
-The next action is one read-only code-path inspection to determine whether the production H1 veto consumes the forming H1 row or only the last closed H1 candle. No strategy change is authorized.
-
-## Oct 15 closed-bar integrity finding — CONFIRMED
-
-The production H1 confirmation path is now proven end-to-end:
-
-```text
-Yahoo raw H1 payload
-  -> tools/data_fetch_candles.sh
-  -> cache/USDJPY_H1.json
-  -> tools/build_indicators.py
-  -> cache/indicators_USDJPY_H1.json
-  -> tools/scoring_engine.sh USDJPY H1
-  -> tools/m15_h1_fusion_legacy.sh
-  -> H1_trend_opposite veto
-```
-
-Observed production evidence at 07:13 UTC contained an extra USDJPY H1 row timestamped `2026-10-15 07:13:14` with identical OHLC values while the 07:00-08:00 H1 candle was still forming.
-
-`build_indicators.py` does not discard forming bars. It normalizes all provider rows, then computes EMA/RSI/MACD/ADX from the complete list and stores the last derived values. `scoring_engine.sh` reads that indicator bundle for the requested timeframe, and the M15/H1 fusion uses the H1 scorer output directly.
-
-Therefore:
-
-```text
-H1_FORMING_CANDLE_INFLUENCE=CONFIRMED
-H1_CLOSED_BAR_INTEGRITY_DEFECT=CONFIRMED
-USDJPY_0700_0715_H1_VETO_POTENTIALLY_CONTAMINATED=YES
-STRATEGY_TUNING_AUTHORIZED=NO
-PRODUCTION_FIX_AUTHORIZED=NO
-```
-
-Important scope warning: the same shared indicator builder serves M15, H1, H4 and D1. Before changing code, verify whether forming-row contamination is present on each production timeframe so the repair boundary is correct and not H1-specific by assumption.
-
-## Oct 15 forming-bar counterfactual — material impact confirmed
-
-A read-only comparison rebuilt production indicators twice from the same candle CSVs: once with all provider rows, and once with only candles whose full timeframe had completed by the current UTC time.
-
-Results:
-
-```text
-FORMING_BAR_CONTAMINATION_SCOPE=EURUSD,GBPUSD,USDJPY / M15,H1,H4,D1
-MATERIAL_DECISION_IMPACT=CONFIRMED
-
-USDJPY_M15_CURRENT_BIAS=SELL
-USDJPY_M15_CLOSED_ONLY_BIAS=HOLD
-
-USDJPY_H1_CURRENT_BIAS=SELL
-USDJPY_H1_CLOSED_ONLY_BIAS=SELL
-
-PRIOR_0700_0715_H1_VETO_FLIP=NOT_PROVEN
-```
-
-The current USDJPY M15 example proves the shared forming-row defect can change a live directional classification, not merely indicator decimals.
-
-At the sampled time:
-- M15 datasets had one incomplete/live row removed;
-- H1 and H4 datasets had two rows removed, showing both a current timeframe bar and an additional live snapshot row could enter calculations;
-- D1 had one incomplete/current row removed.
-
-The H1 bias happened to remain SELL in this snapshot, so this evidence does not prove that the earlier 07:00–07:15 USDJPY H1 veto would have flipped under closed-bar-only semantics.
-
-A second blind spot also surfaced: H4 rebuilt with only 28 total / 26 closed rows, below `build_indicators.py` minimum of 60 bars, producing zeroed indicator values in this read-only calculation. Direct production H4 cache status must be verified before repair design.
-
-```text
-CLOSED_BAR_REPAIR_REQUIRED=YES
-REPAIR_SCOPE=SHARED_INDICATOR_PATH_NOT_H1_ONLY
-H4_DATA_SUFFICIENCY_STATUS=VERIFY_NEXT
-STRATEGY_TUNING=NO
-PRODUCTION_WRITE=NO
-```
-
-## Oct 15 H4 production health — defect confirmed
-
-Read-only production indicator health inspection showed the same H4 failure on all three active pairs:
-
-```text
-EURUSD_H4 error=insufficient_data weak=true ema9=0 ema21=0 adx=0
-GBPUSD_H4 error=insufficient_data weak=true ema9=0 ema21=0 adx=0
-USDJPY_H4 error=insufficient_data weak=true ema9=0 ema21=0 adx=0
-```
-
-The production fetcher currently requests Yahoo H4 with a `5d` range while `build_indicators.py` requires at least 60 normalized candles. The observed H4 datasets contain only about 28 rows, so the H4 indicator bundle cannot become healthy.
-
-Operational effect:
-- H4 trend context is unavailable across EURUSD, GBPUSD and USDJPY;
-- the M15/H1 fusion sees zeroed H4 EMA context as HOLD rather than a usable H4 trend;
-- any H4 confirmation/opposition logic is therefore weakened or inactive until the data horizon is repaired.
-
-Combined repair scope is now proven:
-
-```text
-DEFECT_1=FORMING_UNCLOSED_CANDLES_ENTER_SHARED_INDICATOR_PATH
-DEFECT_2=H4_FETCH_HORIZON_TOO_SHORT_FOR_60_BAR_MINIMUM
-AFFECTED_PAIRS=EURUSD,GBPUSD,USDJPY
-AFFECTED_TF=M15,H1,H4,D1 for defect 1; H4 for defect 2
-MATERIAL_DECISION_IMPACT=CONFIRMED
-STRATEGY_TUNING=NO
-PRODUCTION_WRITE=NO
-NEXT_ACTION=ISOLATED_LOCAL_REPAIR_CANDIDATE
-```
-
-## Strategy boundary
-
-Current production/runtime work does not authorize changes to:
-- Policy B;
-- ADX/RSI/score rules;
-- pair/timeframe scope;
-- higher-timeframe confirmation logic;
-- TP/SL strategy logic;
-- baseline trading rules.
-
-The correct next evidence is clean post-fix observation, not tuning.
-
-## ProfitLab
-
-```text
-PROFITLAB_PUBLIC_PRODUCT=NO
-PROFITLAB_PRIVATE_ANALYTICS=YES
-PROFITLAB_SOURCE_OF_TRUTH=NO
-BOTA_EVIDENCE_SOURCE_OF_TRUTH=YES
-```
-
-As of 2026-10-15, no new post-Oct14 natural BotA signal exists in `public.signals`.
-
-The `public.bot_runtime_health` row is stale legacy Termux observability and must not be used as current Hetzner runtime truth.
-
-## Operating mode
-
-```text
-OBSERVE=YES
-STORE=YES
-COLLECT=YES
-ANALYZE=YES
-STRATEGY_CHANGE=NO
-RUNTIME_CHANGE=NO_UNLESS_NEW_DEFECT_PROVEN
-```
+Do not reinterpret the current three live lifecycles as reopening or invalidating the historical corpus protocol.
 
 ## Exactly one current action
 
-Observe the next natural qualified GREEN and prove its complete dual-sink lifecycle. Until then, continue passive evidence collection and analysis.
+Run one bounded read-only reconciliation of Daily Market Report, Proof-of-Work, Telegram, Supabase signal lifecycle, API-usage counters and scan-delay classification. No strategy or production change is part of that action.
