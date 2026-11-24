@@ -1,6 +1,6 @@
 # BotA Current Continuity State
 
-Last updated: **2026-11-22 UTC**
+Last updated: **2026-11-24 UTC**
 
 This is the canonical operational handoff. Historical audits remain evidence; stale current-state instructions are superseded by this file.
 
@@ -9,130 +9,213 @@ This is the canonical operational handoff. Historical audits remain evidence; st
 ```text
 BOTA_EDGE_STATUS=UNVALIDATED
 LIVE_MONEY_TRADING=NO
+
 PRIMARY_RUNTIME=HETZNER
-RUNTIME_STATE=ACTIVE
+HETZNER_RUNTIME_STATE=ACTIVE
 DEPLOYED_RELEASE=83fa71e651483c95096ce635b525cacbf91cbc5d
 PROVIDER=YAHOO
 PAIR_SCOPE=EURUSD,GBPUSD,USDJPY
 TIMEFRAME=M15
-ANDROID_ACTIVE_SCANNER=NO
-ANDROID_ROLE=CONTROL_AND_OBSERVATION_ONLY
 
-PR135_RECONCILIATION=MERGED_2026-11-02
-PR136_GREEN_VISIBILITY_FIX=MERGED_2026-11-02
-DISTINCT_GREEN_BYPASSES_PAIR_COOLDOWN=YES
-YELLOW_WATCHLIST_COOLDOWN=UNCHANGED
-EXACT_SIGNAL_DEDUP=UNCHANGED
+LEGACY_ANDROID_RUNTIME=STOPPED
+LEGACY_ANDROID_KNOWN_RESTART_PATH=DISABLED
+FRESH_TERMUX_SESSION_RESTART_TEST=PASS
+PHONE_REBOOT_TEST=NOT_YET_RUN
+LEGACY_CREDENTIALS_REVOKED=NO
+CREDENTIAL_INVENTORY_COMPLETE=NO
 
 STRATEGY_TUNING=NO
 PAIR_CHANGES=NO
 TIMEFRAME_CHANGES=NO
-FORCED_SIGNAL_GENERATION=NO
-
-CURRENT_PHASE=OBSERVE_STORE_COLLECT_ANALYZE
-NEXT_ACTION=READ_ONLY_REPORTING_AND_HEALTH_ACCOUNTING_RECONCILIATION
 PRODUCTION_CHANGE_AUTHORIZED=NO
+
+CURRENT_PHASE=RETIRE_LEGACY_PRODUCER_AND_ESTABLISH_SINGLE_PRODUCER_TRUTH
+NEXT_ACTION=READ_ONLY_CREDENTIAL_CONSUMER_INVENTORY
 ```
 
-Runtime release identity was re-verified on 2026-11-22: `/opt/bota/current` resolves to the immutable `83fa71e651483c95096ce635b525cacbf91cbc5d` release.
+## What changed on 2026-11-24
 
-Supabase runtime health at 2026-11-22 11:40 UTC reported `bota-hetzner-primary` as `HEALTHY`, with no current failure reason. 22 Nov is a closed-market Sunday, so absence of watcher progress is not a trading failure.
+A second BotA producer was proven on the Android/Termux phone.
 
-## Source-control state
+The phone was not merely a control/observation device. It had active runit BotA services and a watchdog capable of reviving them. Supabase edge logs matched phone-side closer timestamps to Romanian/Vodafone requests, proving that the legacy phone runtime was still touching the production signal ledger.
 
-PR #135, `Reconcile production lineage into main`, merged on 2026-11-02 with merge commit:
+The legacy runtime was then stopped. Its known Termux-session watchdog launcher:
 
 ```text
-1435fcf4441b5a5b8fb976c4164377f9d82f4f38
+~/BotA/tools/start_native_service_daemon_watchdog.sh
 ```
 
-PR #136, `Keep distinct GREEN signals visible through Telegram cooldown`, merged on 2026-11-02 with merge commit / current production release:
+was made non-executable.
+
+A fresh Termux session was opened afterwards and verified:
 
 ```text
-83fa71e651483c95096ce635b525cacbf91cbc5d
+NO_BOTA_PROCESSES_PASS
+bota-closer=down
+bota-supervisor=down
 ```
 
-PR #136 fixed the lifecycle inconsistency proven on 30 Oct: a genuinely distinct GREEN signal is no longer hidden by the broad pair/timeframe Telegram cooldown. YELLOW/watchlist cooldown and exact identity dedup remain unchanged. No strategy, score, threshold, pair, timeframe, SL/TP or provider-policy change was made.
+Supabase verification from the shutdown point through **2026-11-24 14:30 UTC** showed **zero Romanian edge requests of any kind**.
 
-## Post-release GREEN lifecycle evidence
+This is strong evidence that the phone runtime was the legacy Romanian producer and that its known restart path is disabled.
 
-Production / Supabase evidence after `83fa71e65148...`:
+A phone reboot has not yet been used as a persistence test.
 
-| Date | Pair | Direction | Entry | Outcome | Pips |
-|---|---|---|---:|---|---:|
-| 2026-11-04 | USDJPY | BUY | 158.42101 | LOSS | -22.5 |
-| 2026-11-11 | EURUSD | SELL | 1.11410 | WIN | +20.8 |
-| 2026-11-12 | GBPUSD | SELL | 1.32456 | CANCELLED | 0.0 |
+## Producer-lineage correction
 
-The GBPUSD trade remained ACTIVE for approximately 24 hours without TP or SL being hit, then Supabase recorded `CANCELLED` at 2026-11-13 15:25 UTC with `0.00` pips.
+Previous continuity documents incorrectly treated all recent Supabase rows as Hetzner production evidence.
 
-Post-release performance snapshot:
-
-```text
-GREEN_LIFECYCLES=3
-CLOSED=2
-WINS=1
-LOSSES=1
-CANCELLED=1
-CLOSED_WIN_RATE=50.0%
-CLOSED_NET_PIPS=-1.7
-STRATEGY_CONCLUSION=INSUFFICIENT_SAMPLE
-```
-
-Do not tune strategy from these three lifecycles.
-
-## Current Supabase signal ledger
-
-Read-only Supabase snapshot on 2026-11-22:
-
-```text
-TOTAL_CLOSED=67
-TOTAL_WINS=24
-TOTAL_LOSSES=43
-TOTAL_CANCELLED=8
-TOTAL_ACTIVE=0
-ALL_TIME_CLOSED_WIN_RATE=35.8%
-ALL_TIME_CLOSED_NET_PIPS=+34.6
-```
-
-These are BotA signal-ledger statistics, not brokerage-account P&L.
-
-## Reporting / observability inconsistency — OPEN
-
-The monitoring layer is not yet internally coherent enough to treat every daily `0 signals` line as authoritative strategy evidence.
+That is no longer valid.
 
 Verified examples:
 
-- 11 Nov Daily Market Report states `0 qualified / 0 Telegram`, while production/Supabase proves a GREEN EURUSD SELL was published, tracked and closed WIN +20.8 pips that day. The same day's Proof-of-Work reports one filter-accepted / threshold-eligible candidate.
-- 12 Nov Daily Market Report states `2 qualified / 2 Telegram`, while the Proof-of-Work reports `0 filter-accepted / 0 Telegram-threshold eligible`. Production proves one real GREEN GBPUSD SELL and the earlier 71.9 GBPUSD alert was a YELLOW watchlist.
-- Proof-of-Work on 11-12 Nov reported API usage `960/800 (120%)` while Telegram also warned at `600/800 (75%)`. This counter must be reconciled before treating it as provider-billing truth.
-- Repeated `SCAN DELAYED` / `SCAN RESTORED` notices appeared 18-20 Nov, including multi-hour delays, while the final daily reports still showed all 156 expected market-open watcher cycles. Their timing/classification must be audited before labeling them true market-open outages.
+- **2026-11-11 EURUSD SELL +20.8 pips:** created by the Romanian legacy producer, not by Hetzner. Hetzner's own pipeline at the matching time recorded HOLD/filter rejection.
+- The same 11 Nov row was later touched by both the Hetzner closer and the Romanian legacy closer.
+- **2026-11-12 GBPUSD SELL:** created by Hetzner, but its later cancellation was performed by the Romanian legacy producer.
+- **2026-11-23 USDJPY:** six GREEN M15 BUY rows were created by Hetzner and all closed as losses, total **-131.6 pips**.
 
-Therefore:
+Therefore the earlier summary:
 
 ```text
-RUNTIME_SIGNAL_GENERATION=PROVEN
-GREEN_LIFECYCLE_DELIVERY=PROVEN
-OUTCOME_TRACKING=PROVEN
-REPORTING_ACCOUNTING_CONSISTENCY=NOT_PROVEN
-SCAN_DELAY_CLASSIFICATION=NOT_PROVEN
-API_USAGE_COUNTER_ACCURACY=NOT_PROVEN
+LOSS -> WIN -> CANCELLED
 ```
+
+must not be used as a clean Hetzner strategy sample.
+
+The stored Supabase ledger contains mixed producers and mixed generations. It is operational evidence, not a clean strategy-validation corpus.
+
+## 23 Nov correlated exposure event
+
+Hetzner created six USDJPY M15 BUY signals between 14:15 and 16:30 UTC on 23 Nov.
+
+Results:
+
+```text
+-20.5
+-22.5
+-22.4
+-21.6
+-21.7
+-22.9
+TOTAL=-131.6 pips
+```
+
+They represented one highly correlated thesis repeatedly re-entered while earlier signals were still active.
+
+A one-ACTIVE-per-pair+direction rule is a candidate exposure-control repair, but it is **not yet authorized or deployed**. It must be replayed against historical episodes so removed winners are counted as well as removed losses.
+
+## D1 confirmation defect
+
+A production path mismatch was verified.
+
+The D1 cache writer stores mutable state under:
+
+```text
+/var/lib/bota/cache
+```
+
+using `BOTA_MUTABLE_ROOT`.
+
+The scoring reader instead derives its D1 cache path from `ROOT` / `BOTA_ROOT`, falling back to `~/BotA`, and silently degrades to:
+
+```text
+d1_trend=ANY
+```
+
+when the expected file is absent.
+
+Production has valid D1 cache files under `/var/lib/bota/cache`, but the live scoring reader was not reading that location. Recent GREEN signals therefore showed D1 as `ANY`.
+
+The correct future repair is to read mutable D1 state from `BOTA_MUTABLE_ROOT` and fail closed / alert when D1 state is unavailable. Simply exporting `ROOT` is not the intended fix.
+
+No D1 repair is deployed yet.
+
+## Provider / warning correction
+
+Hetzner production is frozen to Yahoo for candle acquisition. The prior `600/800` / `960/800` style warnings were generated by a generic local counter and are not proof of actual Twelve Data billing usage.
+
+Current Hetzner provider accounting showed no Twelve Data production calls during the audit.
+
+The legacy phone still contains older API credentials and accounting state, so historical warnings cannot yet be attributed with certainty solely from Telegram history.
+
+Do not purchase additional market-data quota based on those warnings.
+
+## Legacy retirement boundary
+
+The phone runtime is stopped, but retirement is not yet irreversible.
+
+The old phone still contains legacy/shared credentials, including Supabase and Telegram credentials. If another restart mechanism revived the process before those credentials were retired, it could potentially authenticate again.
+
+No credential has been rotated or revoked yet.
+
+Claude's independent review identified a valid safety constraint: rotating a shared Supabase service credential blindly could break ProfitLab, Stripe webhook processing, authentication, or other consumers.
+
+Therefore credential rotation is **blocked until a read-only consumer inventory is complete**.
+
+## Current security / credential questions
+
+Must be resolved before rotation:
+
+1. Is the Hetzner Supabase credential a legacy JWT-style key or a newer independently rotatable secret key?
+2. Which services use the same Supabase credential or credential family?
+3. Does ProfitLab / its Stripe webhook depend on it?
+4. Do any Supabase Edge Functions, GitHub Actions, laptop files, or other runtimes depend on it?
+5. Which services use the current Telegram bot token?
+6. Can a new credential be kept exclusively on Hetzner and out of repositories/sync paths?
+
+Only fingerprints, prefixes and consumer locations should be compared. Never copy full secrets into documentation, chat, GitHub or Obsidian.
+
+## Acceptance boundary for permanent retirement
+
+Do not start the final clean-producer clock yet.
+
+Provisional retirement evidence already exists:
+
+- legacy processes stopped;
+- known session restart path disabled;
+- fresh Termux session did not revive BotA;
+- Romanian Supabase traffic disappeared after shutdown.
+
+Final permanent-retirement proof will require a safe credential migration plus active verification.
+
+The exact 72-hour acceptance rule will be finalized after the consumer inventory because legitimate ProfitLab/Vercel writes must not be misclassified as rogue writes.
+
+At minimum, the final test must distinguish:
+
+- legitimate Hetzner BotA writes;
+- legitimate ProfitLab/Vercel writes;
+- deliberate credential-rejection tests;
+- unexplained legacy/non-authorized writes.
+
+A real Hetzner signal lifecycle must also occur inside the verification window; quiet time alone is insufficient evidence.
 
 ## Strategy boundary
 
-Do not change Policy B, score/ADX/RSI thresholds, pairs, timeframe, H1 confirmation, TP/SL rules or provider policy based on the current sample.
+Do not tune Policy B, indicator weights, ADX/RSI thresholds, pairs, timeframe, TP/SL, news scoring or provider policy from the contaminated ledger.
 
-The current release has produced `LOSS -> WIN -> CANCELLED`. That is enough to prove the pipeline can generate and resolve natural GREEN lifecycles, but not enough to establish or reject trading edge.
+Historical research boundary remains:
+
+```text
+POLICY_B_ACCEPTED=195
+PRE_REGISTERED_KILL_THRESHOLD=400
+HISTORICAL_CORPUS_GATE=FAIL
+STRATEGY_EDGE_VALIDATED=NO
+```
+
+The immediate problem is producer integrity and exposure control, not strategy optimization.
 
 ## Exactly one next action
 
-Perform one bounded **read-only reporting and health-accounting reconciliation**. Establish one canonical lifecycle ledger:
+Perform one bounded **read-only credential consumer inventory**.
 
-```text
-GREEN SENT -> ACTIVE -> WIN | LOSS | CANCELLED
-```
+Identify, without printing secrets:
 
-Then reconcile Daily Market Report, Daily Proof-of-Work, Telegram delivery, Supabase `public.signals`, API-usage accounting and scan-delay classification against that same truth.
+- Supabase key type/prefix used by Hetzner;
+- every known consumer of the same Supabase credential or credential family;
+- ProfitLab / Stripe webhook dependencies;
+- Supabase Edge Function dependencies;
+- GitHub Actions secret references;
+- laptop/WSL copies;
+- Telegram bot-token consumers, including unrelated phone services.
 
-Do not change strategy or production behavior as part of that audit.
+No rotation, revocation, reboot, code change or strategy change belongs in this step.
