@@ -23,7 +23,14 @@ LEGACY_ANDROID_RUNTIME=STOPPED
 LEGACY_ANDROID_KNOWN_RESTART_PATH=DISABLED
 FRESH_TERMUX_SESSION_TEST=PASS
 PHONE_REBOOT_TEST=NOT_YET_RUN
-LEGACY_CREDENTIALS_REVOKED=NO
+
+SUPABASE_KEY_TYPE=MODERN_SB_SECRET
+PHONE_AND_HETZNER_SUPABASE_KEY_FINGERPRINT=MATCH
+PROFITLAB_EDGE_FUNCTION_SERVICE_ROLE_PATH=SEPARATE
+SUPABASE_ROTATION_AUTHORIZED=NO
+
+TELEGRAM_CONSUMER_INVENTORY=INCOMPLETE
+TELEGRAM_ROTATION_AUTHORIZED=NO
 
 RECENT_LEDGER_PROVENANCE=CROSS_CONTAMINATED
 11_NOV_WIN_HETZNER=NO
@@ -40,13 +47,14 @@ TIMEFRAME_CHANGES=NO
 PRODUCTION_CHANGE_AUTHORIZED=NO
 
 CURRENT_PHASE=RETIRE_LEGACY_PRODUCER_AND_ESTABLISH_SINGLE_PRODUCER_TRUTH
-NEXT_ACTION=READ_ONLY_CREDENTIAL_CONSUMER_INVENTORY
+NEXT_ACTION=AUTHORIZE_CONTROLLED_SUPABASE_SECRET_ROTATION
+FOUNDER_APPROVAL_REQUIRED=YES
 FURTHER_BROAD_AI_REVIEW=STOP
 ```
 
 Canonical record: `CONTINUITY_CURRENT.md`.
 
-## Critical correction to prior handoffs
+## Critical producer correction
 
 Do not repeat the old claim that Android was only a control/observation device.
 
@@ -68,16 +76,42 @@ Verified:
 - A newly opened Termux session did not restart BotA.
 - `pgrep` returned `NO_BOTA_PROCESSES_PASS`.
 - `bota-closer` and `bota-supervisor` remained down.
-- Supabase showed zero Romanian edge requests from the shutdown point through 14:30 UTC.
+- Supabase showed no Romanian use of the shared BotA key from shutdown through 16:00 UTC.
 
 Not yet verified:
 
 - persistence across a phone reboot;
 - credential revocation;
-- absence of every possible alternate launch mechanism;
-- complete credential dependency map.
+- absence of every possible alternate launch mechanism.
 
-Treat the phone as **stopped but still credential-capable**, not permanently retired.
+Treat the phone as **stopped but still credential-capable** until the shared Supabase key is revoked.
+
+## Credential inventory result
+
+### Supabase
+
+The inventory is sufficient to plan a dedicated Supabase rotation:
+
+- Hetzner uses a modern `sb_secret_...` key.
+- Supabase log fingerprints prove the phone and Hetzner use the same key.
+- Current post-shutdown logs show that key only from Hetzner.
+- ProfitLab/Stripe Edge Functions use the separate legacy `SUPABASE_SERVICE_ROLE_KEY` path.
+- GitHub Actions does not inject a production Supabase secret.
+- No BotA/ProfitLab Vercel project is present in the connected Vercel account.
+
+Do not rotate the project JWT secret. Rotate only the modern BotA secret after explicit founder approval.
+
+### Telegram
+
+Do not rotate Telegram yet.
+
+Hetzner uses `TELEGRAM_BOT_TOKEN`.
+
+The active Supabase `send-telegram` function also has a Telegram bot token, but sends to an admin chat and had no invocation in the last checked 24 hours.
+
+The dividend scanner uses `TELEGRAM_TOKEN`.
+
+Exact token identity across these consumers is still unverified.
 
 ## Current production defects / risks
 
@@ -101,18 +135,6 @@ A one-ACTIVE-per-pair+direction control is a candidate repair, but it must be re
 
 Not deployed.
 
-## Credential-rotation safety boundary
-
-Do not rotate Supabase or Telegram credentials blindly.
-
-First identify all consumers.
-
-A shared Supabase service credential may be used by ProfitLab, Stripe webhook processing, Edge Functions, GitHub Actions or another runtime. Breaking one of those can harm subscribers.
-
-Do not print or store full secrets. Compare only safe prefixes/fingerprints.
-
-A final clean-producer verification window starts only after a safe credential migration and active rejection tests, with legitimate ProfitLab/Vercel writes distinguished from unauthorized writes.
-
 ## Strategy boundary
 
 Preserve:
@@ -128,6 +150,6 @@ Do not tune strategy from the contaminated live ledger.
 
 ## Exactly one current action
 
-Run one read-only credential consumer inventory.
+Obtain explicit founder approval for the controlled **Supabase BotA secret rotation only**.
 
-No code change, deployment, credential rotation, phone reboot, strategy tuning or provider change is included in that action.
+Do not bundle Telegram rotation, D1 repair, exposure-control changes, strategy tuning or provider changes into that action.
