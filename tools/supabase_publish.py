@@ -67,12 +67,10 @@ def auth_headers(key: str) -> dict[str, str]:
 def exact_signal_exists(
     pair: str, direction: str, tf: str, entry: str, sl: str, tp: str, key: str
 ) -> bool | None:
-    """Return True if an ACTIVE signal with this exact identity already exists.
+    """Return True if the exact ACTIVE identity already exists.
 
-    Identity is pair + direction + timeframe + entry/sl/tp, matching the BotA
-    delivery contract (BOTH_HEALTHY_EXACTLY_ONCE_PER_SINK): a distinct GREEN
-    signal for the same pair must reach Supabase even while another ACTIVE
-    signal for that pair is still open. Returns None if the dedup query failed.
+    The watcher local exposure admission is the authority for distinct signals.
+    This sink retains exact retry dedup only; None means the read failed.
     """
     path = (
         "/rest/v1/signals"

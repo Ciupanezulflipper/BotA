@@ -26,10 +26,15 @@ OLD_KEY_REJECTION_TEST=PASS
 OVERNIGHT_PRODUCTION_STABILITY=PASS
 CLEAN_SIGNAL_LIFECYCLE=PENDING
 TELEGRAM_ROTATION=PENDING
-TELEGRAM_ROTATION_AUTHORIZED=NO
+TELEGRAM_ROTATION_AUTHORIZED=YES_2026-11-28_PLAN_REQUIRED
 TELEGRAM_RECONCILIATION=PENDING
-CREDENTIAL_BACKUP_CLEANUP=READY_AWAITING_FOUNDER_APPROVAL
+CREDENTIAL_BACKUP_CLEANUP=PASS
 LEGACY_RETIREMENT_COMPLETE=NO
+CLEAN_72H_WINDOW=OPEN_T0_APPROVED
+CLEAN_72H_T0=2026-11-24T20:00:01.036Z
+CLEAN_72H_EARLIEST_END=2026-11-27T20:00:01.036Z
+PHONE_REMAINING_API_KEYS=PENDING_REVIEW
+REPAIR_BRANCH=CANDIDATE_D1_FRESHNESS_LOCAL_EXPOSURE_GUARD
 RECENT_LEDGER_PROVENANCE=CROSS_CONTAMINATED
 D1_REPAIR_DEPLOYED=NO
 ONE_ACTIVE_PAIR_DIRECTION_CONTROL_DEPLOYED=NO
@@ -38,9 +43,9 @@ PRE_REGISTERED_KILL_THRESHOLD=400
 HISTORICAL_CORPUS_GATE=FAIL
 STRATEGY_EDGE_VALIDATED=NO
 STRATEGY_TUNING=NO
-PRODUCTION_CHANGE_AUTHORIZED=NO
-NEXT_ACTION=FOUNDER_APPROVAL_FOR_CREDENTIAL_BACKUP_CLEANUP
-FOUNDER_APPROVAL_REQUIRED=YES
+PRODUCTION_CHANGE_AUTHORIZED=NO_EXCEPT_APPROVED_2026-11-28_TELEGRAM_ROTATION_AFTER_PLAN
+NEXT_ACTION=REVIEW_CANDIDATE_AND_VERIFY_EXPIRY_RETRY_CUTOVER
+FOUNDER_APPROVAL_REQUIRED=NO_FOR_BRANCH_WORK_MERGE_DEPLOY_NOT_APPROVED
 ```
 
 ## Accepted evidence — do not repeat
@@ -54,16 +59,52 @@ FOUNDER_APPROVAL_REQUIRED=YES
 
 ## Remaining gates
 
-1. Credential backup cleanup: ready, explicit founder approval required. Exact obsolete rollback file `/etc/bota/.live-delivery.rollback-9tio_xxl` contains duplicate live Telegram and health secrets. Old Supabase key cannot be restored.
-2. Telegram token rotation: separate pending gate, not authorized. Phone reportedly still holds valid token. Inventory Hetzner, Supabase send-telegram, phone and dividend scanner; propose Fri ~22:00–Sun ~22:00 UTC FX closure (27–29 Nov; confirm schedule).
+1. Credential backup cleanup: PASS. Founder-approved exact rollback file deletion verified; active credentials unchanged. Never restore revoked key.
+2. Telegram token rotation: approved for Saturday 28 Nov during FX closure, plan required before execution. Inventory Hetzner, Supabase send-telegram, phone and dividend scanner.
 3. Natural signal lifecycle: pending real Hetzner creation and closure; never manufacture signals.
 4. Telegram reconciliation: separate pending gate against Hetzner send records.
-5. Overall retirement not complete. No new production mutation approved.
+5. Overall retirement not complete. No merge or deploy approved; only the separately authorized Saturday Telegram rotation after its plan.
 
 ## Strategy and provenance
 
-11 Nov EURUSD winner +20.8 pips legacy-created; 12 Nov GBPUSD cancellation legacy-performed; 23 Nov six overlapping Hetzner USDJPY BUY losses total -131.6 pips. Historical ledger mixed, not strategy-validation evidence. D1 writer/reader path mismatch falls back to ANY; future mutable-root fail-closed fix not deployed. Candidate one ACTIVE per pair+direction requires historical replay counting removed winners and losses. Yahoo provider unchanged; local quota warnings not evidence of Twelve Data billing. Preserve all strategy boundaries. Do not tune or repair code during retirement.
+11 Nov EURUSD winner +20.8 pips legacy-created; 12 Nov GBPUSD cancellation legacy-performed; 23 Nov six overlapping Hetzner USDJPY BUY losses total -131.6 pips. Historical ledger mixed, not strategy-validation evidence. D1 writer/reader path mismatch falls back to ANY; future mutable-root fail-closed fix not deployed. Candidate one ACTIVE per pair+direction approved for isolated branch implementation; merge/deployment not authorized; requires historical replay counting removed winners and losses. Yahoo provider unchanged; local quota warnings not evidence of Twelve Data billing. Preserve all strategy boundaries. Do not tune or repair code during retirement.
+
+## 25 Nov — observation boundary, residual hazards and tests-only branch
+
+### 72-hour clean-producer acceptance
+
+VERIFIED: founder reported deletion of bota_service; exact dashboard deletion time UNKNOWN. One deliberate GET /rest/v1/signals from bota-r5-01 (2.29.4.127) using revoked key returned HTTP 401 at terminal UTC 2026-11-24T19:59:56.371343Z; independent Edge record 19:59:56.410Z. The next new-key GET returned HTTP 200 at 20:00:01.036Z. No repeat rejection call necessary. Formal pre-registered T0 not evidenced. FOUNDER APPROVED T0: 2026-11-24T20:00:01.036Z; earliest 72-hour end 2026-11-27T20:00:01.036Z (22:00:01 Romania). Keep window open until one real Hetzner signal is created and closed with verified provenance; never fabricate a signal. Unexpected producer activity blocks acceptance and requires investigation and a new clean boundary. Latest accepted overnight evidence ends 2026-11-25T10:18:00Z: 55/55 DB reads, 164/164 health reports, zero legacy requests and unexpected producers. Window is NOT passed.
+
+REPORTED phone reboot persistence PASS. Airplane mode during reboot UNKNOWN; absence of phone Telegram calls UNKNOWN. Supabase logs cannot prove absence of Telegram traffic. Do not repeat completed reboot or key tests to fill the historical gap.
+
+### Residual credential gates
+
+- Telegram token rotation and reconciliation remain separate pending gates. Founder approved rotation on Saturday 28 Nov during FX closure; send plan before execution. Inventory consumers and verify identity without exposing tokens.
+- Obsolete rollback backup: PASS. Exact founder-approved deletion via root SSH; PASS: Backup removed; active credentials unchanged. No other production change.
+- Phone remaining API keys: pending review. Founder decision deferred. Empty output is UNKNOWN, not safe. OANDA_API_URL in ~/BotA/.env.runtime UNKNOWN; read only the URL on device, never token. api-fxpractice.oanda.com = practice; api-fxtrade.oanda.com = live, potential money-risk; escalate live credential review/rotation for separate approval. No trading API calls.
+
+### Lessons and deployment hazard
+
+REPORTED historical cause of 6 Sep failed retirement: two startup paths (boot script and $PREFIX/etc/profile.d/start-services.sh); only one was disabled. Future retirement checklist must cover both boot and shell/profile startup, then persistence proof. Do not restart or repeat completed tests now.
+
+VERIFIED deployed run_signal_closer_live.sh exports values from config/strategy.env, .env and .env.runtime, potentially overwriting inherited credentials. be_shadow_manager.py loads .env.runtime, .env, config/strategy.env and strategy.env using os.environ.setdefault, so it fills missing values rather than overwriting an existing environment variable. Other legacy readers remain a risk. REPORTED from prior Claude server check: none of those files existed in the deployed release. Implemented on isolated branch (not deployed): before staging/activation, fail the candidate release if any of .env, .env.runtime, config/strategy.env, strategy.env exists or is a symlink (including broken symlinks); keep credentials external, report offending paths only, never contents. Focused offline guard and deployment regressions passed; merge/deploy not approved.
+
+### Founder-approved branch implementation
+
+Branch [fix/retirement-d1-active-signal-tests-20261125](https://github.com/Ciupanezulflipper/BotA/tree/fix/retirement-d1-active-signal-tests-20261125). Baseline tests commit 762f942ecb6af45a13e83230bfd36ab93601219a; pushed partial implementation cd25a46c8ff36239f3bce8686b0f030478272939. Isolated laptop WSL worktree /home/tomag/BotA-retirement-tests-20261125. D1 mutable-root fail-closed reader and explicit DEGRADED health payload/reason implemented. Release guard rejects .env, .env.runtime, config/strategy.env and strategy.env (including dangling symlinks) on staging and finalized candidate validation. Offline focused results: D1 decision 3/3; guard and D1 health/recovery 3/3 (including four forbidden-file subcases); runtime-health regression 33/33; deployment regression 37/37. Shell syntax and git diff checks passed. No production deployment or runtime changes. At cd25a46 the exposure admission repair was not implemented; the candidate update below supersedes that state. The old direct-publisher distinct-same-direction acceptance is superseded at the strategy admission boundary, not by weakening exact retry deduplication. The founder subsequently approved local pair/direction records as the sole admission authority. No delivery-state ledger or live database query at admission. See candidate update below. Require integration and independent-delivery tests; do not merge or deploy. Historical replay must count removed winners/losses.
+
+Both repairs deployed = NEW strategy generation. Evaluation starts at the later of (both repairs deployed) and (72-hour clean-producer acceptance passed, including any extension). No deployment, strategy evaluation or live-money trading authorized.
+
+Stale documentation PRs BotA #139 and obsidian-engineering-knowledge #90 closed without merge on founder instruction; comments point to canonical records.
 
 ## Exactly one next action
 
-Ask for explicit founder approval for obsolete credential backup cleanup only. Do not repeat phone/credential audits, restart services, invoke another broad Claude review, or change strategy. See canonical record for detailed evidence and remaining uncertainty.
+Review the isolated candidate and verify cutover/late retry safety before authorizing any deployment. Do not repeat completed audits, rotate keys before the approved window, merge, deploy, restart services, fabricate signals, or start strategy evaluation. Founder approval is not required for this isolated branch work. Keep natural lifecycle observation open under the approved extension rule.
+
+## Branch review update - 25 November 2026
+
+Founder accepted the D1 mutable-root fail-closed reader, visible DEGRADED health and release credential-file guard, subject to the pre-registered 36-hour freshness requirement. Missing, unparseable or stale updated_at is UNAVAILABLE/stale, including health reason d1_cache:<PAIR>:stale. Exposure admission is a durable local pair+direction record before accepted CSV/Telegram, with confirmed matching closure or 24h normal/168h hard expiry. Admission does not query Supabase ACTIVE rows or delivery state; each sink retains its independent retry behavior. This is isolated candidate code, NOT a production rollout. Merge/deploy remain unauthorized. Pre-activation must reconcile pre-existing ACTIVE rows and outstanding delivery retries with the new local record boundary; late retries after expiry require explicit verification before deployment.
+
+Telegram plan Step 1: explicitly compare the phone dividend-capture-scanner token fingerprint with the current BotA token fingerprint, along with Hetzner BotA (watcher, closer and daily report), legacy phone BotA and the Supabase admin send-telegram consumer. Report same/different/unknown; same-token scanner will break on revocation unless its authorized consumer is migrated. No raw token or credential-bearing URL, no phone read without its separate approval. Phone OANDA endpoint remains UNKNOWN until the founder's read-only result; empty is UNKNOWN. Saturday 28 Nov rotation not executed.
+
+Historical runbooks and decision evidence restored in [docs/continuity-history](docs/continuity-history/README.md). Exact snapshots 83fa71e and 37dfacf preserve the October and November evidence; they are historical, not operational instructions.

@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 
 PAIRS = ("EURUSD", "GBPUSD", "USDJPY")
+MAX_D1_AGE = timedelta(hours=36)
 
 
 def read_d1_trend(root: Path, pair: str) -> tuple[str, str | None]:
@@ -26,4 +28,13 @@ def read_d1_trend(root: Path, pair: str) -> tuple[str, str | None]:
     trend = data.get("trend")
     if trend not in ("BUY", "SELL"):
         return "UNAVAILABLE", "invalid_trend"
+    try:
+        updated = datetime.fromisoformat(data["updated_at"])
+        if updated.tzinfo is None:
+            raise ValueError("timezone missing")
+        age = datetime.now(timezone.utc) - updated
+        if age > MAX_D1_AGE or age < timedelta(0):
+            return "UNAVAILABLE", "stale"
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return "UNAVAILABLE", "stale"
     return trend, None

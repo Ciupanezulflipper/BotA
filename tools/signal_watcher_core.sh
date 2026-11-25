@@ -969,6 +969,25 @@ print('London_open' if 7<=h<9 else 'London' if 9<=h<12 else 'London_NY_overlap' 
     _adx_regime="$(python3 -c "print('trending' if float('${_adx_raw}')>=20.0 else 'ranging')" 2>/dev/null || true)"
   fi
 
+  # Single admission boundary: before the accepted CSV becomes visible to
+  # independent ProfitLab delivery, and before any Telegram side effect.
+  if [[ "${rejected}" != "true" && "${_tier_csv}" == "GREEN" ]]; then
+    local exposure_rc=0
+    python3 "${TOOLS}/open_exposure.py" --root "${MUTABLE_ROOT}" \
+      --epoch "${BOTA_SERVER_EPOCH:-0}" \
+      --hard-max-age "${SIGNAL_CLOSER_HARD_MAX_AGE_HOURS:-168}" \
+      "${pair_o}" "${direction}" "${tf_o}" "${entry}" "${sl}" "${tp}" || exposure_rc=$?
+    if (( exposure_rc != 0 )); then
+      rejected="true"
+      if (( exposure_rc == 3 )); then
+        filter_str="${filter_str}|exposure_active_same_direction"
+      else
+        filter_str="${filter_str}|exposure_admission_unavailable"
+        log "HEALTH_ALERT" "${pair_o} ${tf_o} exposure_admission_unavailable"
+      fi
+    fi
+  fi
+
   append_alert_csv "${now}" "${pair_o}" "${tf_o}" "${direction}" "${score}" "${conf}" "${entry}" "${sl}" "${tp}" "${provider}" "${rejected}" "${filter_str}" "${reasons}"     "${_ema_comp}" "${_rsi_comp}" "${_macd_comp}" "${_adx_comp}"     "${_adx_raw}" "${_rsi_raw}" "${_macd_hist_raw}"     "${_macro6}" "${_h1_trend}" "${_tier_csv}" "${_session}" "${_adx_regime}"
 
   if [[ "${rejected}" == "true" ]]; then

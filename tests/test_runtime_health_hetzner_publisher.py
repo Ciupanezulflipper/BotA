@@ -367,7 +367,7 @@ class AgeFieldMappingTests(unittest.TestCase):
             (root / "cache").mkdir()
             for pair in ("EURUSD", "GBPUSD", "USDJPY"):
                 (root / "cache" / f"d1_trend_{pair}.json").write_text(
-                    json.dumps({"pair": pair, "trend": "BUY"}), encoding="utf-8"
+                    json.dumps({"pair": pair, "trend": "BUY", "updated_at": datetime.now(timezone.utc).isoformat()}), encoding="utf-8"
                 )
 
             payload = MOD.build_payload_hetzner(root)
@@ -394,7 +394,7 @@ class AgeFieldMappingTests(unittest.TestCase):
             (root / "cache").mkdir()
             for pair in ("EURUSD", "GBPUSD", "USDJPY"):
                 (root / "cache" / f"d1_trend_{pair}.json").write_text(
-                    json.dumps({"pair": pair, "trend": "BUY"}), encoding="utf-8"
+                    json.dumps({"pair": pair, "trend": "BUY", "updated_at": datetime.now(timezone.utc).isoformat()}), encoding="utf-8"
                 )
 
             payload = MOD.build_payload_hetzner(root)

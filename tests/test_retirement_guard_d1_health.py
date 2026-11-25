@@ -1,5 +1,6 @@
 """Offline acceptance coverage for credential-file guard and D1 health."""
 import json
+from datetime import datetime, timezone
 import os
 import unittest
 from pathlib import Path
@@ -55,7 +56,7 @@ class D1HealthTests(unittest.TestCase):
             self.assertEqual(payload["bot_mode"], "DEGRADED")
             self.assertIn("d1_cache", payload["failure_reasons"])
             for pair in ("EURUSD","GBPUSD","USDJPY"):
-                (root/"cache"/f"d1_trend_{pair}.json").write_text(json.dumps({"pair":pair,"trend":"BUY"}))
+                (root/"cache"/f"d1_trend_{pair}.json").write_text(json.dumps({"pair":pair,"trend":"BUY","updated_at":datetime.now(timezone.utc).isoformat()}))
             self.assertEqual(MOD.build_payload_hetzner(root)["bot_mode"], "HEALTHY")
             (root/"cache/d1_trend_EURUSD.json").write_text('{"trend":"ANY"}')
             payload=MOD.build_payload_hetzner(root)

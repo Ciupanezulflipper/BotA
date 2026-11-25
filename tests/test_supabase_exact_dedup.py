@@ -1,19 +1,10 @@
 #!/usr/bin/env python3
-"""Regression coverage for the distinct-signal Supabase dedup contract.
+"""Exact retry dedup and independent sink delivery regressions.
 
-Production evidence (20 Oct 2026): a confirmed USDJPY SELL at entry=158.00999
-was followed 35 minutes later by a distinct, qualified GREEN USDJPY SELL at
-entry=157.99200. Telegram correctly sent both; Supabase incorrectly suppressed
-the second one with the old pair+ACTIVE-only dedup (``skipped_active_exists``).
-
-This violates BOTH_HEALTHY_EXACTLY_ONCE_PER_SINK: a distinct GREEN signal for
-the same pair must reach Supabase even while another ACTIVE signal for that
-pair is open. An exact retry/replay of the same signal must still dedup.
-
-These tests exercise the real dedup query construction in
-``tools/supabase_publish.py`` (via a fake HTTPS connection, no network) and
-the watcher-cycle evidence contract in ``tools/watcher_cycle_ledger.py`` /
-``tools/watcher_cycle_contract.py``.
+The 20 October distinct same-direction ACTIVE publication policy was superseded
+by the founder-approved 25 November shared local admission decision. The
+publisher remains a transport with exact identity dedup, not admission authority.
+Distinct exposure and re-entry are tested in test_retirement_exposure.py.
 """
 from __future__ import annotations
 
@@ -82,25 +73,6 @@ def query_signal(connection_responses, *, pair, direction, entry, sl, tp, tf="M1
     return ok, status, connection
 
 
-class DistinctSignalNotBlockedTests(unittest.TestCase):
-    """A: a distinct GREEN signal for the same pair must not be suppressed."""
-
-    def test_second_distinct_usdjpy_sell_is_not_blocked_by_first_active(self) -> None:
-        # Real Supabase holds only the first ACTIVE row (entry=158.00999). The
-        # dedup query for the *second*, distinct entry (157.99200) must filter
-        # on the full identity and therefore find no match.
-        ok, status, connection = query_signal(
-            [FakeHTTPResponse(200, b"[]"), FakeHTTPResponse(201, b"")],
-            pair="USDJPY", direction="SELL", entry="157.99200", sl="158.50000", tp="156.80000",
-        )
-        self.assertTrue(ok)
-        self.assertEqual(status, "published")
-        dedup_path = connection.requests[0]["path"]
-        self.assertIn("entry_price=eq.157.992", dedup_path)
-        self.assertIn("pair=eq.USDJPY", dedup_path)
-        self.assertIn("direction=eq.SELL", dedup_path)
-
-
 class ExactRetryDedupTests(unittest.TestCase):
     """B: an exact retry/replay of the same signal must still dedup."""
 
@@ -114,6 +86,13 @@ class ExactRetryDedupTests(unittest.TestCase):
         # Only the dedup GET occurred; no insert was attempted.
         self.assertEqual(len(connection.requests), 1)
         self.assertEqual(connection.requests[0]["method"], "GET")
+        path = connection.requests[0]["path"]
+        self.assertIn("pair=eq.USDJPY", path)
+        self.assertIn("direction=eq.SELL", path)
+        self.assertIn("timeframe=eq.M15", path)
+        self.assertIn("entry_price=eq.158.00999", path)
+        self.assertIn("stop_loss=eq.158.5", path)
+        self.assertIn("take_profit=eq.156.8", path)
 
 
 class DirectionDistinctTests(unittest.TestCase):
@@ -127,21 +106,6 @@ class DirectionDistinctTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(status, "published")
         self.assertIn("direction=eq.BUY", connection.requests[0]["path"])
-
-
-class StopTakeProfitDistinctTests(unittest.TestCase):
-    """D: same pair + same direction + different SL/TP is a distinct identity."""
-
-    def test_different_sl_tp_same_entry_is_not_blocked(self) -> None:
-        ok, status, connection = query_signal(
-            [FakeHTTPResponse(200, b"[]"), FakeHTTPResponse(201, b"")],
-            pair="USDJPY", direction="SELL", entry="158.00999", sl="158.60000", tp="156.50000",
-        )
-        self.assertTrue(ok)
-        self.assertEqual(status, "published")
-        path = connection.requests[0]["path"]
-        self.assertIn("stop_loss=eq.158.6", path)
-        self.assertIn("take_profit=eq.156.5", path)
 
 
 class FailedPublishIsolatedFromTelegramTests(unittest.TestCase):

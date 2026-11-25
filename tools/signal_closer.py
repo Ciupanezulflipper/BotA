@@ -62,6 +62,7 @@ _TOOLS_DIR = str(pathlib.Path(__file__).resolve().parent)
 if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
 import telegram_closure_delivery  # noqa: E402 - sibling module resolved above
+import open_exposure
 
 
 CODE_ROOT = pathlib.Path(
@@ -414,8 +415,15 @@ def close_signal(
 
     try:
         path = f"signals?id=eq.{signal_id}"
-        supabase_request("PATCH", path, body)
+        rows = supabase_request("PATCH", path, body)
         log(f"CLOSED {signal_id} -> {status} {result_pips:+.1f} pips")
+        if isinstance(rows, list) and len(rows) == 1:
+            row = rows[0]
+            if isinstance(row, dict) and str(row.get("id")) == str(signal_id) and row.get("status") == status:
+                try:
+                    open_exposure.release_closed(MUTABLE_ROOT, row)
+                except Exception as exc:
+                    log(f"HEALTH_ALERT exposure_release:{type(exc).__name__}")
     except Exception as exc:
         log(f"ERROR closing {signal_id}: {exc}")
 
@@ -780,6 +788,20 @@ def main() -> None:
             closed += 1
 
     if not dry_run:
+        if fetch_error is None and provider in SUPPORTED_CANDLE_PROVIDERS:
+            try:
+                def has_coverage(record):
+                    created = datetime.fromtimestamp(record["admitted_epoch"], timezone.utc)
+                    candles, _ = fetch_candles(record["pair"], created, record["timeframe"], server_epoch, provider)
+                    return bool(candles)
+
+                for scope in open_exposure.expire_orphans(
+                    MUTABLE_ROOT, server_epoch, signals, has_coverage,
+                    max_age, hard_max_age, args.pair,
+                ):
+                    log(f"EXPOSURE expired:{scope}")
+            except Exception as exc:
+                log(f"HEALTH_ALERT exposure_expiry:{type(exc).__name__}")
         try:
             retry_summary = telegram_closure_delivery.retry_pending_closures()
             log(
