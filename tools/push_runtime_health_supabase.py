@@ -37,6 +37,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from d1_cache_contract import PAIRS, read_d1_trend
+
 TERMUX_BOT_ID = "bota-termux-primary"
 HETZNER_BOT_ID = "bota-hetzner-primary"
 ALLOWED_SOURCES = ("termux", "hetzner")
@@ -360,6 +364,13 @@ def build_payload_hetzner(root: Path) -> dict[str, Any]:
     health = load_json(health_path)
 
     mode, _reasons = derive_hetzner_bot_mode(health)
+    d1_errors = []
+    for pair in PAIRS:
+        _, error = read_d1_trend(root, pair)
+        if error is not None:
+            d1_errors.append(f"d1_cache:{pair}:{error}")
+    if d1_errors:
+        mode = "DEGRADED"
     useful_progress = health.get("useful_progress")
     if not isinstance(useful_progress, dict):
         useful_progress = {}
@@ -382,6 +393,9 @@ def build_payload_hetzner(root: Path) -> dict[str, Any]:
 
     for field in HETZNER_NULL_FIELDS:
         payload[field] = None
+    if d1_errors:
+        payload["failure_reasons"] = sanitize_text(";".join(d1_errors))
+        payload["last_degraded_reason"] = sanitize_text(";".join(d1_errors))
 
     return payload
 

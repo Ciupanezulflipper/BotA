@@ -408,22 +408,23 @@ elif pullback_sell:
 else:
     direction = "HOLD"
 
-# D1 trend filter — only trade in direction of daily trend
-d1_cache_path = f"{os.environ.get('ROOT', os.path.expanduser('~/BotA'))}/cache/d1_trend_{pair}.json"
-d1_trend = "ANY"
-try:
-    import json as _json
-    d1_data = _json.load(open(d1_cache_path))
-    d1_trend = d1_data.get("trend", "ANY")
-except Exception:
-    d1_trend = "ANY"
+# D1 trend filter: use mutable runtime data and fail closed.
+from pathlib import Path
+from d1_cache_contract import read_d1_trend
 
-# Block signals that fight D1 trend (fail open if cache missing)
-if d1_trend != "ANY":
-    if direction == "BUY" and d1_trend == "SELL":
-        direction = "HOLD"
-    elif direction == "SELL" and d1_trend == "BUY":
-        direction = "HOLD"
+d1_root = Path(os.environ.get("BOTA_MUTABLE_ROOT")
+               or os.environ.get("BOTA_ROOT")
+               or os.environ.get("ROOT")
+               or Path.home() / "BotA").expanduser()
+d1_trend, d1_error = read_d1_trend(d1_root, pair)
+if d1_error is not None:
+    import sys
+    print(f"[HEALTH_ALERT] d1_cache:{pair}:{d1_error}", file=sys.stderr)
+    direction = "HOLD"
+elif direction == "BUY" and d1_trend == "SELL":
+    direction = "HOLD"
+elif direction == "SELL" and d1_trend == "BUY":
+    direction = "HOLD"
 
 d1_tag = f"d1_filter={d1_trend}"
 
@@ -437,10 +438,10 @@ if direction == "HOLD":
       "pair": pair, "tf": tf, "direction": "HOLD",
       "entry": 0.0, "sl": 0.0, "tp": 0.0, "volatility": vol,
       "score": 0, "confidence": 40,
-      "reasons": f"no_signal|phase={phase}",
+      "reasons": f"no_signal|phase={phase}|{d1_tag}",
       "price": price, "provider": "engine_A3",
       "atr": atr, "filter_rr": 0.0, "filter_atr": 0.0,
-      "filter_rejected": True, "filter_reasons": ["no_signal"],
+      "filter_rejected": True, "filter_reasons": ["fail_closed", f"d1_cache:{pair}:{d1_error}"] if d1_error else ["no_signal"],
       "pattern_delta": 0
     }
     json.dump(out, sys.stdout, separators=(",",":"))

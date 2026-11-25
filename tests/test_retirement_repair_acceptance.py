@@ -12,6 +12,7 @@ import io
 import json
 import os
 import tempfile
+import sys
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -47,7 +48,8 @@ class D1RetirementTests(unittest.TestCase):
                 "ROOT": str(release), "BOTA_ROOT": str(release),
                 "BOTA_MUTABLE_ROOT": str(mutable),
             }, clear=True), contextlib.redirect_stderr(stderr):
-                exec(block, namespace)
+                with mock.patch.object(sys, "path", [str(ROOT / "tools"), *sys.path]):
+                    exec(block, namespace)
             return namespace, stderr.getvalue()
 
     def test_mutable_d1_overrides_conflicting_release_cache(self):

@@ -297,9 +297,21 @@ def validate_manifest(path: Path, commit: str, tree: str) -> dict[str, object]:
     return value
 
 
+FORBIDDEN_RELEASE_CONFIGS = (".env", ".env.runtime", "config/strategy.env", "strategy.env")
+
+
+def reject_legacy_release_configs(path: Path) -> None:
+    """Reject even a dangling symlink without reading its contents."""
+    for relative in FORBIDDEN_RELEASE_CONFIGS:
+        candidate = path / relative
+        if candidate.is_symlink() or candidate.exists():
+            raise DeployError(f"forbidden_release_config:{relative}")
+
+
 def validate_finalized_release(path: Path, commit: str, tree: str) -> dict[str, object]:
     if not path.is_dir() or path.is_symlink():
         raise DeployError("finalized_release_not_directory")
+    reject_legacy_release_configs(path)
     if stat.S_IMODE(path.stat().st_mode) != RELEASE_DIR_MODE:
         raise DeployError("finalized_release_mode_invalid")
     manifest_path = path / MANIFEST_NAME
@@ -499,6 +511,7 @@ class Deployer:
             _secure_directory(staging)
             archive = self.runner.run(("git", "archive", "--format=tar", commit), cwd=self.repo)
             extract_archive_safely(archive, staging)
+            reject_legacy_release_configs(staging)
             self.fault("after_staging")
             self.runner.run((self.python, "-m", "venv", str(staging / ".venv")))
             candidate_python = staging / ".venv/bin/python"

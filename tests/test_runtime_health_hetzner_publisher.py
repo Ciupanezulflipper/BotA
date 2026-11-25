@@ -364,6 +364,12 @@ class AgeFieldMappingTests(unittest.TestCase):
                 json.dumps(healthy_orchestrator_health()), encoding="utf-8"
             )
 
+            (root / "cache").mkdir()
+            for pair in ("EURUSD", "GBPUSD", "USDJPY"):
+                (root / "cache" / f"d1_trend_{pair}.json").write_text(
+                    json.dumps({"pair": pair, "trend": "BUY"}), encoding="utf-8"
+                )
+
             payload = MOD.build_payload_hetzner(root)
 
             for field in MOD.HETZNER_NULL_FIELDS:
@@ -384,6 +390,12 @@ class AgeFieldMappingTests(unittest.TestCase):
             (state / "vps_orchestrator_health.json").write_text(
                 json.dumps(health), encoding="utf-8"
             )
+
+            (root / "cache").mkdir()
+            for pair in ("EURUSD", "GBPUSD", "USDJPY"):
+                (root / "cache" / f"d1_trend_{pair}.json").write_text(
+                    json.dumps({"pair": pair, "trend": "BUY"}), encoding="utf-8"
+                )
 
             payload = MOD.build_payload_hetzner(root)
 
