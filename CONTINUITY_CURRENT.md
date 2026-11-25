@@ -6,7 +6,7 @@ Last updated **2026-11-25 UTC**
 
 The legacy Android producer was stopped, its launcher was disabled, and the phone passed the reboot check. The production database credential was replaced with a dedicated credential and the former shared credential was revoked. Overnight monitoring found no unexpected BotA activity or use of the retired credential.
 
-Clean single-producer acceptance remains open. Monitor the production runtime for a minimum of 72 hours from the founder-set T0 of **2026-11-27 20:00:01 UTC**. Extend observation until at least one naturally occurring signal is both created and closed by the production runtime. Reconcile its Telegram delivery against production send records. The 72-hour minimum ends **2026-11-30 20:00:01 UTC**. Continue observing without generating test signals in production.
+Clean single-producer acceptance remains open. Monitor the production runtime for a minimum of 72 hours from the founder-set T0 of **2026-11-24 20:00:01 UTC**. Extend observation until at least one naturally occurring signal is both created and closed by the production runtime. Reconcile its Telegram delivery against production send records. The 72-hour minimum ends **2026-11-27 20:00:01 UTC**. Continue observing without generating test signals in production.
 
 ## Historical attribution
 
