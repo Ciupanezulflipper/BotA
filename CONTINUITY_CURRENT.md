@@ -194,11 +194,138 @@ INFERRED: the Edge token is different, assuming the dashboard digest is SHA-256 
 
 ### Saturday 28 November Telegram sequence (approved FX-closure window, not executed)
 
-1. Confirm FX closure, confirm the inventory below and present the final execution plan to the founder before starting. Check that no scheduled Telegram-consuming child is using the old credential at the swap boundary. Do not restart services or alter scheduling.
-2. Revoke the shared old BotA token via BotFather and obtain the replacement securely. Retain the old token only in protected transient memory for the single rejection test; never print either token or a credential-bearing URL.
-3. Atomically replace only TELEGRAM_BOT_TOKEN in /etc/bota/live-delivery.env, preserving owner, mode and every unrelated credential. Do not modify the Supabase Edge secret or dividend scanner.
+1. Confirm FX closure and read-only Supabase ACTIVE count = 0; record both preflight results and UTC timestamps. Confirm the completed consumer inventory and present the final execution plan to the founder before starting. Check that no scheduled Telegram-consuming child is using the old credential at the swap boundary. Do not restart services or alter scheduling.
+2. Revoke the shared old BotA token via BotFather and obtain the replacement securely. The new token is visible only to the founder, who personally enters it at the hidden read -s prompt over interactive SSH. Never paste it into any chat. Retain the old value only in the guarded root-only rollback backup and protected transient test memory; never print either token or a credential-bearing URL.
+3. Use the complete atomic-swap script below; atomically replace only TELEGRAM_BOT_TOKEN in /etc/bota/live-delivery.env, preserving owner, mode and every unrelated credential. Success stdout contains only the new SHA-256 fingerprint (first 12 hex). Do not modify the Supabase Edge secret or dividend scanner.
 4. Run the preregistered getMe tests from Hetzner: exactly one old-token request expecting HTTP 401 and exactly one replacement-token request expecting HTTP 200. Record UTC time, source, call count and HTTP status only. No test message at this step. Stop on unexpected results.
-5. Observe normal scheduled jobs and verify expected consumer operation. Dispose of transient obsolete token material securely; any persistent credential-copy cleanup remains subject to the existing approval boundary. No restoration of the revoked token, restart or unrelated credential change.
+5. Observe normal scheduled jobs and verify expected consumer operation. Dispose of transient obsolete token material securely; retain the protected rollback backup until step 7. No restoration of the revoked token, restart or unrelated credential change.
 6. Mandatory final verification: press the ProfitLab Account administrator Telegram test button exactly once and confirm the genuine test message arrived. Record UTC send/test and receipt evidence, success/failure and recipient channel identity without raw credentials. This checks that send-telegram still works and addresses the digest-method caveat. No fabricated trading signal or subscription event. Failed or unverified receipt blocks rotation acceptance; investigate without changing the Edge secret. Natural trading-signal Telegram reconciliation remains separately pending.
+7. Only after step 6 PASS: securely delete the exact swap rollback backup using the guarded shred procedure below; verify active credential file checksum unchanged and record UTC evidence. This backup contains the live Supabase key and health secret. No cleanup before the mandatory admin test passes.
 
 Next action: present the final execution plan before Saturday execution. Consumer inventory COMPLETE. No rotation, merge or deployment has been executed by this update.
+
+### Founder-approved Saturday execution safeguards
+
+Preflight: record UTC timestamp, read-only Supabase production ACTIVE count = 0, confirmed FX closure, and no conflicting Telegram-consuming child at the swap boundary. Nonzero or unprovable ACTIVE count means STOP; do not revoke the token, manufacture/close signals, or change scheduling to pass. The separate repair deployment preconditions and approval remain unchanged.
+
+The new BotFather token is shown only to the founder. Never paste it into ChatGPT, Claude, another chat, shell history, command arguments or logs. The founder personally opens an interactive SSH terminal to Hetzner as root and runs the complete script below only on Saturday after preflight. Save the script without any token embedded, then execute with bash in the interactive terminal; enter the token only at the hidden read -s prompt. Success stdout is solely the new raw-value SHA-256 fingerprint (first 12 hexadecimal characters); the prompt and fixed errors are stderr. Never read out the backup or credential file. Do not use an assistant-controlled terminal for secret entry.
+
+The exact root-only 0600 rollback path is /etc/bota/.live-delivery.rollback-telegram-20261128. It contains the original revoked Telegram token AND the live Supabase key and health secret. Retain it for the single old-token getMe rejection test, loading the old value directly in protected process memory from the backup and the new value directly from the active file. Print only test timestamps, source, counts and HTTP statuses; no URL, response body or tokens. Never restore the revoked token. A failure stops execution; verify actual state without exposing credentials before any recovery. Do not create a second backup.
+
+#### Complete atomic-swap script (prepared, not executed on production)
+
+~~~bash
+#!/usr/bin/env bash
+set +x
+set -euo pipefail
+umask 077
+ulimit -c 0
+test "$(id -u)" = 0
+test -t 0
+trap 'unset new_token' EXIT
+IFS= read -r -s -p 'Enter replacement BotFather token (hidden): ' new_token </dev/tty
+printf '\n' >&2
+printf '%s' "$new_token" | python3 -c '
+import os, sys, re, stat, hashlib, pwd, grp, tempfile
+from pathlib import Path
+
+active = Path("/etc/bota/live-delivery.env")
+backup = Path("/etc/bota/.live-delivery.rollback-telegram-20261128")
+expected_old = "7e18d1067664"
+staged = None
+def require(ok):
+    if not ok:
+        raise ValueError("rotation_precondition_failed")
+def sync_parent():
+    fd = os.open(active.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+def identity(s):
+    return (s.st_dev, s.st_ino, s.st_uid, s.st_gid, s.st_mode,
+            s.st_nlink, s.st_size, s.st_mtime_ns, s.st_ctime_ns)
+def write_secure(fd, data, uid, gid):
+    with os.fdopen(fd, "wb") as f:
+        os.fchmod(f.fileno(), 0o600)
+        os.fchown(f.fileno(), uid, gid)
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+try:
+    new = sys.stdin.buffer.read()
+    require(re.fullmatch(rb"[0-9]+:[A-Za-z0-9_-]+", new) is not None)
+    require(0 < len(new) <= 256)
+    uid = pwd.getpwnam("bota").pw_uid
+    gid = grp.getgrnam("bota").gr_gid
+    require(not os.path.lexists(backup))
+    with os.fdopen(os.open(active, os.O_RDONLY | os.O_NOFOLLOW), "rb") as f:
+        before = os.fstat(f.fileno())
+        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1)
+        require((before.st_uid, before.st_gid, stat.S_IMODE(before.st_mode)) == (uid, gid, 0o600))
+        original = f.read()
+    pattern = rb"(?m)^([ \t]*TELEGRAM_BOT_TOKEN=)([^\r\n]*)(\r?)$"
+    matches = list(re.finditer(pattern, original))
+    require(len(matches) == 1)
+    m = matches[0]
+    old = m.group(2).strip()
+    if len(old) >= 2 and old[:1] in (b"\x22", b"\x27") and old[-1:] == old[:1]:
+        old = old[1:-1]
+    require(hashlib.sha256(old).hexdigest()[:12] == expected_old)
+    require(new != old)
+    # Replace only the matched value; all other bytes are untouched.
+    replacement = original[:m.start(2)] + new + original[m.end(2):]
+    require(identity(active.lstat()) == identity(before))
+    fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    write_secure(fd, original, 0, 0)
+    sync_parent()
+    fd, staged = tempfile.mkstemp(prefix=".live-delivery.telegram.", dir=active.parent)
+    write_secure(fd, replacement, uid, gid)
+    require(identity(active.lstat()) == identity(before))
+    os.replace(staged, active)
+    staged = None
+    sync_parent()
+    require(active.read_bytes() == replacement)
+    installed = active.lstat()
+    require(stat.S_ISREG(installed.st_mode) and installed.st_nlink == 1)
+    require((installed.st_uid, installed.st_gid, stat.S_IMODE(installed.st_mode)) == (uid, gid, 0o600))
+    print(hashlib.sha256(new).hexdigest()[:12])
+except Exception:
+    print("ERROR: rotation stopped; inspect state without displaying credentials; do not retry blindly.", file=sys.stderr)
+    sys.exit(1)
+finally:
+    if staged is not None:
+        try:
+            os.unlink(staged)
+        except OSError:
+            pass
+'
+unset new_token
+~~~
+
+#### Step 7: guarded backup deletion (only after step 6 PASS)
+
+After old/new getMe checks, normal scheduled operation and the single ProfitLab admin test receipt have all passed, delete only this exact backup as root with the previously accepted guarded shred procedure. This cleanup is approved conditional on step 6 PASS. If a prerequisite fails, STOP; do not delete the backup or claim rotation complete. Verify the PASS line and record UTC time. Secure overwrite on virtual disks, SSDs, snapshots and copy-on-write storage is not guaranteed; deleting the backup does not rotate the unrelated live credentials.
+
+~~~bash
+#!/usr/bin/env bash
+set +x
+set -euo pipefail
+backup=/etc/bota/.live-delivery.rollback-telegram-20261128
+active=/etc/bota/live-delivery.env
+test "$(id -u)" = 0
+test -f "$backup"
+test ! -L "$backup"
+test "$(stat -c '%u:%g:%a:%h' "$backup")" = "0:0:600:1"
+test ! "$backup" -ef "$active"
+test -f "$active"
+test ! -L "$active"
+before=$(sha256sum -- "$active")
+shred -n 3 -z -u -- "$backup"
+test ! -e "$backup"
+test ! -L "$backup"
+test "$(sha256sum -- "$active")" = "$before"
+echo "PASS: Telegram rollback backup removed; active credentials unchanged"
+~~~
+
+Validation: bash syntax and synthetic local fixture tests for value-only swap, old-fingerprint rejection, existing-backup refusal, file permissions, fingerprint-only stdout and guarded deletion passed. Production script has not been executed. The actual hidden entry and server ownership/path checks remain Saturday execution gates.
