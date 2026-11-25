@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
-from datetime import datetime
 import fcntl
 import json
 import math
@@ -11,6 +10,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import uuid
 
 PAIRS = ("EURUSD", "GBPUSD", "USDJPY")
 DIRECTIONS = ("BUY", "SELL")
@@ -64,6 +64,8 @@ def load(path):
     except FileNotFoundError:
         return None
     if (not isinstance(record, dict) or record.get("version") != 1
+            or not isinstance(record.get("signal_id"), str)
+            or str(uuid.UUID(record["signal_id"])) != record["signal_id"]
             or type(record.get("admitted_epoch")) is not int
             or record["admitted_epoch"] <= 1000000000
             or record_path(path.parent, row_identity(record)) != path):
@@ -102,23 +104,24 @@ def admit(root, ident, epoch, hard_max_age=HARD_MAX_AGE_HOURS):
             if age < 0:
                 raise ValueError("exposure_clock_regressed")
             if age < hard_max_age * 3600:
-                return row_identity(old) == ident
+                return old["signal_id"] if row_identity(old) == ident else None
             print(f"[EXPOSURE] hard_expiry:{ident['pair']}:{ident['direction']}", file=sys.stderr)
-        write(path, dict(ident, version=1, admitted_epoch=epoch))
-        return True
+        signal_id = str(uuid.uuid4())
+        write(path, dict(ident, version=1, admitted_epoch=epoch, signal_id=signal_id))
+        return signal_id
 
 
 def release_closed(root, row):
     """Only a confirmed matching closure of this admission can clear its slot."""
-    ident = row_identity(row)
-    created = datetime.fromisoformat(row["created_at"])
-    if created.tzinfo is None:
-        raise ValueError("closure_clock_unavailable")
+    pair, direction = row["pair"].upper(), row["direction"].upper()
+    if pair not in PAIRS or direction not in DIRECTIONS:
+        raise ValueError("invalid_exposure_scope")
+    if row.get("status") not in ("CLOSED", "CANCELLED"):
+        return False
     with locked(root) as directory:
-        path = record_path(directory, ident)
+        path = record_path(directory, {"pair": pair, "direction": direction})
         record = load(path)
-        if (record is None or row_identity(record) != ident
-                or created.timestamp() < record["admitted_epoch"]):
+        if record is None or str(row.get("id")) != record["signal_id"]:
             return False
         remove(path)
         return True
@@ -144,10 +147,10 @@ def expire_orphans(root, epoch, active_rows, usable_candles, normal_max_age, har
             age = epoch - record["admitted_epoch"]
             if age < 0:
                 raise ValueError("exposure_clock_regressed")
-            ident = row_identity(record)
             # A database row is used only by the closer to identify an existing
             # lifecycle, never by the watcher admission decision.
-            represented = any(row_identity(row) == ident for row in active_rows)
+            represented = any(str(row.get("id")) == record["signal_id"]
+                              for row in active_rows)
             if age >= hard_max_age * 3600 or (
                 not represented and age >= normal_max_age * 3600 and usable_candles(record)
             ):
@@ -170,7 +173,11 @@ def main():
     args = parser.parse_args()
     try:
         ident = identity(args.pair, args.direction, args.timeframe, args.entry, args.sl, args.tp)
-        return 0 if admit(args.root, ident, args.epoch, args.hard_max_age) else 3
+        signal_id = admit(args.root, ident, args.epoch, args.hard_max_age)
+        if signal_id is None:
+            return 3
+        print(signal_id)
+        return 0
     except Exception as exc:
         print(f"[HEALTH_ALERT] exposure_admission:{type(exc).__name__}", file=sys.stderr)
         return 4

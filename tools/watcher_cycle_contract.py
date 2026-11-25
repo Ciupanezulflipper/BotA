@@ -24,11 +24,11 @@ VALID_TELEGRAM = {
     "sent_local_reconcile_failed",
 }
 VALID_SUPABASE = {
-    "published", "skipped_exact_duplicate", "skipped_non_green",
+    "published", "skipped_exact_duplicate", "skipped_non_green", "skipped_expired_admission",
     "failed_missing_service_key", "failed_dedup_check", "failed_publish",
 }
 BAD_TELEGRAM = {"definite_failure", "unknown_outcome", "sent_local_reconcile_failed"}
-BAD_SUPABASE = {"failed_missing_service_key", "failed_dedup_check", "failed_publish"}
+BAD_SUPABASE = {"failed_missing_service_key", "failed_dedup_check", "failed_publish", "skipped_expired_admission"}
 SKIP_LINE_RE = re.compile(
     r"^\[(STALE|PAUSE|NEWS_GATE|CALENDAR_BLOCK) [^\]]+\] "
     r"([A-Z]{6}) ([A-Z0-9]+) (.*)$"

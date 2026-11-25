@@ -15,6 +15,7 @@ import json
 import os
 import stat
 import sys
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -65,7 +66,8 @@ def auth_headers(key: str) -> dict[str, str]:
 
 
 def exact_signal_exists(
-    pair: str, direction: str, tf: str, entry: str, sl: str, tp: str, key: str
+    pair: str, direction: str, tf: str, entry: str, sl: str, tp: str, key: str,
+    signal_id: str | None = None,
 ) -> bool | None:
     """Return True if the exact ACTIVE identity already exists.
 
@@ -78,6 +80,9 @@ def exact_signal_exists(
         f"&timeframe=eq.{tf.upper()}&entry_price=eq.{float(entry)}"
         f"&stop_loss=eq.{float(sl)}&take_profit=eq.{float(tp)}&select=id"
     )
+    if signal_id is not None:
+        # A retry of the same admission must not reopen a closed signal.
+        path = f"/rest/v1/signals?id=eq.{signal_id}&select=id"
     connection = http.client.HTTPSConnection(SUPABASE_HOST, timeout=10)
     try:
         connection.request("GET", path, headers=auth_headers(key))
@@ -126,7 +131,8 @@ def insert_signal(payload: dict[str, object], key: str) -> bool:
         connection.close()
 
 
-def publish_with_status(pair, direction, entry, sl, tp, score, tf, tier) -> tuple[bool, str]:
+def publish_with_status(pair, direction, entry, sl, tp, score, tf, tier,
+                        signal_id: str | None = None) -> tuple[bool, str]:
     tier = str(tier).upper()
     if tier != "GREEN":
         print(
@@ -140,8 +146,17 @@ def publish_with_status(pair, direction, entry, sl, tp, score, tf, tier) -> tupl
         print("[supabase_publish] SUPABASE_SERVICE_KEY not set", file=sys.stderr)
         return False, "failed_missing_service_key"
 
+    if signal_id is not None:
+        try:
+            signal_id = str(uuid.UUID(signal_id))
+        except (ValueError, AttributeError, TypeError):
+            return False, "failed_dedup_check"
+
     with publication_lock():
-        duplicate = exact_signal_exists(pair, direction, tf, entry, sl, tp, key)
+        if signal_id is None:
+            duplicate = exact_signal_exists(pair, direction, tf, entry, sl, tp, key)
+        else:
+            duplicate = exact_signal_exists(pair, direction, tf, entry, sl, tp, key, signal_id)
         if duplicate is None:
             return False, "failed_dedup_check"
         if duplicate:
@@ -159,7 +174,26 @@ def publish_with_status(pair, direction, entry, sl, tp, score, tf, tier) -> tupl
             "min_tier": "pro",
             "rationale": f"BotA score={score} tier={tier}",
         }
-        if not insert_signal(payload, key):
+        if signal_id is not None:
+            # This is a delivery validity check, not a second admission.
+            # Do not recreate an expired/superseded local admission on a late retry.
+            import open_exposure
+            try:
+                ident = open_exposure.identity(pair, direction, tf, entry, sl, tp)
+                with open_exposure.locked(root_path()) as directory:
+                    record = open_exposure.load(open_exposure.record_path(directory, ident))
+                    if record is None or record["signal_id"] != signal_id:
+                        print("[supabase_publish] skipped_expired_admission", file=sys.stderr)
+                        return True, "skipped_expired_admission"
+                    if open_exposure.row_identity(record) != ident:
+                        return False, "failed_publish"
+                    payload["id"] = signal_id
+                    if not insert_signal(payload, key):
+                        return False, "failed_publish"
+            except (OSError, ValueError, TypeError, KeyError):
+                print("[supabase_publish] exposure_record_unavailable", file=sys.stderr)
+                return False, "failed_publish"
+        elif not insert_signal(payload, key):
             return False, "failed_publish"
 
         print(f"[supabase_publish] published {pair} {direction} entry={entry}", file=sys.stderr)
@@ -256,9 +290,11 @@ def main() -> int:
     parser.add_argument("--score", required=True)
     parser.add_argument("--tf", required=True)
     parser.add_argument("--tier", default="GREEN")
+    parser.add_argument("--signal-id")
     args = parser.parse_args()
     ok, status = publish_with_status(
-        args.pair, args.direction, args.entry, args.sl, args.tp, args.score, args.tf, args.tier
+        args.pair, args.direction, args.entry, args.sl, args.tp, args.score, args.tf, args.tier,
+        signal_id=args.signal_id,
     )
     print(f"[supabase_publish] status={status}", file=sys.stderr)
     evidence_ok = emit_cycle_result(

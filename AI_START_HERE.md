@@ -33,6 +33,8 @@ LEGACY_RETIREMENT_COMPLETE=NO
 CLEAN_72H_WINDOW=OPEN_T0_APPROVED
 CLEAN_72H_T0=2026-11-24T20:00:01.036Z
 CLEAN_72H_EARLIEST_END=2026-11-27T20:00:01.036Z
+PHONE_OANDA_ENDPOINT=REPORTED_PRACTICE
+PHONE_OANDA_TOKEN_CLEANUP=LOW_PRIORITY
 PHONE_REMAINING_API_KEYS=PENDING_REVIEW
 REPAIR_BRANCH=CANDIDATE_D1_FRESHNESS_LOCAL_EXPOSURE_GUARD
 RECENT_LEDGER_PROVENANCE=CROSS_CONTAMINATED
@@ -44,8 +46,8 @@ HISTORICAL_CORPUS_GATE=FAIL
 STRATEGY_EDGE_VALIDATED=NO
 STRATEGY_TUNING=NO
 PRODUCTION_CHANGE_AUTHORIZED=NO_EXCEPT_APPROVED_2026-11-28_TELEGRAM_ROTATION_AFTER_PLAN
-NEXT_ACTION=REVIEW_CANDIDATE_AND_VERIFY_EXPIRY_RETRY_CUTOVER
-FOUNDER_APPROVAL_REQUIRED=NO_FOR_BRANCH_WORK_MERGE_DEPLOY_NOT_APPROVED
+NEXT_ACTION=COMPLETE_TELEGRAM_FINGERPRINT_COMPARISON
+FOUNDER_APPROVAL_REQUIRED=YES_FOR_MERGE_OR_DEPLOY
 ```
 
 ## Accepted evidence — do not repeat
@@ -81,7 +83,7 @@ REPORTED phone reboot persistence PASS. Airplane mode during reboot UNKNOWN; abs
 
 - Telegram token rotation and reconciliation remain separate pending gates. Founder approved rotation on Saturday 28 Nov during FX closure; send plan before execution. Inventory consumers and verify identity without exposing tokens.
 - Obsolete rollback backup: PASS. Exact founder-approved deletion via root SSH; PASS: Backup removed; active credentials unchanged. No other production change.
-- Phone remaining API keys: pending review. Founder decision deferred. Empty output is UNKNOWN, not safe. OANDA_API_URL in ~/BotA/.env.runtime UNKNOWN; read only the URL on device, never token. api-fxpractice.oanda.com = practice; api-fxtrade.oanda.com = live, potential money-risk; escalate live credential review/rotation for separate approval. No trading API calls.
+- Phone remaining API keys: pending review. Founder REPORTED api-fxpractice.oanda.com in both phone files (.env and .env.runtime); practice endpoint, no live-money endpoint identified. Phone OANDA token cleanup is low priority; other keys still require review. No trading API calls.
 
 ### Lessons and deployment hazard
 
@@ -99,12 +101,14 @@ Stale documentation PRs BotA #139 and obsidian-engineering-knowledge #90 closed 
 
 ## Exactly one next action
 
-Review the isolated candidate and verify cutover/late retry safety before authorizing any deployment. Do not repeat completed audits, rotate keys before the approved window, merge, deploy, restart services, fabricate signals, or start strategy evaluation. Founder approval is not required for this isolated branch work. Keep natural lifecycle observation open under the approved extension rule.
+Complete the two outstanding Telegram fingerprint comparisons before Saturday rotation. Separately review the isolated candidate and reconcile pre-existing ACTIVE rows/backlog before any deployment. Do not repeat completed audits, rotate keys before the approved window, merge, deploy, restart services, fabricate signals, or start strategy evaluation. Founder approval is not required for this isolated branch work. Keep natural lifecycle observation open under the approved extension rule.
 
 ## Branch review update - 25 November 2026
 
-Founder accepted the D1 mutable-root fail-closed reader, visible DEGRADED health and release credential-file guard, subject to the pre-registered 36-hour freshness requirement. Missing, unparseable or stale updated_at is UNAVAILABLE/stale, including health reason d1_cache:<PAIR>:stale. Exposure admission is a durable local pair+direction record before accepted CSV/Telegram, with confirmed matching closure or 24h normal/168h hard expiry. Admission does not query Supabase ACTIVE rows or delivery state; each sink retains its independent retry behavior. This is isolated candidate code, NOT a production rollout. Merge/deploy remain unauthorized. Pre-activation must reconcile pre-existing ACTIVE rows and outstanding delivery retries with the new local record boundary; late retries after expiry require explicit verification before deployment.
+Founder accepted the D1 mutable-root fail-closed reader, visible DEGRADED health and release credential-file guard, subject to the pre-registered 36-hour freshness requirement. Missing, unparseable or stale updated_at is UNAVAILABLE/stale, including health reason d1_cache:<PAIR>:stale. Exposure admission is a durable local pair+direction record before accepted CSV/Telegram, with a UUID assigned at admission and propagated to both Supabase publication paths. Only the confirmed CLOSED/CANCELLED row with the matching signal ID and scope releases its record; changed SL/TP does not invalidate the ID match. Normal expiry 24h with usable candle coverage for orphan records; hard expiry 168h. A late retry for a replaced/expired admission cannot insert an old ACTIVE row; the sink checks its admission ID, not delivery status, and exact retries dedup by ID even after closure. Admission does not query Supabase ACTIVE rows or delivery state; each sink retains its independent retry behavior. This is isolated candidate code, NOT a production rollout. Merge/deploy remain unauthorized. Pre-activation must reconcile pre-existing ACTIVE rows and outstanding pre-generation delivery retries with the new local record boundary; late-retry rejection is covered by offline tests. Hard expiry is a local safety release, not proof a remote row closed during an outage.
 
-Telegram plan Step 1: explicitly compare the phone dividend-capture-scanner token fingerprint with the current BotA token fingerprint, along with Hetzner BotA (watcher, closer and daily report), legacy phone BotA and the Supabase admin send-telegram consumer. Report same/different/unknown; same-token scanner will break on revocation unless its authorized consumer is migrated. No raw token or credential-bearing URL, no phone read without its separate approval. Phone OANDA endpoint remains UNKNOWN until the founder's read-only result; empty is UNKNOWN. Saturday 28 Nov rotation not executed.
+Telegram plan Step 1: SHA-256(raw token), first 12 hex only. Founder REPORTED phone BotA token fingerprint 7e18d1067664 and dividend-capture-scanner token fingerprint 4adf3e925f93 (different from phone BotA). Founder REPORTED OANDA practice endpoint in both phone files; OANDA token cleanup low priority. Hetzner BotA token fingerprint UNKNOWN: automated SSH fingerprint request blocked by tool safety check; no bypass attempted. Supabase send-telegram token fingerprint UNKNOWN: connector has no secret-digest list; compare the existing project secret digest without retrieving raw value. Deployed send-telegram v38 reads TELEGRAM_BOT_TOKEN and TELEGRAM_ADMIN_CHAT_ID; known callers are ProfitLab Account.tsx admin test action and deployed stripe-webhook v48 (new subscription, active update/renewal, cancellation/inactive notifications). If the Edge token matches the target token, update it in the same Saturday rotation window. If Hetzner differs from phone BotA, plan separate revocation; dividend scanner is excluded only after confirming its token does not match a token actually being revoked. No raw token or credential-bearing URL. Saturday 28 Nov rotation not executed.
 
 Historical runbooks and decision evidence restored in [docs/continuity-history](docs/continuity-history/README.md). Exact snapshots 83fa71e and 37dfacf preserve the October and November evidence; they are historical, not operational instructions.
+
+Offline verification: preregistered D1 freshness 5/5; shared exposure/ID/expiry 12/12; all 12 focused offline suites passed (146 tests). No merge/deploy authorized. Remaining pre-activation gates: independent review, reconcile existing ACTIVE/backlog, then separate founder approval. Historical replay and clean-producer natural lifecycle gate remain open.

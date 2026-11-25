@@ -35,7 +35,7 @@ CURRENT_ALERT_FIELDS_25 = (
 CANONICAL_ALERT_FIELDS_25 = CURRENT_ALERT_FIELDS_25
 VALID_SUPABASE_STATUSES = {
     "published", "skipped_exact_duplicate", "skipped_non_green", "failed_missing_service_key",
-    "failed_dedup_check", "failed_publish",
+    "failed_dedup_check", "failed_publish", "skipped_expired_admission",
 }
 VALID_TELEGRAM_STATUSES = {
     "sent", "reconciled_sent", "definite_failure", "unknown_outcome", "sent_local_reconcile_failed",
@@ -350,7 +350,7 @@ def ledger_decision(*, cycle_id, server_epoch, pair, timeframe, row, lines,
     persisted = bool(row) and not malformed
     rejected = normalized_rejected(row)
     if structured_supabase is not None:
-        supabase = "failed" if structured_supabase.startswith("failed_") else structured_supabase
+        supabase = "failed" if structured_supabase.startswith("failed_") or structured_supabase == "skipped_expired_admission" else structured_supabase
     if malformed:
         outcome = "parse_error"
         telegram = "not_attempted"

@@ -13,6 +13,7 @@ import fcntl
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -176,6 +177,9 @@ def publish(row: dict[str, str], publisher: Path) -> bool:
         "--tier",
         "GREEN",
     ]
+    marker = re.search(r"(?:^|\|)exposure_id=([0-9a-f-]{36})(?:\||$)", row.get("reasons", ""))
+    if marker:
+        command.extend(("--signal-id", marker.group(1)))
     try:
         result = subprocess.run(
             command,

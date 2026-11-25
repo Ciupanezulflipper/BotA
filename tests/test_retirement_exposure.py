@@ -100,13 +100,73 @@ complete_delivery_transaction() { return 1; }
         self.run_watcher()
         record=self.root/"state/open_exposure/USDJPY-SELL.json"
         self.assertTrue(record.is_file())
-        closed={"id":"first","status":"CLOSED","pair":PAIR,"direction":"SELL","timeframe":"M15",
+        admitted_id=json.loads(record.read_text())["signal_id"]
+        closed={"id":admitted_id,"status":"CLOSED","pair":PAIR,"direction":"SELL","timeframe":"M15",
                 "entry_price":158.01,"stop_loss":158.5,"take_profit":156.8,"created_at":iso(T0+1)}
         with mock.patch.object(signal_closer,"MUTABLE_ROOT",self.root), mock.patch.object(signal_closer,"log"), mock.patch.object(signal_closer,"supabase_request",return_value=[closed]):
-            signal_closer.close_signal("first","CLOSED",1.0,False,iso(T0+300))
+            signal_closer.close_signal(admitted_id,"CLOSED",1.0,False,iso(T0+300))
         self.assertFalse(record.exists())
         row,_=self.run_watcher("157.99",epoch=T0+301)
         self.assertTrue(profitlab_delivery.eligible(row))
+
+    def test_admission_id_is_carried_to_independent_publisher(self):
+        import uuid
+        first,_=self.run_watcher()
+        record=json.loads((self.root/"state/open_exposure/USDJPY-SELL.json").read_text())
+        ident=record.get("signal_id")
+        self.assertIsNotNone(ident)
+        self.assertEqual(str(uuid.UUID(ident)),ident)
+        self.assertIn("exposure_id="+ident,first["reasons"])
+        with mock.patch.object(profitlab_delivery.subprocess,"run") as run:
+            run.return_value.returncode=0
+            self.assertTrue(profitlab_delivery.publish(first,ROOT/"tools/supabase_publish.py"))
+            argv=run.call_args.args[0]
+            self.assertEqual(argv[argv.index("--signal-id")+1],ident)
+
+    def test_matching_id_closure_after_stop_change(self):
+        self.run_watcher()
+        record=self.root/"state/open_exposure/USDJPY-SELL.json"
+        admitted_id=json.loads(record.read_text())["signal_id"]
+        closed={"id":admitted_id,"status":"CLOSED","pair":PAIR,"direction":"SELL","timeframe":"M15",
+                "entry_price":158.01,"stop_loss":158.01,"take_profit":156.8,"created_at":iso(T0+1)}
+        with mock.patch.object(signal_closer,"MUTABLE_ROOT",self.root), mock.patch.object(signal_closer,"log"), mock.patch.object(signal_closer,"supabase_request",return_value=[closed]):
+            signal_closer.close_signal(admitted_id,"CLOSED",1.0,False,iso(T0+300))
+        self.assertFalse(record.exists())
+
+    def test_publisher_inserts_admission_id_and_retry_never_reopens(self):
+        import supabase_publish
+        first,_=self.run_watcher()
+        record=json.loads((self.root/"state/open_exposure/USDJPY-SELL.json").read_text())
+        admitted_id=record["signal_id"]
+        args=(PAIR,"SELL","158.01","158.5","156.8","80","M15","GREEN")
+        with mock.patch.object(supabase_publish,"service_key",return_value="offline-fixture"), mock.patch.object(supabase_publish,"root_path",return_value=self.root), mock.patch.object(supabase_publish,"exact_signal_exists",return_value=False) as lookup, mock.patch.object(supabase_publish,"insert_signal",return_value=True) as insert:
+            self.assertEqual(supabase_publish.publish_with_status(*args,signal_id=admitted_id),(True,"published"))
+            self.assertEqual(lookup.call_args.args[-1],admitted_id)
+            self.assertEqual(insert.call_args.args[0]["id"],admitted_id)
+            lookup.return_value=True
+            self.assertEqual(supabase_publish.publish_with_status(*args,signal_id=admitted_id),(True,"skipped_exact_duplicate"))
+            self.assertEqual(insert.call_count,1)
+
+    def test_expired_retry_cannot_insert_after_new_admission(self):
+        import supabase_publish
+        self.run_watcher()
+        record=self.root/"state/open_exposure/USDJPY-SELL.json"
+        old_id=json.loads(record.read_text())["signal_id"]
+        self.run_watcher("157.99",epoch=T0+168*HOUR)
+        self.assertNotEqual(json.loads(record.read_text())["signal_id"],old_id)
+        args=(PAIR,"SELL","158.01","158.5","156.8","80","M15","GREEN")
+        with mock.patch.object(supabase_publish,"service_key",return_value="offline-fixture"), mock.patch.object(supabase_publish,"root_path",return_value=self.root), mock.patch.object(supabase_publish,"exact_signal_exists",return_value=False), mock.patch.object(supabase_publish,"insert_signal",return_value=True) as insert:
+            self.assertEqual(supabase_publish.publish_with_status(*args,signal_id=old_id),(True,"skipped_expired_admission"))
+            insert.assert_not_called()
+
+    def test_identical_prices_wrong_signal_id_cannot_release(self):
+        self.run_watcher()
+        record=self.root/"state/open_exposure/USDJPY-SELL.json"
+        other={"id":"a-different-signal","status":"CLOSED","pair":PAIR,"direction":"SELL","timeframe":"M15",
+               "entry_price":158.01,"stop_loss":158.5,"take_profit":156.8,"created_at":iso(T0+1)}
+        with mock.patch.object(signal_closer,"MUTABLE_ROOT",self.root), mock.patch.object(signal_closer,"log"), mock.patch.object(signal_closer,"supabase_request",return_value=[other]):
+            signal_closer.close_signal("a-different-signal","CLOSED",1.0,False,iso(T0+300))
+        self.assertTrue(record.exists(), "closure of a different signal ID must not clear the slot")
 
     def test_failed_patch_and_unrelated_close_do_not_release(self):
         self.run_watcher()

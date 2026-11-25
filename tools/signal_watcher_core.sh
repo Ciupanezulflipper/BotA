@@ -387,14 +387,18 @@ signal_delivery_mark() {
 
 complete_delivery_transaction() {
   local tier="$1" pair="$2" tf="$3" direction="$4" score="$5" score_int="$6"
-  local entry="$7" sl="$8" tp="$9"
+  local entry="$7" sl="$8" tp="$9" exposure_id="${10:-}"
 
   if [[ "${tier}" = "GREEN" ]]; then
     if [[ ! -f "${TOOLS}/supabase_publish.py" ]]; then
       log "SUPABASE" "publisher missing for ${pair} ${tf} -> fail_closed"
       return 1
     fi
-    if ! python3 "${TOOLS}/supabase_publish.py" \
+    local exposure_args=()
+    if [[ -n "${exposure_id}" ]]; then
+      exposure_args=(--signal-id "${exposure_id}")
+    fi
+    if ! python3 "${TOOLS}/supabase_publish.py" "${exposure_args[@]}" \
       --pair "${pair}" --direction "${direction}" \
       --entry "${entry}" --sl "${sl}" --tp "${tp}" \
       --score "${score_int}" --tf "${tf}" --tier "${tier}" \
@@ -971,12 +975,20 @@ print('London_open' if 7<=h<9 else 'London' if 9<=h<12 else 'London_NY_overlap' 
 
   # Single admission boundary: before the accepted CSV becomes visible to
   # independent ProfitLab delivery, and before any Telegram side effect.
+  local exposure_id=""
   if [[ "${rejected}" != "true" && "${_tier_csv}" == "GREEN" ]]; then
     local exposure_rc=0
-    python3 "${TOOLS}/open_exposure.py" --root "${MUTABLE_ROOT}" \
+    exposure_id="$(python3 "${TOOLS}/open_exposure.py" --root "${MUTABLE_ROOT}" \
       --epoch "${BOTA_SERVER_EPOCH:-0}" \
       --hard-max-age "${SIGNAL_CLOSER_HARD_MAX_AGE_HOURS:-168}" \
-      "${pair_o}" "${direction}" "${tf_o}" "${entry}" "${sl}" "${tp}" || exposure_rc=$?
+      "${pair_o}" "${direction}" "${tf_o}" "${entry}" "${sl}" "${tp}")" || exposure_rc=$?
+    if (( exposure_rc == 0 )); then
+      if [[ "${exposure_id}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+        reasons="${reasons}|exposure_id=${exposure_id}"
+      else
+        exposure_rc=4
+      fi
+    fi
     if (( exposure_rc != 0 )); then
       rejected="true"
       if (( exposure_rc == 3 )); then
@@ -1056,7 +1068,7 @@ except Exception:
     # Commit only after the complete Telegram->Supabase transaction succeeds.
     if ! complete_delivery_transaction \
       "${tier}" "${pair_o}" "${tf_o}" "${direction}" "${score}" "${score_int}" \
-      "${entry}" "${sl}" "${tp}"; then
+      "${entry}" "${sl}" "${tp}" "${exposure_id}"; then
       return 1
     fi
   else
