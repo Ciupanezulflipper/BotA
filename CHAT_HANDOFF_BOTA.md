@@ -25,6 +25,7 @@ OLD_SHARED_KEY_REVOKED=YES
 OLD_KEY_REJECTION_TEST=PASS
 OVERNIGHT_PRODUCTION_STABILITY=PASS
 CLEAN_SIGNAL_LIFECYCLE=PENDING
+TELEGRAM_CONSUMER_INVENTORY=COMPLETE
 TELEGRAM_ROTATION=PENDING
 TELEGRAM_ROTATION_AUTHORIZED=YES_2026-11-28_PLAN_REQUIRED
 TELEGRAM_RECONCILIATION=PENDING
@@ -46,7 +47,7 @@ HISTORICAL_CORPUS_GATE=FAIL
 STRATEGY_EDGE_VALIDATED=NO
 STRATEGY_TUNING=NO
 PRODUCTION_CHANGE_AUTHORIZED=NO_EXCEPT_APPROVED_2026-11-28_TELEGRAM_ROTATION_AFTER_PLAN
-NEXT_ACTION=COMPLETE_TELEGRAM_FINGERPRINT_COMPARISON
+NEXT_ACTION=PRESENT_FINAL_SATURDAY_ROTATION_PLAN_BEFORE_EXECUTION
 FOUNDER_APPROVAL_REQUIRED=YES_FOR_MERGE_OR_DEPLOY
 ```
 
@@ -62,7 +63,7 @@ FOUNDER_APPROVAL_REQUIRED=YES_FOR_MERGE_OR_DEPLOY
 ## Remaining gates
 
 1. Credential backup cleanup: PASS. Founder-approved exact rollback file deletion verified; active credentials unchanged. Never restore revoked key.
-2. Telegram token rotation: approved for Saturday 28 Nov during FX closure, plan required before execution. Inventory Hetzner, Supabase send-telegram, phone and dividend scanner.
+2. Telegram token rotation: approved for Saturday 28 Nov during FX closure, plan required before execution. Consumer inventory COMPLETE; Edge and dividend scanner excluded.
 3. Natural signal lifecycle: pending real Hetzner creation and closure; never manufacture signals.
 4. Telegram reconciliation: separate pending gate against Hetzner send records.
 5. Overall retirement not complete. No merge or deploy approved; only the separately authorized Saturday Telegram rotation after its plan.
@@ -81,7 +82,7 @@ REPORTED phone reboot persistence PASS. Airplane mode during reboot UNKNOWN; abs
 
 ### Residual credential gates
 
-- Telegram token rotation and reconciliation remain separate pending gates. Founder approved rotation on Saturday 28 Nov during FX closure; send plan before execution. Inventory consumers and verify identity without exposing tokens.
+- Telegram token rotation and reconciliation remain separate pending gates. Founder approved rotation on Saturday 28 Nov during FX closure; send plan before execution. Consumer inventory COMPLETE; no Edge or dividend-scanner secret change.
 - Obsolete rollback backup: PASS. Exact founder-approved deletion via root SSH; PASS: Backup removed; active credentials unchanged. No other production change.
 - Phone remaining API keys: pending review. Founder REPORTED api-fxpractice.oanda.com in both phone files (.env and .env.runtime); practice endpoint, no live-money endpoint identified. Phone OANDA token cleanup is low priority; other keys still require review. No trading API calls.
 
@@ -101,13 +102,13 @@ Stale documentation PRs BotA #139 and obsidian-engineering-knowledge #90 closed 
 
 ## Exactly one next action
 
-Complete the remaining Supabase Edge token digest comparison before Saturday rotation. Deployment is separately blocked until both timestamped hard preconditions (zero ACTIVE signals and zero pending ProfitLab retries) pass and the founder authorizes merge/deploy. Do not repeat completed audits, rotate keys before the approved window, merge, deploy, restart services, fabricate signals, or start strategy evaluation. Founder approval is not required for this isolated branch work. Keep natural lifecycle observation open under the approved extension rule.
+Present the final execution plan before starting the approved Saturday rotation during FX closure. Deployment is separately blocked until both timestamped hard preconditions (zero ACTIVE signals and zero pending ProfitLab retries) pass and the founder authorizes merge/deploy. Do not repeat completed audits, rotate keys before the approved window, merge, deploy, restart services, fabricate signals, or start strategy evaluation. Founder approval is not required for this isolated branch work. Keep natural lifecycle observation open under the approved extension rule.
 
 ## Branch review update - 25 November 2026
 
 Founder accepted the D1 mutable-root fail-closed reader, visible DEGRADED health and release credential-file guard, subject to the pre-registered 36-hour freshness requirement. Missing, unparseable or stale updated_at is UNAVAILABLE/stale, including health reason d1_cache:<PAIR>:stale. Exposure admission is a durable local pair+direction record before accepted CSV/Telegram, with a UUID assigned at admission and propagated to both Supabase publication paths. Only the confirmed CLOSED/CANCELLED row with the matching signal ID and scope releases its record; changed SL/TP does not invalidate the ID match. Normal expiry 24h with usable candle coverage for orphan records; hard expiry 168h. A late retry for a replaced/expired admission cannot insert an old ACTIVE row; the sink checks its admission ID, not delivery status, and exact retries dedup by ID even after closure. Admission does not query Supabase ACTIVE rows or delivery state; each sink retains its independent retry behavior. This is isolated candidate code, NOT a production rollout. Merge/deploy remain unauthorized. Pre-activation requires zero ACTIVE rows and zero pending ProfitLab retries, verified at deploy time; no reconciliation code. Late-retry rejection is covered by offline tests. Hard expiry is a local safety release, not proof a remote row closed during an outage.
 
-Telegram plan Step 1: SHA-256(raw token), first 12 hex only. Founder REPORTED phone BotA token fingerprint 7e18d1067664 and dividend-capture-scanner token fingerprint 4adf3e925f93 (different from phone BotA). Founder REPORTED OANDA practice endpoint in both phone files; OANDA token cleanup low priority. Hetzner BotA token fingerprint VERIFIED by SSH: 7e18d1067664, matching the reported phone BotA token. The reported dividend scanner token 4adf3e925f93 differs and is excluded. Supabase send-telegram token fingerprint UNKNOWN: connector has no secret-digest list; compare the existing project secret digest without retrieving raw value. Deployed send-telegram v38 reads TELEGRAM_BOT_TOKEN and TELEGRAM_ADMIN_CHAT_ID; known callers are ProfitLab Account.tsx admin test action and deployed stripe-webhook v48 (new subscription, active update/renewal, cancellation/inactive notifications). If the Edge token matches the target token, update it in the same Saturday rotation window. No separate phone BotA token revocation is required; the shared old token is the Saturday rotation target. No raw token or credential-bearing URL. Saturday 28 Nov rotation not executed.
+Telegram plan Step 1: SHA-256(raw token), first 12 hex only. Founder REPORTED phone BotA token fingerprint 7e18d1067664 and dividend-capture-scanner token fingerprint 4adf3e925f93 (different from phone BotA). Founder REPORTED OANDA practice endpoint in both phone files; OANDA token cleanup low priority. Hetzner BotA token fingerprint VERIFIED by SSH: 7e18d1067664, matching the reported phone BotA token. The reported dividend scanner token 4adf3e925f93 differs and is excluded. Supabase send-telegram SHA-256 dashboard digest prefix 8fac38826d87 is VERIFIED from the founder-provided dashboard screenshot; it does not match 7e18d1067664. INFERRED: the Edge token is different, assuming the dashboard digest is SHA-256 of the raw value, the same method used for 7e18d1067664. Deployed send-telegram v38 reads TELEGRAM_BOT_TOKEN and TELEGRAM_ADMIN_CHAT_ID; known callers are ProfitLab Account.tsx admin test action and deployed stripe-webhook v48 (new subscription, active update/renewal, cancellation/inactive notifications). Exclude the Edge token from Saturday rotation; do not modify the Edge secret. The mandatory final ProfitLab administrator test confirms send-telegram operation. No separate phone BotA token revocation is required; the shared old token is the Saturday rotation target. No raw token or credential-bearing URL. Saturday 28 Nov rotation not executed.
 
 Historical runbooks and decision evidence restored in [docs/continuity-history](docs/continuity-history/README.md). Exact snapshots 83fa71e and 37dfacf preserve the October and November evidence; they are historical, not operational instructions.
 
@@ -117,4 +118,4 @@ Offline verification: preregistered D1 freshness 5/5; shared exposure/ID/expiry 
 
 The canonical [deployment and Saturday rotation plan](CONTINUITY_CURRENT.md#founder-approved-deployment-and-saturday-rotation-plan---25-november-2026) records the founder-reported independent 62/62 retirement tests at f11a3ae. Hard deployment preconditions: 0 Supabase ACTIVE signals AND 0 pending ProfitLab retries/in-flight delivery, with both UTC timestamps and evidence captured at the deployment boundary. No reconciliation code, forced closure or queue reset. Unknown or nonzero blocks deployment. Merge/deploy NOT AUTHORIZED.
 
-Saturday: Hetzner fingerprint 7e18d1067664 matches the reported phone BotA token; dividend-scanner 4adf3e925f93 is excluded. Edge token digest still UNKNOWN. If it matches, update the Edge TELEGRAM_BOT_TOKEN immediately after atomic Hetzner swap; if different, leave it unchanged; if unknown, stop before revocation. In both resolved cases, final verification is exactly one genuine ProfitLab Account admin Telegram test button press with confirmed delivery and UTC evidence. This is not a fabricated trading signal. See canonical plan for the full sequence.
+Saturday consumer inventory COMPLETE. Hetzner fingerprint 7e18d1067664 matches the reported phone BotA token; dividend scanner 4adf3e925f93 is excluded. Supabase send-telegram dashboard digest 8fac38826d87 does not match; different token, excluded (INFERRED). INFERRED: the Edge token is different, assuming the dashboard digest is SHA-256 of the raw value, the same method used for 7e18d1067664. Do not modify the Edge secret. Mandatory final verification is exactly one genuine ProfitLab Account admin Telegram test button press with confirmed delivery and UTC evidence. This is not a fabricated trading signal. See canonical plan for the full sequence.
