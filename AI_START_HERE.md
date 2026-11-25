@@ -1,155 +1,69 @@
 # BotA AI Start Here
 
-Last updated: **2026-11-24 UTC**
+Last updated: **2026-11-25 UTC**
 
-Read this before proposing BotA strategy, deployment, Telegram, ProfitLab, Android/Termux, VPS/Hetzner, replay, historical-data or runtime work.
+Read before proposing strategy, deployment, Telegram, ProfitLab, Android/Termux, VPS, replay or runtime work.
 
-## Current authoritative truth
+Canonical detailed state and evidence: [CONTINUITY_CURRENT.md](CONTINUITY_CURRENT.md). Historical pre-rotation instructions are superseded.
+
+## Current status
 
 ```text
-PROJECT=BotA
 BOTA_EDGE_STATUS=UNVALIDATED
 LIVE_MONEY_TRADING=NO
-
 PRIMARY_RUNTIME=HETZNER
-HETZNER_RUNTIME_STATE=ACTIVE
 DEPLOYED_RELEASE=83fa71e651483c95096ce635b525cacbf91cbc5d
 PROVIDER=YAHOO
 PAIRS=EURUSD,GBPUSD,USDJPY
 TIMEFRAME=M15
-
-SECOND_PRODUCER_PROVEN=YES
 LEGACY_ANDROID_RUNTIME=STOPPED
-LEGACY_ANDROID_KNOWN_RESTART_PATH=DISABLED
-FRESH_TERMUX_SESSION_TEST=PASS
-PHONE_REBOOT_TEST=NOT_YET_RUN
-
-SUPABASE_KEY_TYPE=MODERN_SB_SECRET
-PHONE_AND_HETZNER_SUPABASE_KEY_FINGERPRINT=MATCH
-PROFITLAB_EDGE_FUNCTION_SERVICE_ROLE_PATH=SEPARATE
-SUPABASE_ROTATION_AUTHORIZED=NO
-
-TELEGRAM_CONSUMER_INVENTORY=INCOMPLETE
+PHONE_REBOOT_TEST=PASS
+SUPABASE_ROTATION=COMPLETE
+HETZNER_DEDICATED_KEY=bota_hetzner
+OLD_SHARED_KEY=bota_service
+OLD_SHARED_KEY_REVOKED=YES
+OLD_KEY_REJECTION_TEST=PASS
+OVERNIGHT_PRODUCTION_STABILITY=PASS
+CLEAN_SIGNAL_LIFECYCLE=PENDING
+TELEGRAM_ROTATION=PENDING
 TELEGRAM_ROTATION_AUTHORIZED=NO
-
+TELEGRAM_RECONCILIATION=PENDING
+CREDENTIAL_BACKUP_CLEANUP=READY_AWAITING_FOUNDER_APPROVAL
+LEGACY_RETIREMENT_COMPLETE=NO
 RECENT_LEDGER_PROVENANCE=CROSS_CONTAMINATED
-11_NOV_WIN_HETZNER=NO
-12_NOV_CANCEL_HETZNER=NO
-23_NOV_USDJPY_HETZNER_CLUSTER=6_LOSSES_-131.6_PIPS
-
-D1_CONFIRMATION_READER_PATH_DEFECT=VERIFIED
 D1_REPAIR_DEPLOYED=NO
 ONE_ACTIVE_PAIR_DIRECTION_CONTROL_DEPLOYED=NO
-
-STRATEGY_TUNING=NO
-PAIR_CHANGES=NO
-TIMEFRAME_CHANGES=NO
-PRODUCTION_CHANGE_AUTHORIZED=NO
-
-CURRENT_PHASE=RETIRE_LEGACY_PRODUCER_AND_ESTABLISH_SINGLE_PRODUCER_TRUTH
-NEXT_ACTION=AUTHORIZE_CONTROLLED_SUPABASE_SECRET_ROTATION
-FOUNDER_APPROVAL_REQUIRED=YES
-FURTHER_BROAD_AI_REVIEW=STOP
-```
-
-Canonical record: `CONTINUITY_CURRENT.md`.
-
-## Critical producer correction
-
-Do not repeat the old claim that Android was only a control/observation device.
-
-A live Termux BotA runtime was proven on 24 Nov 2026. It was making Romanian-origin Supabase requests and could create/close production signal rows.
-
-Do not repeat the old clean post-release sequence `LOSS -> WIN -> CANCELLED`.
-
-The 11 Nov EURUSD +20.8 winner was created by the Romanian legacy producer, not Hetzner. The 12 Nov GBPUSD cancellation was also performed by the Romanian legacy producer.
-
-The Supabase ledger is mixed-producer evidence and cannot be treated as a clean strategy sample.
-
-## Legacy-phone retirement status
-
-Verified:
-
-- BotA runit services on phone were stopped.
-- The watchdog was killed.
-- The known Termux session launcher was made non-executable.
-- A newly opened Termux session did not restart BotA.
-- `pgrep` returned `NO_BOTA_PROCESSES_PASS`.
-- `bota-closer` and `bota-supervisor` remained down.
-- Supabase showed no Romanian use of the shared BotA key from shutdown through 16:00 UTC.
-
-Not yet verified:
-
-- persistence across a phone reboot;
-- credential revocation;
-- absence of every possible alternate launch mechanism.
-
-Treat the phone as **stopped but still credential-capable** until the shared Supabase key is revoked.
-
-## Credential inventory result
-
-### Supabase
-
-The inventory is sufficient to plan a dedicated Supabase rotation:
-
-- Hetzner uses a modern `sb_secret_...` key.
-- Supabase log fingerprints prove the phone and Hetzner use the same key.
-- Current post-shutdown logs show that key only from Hetzner.
-- ProfitLab/Stripe Edge Functions use the separate legacy `SUPABASE_SERVICE_ROLE_KEY` path.
-- GitHub Actions does not inject a production Supabase secret.
-- No BotA/ProfitLab Vercel project is present in the connected Vercel account.
-
-Do not rotate the project JWT secret. Rotate only the modern BotA secret after explicit founder approval.
-
-### Telegram
-
-Do not rotate Telegram yet.
-
-Hetzner uses `TELEGRAM_BOT_TOKEN`.
-
-The active Supabase `send-telegram` function also has a Telegram bot token, but sends to an admin chat and had no invocation in the last checked 24 hours.
-
-The dividend scanner uses `TELEGRAM_TOKEN`.
-
-Exact token identity across these consumers is still unverified.
-
-## Current production defects / risks
-
-### D1 confirmation
-
-The D1 cache writer uses `BOTA_MUTABLE_ROOT` and writes under `/var/lib/bota/cache`.
-
-The scoring reader uses `ROOT` / `BOTA_ROOT` semantics and silently returns `ANY` when its path is missing.
-
-Production has valid D1 cache state, but the scorer was not reading it.
-
-Future repair: use the mutable-root cache and fail closed / alert if unavailable.
-
-Not deployed.
-
-### Correlated exposure
-
-On 23 Nov Hetzner created six overlapping USDJPY BUY signals and they lost a combined -131.6 pips.
-
-A one-ACTIVE-per-pair+direction control is a candidate repair, but it must be replayed across history before authorization so removed winners are counted too.
-
-Not deployed.
-
-## Strategy boundary
-
-Preserve:
-
-```text
 POLICY_B_ACCEPTED=195
 PRE_REGISTERED_KILL_THRESHOLD=400
 HISTORICAL_CORPUS_GATE=FAIL
 STRATEGY_EDGE_VALIDATED=NO
+STRATEGY_TUNING=NO
+PRODUCTION_CHANGE_AUTHORIZED=NO
+NEXT_ACTION=FOUNDER_APPROVAL_FOR_CREDENTIAL_BACKUP_CLEANUP
+FOUNDER_APPROVAL_REQUIRED=YES
 ```
 
-Do not tune strategy from the contaminated live ledger.
+## Accepted evidence — do not repeat
 
-## Exactly one current action
+- Legacy phone was a real producer sharing Hetzner's old Supabase key. Watchdog and runit stopped, launcher disabled, fresh-session and reboot persistence checks passed.
+- Dedicated modern secret installed atomically at 19:27:30 UTC on 24 Nov without restart; other credentials preserved. Exact dashboard match established old key identity.
+- New key authenticated at 19:28:44 UTC; scheduled closer reads 19:30 and 19:45 HTTP 200. Claude Code reported all relevant jobs succeeded and no credential override files existed. Successful job exits are not proof of writes.
+- Old key revoked; deliberate rejection 19:59:56 HTTP 401 independently logged, new key read 20:00:01 HTTP 200.
+- Overnight 24 Nov 20:39–25 Nov 10:18 UTC: 55/55 Hetzner reads, 164/164 health writes, zero legacy key requests and unexpected producers. No actual signal creation/closure in that window.
+- ProfitLab privileged Edge Functions use separate legacy service-role path; health requests use a separate credential. Full billing transaction testing not performed.
 
-Obtain explicit founder approval for the controlled **Supabase BotA secret rotation only**.
+## Remaining gates
 
-Do not bundle Telegram rotation, D1 repair, exposure-control changes, strategy tuning or provider changes into that action.
+1. Credential backup cleanup: ready, explicit founder approval required. Exact obsolete rollback file `/etc/bota/.live-delivery.rollback-9tio_xxl` contains duplicate live Telegram and health secrets. Old Supabase key cannot be restored.
+2. Telegram token rotation: separate pending gate, not authorized. Phone reportedly still holds valid token. Inventory Hetzner, Supabase send-telegram, phone and dividend scanner; propose Fri ~22:00–Sun ~22:00 UTC FX closure (27–29 Nov; confirm schedule).
+3. Natural signal lifecycle: pending real Hetzner creation and closure; never manufacture signals.
+4. Telegram reconciliation: separate pending gate against Hetzner send records.
+5. Overall retirement not complete. No new production mutation approved.
+
+## Strategy and provenance
+
+11 Nov EURUSD winner +20.8 pips legacy-created; 12 Nov GBPUSD cancellation legacy-performed; 23 Nov six overlapping Hetzner USDJPY BUY losses total -131.6 pips. Historical ledger mixed, not strategy-validation evidence. D1 writer/reader path mismatch falls back to ANY; future mutable-root fail-closed fix not deployed. Candidate one ACTIVE per pair+direction requires historical replay counting removed winners and losses. Yahoo provider unchanged; local quota warnings not evidence of Twelve Data billing. Preserve all strategy boundaries. Do not tune or repair code during retirement.
+
+## Exactly one next action
+
+Ask for explicit founder approval for obsolete credential backup cleanup only. Do not repeat phone/credential audits, restart services, invoke another broad Claude review, or change strategy. See canonical record for detailed evidence and remaining uncertainty.
