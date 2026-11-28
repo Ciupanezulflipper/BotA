@@ -1,3 +1,5 @@
+> **Start here for every BotA session:** [BotA Execution & Go-Live Roadmap](docs/plans/bota-execution-go-live-roadmap.md) is the canonical status and next-action reference; read it before this file.
+
 # BotA Chat Handoff
 
 Last updated: **2026-11-25 UTC**

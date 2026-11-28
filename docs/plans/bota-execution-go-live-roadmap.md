@@ -1,8 +1,8 @@
 # BotA Execution & Go-Live Roadmap
 
-- Last updated: 2026-11-28 (Claude)
+- Last updated: 2026-11-28 (ChatGPT, execution evidence reconciliation)
 - Purpose: single source of truth for where BotA is. Any AI session (Claude or ChatGPT) reads THIS file first instead of re-reading long continuity docs.
-- Update rule: when a step changes status, update the diagram class AND the status table in the same commit, and keep GitHub and Obsidian identical.
+- Update rule: when a step changes status, update the Mermaid class, status table row and one changelog line in the same docs-only commit. Keep GitHub main and the Obsidian copy byte-identical; verify SHA-256 after each accepted update. Notify the founder whenever a step or chapter finishes. No production, merge or deploy changes without explicit founder approval.
 - Detail: `docs/plans/2026-11-28-execution-layer-plan.md`
 
 Legend: green = DONE, amber = IN PROGRESS / NEXT, grey = PENDING, red = GATE (must pass before continuing)
@@ -13,7 +13,7 @@ flowchart TD
         R1["Legacy phone producer stopped<br/>+ launcher disabled"]
         R2["Supabase key rotated<br/>old key 401"]
         R3["Rollback file deleted"]
-        R4["Telegram token rotation<br/>(scheduled 28 Nov)"]
+        R4["Telegram token rotation<br/>401/200 MATCH; admin test pending"]
         R5["72h clean-producer window<br/>T0 24 Nov 20:00 UTC"]
         R6{{"GATE: real Hetzner signal<br/>opened + closed"}}
         R1 --> R2 --> R3 --> R4 --> R5 --> R6
@@ -84,9 +84,9 @@ flowchart TD
 | 1.1 | Legacy phone producer stopped + launcher disabled | DONE | 24 Nov; reboot persistence PASS |
 | 1.2 | Supabase key rotated (bota_hetzner), old key revoked | DONE | 401 test 24 Nov 19:59:56 UTC |
 | 1.3 | Supabase rollback file deleted | DONE | 25 Nov, guarded shred PASS |
-| 1.4 | Telegram token rotation | IN PROGRESS | Scheduled 28 Nov; consumers: Hetzner + phone (7e18d1067664); scanner and send-telegram excluded |
-| 1.5 | 72h clean-producer window | IN PROGRESS | Earliest end 27 Nov 20:00 UTC; extends until gate 1.6 |
-| 1.6 | GATE: real Hetzner signal opened + closed | PENDING | Do not manufacture signals |
+| 1.4 | Telegram token rotation | IN PROGRESS | Founder-reported execution 28 Nov: old getMe HTTP 401 at 14:09:00 UTC; new getMe HTTP 200 MATCH at 14:09:03 UTC. Replacement installed on Hetzner; admin test result not yet evidenced. Consumers: Hetzner + phone (old fingerprint 7e18d1067664); scanner and send-telegram excluded. |
+| 1.5 | 72h clean-producer window | IN PROGRESS | Earliest end 27 Nov 20:00 UTC has passed; extends until gate 1.6. Full clean-producer verification not re-audited in this session. |
+| 1.6 | GATE: real Hetzner signal opened + closed | PENDING | Read-only Supabase signals query 28 Nov: 0 opened since T0 24 Nov 20:00 UTC, 0 opened and closed since T0; latest creation 23 Nov 16:30:04.819262 UTC, latest closure 23 Nov 19:15 UTC. Do not manufacture signals. |
 | 2.1 | Repairs implemented (D1, exposure gate, deploy guard) | DONE | Branch fix/retirement-d1-active-signal-tests-20261125 @ f11a3ae; 62/62 tests independently verified |
 | 2.2 | GATE: 0 ACTIVE + empty ProfitLab queue | PENDING | Checked at deploy time |
 | 2.3 | Merge + deploy | PENDING | Founder approval required |
@@ -100,3 +100,4 @@ flowchart TD
 ## Changelog
 
 - 2026-11-28: roadmap created (Claude).
+- 2026-11-28: recorded Telegram getMe 401/200 MATCH evidence (admin test pending), verified no post-T0 signal lifecycle, retained R4/R5 active and R6 gate; added roadmap-first pointers to continuity files.
