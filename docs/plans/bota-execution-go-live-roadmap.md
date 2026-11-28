@@ -13,7 +13,7 @@ flowchart TD
         R1["Legacy phone producer stopped<br/>+ launcher disabled"]
         R2["Supabase key rotated<br/>old key 401"]
         R3["Rollback file deleted"]
-        R4["Telegram token rotation<br/>401/200 MATCH; admin test pending"]
+        R4["Telegram token rotation<br/>401/200 MATCH; admin test PASS"]
         R5["72h clean-producer window<br/>T0 24 Nov 20:00 UTC"]
         R6{{"GATE: real Hetzner signal<br/>opened + closed"}}
         R1 --> R2 --> R3 --> R4 --> R5 --> R6
@@ -71,8 +71,8 @@ flowchart TD
     classDef pending fill:#9e9e9e,stroke:#616161,color:#000000;
     classDef gate fill:#c62828,stroke:#8e0000,color:#ffffff;
 
-    class R1,R2,R3,P1 done;
-    class R4,R5 active;
+    class R1,R2,R3,R4,P1 done;
+    class R5 active;
     class R6,P2,G1 gate;
     class P3,P4,B1,B2,B3,A1,A2,A3,D1,D2,C1,C2,C3 pending;
 ```
@@ -84,7 +84,7 @@ flowchart TD
 | 1.1 | Legacy phone producer stopped + launcher disabled | DONE | 24 Nov; reboot persistence PASS |
 | 1.2 | Supabase key rotated (bota_hetzner), old key revoked | DONE | 401 test 24 Nov 19:59:56 UTC |
 | 1.3 | Supabase rollback file deleted | DONE | 25 Nov, guarded shred PASS |
-| 1.4 | Telegram token rotation | IN PROGRESS | Founder-reported execution 28 Nov: old getMe HTTP 401 at 14:09:00 UTC; new getMe HTTP 200 MATCH at 14:09:03 UTC. Replacement installed on Hetzner; admin test result not yet evidenced. Consumers: Hetzner + phone (old fingerprint 7e18d1067664); scanner and send-telegram excluded. |
+| 1.4 | Telegram token rotation | DONE | Founder-reported execution 28 Nov: old getMe HTTP 401 at 14:09:00 UTC; new getMe HTTP 200 MATCH at 14:09:03 UTC. Replacement installed on Hetzner; ProfitLab Account / Admin Actions / Send Telegram Test: founder confirmed message received on 28 Nov (PASS; exact delivery timestamp not supplied). Consumers: Hetzner + phone (old fingerprint 7e18d1067664); scanner and send-telegram excluded. |
 | 1.5 | 72h clean-producer window | IN PROGRESS | Earliest end 27 Nov 20:00 UTC has passed; extends until gate 1.6. Full clean-producer verification not re-audited in this session. |
 | 1.6 | GATE: real Hetzner signal opened + closed | PENDING | Read-only Supabase signals query 28 Nov: 0 opened since T0 24 Nov 20:00 UTC, 0 opened and closed since T0; latest creation 23 Nov 16:30:04.819262 UTC, latest closure 23 Nov 19:15 UTC. Do not manufacture signals. |
 | 2.1 | Repairs implemented (D1, exposure gate, deploy guard) | DONE | Branch fix/retirement-d1-active-signal-tests-20261125 @ f11a3ae; 62/62 tests independently verified |
@@ -101,3 +101,4 @@ flowchart TD
 
 - 2026-11-28: roadmap created (Claude).
 - 2026-11-28: recorded Telegram getMe 401/200 MATCH evidence (admin test pending), verified no post-T0 signal lifecycle, retained R4/R5 active and R6 gate; added roadmap-first pointers to continuity files.
+- 2026-11-28: step 1.4 DONE after founder confirmed receipt of the Telegram admin test; moved R4 to done; 1.5 and 1.6 unchanged.
